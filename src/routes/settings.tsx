@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/app-shell";
@@ -22,6 +23,75 @@ import {
   UpdateSettingsDocument,
 } from "@/gql/graphql";
 import { request } from "@/lib/gql";
+
+/**
+ * Where an agent reaches this server.
+ *
+ * In production express serves the app and the endpoint from one origin, so the page's own is
+ * the answer. In dev the app is on vite's port and only `/graphql` is proxied (see
+ * `vite.config.ts`), so the endpoint is on the server's own port — the default one, since a
+ * page has no way to ask what `PORT` was set to.
+ */
+const ENDPOINT = import.meta.env.DEV
+  ? `${window.location.protocol}//${window.location.hostname}:8787/mcp`
+  : `${window.location.origin}/mcp`;
+
+/** What a client wants in its `.mcp.json`, ready to paste. */
+const MCP_JSON = `{
+  "mcpServers": {
+    "tasks": {
+      "type": "http",
+      "url": "${ENDPOINT}"
+    }
+  }
+}`;
+
+const CLAUDE_CLI = `claude mcp add --transport http tasks ${ENDPOINT}`;
+
+/**
+ * The old way to copy, for the pages that cannot use the new one: `navigator.clipboard` exists
+ * only in a secure context, and this app is as often as not served over plain http on a LAN.
+ */
+function copyTheOldWay(text: string) {
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.append(area);
+  area.select();
+  document.execCommand("copy");
+  area.remove();
+}
+
+function Snippet({ label, text }: { label: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      if (navigator.clipboard) await navigator.clipboard.writeText(text);
+      else copyTheOldWay(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Could not copy. Select the text and copy it by hand.");
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <Label>{label}</Label>
+        <Button variant="ghost" size="xs" onClick={copy}>
+          {copied ? <Check /> : <Copy />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs">
+        <code>{text}</code>
+      </pre>
+    </div>
+  );
+}
 
 interface Form {
   baseUrl: string;
@@ -225,6 +295,20 @@ export function SettingsRoute() {
           </div>
         </Card>
       ) : null}
+
+      <Card className="gap-4 p-4">
+        <div>
+          <h2 className="font-medium">Connect an agent</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            This server's own API is served as MCP tools at <code>{ENDPOINT}</code>, so an assistant
+            elsewhere can list the tasks, add one, run it and watch the run. There is no
+            authentication: anyone who can reach the port can do all of that.
+          </p>
+        </div>
+
+        <Snippet label=".mcp.json" text={MCP_JSON} />
+        <Snippet label="Claude Code" text={CLAUDE_CLI} />
+      </Card>
     </Page>
   );
 }
