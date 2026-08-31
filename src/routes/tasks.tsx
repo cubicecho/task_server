@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
-import { useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/app-shell";
-import { TaskDialog } from "@/components/task-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,8 +19,6 @@ import { request } from "@/lib/gql";
 
 export function TasksRoute() {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState<TaskFieldsFragment | null>(null);
-  const [creating, setCreating] = useState(false);
 
   const tasks = useQuery({
     queryKey: ["tasks"],
@@ -82,9 +79,11 @@ export function TasksRoute() {
       title="Tasks"
       description="A prompt, and the triggers that decide when it runs."
       actions={
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" />
-          New task
+        <Button asChild>
+          <Link to="/tasks/new">
+            <Plus className="size-4" />
+            New task
+          </Link>
         </Button>
       }
     >
@@ -153,8 +152,10 @@ export function TasksRoute() {
                     <Play className="size-4" />
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" title="Edit" onClick={() => setEditing(task)}>
-                  <Pencil className="size-4" />
+                <Button variant="ghost" size="icon" title="Edit" asChild>
+                  <Link to="/tasks/$taskId" params={{ taskId: task.id }}>
+                    <Pencil className="size-4" />
+                  </Link>
                 </Button>
                 <Button
                   variant="ghost"
@@ -191,11 +192,6 @@ export function TasksRoute() {
           </Card>
         );
       })}
-
-      {creating ? <TaskDialog onClose={() => setCreating(false)} onSaved={refresh} /> : null}
-      {editing ? (
-        <TaskDialog task={editing} onClose={() => setEditing(null)} onSaved={refresh} />
-      ) : null}
     </Page>
   );
 }

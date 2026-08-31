@@ -7,11 +7,81 @@ import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DeleteRunDocument, RunsDocument, StopTaskDocument } from "@/gql/graphql";
+import { DeleteRunDocument, RunsDocument, type RunsQuery, StopTaskDocument } from "@/gql/graphql";
 import { request } from "@/lib/gql";
+
+type RunStep = RunsQuery["runs"][number]["steps"][number];
 
 const duration = (from: string, to?: string | null) =>
   to ? `${((new Date(to).getTime() - new Date(from).getTime()) / 1000).toFixed(1)}s` : "running…";
+
+const STATUS_VARIANT = {
+  error: "destructive",
+  running: "outline",
+  stopped: "outline",
+  skipped: "outline",
+  ok: "secondary",
+} as const;
+
+/** Tool names as chips, red where the call failed. */
+function ToolChips({ calls }: { calls: unknown }) {
+  const tools = (calls ?? []) as { name: string; ok: boolean }[];
+  if (tools.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {tools.map((tool, index) => (
+        <span
+          // biome-ignore lint/suspicious/noArrayIndexKey: a finished run's tool list never changes, and the same tool may appear in it twice
+          key={`${tool.name}-${index}`}
+          className={`rounded-md border px-2 py-0.5 font-mono text-xs ${
+            tool.ok ? "text-muted-foreground" : "border-destructive text-destructive"
+          }`}
+        >
+          {tool.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * What the run actually did, step by step.
+ *
+ * Indented by `depth`, so an arm of a decision reads as being inside it — and the arm each
+ * decision took is spelled out, which is the thing you open a branching run to find out.
+ */
+function RunSteps({ steps }: { steps: readonly RunStep[] }) {
+  return (
+    <ol className="flex flex-col gap-3">
+      {steps.map((step) => (
+        <li
+          key={step.id}
+          className="flex flex-col gap-1 border-l-2 pl-3"
+          style={{ marginLeft: `${step.depth * 1}rem` }}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={STATUS_VARIANT[step.status] ?? "secondary"}>{step.status}</Badge>
+            <span className="text-sm font-medium">{step.name}</span>
+            {step.kind === "decision" ? (
+              <span className="font-mono text-xs text-muted-foreground">
+                → {step.branch || "(undecided)"}
+              </span>
+            ) : null}
+            {step.totalTokens ? (
+              <span className="text-xs text-muted-foreground">{step.totalTokens} tokens</span>
+            ) : null}
+          </div>
+          <ToolChips calls={step.toolCalls} />
+          {step.error || step.output ? (
+            <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
+              {step.error || step.output}
+            </pre>
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 export function RunsRoute() {
   const queryClient = useQueryClient();
@@ -62,7 +132,6 @@ export function RunsRoute() {
       ) : null}
 
       {runs.data?.runs.map((run) => {
-        const tools = (run.toolCalls ?? []) as { name: string; ok: boolean }[];
         const expanded = open === run.id;
         const running = run.status === "running";
         return (
@@ -124,25 +193,19 @@ export function RunsRoute() {
               <div className="flex flex-col gap-2 border-t pt-3">
                 {/* A run in flight has no stored output yet — this is the run itself, live. */}
                 {running ? <RunStream runId={run.id} /> : null}
-                {tools.length ? (
-                  <div className="flex flex-wrap gap-1">
-                    {tools.map((tool, index) => (
-                      <span
-                        // biome-ignore lint/suspicious/noArrayIndexKey: a finished run's tool list never changes, and the same tool may appear in it twice
-                        key={`${tool.name}-${index}`}
-                        className={`rounded-md border px-2 py-0.5 font-mono text-xs ${
-                          tool.ok ? "text-muted-foreground" : "border-destructive text-destructive"
-                        }`}
-                      >
-                        {tool.name}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                {running ? null : (
-                  <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-                    {run.error || run.output || "(no output)"}
-                  </pre>
+                {running ? null : run.steps.length ? (
+                  <>
+                    <RunSteps steps={run.steps} />
+                    {/* The run failed before or between steps — nothing above says why. */}
+                    {run.error ? <p className="text-sm text-destructive">{run.error}</p> : null}
+                  </>
+                ) : (
+                  <>
+                    <ToolChips calls={run.toolCalls} />
+                    <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
+                      {run.error || run.output || "(no output)"}
+                    </pre>
+                  </>
                 )}
               </div>
             ) : null}
