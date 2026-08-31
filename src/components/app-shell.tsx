@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/tasks", label: "Tasks", icon: ListChecks },
   { to: "/runs", label: "Runs", icon: History },
-  { to: "/mcp", label: "MCP servers", icon: Plug },
+  { to: "/servers", label: "MCP servers", icon: Plug },
   { to: "/settings", label: "Settings", icon: SlidersHorizontal },
 ] as const;
 
