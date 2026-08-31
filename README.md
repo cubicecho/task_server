@@ -82,7 +82,9 @@ express: `models`, `mcpStatus` and `schedule` on the query side, `runTask`, `rec
 `setApiKey` on the mutation side.
 
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
-- **`POST /mcp`** — the same schema served as MCP tools by `@cubicecho/graphql-mcp`, so an
+- **`POST /mcp`** — for agents, not the web app, which talks only GraphQL. In dev it is
+  reached on the server's own port (`:8787`); vite proxies `/graphql` alone. This is
+  the same schema served as MCP tools by `@cubicecho/graphql-mcp`, so an
   agent elsewhere can create and run tasks here.
 
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so

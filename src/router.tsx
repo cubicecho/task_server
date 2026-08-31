@@ -29,7 +29,9 @@ const runsRoute = createRoute({
 
 const mcpRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/mcp",
+  // Not `/mcp`: that path is the MCP endpoint the server answers on, and in dev the vite
+  // proxy would hand this page to it.
+  path: "/servers",
   component: McpRoute,
 });
 
