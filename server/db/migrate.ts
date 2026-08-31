@@ -46,6 +46,25 @@ export function ensureSchema() {
     );
     CREATE INDEX IF NOT EXISTS triggers_task_idx ON triggers (taskId);
 
+    CREATE TABLE IF NOT EXISTS steps (
+      id TEXT PRIMARY KEY NOT NULL,
+      taskId TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      parentId TEXT REFERENCES steps(id) ON DELETE CASCADE,
+      branch TEXT NOT NULL DEFAULT '',
+      position INTEGER NOT NULL DEFAULT 0,
+      kind TEXT NOT NULL DEFAULT 'agent',
+      name TEXT NOT NULL DEFAULT '',
+      prompt TEXT NOT NULL DEFAULT '',
+      cases TEXT,
+      model TEXT NOT NULL DEFAULT '',
+      systemPrompt TEXT NOT NULL DEFAULT '',
+      context TEXT NOT NULL DEFAULT 'all',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      createdAt INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS steps_task_idx ON steps (taskId);
+    CREATE INDEX IF NOT EXISTS steps_parent_idx ON steps (parentId);
+
     CREATE TABLE IF NOT EXISTS runs (
       id TEXT PRIMARY KEY NOT NULL,
       taskId TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -62,6 +81,27 @@ export function ensureSchema() {
     );
     CREATE INDEX IF NOT EXISTS runs_task_idx ON runs (taskId);
     CREATE INDEX IF NOT EXISTS runs_started_idx ON runs (startedAt);
+
+    CREATE TABLE IF NOT EXISTS run_steps (
+      id TEXT PRIMARY KEY NOT NULL,
+      runId TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      stepId TEXT REFERENCES steps(id) ON DELETE SET NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      depth INTEGER NOT NULL DEFAULT 0,
+      name TEXT NOT NULL DEFAULT '',
+      kind TEXT NOT NULL DEFAULT 'agent',
+      status TEXT NOT NULL DEFAULT 'running',
+      branch TEXT NOT NULL DEFAULT '',
+      startedAt INTEGER NOT NULL,
+      finishedAt INTEGER,
+      output TEXT NOT NULL DEFAULT '',
+      error TEXT NOT NULL DEFAULT '',
+      toolCalls TEXT,
+      promptTokens INTEGER NOT NULL DEFAULT 0,
+      completionTokens INTEGER NOT NULL DEFAULT 0,
+      totalTokens INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS run_steps_run_idx ON run_steps (runId);
 
     CREATE TABLE IF NOT EXISTS mcp_servers (
       id TEXT PRIMARY KEY NOT NULL,
@@ -105,8 +145,14 @@ export function ensureSchema() {
         "then report what you did and what you found. Say plainly when something failed.",
     );
 
-  // A run left `running` by a crash is never going to finish; nothing would ever clear it.
+  // A run left `running` by a crash is never going to finish; nothing would ever clear it. The
+  // step it died inside is in the same position, and a run whose steps still say `running`
+  // would read as though part of it were somehow still going.
+  const now = Date.now();
   db.run(
-    sql`UPDATE runs SET status = 'error', error = 'interrupted by a server restart', finishedAt = ${Date.now()} WHERE status = 'running'`,
+    sql`UPDATE run_steps SET status = 'error', error = 'interrupted by a server restart', finishedAt = ${now} WHERE status = 'running'`,
+  );
+  db.run(
+    sql`UPDATE runs SET status = 'error', error = 'interrupted by a server restart', finishedAt = ${now} WHERE status = 'running'`,
   );
 }
