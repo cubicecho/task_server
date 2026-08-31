@@ -76,6 +76,14 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
   );
   expect(runRefused.errors?.[0].message).toMatch(/still going/i);
 
+  // The run read the flow when it started and is recording what it executed against those very
+  // rows, so editing them now would make its own account of itself lie.
+  const stepsRefused = await gql(
+    `mutation S($id: String!) { setTaskSteps(taskId: $id, steps: [{ prompt: "later" }]) { id } }`,
+    { id: taskId },
+  );
+  expect(stepsRefused.errors?.[0].message).toMatch(/running/i);
+
   const stopped = await gql(`mutation S($id: String!) { stopTask(taskId: $id) }`, { id: taskId });
   expect(stopped.data?.stopTask).toBe(true);
 

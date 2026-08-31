@@ -222,7 +222,7 @@ export async function runAgent({
     // A stop aborts the request in flight, but a tool call already handed to an MCP server
     // runs to its own end — so the signal is checked between steps as well.
     signal?.throwIfAborted();
-    onEvent?.({ kind: "step", text: `step ${iteration + 1}` });
+    onEvent?.({ kind: "turn", text: `turn ${iteration + 1}` });
 
     // With a preselection in hand the first step gets the shortlist and nothing else — no
     // catalogue, no `load_tools`. Left with the menu in front of it the model shops: it

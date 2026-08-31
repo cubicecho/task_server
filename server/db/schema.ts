@@ -20,6 +20,7 @@ import * as sqlite from "./schema.sqlite.ts";
  */
 const active = isPostgres ? (pg as unknown as typeof sqlite) : sqlite;
 
-export const { tasks, triggers, runs, mcpServers, settings, schema, relations } = active;
+export const { tasks, triggers, steps, runs, runSteps, mcpServers, settings, schema, relations } =
+  active;
 
-export type { McpServerRow, Run, Settings, Task, Trigger } from "./schema.sqlite.ts";
+export type { McpServerRow, Run, RunStep, Settings, Step, Task, Trigger } from "./schema.sqlite.ts";

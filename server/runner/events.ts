@@ -16,8 +16,12 @@ const MAX_EVENTS = 1000;
 const RETAIN_MS = 60_000;
 
 export type RunEventKind =
-  /** A new turn of the agent loop began. */
+  /** A step of the task's flow began. `name` is the step, `text` its kind. */
   | "step"
+  /** A decision step chose an arm. `text` is the arm it took. */
+  | "decision"
+  /** A new turn of the agent loop began, inside whichever step is running. */
+  | "turn"
   /** Reasoning tokens, as they arrive. */
   | "thinking"
   /** Reply tokens, as they arrive. */
@@ -41,6 +45,11 @@ export interface RunEvent {
   text: string;
   /** Tool name on the tool kinds, otherwise empty. */
   name: string;
+  /**
+   * The flow step this happened inside, so a watcher can group a run the way the task is
+   * written. Empty for events that belong to the run rather than to any one step.
+   */
+  step: string;
   /** Outcome on `tool-result` and `done`, otherwise null. */
   ok: boolean | null;
 }
@@ -73,6 +82,7 @@ export function emit(runId: string, input: RunEventInput): RunEvent {
     at: new Date(),
     text: "",
     name: "",
+    step: "",
     ok: null,
     ...input,
   };
@@ -146,7 +156,7 @@ export function fold(events: RunEvent[]): RunEvent[] {
   for (const event of events) {
     const last = blocks[blocks.length - 1];
     const mergeable = event.kind === "thinking" || event.kind === "output";
-    if (last && mergeable && last.kind === event.kind) {
+    if (last && mergeable && last.kind === event.kind && last.step === event.step) {
       blocks[blocks.length - 1] = {
         ...last,
         seq: event.seq,

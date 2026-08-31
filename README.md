@@ -27,7 +27,11 @@ from the environment instead of the UI.
 
 ## The model
 
-- **task** — a name, a prompt, and optional per-task model and system prompt overrides.
+- **task** — a name, a prompt, and optional per-task model and system prompt overrides. The
+  prompt is the first thing that runs; anything after it is the task's flow.
+- **step** — one node of that flow: its own prompt, optional model and system prompt, and how
+  much of the run so far it is shown. A `decision` step also carries the cases it may choose
+  between, and the steps that hang under each of them. See **Flows**.
 - **trigger** — what starts a task. `kind: cron` is the only one that fires today; `kind:
   event` exists as the row shape for the next step (a new email, a webhook), and is stored but
   never dispatched.
@@ -37,11 +41,40 @@ from the environment instead of the UI.
   Neither the run nor its task can be deleted while it is going: both deletes are refused
   server-side until it has stopped. Expanding a running run on the **Runs** page shows it
   happening — see below.
+- **run step** — what one step of the flow actually did on one run: its status, output, tools
+  and tokens, and for a decision the arm it took. This is the record of the path a run took,
+  and it survives the step being edited or deleted afterwards.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
   will dial a config (`testMcpServer`) to list its tools before you save it.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
   temperature limits, the cap on tool iterations per run, and how MCP tools are discovered.
+
+## Flows
+
+A task's prompt runs first. What follows it is a tree of steps, run depth-first and strictly in
+order — the shape of Home Assistant's `choose`, with a model doing the choosing.
+
+- An **agent step** is a full run of the agent loop: same tools, same iteration cap, its own
+  prompt. Its answer joins the run's context and the next step sees it.
+- A **decision step** is the same run, with one instruction appended: end with a line naming
+  one of its cases. It can call tools to make up its mind — "check the last five emails, then
+  say whether any of them report an error" is one step, not two. The arm it names runs next;
+  the arms it did not name do not run at all. A decision that answers with nothing recognisable
+  falls to its `default` arm if there is one, and fails the run if there is not — silently
+  doing nothing is the worst possible thing to have to debug.
+
+What a step is shown of the run so far is its `context`: `all` (default), `previous` — only the
+step before it — or `none`. Where the prompt itself contains `{{previous}}` or
+`{{steps.<name>}}`, the output goes exactly there and no preamble is added, so
+`write {{previous}} to ~/notes/errors.md` puts the data where the sentence needs it.
+
+Flows are capped at 64 executed steps and 8 levels of nesting per run, which is what stops a
+mis-parented tree from running away. Edit one on a task's page, either as cards or as YAML —
+the two are the same tree, and the text tab keeps step ids, so a round trip through it leaves
+the run history attached. Over the API it is one mutation, `setTaskSteps(taskId:, steps:)`,
+which validates and writes the whole tree in a single transaction and refuses while the task is
+running.
 
 ## Watching a run
 
@@ -49,7 +82,8 @@ A run row is a before and an after. Everything in between — the thinking, the 
 reached for, the argument it got wrong — is what you need when a task misbehaves, and it is
 gone by the time the row is written. So the runner streams its completions and reports what it
 is doing as it does it: reasoning and reply tokens, each tool call with its arguments, each
-result, and the step boundaries between them.
+result, the turn boundaries of the agent loop, and which flow step each of them happened in —
+the live view groups by step the same way the finished run does.
 
 Those events go to an in-memory bus (`server/runner/events.ts`) and out over a GraphQL
 subscription, `runEvents(runId:)`, which yoga serves as SSE — the browser reads it with its own
@@ -61,12 +95,12 @@ It is debugging output, not the record: nothing is persisted, nothing survives a
 finished run is forgotten a minute later. The row remains the lasting account of what happened.
 
 With several servers connected, tool definitions cost more per request than the task's own
-prompt — they are mostly JSON Schema, and every one is sent on every step. Settings offers two
+prompt — they are mostly JSON Schema, and every one is sent on every turn. Settings offers two
 discovery modes (`runner/tool-loading.ts`):
 
 - **eager** — every definition on every request. Simple, and fine with a handful of tools.
 - **on demand** — the system prompt carries a name-only catalogue and the model calls
-  `load_tools` for the schemas it wants, which arrive on the step after. Names cost roughly a
+  `load_tools` for the schemas it wants, which arrive on the turn after. Names cost roughly a
   fortieth of what the schemas do. Before the run starts, an optional small **tool-picking
   model** reads the same catalogue and guesses the tools the task needs; when it guesses well
   the first step opens with that shortlist alone — no catalogue, no `load_tools`, no extra
@@ -89,7 +123,7 @@ for to make it stop.
 server/
   db/          drizzle schema, client, and the boot-time CREATE TABLE IF NOT EXISTS
   graphql/     the schema: drizzle-graphql entities plus a few hand-written fields
-  runner/      llm client, MCP pool, tool loading + schema compat, agent loop, recorder
+  runner/      llm client, MCP pool, tool loading + schema compat, agent loop, flow, recorder
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write
   index.ts     express + yoga + the MCP endpoint + the built SPA
 src/           vite + react + tanstack router/query + shadcn
@@ -127,11 +161,11 @@ going through the web app. In dev it is on the server's own port (`:8787`); vite
 claude mcp add --transport http tasks http://localhost:8787/mcp
 ```
 
-Fourteen tools, chosen in `server/mcp-endpoint.ts` rather than projected from the whole schema:
+Seventeen tools, chosen in `server/mcp-endpoint.ts` rather than projected from the whole schema:
 
-- **read** — `tasks`, `runs`, `triggers`, `schedule`, `models`
+- **read** — `tasks`, `steps`, `runs`, `runSteps`, `triggers`, `schedule`, `models`
 - **write** — `createTask`, `updateTaskSingle`, `deleteTaskSingle`, and the same three for
-  triggers
+  triggers, plus `setTaskSteps` for a task's whole flow
 - **run** — `runTask`, `stopTask`, `runEvents`
 
 The schema has forty-odd root fields, and the rest are left out on purpose: the settings row and

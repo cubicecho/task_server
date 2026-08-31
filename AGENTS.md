@@ -85,7 +85,7 @@ and one generated client could not serve both. A task and its triggers save as s
 mutations.
 
 **The `/mcp` surface is curated, not the whole schema.** `server/mcp-endpoint.ts` lists the
-fourteen tools an outside client gets. Nothing that empties a table in one call, and nothing
+seventeen tools an outside client gets. Nothing that empties a table in one call, and nothing
 that reads the API key. A new tool goes in that list deliberately, with a `HINTS` entry if the
 generated description does not say enough.
 

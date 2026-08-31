@@ -1,5 +1,6 @@
 import { defineRelations } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -68,6 +69,36 @@ export const triggers = pgTable(
   (table) => [index("triggers_task_idx").on(table.taskId)],
 );
 
+export const steps = pgTable(
+  "steps",
+  {
+    id: id(),
+    taskId: text()
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    parentId: text().references((): AnyPgColumn => steps.id, { onDelete: "cascade" }),
+    branch: text().notNull().default(""),
+    position: integer().notNull().default(0),
+    kind: text({ enum: ["agent", "decision"] })
+      .notNull()
+      .default("agent"),
+    name: text().notNull().default(""),
+    prompt: text().notNull().default(""),
+    cases: jsonb().$type<string[]>(),
+    model: text().notNull().default(""),
+    systemPrompt: text().notNull().default(""),
+    context: text({ enum: ["all", "previous", "none"] })
+      .notNull()
+      .default("all"),
+    enabled: boolean().notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("steps_task_idx").on(table.taskId),
+    index("steps_parent_idx").on(table.parentId),
+  ],
+);
+
 export const runs = pgTable(
   "runs",
   {
@@ -92,6 +123,34 @@ export const runs = pgTable(
     index("runs_task_idx").on(table.taskId),
     index("runs_started_idx").on(table.startedAt),
   ],
+);
+
+export const runSteps = pgTable(
+  "run_steps",
+  {
+    id: id(),
+    runId: text()
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    stepId: text().references(() => steps.id, { onDelete: "set null" }),
+    position: integer().notNull().default(0),
+    depth: integer().notNull().default(0),
+    name: text().notNull().default(""),
+    kind: text().notNull().default("agent"),
+    status: text({ enum: ["running", "ok", "error", "stopped", "skipped"] })
+      .notNull()
+      .default("running"),
+    branch: text().notNull().default(""),
+    startedAt: createdAt(),
+    finishedAt: timestamp({ mode: "date", withTimezone: true }),
+    output: text().notNull().default(""),
+    error: text().notNull().default(""),
+    toolCalls: jsonb().$type<{ name: string; ok: boolean }[]>(),
+    promptTokens: integer().notNull().default(0),
+    completionTokens: integer().notNull().default(0),
+    totalTokens: integer().notNull().default(0),
+  },
+  (table) => [index("run_steps_run_idx").on(table.runId)],
 );
 
 export const mcpServers = pgTable("mcp_servers", {
@@ -129,19 +188,27 @@ export const settings = pgTable("settings", {
   toolSelectModel: text().notNull().default(""),
 });
 
-export const schema = { tasks, triggers, runs, mcpServers, settings };
+export const schema = { tasks, triggers, steps, runs, runSteps, mcpServers, settings };
 
 export const relations = defineRelations(schema, (r) => ({
   tasks: {
     triggers: r.many.triggers({ from: r.tasks.id, to: r.triggers.taskId }),
+    steps: r.many.steps({ from: r.tasks.id, to: r.steps.taskId }),
     runs: r.many.runs({ from: r.tasks.id, to: r.runs.taskId }),
   },
   triggers: {
     task: r.one.tasks({ from: r.triggers.taskId, to: r.tasks.id, optional: false }),
     runs: r.many.runs({ from: r.triggers.id, to: r.runs.triggerId }),
   },
+  steps: {
+    task: r.one.tasks({ from: r.steps.taskId, to: r.tasks.id, optional: false }),
+  },
   runs: {
     task: r.one.tasks({ from: r.runs.taskId, to: r.tasks.id, optional: false }),
     trigger: r.one.triggers({ from: r.runs.triggerId, to: r.triggers.id }),
+    steps: r.many.runSteps({ from: r.runs.id, to: r.runSteps.runId }),
+  },
+  runSteps: {
+    run: r.one.runs({ from: r.runSteps.runId, to: r.runs.id, optional: false }),
   },
 }));

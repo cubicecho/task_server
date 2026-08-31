@@ -15,6 +15,8 @@ interface Block {
   seq: number;
   kind: string;
   name: string;
+  /** The flow step this was said in. Empty for what the runner says about the run itself. */
+  step: string;
   ok?: boolean | null;
   text: string;
 }
@@ -23,13 +25,43 @@ const mergeable = (kind: string) => kind === "thinking" || kind === "output";
 
 function append(blocks: Block[], event: RunEvent): Block[] {
   const last = blocks[blocks.length - 1];
-  if (last && mergeable(event.kind) && last.kind === event.kind) {
+  // Never across a step boundary: two steps writing the same kind of thing are two answers.
+  if (last && mergeable(event.kind) && last.kind === event.kind && last.step === event.step) {
     return [...blocks.slice(0, -1), { ...last, text: last.text + event.text }];
   }
   return [
     ...blocks,
-    { seq: event.seq, kind: event.kind, name: event.name, ok: event.ok, text: event.text },
+    {
+      seq: event.seq,
+      kind: event.kind,
+      name: event.name,
+      step: event.step,
+      ok: event.ok,
+      text: event.text,
+    },
   ];
+}
+
+/** One flow step's worth of blocks, under the name of the step that produced them. */
+interface Group {
+  step: string;
+  kind: string;
+  blocks: Block[];
+}
+
+function group(blocks: Block[]): Group[] {
+  const groups: Group[] = [];
+  for (const block of blocks) {
+    let last = groups[groups.length - 1];
+    if (!last || last.step !== block.step) {
+      last = { step: block.step, kind: "", blocks: [] };
+      groups.push(last);
+    }
+    // The `step` event is the heading rather than a line of its own; it names the kind.
+    if (block.kind === "step") last.kind = block.text;
+    else last.blocks.push(block);
+  }
+  return groups;
 }
 
 /** Tokens arrive faster than anyone can read them; redraw on a human timescale instead. */
@@ -107,9 +139,24 @@ export function RunStream({ runId }: { runId: string }) {
         {blocks.length === 0 ? (
           <p className="text-sm text-muted-foreground">Waiting for the model…</p>
         ) : null}
-        <div className="flex flex-col gap-2">
-          {blocks.map((block) => (
-            <BlockView key={`${block.kind}-${block.seq}`} block={block} />
+        <div className="flex flex-col gap-3">
+          {group(blocks).map((entry, index) => (
+            <section
+              // Two steps can share a name across arms, so position is what tells them apart.
+              // biome-ignore lint/suspicious/noArrayIndexKey: groups only ever grow at the end
+              key={index}
+              className="flex flex-col gap-2"
+            >
+              {entry.step ? (
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {entry.step}
+                  {entry.kind === "decision" ? " · decision" : ""}
+                </p>
+              ) : null}
+              {entry.blocks.map((block) => (
+                <BlockView key={`${block.kind}-${block.seq}`} block={block} />
+              ))}
+            </section>
           ))}
         </div>
       </div>
@@ -141,12 +188,15 @@ function BlockView({ block }: { block: Block }) {
           ← {block.name}: {block.text}
         </p>
       );
-    case "step":
+    case "turn":
       return (
         <p className="border-t pt-2 text-xs tracking-wide text-muted-foreground uppercase">
           {block.text}
         </p>
       );
+    case "decision":
+      // The arm it chose — the one thing you open a branching run to find out.
+      return <p className="text-sm font-medium">&rarr; {block.text}</p>;
     default:
       // `notice` and `done`: the runner speaking rather than the model.
       return <p className="text-xs text-muted-foreground">{block.text}</p>;

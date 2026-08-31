@@ -47,11 +47,14 @@ export function Page({
   title,
   description,
   actions,
+  wide,
   children,
 }: {
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  /** For pages that nest — the flow editor indents, and runs out of room at the usual width. */
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -64,7 +67,9 @@ export function Page({
         {actions}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4">{children}</div>
+        <div className={cn("mx-auto flex flex-col gap-4", wide ? "max-w-5xl" : "max-w-3xl")}>
+          {children}
+        </div>
       </div>
     </div>
   );

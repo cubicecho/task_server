@@ -1,4 +1,5 @@
 import { buildSchema, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
+import { eq } from "drizzle-orm";
 import {
   GraphQLBoolean,
   GraphQLError,
@@ -13,11 +14,13 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
+import { steps, tasks } from "../db/schema.ts";
 import { fold, history, type RunEvent, watch } from "../runner/events.ts";
 import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { state as scheduleState, syncSoon } from "../scheduler/cron.ts";
+import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
 
 /**
  * The CRUD half of the API is generated from the Drizzle schema — tasks, triggers, runs, MCP
@@ -36,11 +39,11 @@ const { entities } = buildSchema(db, {
     column.columnType === "SQLiteTimestamp" || column.columnType === "PgTimestamp"
       ? GraphQLDateTime
       : undefined,
-  // The run history is written by the runner, never by a client: a hand-made run row would
-  // claim something happened that did not.
+  // The run history — the run and the steps it took — is written by the runner, never by a
+  // client: a hand-made row would claim something happened that did not.
   features: {
-    insert: (table) => table !== "runs" && table !== "settings",
-    update: (table) => table !== "runs",
+    insert: (table) => table !== "runs" && table !== "runSteps" && table !== "settings",
+    update: (table) => table !== "runs" && table !== "runSteps",
     delete: (table) => table !== "settings",
     // `nestedWrites` (triggers created inline under createTask) is off: it needs an async
     // driver for its multi-statement transaction, and node:sqlite is synchronous. Postgres
@@ -168,6 +171,62 @@ const ScheduleEntryType = new GraphQLObjectType({
   },
 });
 
+/**
+ * A flow, as the editor holds it: steps nested inside the branches of the decisions above them.
+ *
+ * Recursive input objects are legal GraphQL, and this shape is the tree itself rather than the
+ * flattened rows — so a client never has to compute a `parentId`, a `branch` or a `position`,
+ * and cannot get one wrong.
+ */
+const StepBranchInputType: GraphQLInputObjectType = new GraphQLInputObjectType({
+  name: "StepBranchInput",
+  description: "One arm of a decision: the case it answers to, and what runs if it does.",
+  fields: () => ({
+    case: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: 'One of the decision\'s own cases, or "default" for the fall-through arm.',
+    },
+    steps: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(StepInputType))) },
+  }),
+});
+
+const StepInputType: GraphQLInputObjectType = new GraphQLInputObjectType({
+  name: "StepInput",
+  description: "A step of a task's flow, with whatever hangs off it.",
+  fields: () => ({
+    id: {
+      type: GraphQLString,
+      description:
+        "Send back the id of an existing step to edit it in place, so the run history that " +
+        "points at it stays pointed at it. Omit for a new step.",
+    },
+    kind: { type: GraphQLString, description: "agent (default) | decision." },
+    name: {
+      type: GraphQLString,
+      description: "What this step is called, in the run history and in `{{steps.<name>}}`.",
+    },
+    prompt: { type: new GraphQLNonNull(GraphQLString) },
+    cases: {
+      type: new GraphQLList(new GraphQLNonNull(GraphQLString)),
+      description: "Decision only, and required for one: the arms it may choose between.",
+    },
+    model: { type: GraphQLString, description: "Empty falls back to the task's, then Settings'." },
+    systemPrompt: { type: GraphQLString },
+    context: {
+      type: GraphQLString,
+      description:
+        "How much of the run so far this step is shown before its own prompt: all (default) | " +
+        "previous | none. Ignored where the prompt places `{{previous}}` or `{{steps.<name>}}` " +
+        "itself.",
+    },
+    enabled: { type: GraphQLBoolean },
+    branches: {
+      type: new GraphQLList(new GraphQLNonNull(StepBranchInputType)),
+      description: "Decision only: what runs under each case.",
+    },
+  }),
+});
+
 const RunEventType = new GraphQLObjectType({
   name: "RunEvent",
   description:
@@ -182,12 +241,19 @@ const RunEventType = new GraphQLObjectType({
     at: { type: new GraphQLNonNull(GraphQLDateTime) },
     kind: {
       type: new GraphQLNonNull(GraphQLString),
-      description: "step | thinking | output | tool-call | tool-result | notice | done.",
+      description:
+        "step | decision | turn | thinking | output | tool-call | tool-result | notice | done.",
     },
     text: { type: new GraphQLNonNull(GraphQLString) },
     name: {
       type: new GraphQLNonNull(GraphQLString),
       description: "Tool name, where there is one.",
+    },
+    step: {
+      type: new GraphQLNonNull(GraphQLString),
+      description:
+        "The flow step this happened inside, so a watcher can group a run the way the task is " +
+        "written. Empty for what belongs to the run rather than to any one step.",
     },
     ok: { type: GraphQLBoolean },
   },
@@ -261,6 +327,49 @@ export const schema = new GraphQLSchema({
           "failure. The run is recorded as `stopped`.",
         args: { taskId: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: (_source, args: { taskId: string }) => stopTask(args.taskId),
+      },
+      setTaskSteps: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(generatedType("Step")))),
+        description:
+          "Replaces a task's whole flow in one transaction, and returns it flattened into rows " +
+          "in the order it runs. A flow is only correct as a whole — a step's parent, its arm " +
+          "and its place in that arm are all relative to its siblings — so it is written as a " +
+          "whole rather than a row at a time. Steps sent back with their existing ids are " +
+          "edited in place and keep the run history that points at them; the rest are replaced. " +
+          "Pass an empty list to run the task's own prompt and nothing else.",
+        args: {
+          taskId: { type: new GraphQLNonNull(GraphQLString) },
+          steps: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(StepInputType))) },
+        },
+        resolve: async (_source, args: { taskId: string; steps: StepInput[] }) => {
+          const [task] = await db.select().from(tasks).where(eq(tasks.id, args.taskId)).limit(1);
+          if (!task) {
+            throw new GraphQLError(`There is no task with id ${args.taskId}.`, {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+          // The run in flight read the flow when it started and is recording what it executed
+          // against those very rows; editing them now would make its own account of itself lie.
+          if (runningTaskIds().has(args.taskId)) {
+            throw new GraphQLError("This task is running. Stop it first, then edit its steps.", {
+              extensions: { code: "RUN_IN_FLIGHT" },
+            });
+          }
+
+          const rows = flattenSteps(args.taskId, args.steps);
+          const foreign = await foreignIds(args.taskId, rows);
+          if (foreign.length) {
+            throw new GraphQLError(
+              `These step ids already belong to another task: ${foreign.join(", ")}.`,
+              { extensions: { code: "BAD_STEPS" } },
+            );
+          }
+          await writeTaskSteps(args.taskId, rows);
+
+          const written = await db.select().from(steps).where(eq(steps.taskId, args.taskId));
+          const order = new Map(rows.map((row, at) => [row.id, at]));
+          return written.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+        },
       },
       testMcpServer: {
         type: new GraphQLNonNull(McpProbeType),

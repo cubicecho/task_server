@@ -3,7 +3,7 @@ import { db } from "./client.ts";
 import { isPostgres } from "./dialect.ts";
 import { ensurePgTables } from "./ensure.pg.ts";
 import { ensureSqliteTables } from "./ensure.sqlite.ts";
-import { runs, settings } from "./schema.ts";
+import { runSteps, runs, settings } from "./schema.ts";
 
 const DEFAULT_SYSTEM_PROMPT =
   "You are a task runner. Carry out the instruction using the tools available to you, " +
@@ -18,7 +18,7 @@ const DEFAULT_SYSTEM_PROMPT =
  * database. Once the schema stops moving, generated migrations replace this outright.
  *
  * The DDL is per dialect and lives in `ensure.sqlite.ts` / `ensure.pg.ts`. What follows it is
- * not: both statements are ordinary drizzle writes, and run the same either way.
+ * not: all three writes are ordinary drizzle ones, and run the same either way.
  */
 export async function ensureSchema() {
   if (isPostgres) await ensurePgTables();
@@ -31,9 +31,14 @@ export async function ensureSchema() {
     .values({ id: "default", systemPrompt: DEFAULT_SYSTEM_PROMPT })
     .onConflictDoNothing();
 
-  // A run left `running` by a crash is never going to finish; nothing would ever clear it.
-  await db
-    .update(runs)
-    .set({ status: "error", error: "interrupted by a server restart", finishedAt: new Date() })
-    .where(eq(runs.status, "running"));
+  // A run left `running` by a crash is never going to finish; nothing would ever clear it. The
+  // step it died inside is in the same position, and a run whose steps still say `running`
+  // would read as though part of it were somehow still going.
+  const interrupted = {
+    status: "error",
+    error: "interrupted by a server restart",
+    finishedAt: new Date(),
+  } as const;
+  await db.update(runSteps).set(interrupted).where(eq(runSteps.status, "running"));
+  await db.update(runs).set(interrupted).where(eq(runs.status, "running"));
 }

@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { McpRoute } from "@/routes/mcp";
 import { RunsRoute } from "@/routes/runs";
 import { SettingsRoute } from "@/routes/settings";
+import { TaskEditRoute } from "@/routes/task-edit";
 import { TasksRoute } from "@/routes/tasks";
 
 const rootRoute = createRootRoute({ component: AppShell });
@@ -19,6 +20,20 @@ const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks",
   component: TasksRoute,
+});
+
+// Both edit pages are the same component: whether it creates or edits is whether the route
+// gave it an id. `/tasks/new` is declared first so it is not read as a task called "new".
+const taskNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tasks/new",
+  component: TaskEditRoute,
+});
+
+const taskEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tasks/$taskId",
+  component: TaskEditRoute,
 });
 
 const runsRoute = createRoute({
@@ -42,7 +57,15 @@ const settingsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, tasksRoute, runsRoute, mcpRoute, settingsRoute]),
+  routeTree: rootRoute.addChildren([
+    indexRoute,
+    tasksRoute,
+    taskNewRoute,
+    taskEditRoute,
+    runsRoute,
+    mcpRoute,
+    settingsRoute,
+  ]),
   defaultPreload: "intent",
 });
 
