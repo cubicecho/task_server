@@ -65,6 +65,17 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
   const still = await gql(`{ tasks { id } }`);
   expect(still.data?.tasks).toHaveLength(1);
 
+  // The run row is the one the runner is about to write the outcome to, so it is guarded too.
+  const runs = await gql(`{ runs { id status } }`);
+  const [inFlight] = (runs.data?.runs ?? []) as { id: string; status: string }[];
+  const runId = inFlight.id;
+  expect(inFlight.status).toBe("running");
+  const runRefused = await gql(
+    `mutation D($id: String!) { deleteRunSingle(where: { id: { eq: $id } }) { id } }`,
+    { id: runId },
+  );
+  expect(runRefused.errors?.[0].message).toMatch(/still going/i);
+
   const stopped = await gql(`mutation S($id: String!) { stopTask(taskId: $id) }`, { id: taskId });
   expect(stopped.data?.stopTask).toBe(true);
 
@@ -72,6 +83,12 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
   expect(run.status).toBe("stopped");
   expect(run.error).toBeFalsy();
   expect(runner.runningTaskIds().has(taskId)).toBe(false);
+
+  const runDeleted = await gql(
+    `mutation D($id: String!) { deleteRunSingle(where: { id: { eq: $id } }) { id } }`,
+    { id: runId },
+  );
+  expect(runDeleted.errors).toBeUndefined();
 
   const deleted = await gql(
     `mutation D($id: String!) { deleteTaskSingle(where: { id: { eq: $id } }) { id } }`,

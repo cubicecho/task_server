@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DeleteRunDocument, RunsDocument } from "@/gql/graphql";
+import { DeleteRunDocument, RunsDocument, StopTaskDocument } from "@/gql/graphql";
 import { request } from "@/lib/gql";
 
 const duration = (from: string, to?: string | null) =>
@@ -27,6 +27,18 @@ export function RunsRoute() {
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteRunDocument, { id }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runs"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // A run is stopped through the task that owns it: the runner keys what is in flight by task.
+  const stop = useMutation({
+    mutationFn: (taskId: string) => request(StopTaskDocument, { taskId }),
+    onSuccess: (data) => {
+      // False means it had already finished on its own — the refresh is what shows that.
+      if (data.stopTask) toast.success("Stopping…");
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -51,6 +63,7 @@ export function RunsRoute() {
       {runs.data?.runs.map((run) => {
         const tools = (run.toolCalls ?? []) as { name: string; ok: boolean }[];
         const expanded = open === run.id;
+        const running = run.status === "running";
         return (
           <Card key={run.id} className="gap-2 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -82,9 +95,28 @@ export function RunsRoute() {
                   {run.error || run.output || "(no output)"}
                 </p>
               </button>
-              <Button variant="ghost" size="icon" onClick={() => remove.mutate(run.id)}>
-                <Trash2 className="size-4" />
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                {running ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Stop this run"
+                    disabled={stop.isPending}
+                    onClick={() => stop.mutate(run.taskId)}
+                  >
+                    <Square className="size-4" />
+                  </Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={running ? "Stop the run before deleting" : "Delete"}
+                  disabled={running}
+                  onClick={() => remove.mutate(run.id)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
             </div>
 
             {expanded ? (
