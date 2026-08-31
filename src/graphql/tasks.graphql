@@ -1,0 +1,77 @@
+fragment TaskFields on Task {
+  id
+  name
+  prompt
+  model
+  systemPrompt
+  enabled
+  updatedAt
+  triggers(orderBy: { createdAt: { direction: asc, priority: 1 } }) {
+    id
+    kind
+    cron
+    timezone
+    event
+    enabled
+  }
+  runs(limit: 1, orderBy: { startedAt: { direction: desc, priority: 1 } }) {
+    id
+    status
+    startedAt
+    finishedAt
+  }
+}
+
+query Tasks {
+  tasks(orderBy: { name: { direction: asc, priority: 1 } }) {
+    ...TaskFields
+  }
+  schedule {
+    triggerId
+    nextRun
+  }
+}
+
+mutation CreateTask($values: CreateTaskInput!) {
+  createTask(values: $values) {
+    ...TaskFields
+  }
+}
+
+mutation UpdateTask($id: String!, $set: UpdateTaskInput!) {
+  updateTaskSingle(where: { id: { eq: $id } }, set: $set) {
+    ...TaskFields
+  }
+}
+
+mutation DeleteTask($id: String!) {
+  deleteTaskSingle(where: { id: { eq: $id } }) {
+    id
+  }
+}
+
+mutation CreateTrigger($values: CreateTriggerInput!) {
+  createTrigger(values: $values) {
+    id
+  }
+}
+
+mutation UpdateTrigger($id: String!, $set: UpdateTriggerInput!) {
+  updateTriggerSingle(where: { id: { eq: $id } }, set: $set) {
+    id
+  }
+}
+
+mutation DeleteTrigger($id: String!) {
+  deleteTriggerSingle(where: { id: { eq: $id } }) {
+    id
+  }
+}
+
+mutation RunTask($taskId: String!) {
+  runTask(taskId: $taskId) {
+    id
+    status
+    error
+  }
+}

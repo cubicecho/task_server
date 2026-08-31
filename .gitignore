@@ -1,0 +1,6 @@
+node_modules
+dist
+# The SQLite file and anything else written at runtime. Re-created on demand.
+data
+.env
+*.local

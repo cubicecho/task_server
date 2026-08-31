@@ -1,0 +1,168 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type OpenAI from "openai";
+import { db } from "../db/client.ts";
+import { type McpServerRow, mcpServers } from "../db/schema.ts";
+
+const SEPARATOR = "__";
+
+export type McpStatus = "disabled" | "connecting" | "ready" | "error";
+
+export interface McpServerState {
+  id: string;
+  slug: string;
+  label: string;
+  status: McpStatus;
+  error: string;
+  tools: { name: string; description: string }[];
+}
+
+interface Entry {
+  config: McpServerRow;
+  client?: Client;
+  status: McpStatus;
+  error?: string;
+  tools: { name: string; description: string; inputSchema: Record<string, unknown> }[];
+}
+
+/**
+ * One MCP client per configured server, exposing their tools to the agent loop as
+ * `<slug>__<tool name>`.
+ *
+ * Connections are long-lived and shared across runs: a stdio server is a child process, and
+ * spawning one per task run would cost more than the run. `sync()` reconciles the pool with
+ * the `mcp_servers` table and is called on boot and after every write to it.
+ */
+class McpPool {
+  private entries = new Map<string, Entry>();
+
+  async sync(configs?: McpServerRow[]) {
+    const wanted = configs ?? (await db.select().from(mcpServers));
+    for (const [id, entry] of this.entries) {
+      if (!wanted.some((config) => config.id === id)) {
+        await this.close(entry);
+        this.entries.delete(id);
+      }
+    }
+    await Promise.all(
+      wanted.map(async (config) => {
+        const existing = this.entries.get(config.id);
+        // Reconnecting an unchanged server would restart its child process for nothing.
+        if (existing && JSON.stringify(existing.config) === JSON.stringify(config)) return;
+        if (existing) await this.close(existing);
+        await this.connect(config);
+      }),
+    );
+  }
+
+  private async connect(config: McpServerRow) {
+    const entry: Entry = { config, status: config.enabled ? "connecting" : "disabled", tools: [] };
+    this.entries.set(config.id, entry);
+    if (!config.enabled) return;
+
+    try {
+      const client = new Client({ name: "task-server", version: "0.1.0" });
+      const transport =
+        config.transport === "stdio"
+          ? new StdioClientTransport({
+              command: config.command,
+              args: config.args ?? [],
+              env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
+            })
+          : new StreamableHTTPClientTransport(new URL(config.url), {
+              requestInit: { headers: config.headers ?? {} },
+            });
+
+      await client.connect(transport);
+      const { tools } = await client.listTools();
+
+      entry.client = client;
+      entry.status = "ready";
+      entry.tools = tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description ?? "",
+        inputSchema: (tool.inputSchema ?? { type: "object" }) as Record<string, unknown>,
+      }));
+      console.log(`[mcp] ${config.slug}: ${entry.tools.length} tool(s)`);
+    } catch (error) {
+      entry.status = "error";
+      entry.error = error instanceof Error ? error.message : String(error);
+      console.error(`[mcp] ${config.slug}: ${entry.error}`);
+    }
+  }
+
+  private async close(entry: Entry) {
+    try {
+      await entry.client?.close();
+    } catch {
+      // a server that died on its own is already closed
+    }
+    entry.client = undefined;
+  }
+
+  /** The one place a tool's wire name is built, so `call` and `tools` agree. */
+  private static qualify(slug: string, tool: string) {
+    return `${slug}${SEPARATOR}${tool}`.slice(0, 64);
+  }
+
+  /** Every ready tool, in OpenAI function-tool shape. */
+  tools(): OpenAI.ChatCompletionTool[] {
+    const tools: OpenAI.ChatCompletionTool[] = [];
+    for (const entry of this.entries.values()) {
+      if (entry.status !== "ready") continue;
+      for (const tool of entry.tools) {
+        tools.push({
+          type: "function",
+          function: {
+            name: McpPool.qualify(entry.config.slug, tool.name),
+            description: `[${entry.config.label || entry.config.slug}] ${tool.description}`.trim(),
+            parameters: tool.inputSchema,
+          },
+        });
+      }
+    }
+    return tools;
+  }
+
+  /** Runs one tool call and returns text for a tool message. */
+  async call(qualifiedName: string, input: unknown): Promise<string> {
+    const [slug, ...rest] = qualifiedName.split(SEPARATOR);
+    const entry = [...this.entries.values()].find((candidate) => candidate.config.slug === slug);
+    if (!entry?.client) throw new Error(`MCP server "${slug}" is not connected`);
+
+    const result = await entry.client.callTool({
+      name: rest.join(SEPARATOR),
+      arguments: (input ?? {}) as Record<string, unknown>,
+    });
+
+    const content = Array.isArray(result.content) ? result.content : [];
+    const text = content
+      .map((block: { type?: string; text?: string }) =>
+        block.type === "text" ? block.text : `[${block.type ?? "unknown"} content]`,
+      )
+      .join("\n")
+      .trim();
+
+    if (result.isError) throw new Error(text || "tool call failed");
+    return text || "(no output)";
+  }
+
+  state(): McpServerState[] {
+    return [...this.entries.values()].map((entry) => ({
+      id: entry.config.id,
+      slug: entry.config.slug,
+      label: entry.config.label,
+      status: entry.status,
+      error: entry.error ?? "",
+      tools: entry.tools.map(({ name, description }) => ({ name, description })),
+    }));
+  }
+
+  async shutdown() {
+    await Promise.all([...this.entries.values()].map((entry) => this.close(entry)));
+    this.entries.clear();
+  }
+}
+
+export const mcp = new McpPool();
