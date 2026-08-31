@@ -25,6 +25,19 @@ type Task {
     distinct: [TriggerDistinctColumn!]
   ): [Trigger!]!
   triggersAggregate(where: TriggerFilters): TriggerAggregate!
+  steps(
+    where: StepFilters
+    orderBy: StepOrderBy
+    offset: Int
+    limit: Int
+
+    """
+    Keyset pagination: only return related rows strictly after this cursor (a row's `cursor` field from a previous page of this relation, under the same orderBy).
+    """
+    after: String
+    distinct: [StepDistinctColumn!]
+  ): [Step!]!
+  stepsAggregate(where: StepFilters): StepAggregate!
   runs(
     where: RunFilters
     orderBy: RunOrderBy
@@ -54,6 +67,24 @@ enum TriggerDistinctColumn {
   timezone
   event
   config
+  enabled
+  createdAt
+}
+
+"""Columns of Step that a query can be made distinct on"""
+enum StepDistinctColumn {
+  id
+  taskId
+  parentId
+  branch
+  position
+  kind
+  name
+  prompt
+  cases
+  model
+  systemPrompt
+  context
   enabled
   createdAt
 }
@@ -263,6 +294,158 @@ type TriggerGroupKeys {
   enabled: Boolean
 }
 
+type Step {
+  id: String!
+  taskId: String!
+  parentId: String
+  branch: String!
+  position: Int!
+  kind: StepsKindEnum!
+  name: String!
+  prompt: String!
+  cases: JSON
+  model: String!
+  systemPrompt: String!
+  context: StepsContextEnum!
+  enabled: Boolean!
+  createdAt: DateTime!
+
+  """
+  Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
+  """
+  cursor: String
+  task(where: TaskFilters): Task!
+}
+
+enum StepsKindEnum {
+  """Value: agent"""
+  agent
+
+  """Value: decision"""
+  decision
+}
+
+enum StepsContextEnum {
+  """Value: all"""
+  all
+
+  """Value: previous"""
+  previous
+
+  """Value: none"""
+  none
+}
+
+type StepAggregate {
+  count: Int!
+  avg: StepAvgAggregate
+  sum: StepSumAggregate
+  min: StepMinAggregate
+  max: StepMaxAggregate
+  countNonNull: StepCountNonNullAggregate
+  countDistinct: StepCountDistinctAggregate
+}
+
+type StepAvgAggregate {
+  position: Float
+}
+
+type StepSumAggregate {
+  position: Float
+}
+
+type StepMinAggregate {
+  id: String
+  taskId: String
+  parentId: String
+  branch: String
+  position: Int
+  kind: StepsKindEnum
+  name: String
+  prompt: String
+  model: String
+  systemPrompt: String
+  context: StepsContextEnum
+  createdAt: DateTime
+}
+
+type StepMaxAggregate {
+  id: String
+  taskId: String
+  parentId: String
+  branch: String
+  position: Int
+  kind: StepsKindEnum
+  name: String
+  prompt: String
+  model: String
+  systemPrompt: String
+  context: StepsContextEnum
+  createdAt: DateTime
+}
+
+type StepCountNonNullAggregate {
+  id: Int!
+  taskId: Int!
+  parentId: Int!
+  branch: Int!
+  position: Int!
+  kind: Int!
+  name: Int!
+  prompt: Int!
+  cases: Int!
+  model: Int!
+  systemPrompt: Int!
+  context: Int!
+  enabled: Int!
+  createdAt: Int!
+}
+
+type StepCountDistinctAggregate {
+  id: Int!
+  taskId: Int!
+  parentId: Int!
+  branch: Int!
+  position: Int!
+  kind: Int!
+  name: Int!
+  prompt: Int!
+  model: Int!
+  systemPrompt: Int!
+  context: Int!
+  createdAt: Int!
+}
+
+type StepGroupBy {
+  group: StepGroupKeys!
+  count: Int!
+  avg: StepAvgAggregate
+  sum: StepSumAggregate
+  min: StepMinAggregate
+  max: StepMaxAggregate
+  countNonNull: StepCountNonNullAggregate
+  countDistinct: StepCountDistinctAggregate
+}
+
+"""
+The grouped column values of one Step group. A column the query did not group by is null.
+"""
+type StepGroupKeys {
+  id: String
+  taskId: String
+  parentId: String
+  branch: String
+  position: Int
+  kind: StepsKindEnum
+  name: String
+  prompt: String
+  model: String
+  systemPrompt: String
+  context: StepsContextEnum
+  createdAt: DateTime
+  enabled: Boolean
+}
+
 type Run {
   id: String!
   taskId: String!
@@ -283,6 +466,19 @@ type Run {
   cursor: String
   task(where: TaskFilters): Task!
   trigger(where: TriggerFilters): Trigger
+  steps(
+    where: RunStepFilters
+    orderBy: RunStepOrderBy
+    offset: Int
+    limit: Int
+
+    """
+    Keyset pagination: only return related rows strictly after this cursor (a row's `cursor` field from a previous page of this relation, under the same orderBy).
+    """
+    after: String
+    distinct: [RunStepDistinctColumn!]
+  ): [RunStep!]!
+  stepsAggregate(where: RunStepFilters): RunStepAggregate!
 }
 
 enum RunsStatusEnum {
@@ -297,6 +493,27 @@ enum RunsStatusEnum {
 
   """Value: stopped"""
   stopped
+}
+
+"""Columns of RunStep that a query can be made distinct on"""
+enum RunStepDistinctColumn {
+  id
+  runId
+  stepId
+  position
+  depth
+  name
+  kind
+  status
+  branch
+  startedAt
+  finishedAt
+  output
+  error
+  toolCalls
+  promptTokens
+  completionTokens
+  totalTokens
 }
 
 type RunAggregate {
@@ -397,6 +614,185 @@ type RunGroupKeys {
   taskId: String
   triggerId: String
   status: RunsStatusEnum
+  startedAt: DateTime
+  finishedAt: DateTime
+  output: String
+  error: String
+  promptTokens: Int
+  completionTokens: Int
+  totalTokens: Int
+}
+
+type RunStep {
+  id: String!
+  runId: String!
+  stepId: String
+  position: Int!
+  depth: Int!
+  name: String!
+  kind: String!
+  status: RunStepsStatusEnum!
+  branch: String!
+  startedAt: DateTime!
+  finishedAt: DateTime
+  output: String!
+  error: String!
+  toolCalls: JSON
+  promptTokens: Int!
+  completionTokens: Int!
+  totalTokens: Int!
+
+  """
+  Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
+  """
+  cursor: String
+  run(where: RunFilters): Run!
+}
+
+enum RunStepsStatusEnum {
+  """Value: running"""
+  running
+
+  """Value: ok"""
+  ok
+
+  """Value: error"""
+  error
+
+  """Value: stopped"""
+  stopped
+
+  """Value: skipped"""
+  skipped
+}
+
+type RunStepAggregate {
+  count: Int!
+  avg: RunStepAvgAggregate
+  sum: RunStepSumAggregate
+  min: RunStepMinAggregate
+  max: RunStepMaxAggregate
+  countNonNull: RunStepCountNonNullAggregate
+  countDistinct: RunStepCountDistinctAggregate
+}
+
+type RunStepAvgAggregate {
+  position: Float
+  depth: Float
+  promptTokens: Float
+  completionTokens: Float
+  totalTokens: Float
+}
+
+type RunStepSumAggregate {
+  position: Float
+  depth: Float
+  promptTokens: Float
+  completionTokens: Float
+  totalTokens: Float
+}
+
+type RunStepMinAggregate {
+  id: String
+  runId: String
+  stepId: String
+  position: Int
+  depth: Int
+  name: String
+  kind: String
+  status: RunStepsStatusEnum
+  branch: String
+  startedAt: DateTime
+  finishedAt: DateTime
+  output: String
+  error: String
+  promptTokens: Int
+  completionTokens: Int
+  totalTokens: Int
+}
+
+type RunStepMaxAggregate {
+  id: String
+  runId: String
+  stepId: String
+  position: Int
+  depth: Int
+  name: String
+  kind: String
+  status: RunStepsStatusEnum
+  branch: String
+  startedAt: DateTime
+  finishedAt: DateTime
+  output: String
+  error: String
+  promptTokens: Int
+  completionTokens: Int
+  totalTokens: Int
+}
+
+type RunStepCountNonNullAggregate {
+  id: Int!
+  runId: Int!
+  stepId: Int!
+  position: Int!
+  depth: Int!
+  name: Int!
+  kind: Int!
+  status: Int!
+  branch: Int!
+  startedAt: Int!
+  finishedAt: Int!
+  output: Int!
+  error: Int!
+  toolCalls: Int!
+  promptTokens: Int!
+  completionTokens: Int!
+  totalTokens: Int!
+}
+
+type RunStepCountDistinctAggregate {
+  id: Int!
+  runId: Int!
+  stepId: Int!
+  position: Int!
+  depth: Int!
+  name: Int!
+  kind: Int!
+  status: Int!
+  branch: Int!
+  startedAt: Int!
+  finishedAt: Int!
+  output: Int!
+  error: Int!
+  promptTokens: Int!
+  completionTokens: Int!
+  totalTokens: Int!
+}
+
+type RunStepGroupBy {
+  group: RunStepGroupKeys!
+  count: Int!
+  avg: RunStepAvgAggregate
+  sum: RunStepSumAggregate
+  min: RunStepMinAggregate
+  max: RunStepMaxAggregate
+  countNonNull: RunStepCountNonNullAggregate
+  countDistinct: RunStepCountDistinctAggregate
+}
+
+"""
+The grouped column values of one RunStep group. A column the query did not group by is null.
+"""
+type RunStepGroupKeys {
+  id: String
+  runId: String
+  stepId: String
+  position: Int
+  depth: Int
+  name: String
+  kind: String
+  status: RunStepsStatusEnum
+  branch: String
   startedAt: DateTime
   finishedAt: DateTime
   output: String
@@ -664,6 +1060,7 @@ input TaskFilters {
   createdAt: DateTimeFilter
   updatedAt: DateTimeFilter
   triggers: TriggerListRelationFilter
+  steps: StepListRelationFilter
   runs: RunListRelationFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
@@ -907,6 +1304,17 @@ input TriggerListRelationFilter {
 
   """Every related row matches"""
   every: TriggerFilters
+}
+
+input StepListRelationFilter {
+  """At least one related row matches"""
+  some: StepFilters
+
+  """No related row matches"""
+  none: StepFilters
+
+  """Every related row matches"""
+  every: StepFilters
 }
 
 input RunListRelationFilter {
@@ -1278,6 +1686,347 @@ input TriggerCountDistinctHaving {
   createdAt: AggregateNumberFilter
 }
 
+input CreateStepInput {
+  id: String
+  taskId: String!
+  parentId: String
+  branch: String
+  position: Int
+  kind: StepsKindEnum
+  name: String
+  prompt: String
+  cases: JSON
+  model: String
+  systemPrompt: String
+  context: StepsContextEnum
+  enabled: Boolean
+  createdAt: DateTime
+}
+
+input UpdateStepInput {
+  id: String
+  taskId: String
+  parentId: String
+  branch: String
+  position: Int
+  kind: StepsKindEnum
+  name: String
+  prompt: String
+  cases: JSON
+  model: String
+  systemPrompt: String
+  context: StepsContextEnum
+  enabled: Boolean
+  createdAt: DateTime
+}
+
+"""
+One entry of a batch update of Step: the rows `where` matches get this entry's `set` applied.
+"""
+input UpdateStepManyInput {
+  """Rows this entry updates. An omitted filter updates every row."""
+  where: StepFilters
+  set: UpdateStepInput!
+}
+
+input StepFilters {
+  id: StringFilter
+  taskId: StringFilter
+  parentId: StringFilter
+  branch: StringFilter
+  position: IntFilter
+  kind: StepsKindEnumFilter
+  name: StringFilter
+  prompt: StringFilter
+  cases: JSONFilter
+  model: StringFilter
+  systemPrompt: StringFilter
+  context: StepsContextEnumFilter
+  enabled: BooleanFilter
+  createdAt: DateTimeFilter
+
+  """Matches rows whose task matches these filters"""
+  task: TaskFilters
+
+  """At least one branch matches; ANDed with any sibling fields"""
+  OR: [StepFilters!]
+
+  """Every branch matches"""
+  AND: [StepFilters!]
+
+  """Negates the nested filters"""
+  NOT: StepFilters
+}
+
+input IntFilter {
+  """Equal to"""
+  eq: Int
+
+  """Not equal to"""
+  ne: Int
+
+  """Less than"""
+  lt: Int
+
+  """Less than or equal to"""
+  lte: Int
+
+  """Greater than"""
+  gt: Int
+
+  """Greater than or equal to"""
+  gte: Int
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [Int!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [Int!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [IntFilter!]
+
+  """Every branch matches"""
+  AND: [IntFilter!]
+
+  """Negates the nested operators"""
+  NOT: IntFilter
+}
+
+input StepsKindEnumFilter {
+  """Equal to"""
+  eq: StepsKindEnum
+
+  """Not equal to"""
+  ne: StepsKindEnum
+
+  """Less than"""
+  lt: StepsKindEnum
+
+  """Less than or equal to"""
+  lte: StepsKindEnum
+
+  """Greater than"""
+  gt: StepsKindEnum
+
+  """Greater than or equal to"""
+  gte: StepsKindEnum
+  like: String
+  notLike: String
+  ilike: String
+  notIlike: String
+
+  """
+  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
+  """
+  startsWith: String
+
+  """
+  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
+  """
+  endsWith: String
+
+  """
+  Matches values containing the given string. `%`, `_` and `\` are matched literally.
+  """
+  contains: String
+
+  """Case-insensitive `startsWith`."""
+  iStartsWith: String
+
+  """Case-insensitive `endsWith`."""
+  iEndsWith: String
+
+  """Case-insensitive `contains`."""
+  iContains: String
+
+  """
+  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
+  """
+  insensitive: Boolean
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [StepsKindEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [StepsKindEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [StepsKindEnumFilter!]
+
+  """Every branch matches"""
+  AND: [StepsKindEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: StepsKindEnumFilter
+}
+
+input StepsContextEnumFilter {
+  """Equal to"""
+  eq: StepsContextEnum
+
+  """Not equal to"""
+  ne: StepsContextEnum
+
+  """Less than"""
+  lt: StepsContextEnum
+
+  """Less than or equal to"""
+  lte: StepsContextEnum
+
+  """Greater than"""
+  gt: StepsContextEnum
+
+  """Greater than or equal to"""
+  gte: StepsContextEnum
+  like: String
+  notLike: String
+  ilike: String
+  notIlike: String
+
+  """
+  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
+  """
+  startsWith: String
+
+  """
+  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
+  """
+  endsWith: String
+
+  """
+  Matches values containing the given string. `%`, `_` and `\` are matched literally.
+  """
+  contains: String
+
+  """Case-insensitive `startsWith`."""
+  iStartsWith: String
+
+  """Case-insensitive `endsWith`."""
+  iEndsWith: String
+
+  """Case-insensitive `contains`."""
+  iContains: String
+
+  """
+  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
+  """
+  insensitive: Boolean
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [StepsContextEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [StepsContextEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [StepsContextEnumFilter!]
+
+  """Every branch matches"""
+  AND: [StepsContextEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: StepsContextEnumFilter
+}
+
+input StepOrderBy {
+  id: InnerOrder
+  taskId: InnerOrder
+  parentId: InnerOrder
+  branch: InnerOrder
+  position: InnerOrder
+  kind: InnerOrder
+  name: InnerOrder
+  prompt: InnerOrder
+  cases: InnerOrder
+  model: InnerOrder
+  systemPrompt: InnerOrder
+  context: InnerOrder
+  enabled: InnerOrder
+  createdAt: InnerOrder
+
+  """Order by columns of the related task row"""
+  task: TaskOrderBy
+}
+
+"""Filters Step groups by their aggregated values"""
+input StepHaving {
+  """Filters groups by how many rows they contain"""
+  count: AggregateNumberFilter
+  avg: StepAvgHaving
+  sum: StepSumHaving
+  min: StepMinHaving
+  max: StepMaxHaving
+  countNonNull: StepCountNonNullHaving
+  countDistinct: StepCountDistinctHaving
+}
+
+input StepAvgHaving {
+  position: AggregateNumberFilter
+}
+
+input StepSumHaving {
+  position: AggregateNumberFilter
+}
+
+input StepMinHaving {
+  position: AggregateNumberFilter
+}
+
+input StepMaxHaving {
+  position: AggregateNumberFilter
+}
+
+input StepCountNonNullHaving {
+  id: AggregateNumberFilter
+  taskId: AggregateNumberFilter
+  parentId: AggregateNumberFilter
+  branch: AggregateNumberFilter
+  position: AggregateNumberFilter
+  kind: AggregateNumberFilter
+  name: AggregateNumberFilter
+  prompt: AggregateNumberFilter
+  cases: AggregateNumberFilter
+  model: AggregateNumberFilter
+  systemPrompt: AggregateNumberFilter
+  context: AggregateNumberFilter
+  enabled: AggregateNumberFilter
+  createdAt: AggregateNumberFilter
+}
+
+input StepCountDistinctHaving {
+  id: AggregateNumberFilter
+  taskId: AggregateNumberFilter
+  parentId: AggregateNumberFilter
+  branch: AggregateNumberFilter
+  position: AggregateNumberFilter
+  kind: AggregateNumberFilter
+  name: AggregateNumberFilter
+  prompt: AggregateNumberFilter
+  model: AggregateNumberFilter
+  systemPrompt: AggregateNumberFilter
+  context: AggregateNumberFilter
+  createdAt: AggregateNumberFilter
+}
+
 input RunFilters {
   id: StringFilter
   taskId: StringFilter
@@ -1297,6 +2046,7 @@ input RunFilters {
 
   """Matches rows whose trigger matches these filters"""
   trigger: TriggerFilters
+  steps: RunStepListRelationFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [RunFilters!]
@@ -1382,45 +2132,15 @@ input RunsStatusEnumFilter {
   NOT: RunsStatusEnumFilter
 }
 
-input IntFilter {
-  """Equal to"""
-  eq: Int
+input RunStepListRelationFilter {
+  """At least one related row matches"""
+  some: RunStepFilters
 
-  """Not equal to"""
-  ne: Int
+  """No related row matches"""
+  none: RunStepFilters
 
-  """Less than"""
-  lt: Int
-
-  """Less than or equal to"""
-  lte: Int
-
-  """Greater than"""
-  gt: Int
-
-  """Greater than or equal to"""
-  gte: Int
-
-  """Matches any one of these values (SQL `IN`)"""
-  inArray: [Int!]
-
-  """Matches none of these values (SQL `NOT IN`)"""
-  notInArray: [Int!]
-
-  """When true, matches rows where the column is NULL"""
-  isNull: Boolean
-
-  """When true, matches rows where the column is not NULL"""
-  isNotNull: Boolean
-
-  """At least one branch matches; ANDed with any sibling operators"""
-  OR: [IntFilter!]
-
-  """Every branch matches"""
-  AND: [IntFilter!]
-
-  """Negates the nested operators"""
-  NOT: IntFilter
+  """Every related row matches"""
+  every: RunStepFilters
 }
 
 input RunOrderBy {
@@ -1500,6 +2220,218 @@ input RunCountDistinctHaving {
   taskId: AggregateNumberFilter
   triggerId: AggregateNumberFilter
   status: AggregateNumberFilter
+  startedAt: AggregateNumberFilter
+  finishedAt: AggregateNumberFilter
+  output: AggregateNumberFilter
+  error: AggregateNumberFilter
+  promptTokens: AggregateNumberFilter
+  completionTokens: AggregateNumberFilter
+  totalTokens: AggregateNumberFilter
+}
+
+input RunStepFilters {
+  id: StringFilter
+  runId: StringFilter
+  stepId: StringFilter
+  position: IntFilter
+  depth: IntFilter
+  name: StringFilter
+  kind: StringFilter
+  status: RunStepsStatusEnumFilter
+  branch: StringFilter
+  startedAt: DateTimeFilter
+  finishedAt: DateTimeFilter
+  output: StringFilter
+  error: StringFilter
+  toolCalls: JSONFilter
+  promptTokens: IntFilter
+  completionTokens: IntFilter
+  totalTokens: IntFilter
+
+  """Matches rows whose run matches these filters"""
+  run: RunFilters
+
+  """At least one branch matches; ANDed with any sibling fields"""
+  OR: [RunStepFilters!]
+
+  """Every branch matches"""
+  AND: [RunStepFilters!]
+
+  """Negates the nested filters"""
+  NOT: RunStepFilters
+}
+
+input RunStepsStatusEnumFilter {
+  """Equal to"""
+  eq: RunStepsStatusEnum
+
+  """Not equal to"""
+  ne: RunStepsStatusEnum
+
+  """Less than"""
+  lt: RunStepsStatusEnum
+
+  """Less than or equal to"""
+  lte: RunStepsStatusEnum
+
+  """Greater than"""
+  gt: RunStepsStatusEnum
+
+  """Greater than or equal to"""
+  gte: RunStepsStatusEnum
+  like: String
+  notLike: String
+  ilike: String
+  notIlike: String
+
+  """
+  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
+  """
+  startsWith: String
+
+  """
+  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
+  """
+  endsWith: String
+
+  """
+  Matches values containing the given string. `%`, `_` and `\` are matched literally.
+  """
+  contains: String
+
+  """Case-insensitive `startsWith`."""
+  iStartsWith: String
+
+  """Case-insensitive `endsWith`."""
+  iEndsWith: String
+
+  """Case-insensitive `contains`."""
+  iContains: String
+
+  """
+  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
+  """
+  insensitive: Boolean
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [RunStepsStatusEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [RunStepsStatusEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [RunStepsStatusEnumFilter!]
+
+  """Every branch matches"""
+  AND: [RunStepsStatusEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: RunStepsStatusEnumFilter
+}
+
+input RunStepOrderBy {
+  id: InnerOrder
+  runId: InnerOrder
+  stepId: InnerOrder
+  position: InnerOrder
+  depth: InnerOrder
+  name: InnerOrder
+  kind: InnerOrder
+  status: InnerOrder
+  branch: InnerOrder
+  startedAt: InnerOrder
+  finishedAt: InnerOrder
+  output: InnerOrder
+  error: InnerOrder
+  toolCalls: InnerOrder
+  promptTokens: InnerOrder
+  completionTokens: InnerOrder
+  totalTokens: InnerOrder
+
+  """Order by columns of the related run row"""
+  run: RunOrderBy
+}
+
+"""Filters RunStep groups by their aggregated values"""
+input RunStepHaving {
+  """Filters groups by how many rows they contain"""
+  count: AggregateNumberFilter
+  avg: RunStepAvgHaving
+  sum: RunStepSumHaving
+  min: RunStepMinHaving
+  max: RunStepMaxHaving
+  countNonNull: RunStepCountNonNullHaving
+  countDistinct: RunStepCountDistinctHaving
+}
+
+input RunStepAvgHaving {
+  position: AggregateNumberFilter
+  depth: AggregateNumberFilter
+  promptTokens: AggregateNumberFilter
+  completionTokens: AggregateNumberFilter
+  totalTokens: AggregateNumberFilter
+}
+
+input RunStepSumHaving {
+  position: AggregateNumberFilter
+  depth: AggregateNumberFilter
+  promptTokens: AggregateNumberFilter
+  completionTokens: AggregateNumberFilter
+  totalTokens: AggregateNumberFilter
+}
+
+input RunStepMinHaving {
+  position: AggregateNumberFilter
+  depth: AggregateNumberFilter
+  promptTokens: AggregateNumberFilter
+  completionTokens: AggregateNumberFilter
+  totalTokens: AggregateNumberFilter
+}
+
+input RunStepMaxHaving {
+  position: AggregateNumberFilter
+  depth: AggregateNumberFilter
+  promptTokens: AggregateNumberFilter
+  completionTokens: AggregateNumberFilter
+  totalTokens: AggregateNumberFilter
+}
+
+input RunStepCountNonNullHaving {
+  id: AggregateNumberFilter
+  runId: AggregateNumberFilter
+  stepId: AggregateNumberFilter
+  position: AggregateNumberFilter
+  depth: AggregateNumberFilter
+  name: AggregateNumberFilter
+  kind: AggregateNumberFilter
+  status: AggregateNumberFilter
+  branch: AggregateNumberFilter
+  startedAt: AggregateNumberFilter
+  finishedAt: AggregateNumberFilter
+  output: AggregateNumberFilter
+  error: AggregateNumberFilter
+  toolCalls: AggregateNumberFilter
+  promptTokens: AggregateNumberFilter
+  completionTokens: AggregateNumberFilter
+  totalTokens: AggregateNumberFilter
+}
+
+input RunStepCountDistinctHaving {
+  id: AggregateNumberFilter
+  runId: AggregateNumberFilter
+  stepId: AggregateNumberFilter
+  position: AggregateNumberFilter
+  depth: AggregateNumberFilter
+  name: AggregateNumberFilter
+  kind: AggregateNumberFilter
+  status: AggregateNumberFilter
+  branch: AggregateNumberFilter
   startedAt: AggregateNumberFilter
   finishedAt: AggregateNumberFilter
   output: AggregateNumberFilter
@@ -1965,6 +2897,32 @@ type Query {
     """Filters the groups after they are aggregated."""
     having: TriggerHaving
   ): [TriggerGroupBy!]!
+  steps(
+    offset: Int
+    limit: Int
+    orderBy: StepOrderBy
+    where: StepFilters
+
+    """
+    Keyset pagination: only return rows strictly after this cursor (a row's `cursor` field from a previous page, under the same orderBy).
+    """
+    after: String
+    distinct: [StepDistinctColumn!]
+  ): [Step!]!
+  step(offset: Int, orderBy: StepOrderBy, where: StepFilters): Step
+  stepsAggregate(where: StepFilters): StepAggregate!
+  stepsGroupBy(
+    """
+    Columns to group by. One result row per distinct combination of their values.
+    """
+    groupBy: [StepGroupByColumn!]!
+
+    """Filters the rows before they are grouped."""
+    where: StepFilters
+
+    """Filters the groups after they are aggregated."""
+    having: StepHaving
+  ): [StepGroupBy!]!
   runs(
     offset: Int
     limit: Int
@@ -1991,6 +2949,32 @@ type Query {
     """Filters the groups after they are aggregated."""
     having: RunHaving
   ): [RunGroupBy!]!
+  runSteps(
+    offset: Int
+    limit: Int
+    orderBy: RunStepOrderBy
+    where: RunStepFilters
+
+    """
+    Keyset pagination: only return rows strictly after this cursor (a row's `cursor` field from a previous page, under the same orderBy).
+    """
+    after: String
+    distinct: [RunStepDistinctColumn!]
+  ): [RunStep!]!
+  runStep(offset: Int, orderBy: RunStepOrderBy, where: RunStepFilters): RunStep
+  runStepsAggregate(where: RunStepFilters): RunStepAggregate!
+  runStepsGroupBy(
+    """
+    Columns to group by. One result row per distinct combination of their values.
+    """
+    groupBy: [RunStepGroupByColumn!]!
+
+    """Filters the rows before they are grouped."""
+    where: RunStepFilters
+
+    """Filters the groups after they are aggregated."""
+    having: RunStepHaving
+  ): [RunStepGroupBy!]!
   mcpServers(
     offset: Int
     limit: Int
@@ -2099,12 +3083,49 @@ enum TriggerGroupByColumn {
   createdAt
 }
 
+"""Columns of Step that a query can group by"""
+enum StepGroupByColumn {
+  id
+  taskId
+  parentId
+  branch
+  position
+  kind
+  name
+  prompt
+  model
+  systemPrompt
+  context
+  enabled
+  createdAt
+}
+
 """Columns of Run that a query can group by"""
 enum RunGroupByColumn {
   id
   taskId
   triggerId
   status
+  startedAt
+  finishedAt
+  output
+  error
+  promptTokens
+  completionTokens
+  totalTokens
+}
+
+"""Columns of RunStep that a query can group by"""
+enum RunStepGroupByColumn {
+  id
+  runId
+  stepId
+  position
+  depth
+  name
+  kind
+  status
+  branch
   startedAt
   finishedAt
   output
@@ -2200,12 +3221,19 @@ type RunEvent {
   seq: Int!
   at: DateTime!
 
-  """step | thinking | output | tool-call | tool-result | notice | done."""
+  """
+  step | decision | turn | thinking | output | tool-call | tool-result | notice | done.
+  """
   kind: String!
   text: String!
 
   """Tool name, where there is one."""
   name: String!
+
+  """
+  The flow step this happened inside, so a watcher can group a run the way the task is written. Empty for what belongs to the run rather than to any one step.
+  """
+  step: String!
   ok: Boolean
 }
 
@@ -2232,8 +3260,21 @@ type Mutation {
   updateTriggerSingle(set: UpdateTriggerInput!, where: TriggerFilters!): Trigger
   deleteTrigger(where: TriggerFilters): [Trigger!]!
   deleteTriggerSingle(where: TriggerFilters!): Trigger
+  createSteps(values: [CreateStepInput!]!): [Step!]!
+  createStep(values: CreateStepInput!): Step!
+  updateStep(set: UpdateStepInput!, where: StepFilters): [Step!]!
+
+  """
+  Each entry's updated rows, in entry order. An entry whose `where` matched no rows contributes `null` in its slot; an entry that matched several contributes each of its rows.
+  """
+  updateStepsMany(updates: [UpdateStepManyInput!]!): [Step]!
+  updateStepSingle(set: UpdateStepInput!, where: StepFilters!): Step
+  deleteStep(where: StepFilters): [Step!]!
+  deleteStepSingle(where: StepFilters!): Step
   deleteRun(where: RunFilters): [Run!]!
   deleteRunSingle(where: RunFilters!): Run
+  deleteRunStep(where: RunStepFilters): [RunStep!]!
+  deleteRunStepSingle(where: RunStepFilters!): RunStep
   createMcpServers(values: [CreateMcpServerInput!]!): [McpServer!]!
   createMcpServer(values: CreateMcpServerInput!): McpServer!
   updateMcpServer(set: UpdateMcpServerInput!, where: McpServerFilters): [McpServer!]!
@@ -2264,6 +3305,11 @@ type Mutation {
   stopTask(taskId: String!): Boolean!
 
   """
+  Replaces a task's whole flow in one transaction, and returns it flattened into rows in the order it runs. A flow is only correct as a whole — a step's parent, its arm and its place in that arm are all relative to its siblings — so it is written as a whole rather than a row at a time. Steps sent back with their existing ids are edited in place and keep the run history that points at them; the rest are replaced. Pass an empty list to run the task's own prompt and nothing else.
+  """
+  setTaskSteps(taskId: String!, steps: [StepInput!]!): [Step!]!
+
+  """
   Connects to a config that need not be saved yet and lists its tools, so a server can be checked before a task depends on it.
   """
   testMcpServer(config: McpConnectionInput!): McpProbe!
@@ -2275,6 +3321,50 @@ type Mutation {
   Writes the API key. Separate from updateSetting because the key is write-only: it is excluded from the Setting type so it can never be read back out.
   """
   setApiKey(apiKey: String!): Boolean!
+}
+
+"""A step of a task's flow, with whatever hangs off it."""
+input StepInput {
+  """
+  Send back the id of an existing step to edit it in place, so the run history that points at it stays pointed at it. Omit for a new step.
+  """
+  id: String
+
+  """agent (default) | decision."""
+  kind: String
+
+  """
+  What this step is called, in the run history and in `{{steps.<name>}}`.
+  """
+  name: String
+  prompt: String!
+
+  """Decision only, and required for one: the arms it may choose between."""
+  cases: [String!]
+
+  """Empty falls back to the task's, then Settings'."""
+  model: String
+  systemPrompt: String
+
+  """
+  How much of the run so far this step is shown before its own prompt: all (default) | previous | none. Ignored where the prompt places `{{previous}}` or `{{steps.<name>}}` itself.
+  """
+  context: String
+  enabled: Boolean
+
+  """Decision only: what runs under each case."""
+  branches: [StepBranchInput!]
+}
+
+"""
+One arm of a decision: the case it answers to, and what runs if it does.
+"""
+input StepBranchInput {
+  """
+  One of the decision's own cases, or "default" for the fall-through arm.
+  """
+  case: String!
+  steps: [StepInput!]!
 }
 
 """

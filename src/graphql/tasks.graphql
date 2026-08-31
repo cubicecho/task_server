@@ -22,6 +22,30 @@ fragment TaskFields on Task {
   }
 }
 
+fragment StepFields on Step {
+  id
+  parentId
+  branch
+  position
+  kind
+  name
+  prompt
+  cases
+  model
+  systemPrompt
+  context
+  enabled
+}
+
+# The list page never asks for this: a flow per task is a lot of payload for a page that shows
+# names. The edit page asks for one task and gets all of it.
+fragment TaskDetailFields on Task {
+  ...TaskFields
+  steps(orderBy: { position: { direction: asc, priority: 1 } }) {
+    ...StepFields
+  }
+}
+
 query Tasks {
   tasks(orderBy: { name: { direction: asc, priority: 1 } }) {
     ...TaskFields
@@ -29,6 +53,12 @@ query Tasks {
   schedule {
     triggerId
     nextRun
+  }
+}
+
+query Task($id: String!) {
+  task(where: { id: { eq: $id } }) {
+    ...TaskDetailFields
   }
 }
 
@@ -47,6 +77,12 @@ mutation UpdateTask($id: String!, $set: UpdateTaskInput!) {
 mutation DeleteTask($id: String!) {
   deleteTaskSingle(where: { id: { eq: $id } }) {
     id
+  }
+}
+
+mutation SetTaskSteps($taskId: String!, $steps: [StepInput!]!) {
+  setTaskSteps(taskId: $taskId, steps: $steps) {
+    ...StepFields
   }
 }
 

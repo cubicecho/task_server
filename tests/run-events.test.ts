@@ -34,12 +34,12 @@ async function take<T>(iterator: AsyncIterator<T>, count: number): Promise<T[]> 
 }
 
 test("a watcher joining late is told everything it missed, then follows along", async () => {
-  events.emit("run-1", { kind: "step", text: "step 1" });
+  events.emit("run-1", { kind: "turn", text: "turn 1" });
   events.emit("run-1", { kind: "thinking", text: "hmm" });
 
   const watcher = events.watch("run-1");
   const backlog = await take(watcher, 2);
-  expect(backlog.map((event) => event.text)).toEqual(["step 1", "hmm"]);
+  expect(backlog.map((event) => event.text)).toEqual(["turn 1", "hmm"]);
   // Numbered from one, so a client can order and de-duplicate what it is handed.
   expect(backlog.map((event) => event.seq)).toEqual([1, 2]);
 
@@ -87,4 +87,22 @@ test("the subscription carries a run over GraphQL", async () => {
     { seq: 2, kind: "done", text: "finished", name: "", ok: true },
   ]);
   expect((await stream.next()).done).toBe(true);
+});
+
+test("consecutive tokens fold into one entry, but never across a step boundary", () => {
+  events.emit("run-5", { kind: "output", text: "he", step: "read" });
+  events.emit("run-5", { kind: "output", text: "llo", step: "read" });
+  events.emit("run-5", { kind: "step", name: "write", text: "agent" });
+  events.emit("run-5", { kind: "output", text: "by", step: "write" });
+  events.emit("run-5", { kind: "output", text: "e", step: "write" });
+
+  const folded = events.fold(events.history("run-5"));
+  expect(folded.map((event) => [event.kind, event.step, event.text])).toEqual([
+    ["output", "read", "hello"],
+    ["step", "", "agent"],
+    ["output", "write", "bye"],
+  ]);
+  // Each block carries the seq of its last event, so a client that asks for what came after
+  // one block picks up exactly where it left off.
+  expect(folded.map((event) => event.seq)).toEqual([2, 3, 5]);
 });
