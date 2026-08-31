@@ -1,0 +1,26 @@
+query Runs($taskId: String) {
+  runs(
+    limit: 100
+    where: { taskId: { eq: $taskId } }
+    orderBy: { startedAt: { direction: desc, priority: 1 } }
+  ) {
+    id
+    taskId
+    status
+    startedAt
+    finishedAt
+    output
+    error
+    toolCalls
+    totalTokens
+    task {
+      name
+    }
+  }
+}
+
+mutation DeleteRun($id: String!) {
+  deleteRunSingle(where: { id: { eq: $id } }) {
+    id
+  }
+}
