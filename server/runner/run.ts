@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
-import { type Run, runs, tasks } from "../db/schema.ts";
-import { runAgent } from "./agent.ts";
+import { type Run, runs, steps, tasks } from "../db/schema.ts";
 import { emit } from "./events.ts";
+import { runFlow } from "./flow.ts";
 import { loadSettings } from "./llm.ts";
 
 /**
@@ -38,11 +38,17 @@ export function stopTask(taskId: string): boolean {
  * The run row is written *before* the agent starts, so a task that is running right now is
  * visible in the UI rather than appearing only once it finishes — which for a task that hangs
  * is never. The row is then updated in place with the outcome.
+ *
+ * What actually runs is the task's flow: its prompt, then whatever steps hang off it. A task
+ * with no steps is one step, which is the whole of what this used to do.
  */
 export async function runTask(taskId: string, triggerId?: string): Promise<Run> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   if (!task) throw new Error(`no task with id ${taskId}`);
   if (inFlight.has(taskId)) throw new Error(`task "${task.name}" is already running`);
+  // Read once, before the run starts: a flow edited halfway through would make the run's own
+  // account of itself untrue.
+  const flow = await db.select().from(steps).where(eq(steps.taskId, taskId));
 
   const [run] = await db
     .insert(runs)
@@ -56,11 +62,11 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
   onEvent({ kind: "notice", text: `${task.name} started` });
   try {
     const config = await loadSettings();
-    const result = await runAgent({
+    const result = await runFlow({
+      runId: run.id,
+      task,
+      steps: flow,
       config,
-      model: task.model || config.model,
-      systemPrompt: task.systemPrompt || config.systemPrompt,
-      prompt: task.prompt,
       signal: controller.signal,
       onEvent,
     });

@@ -99,7 +99,7 @@ test("reports the run as it happens, tokens and tool calls alike", async () => {
     onEvent: (event) => events.push(event as (typeof events)[number]),
   });
 
-  expect(events.filter((event) => event.kind === "step")).toHaveLength(2);
+  expect(events.filter((event) => event.kind === "turn")).toHaveLength(2);
   // Content arrives in pieces and is reported as it does, not in one lump at the end.
   const output = events.filter((event) => event.kind === "output");
   expect(output.length).toBeGreaterThan(1);
