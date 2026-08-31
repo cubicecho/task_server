@@ -9,6 +9,58 @@ const SEPARATOR = "__";
 
 export type McpStatus = "disabled" | "connecting" | "ready" | "error";
 
+/** What it takes to reach a server — the connection half of a row, without its identity. */
+export type McpConnection = Pick<
+  McpServerRow,
+  "transport" | "command" | "args" | "env" | "url" | "headers"
+>;
+
+function createTransport(config: McpConnection) {
+  if (config.transport === "stdio") {
+    if (!config.command) throw new Error("a stdio server needs a command");
+    return new StdioClientTransport({
+      command: config.command,
+      args: config.args ?? [],
+      // The child inherits our environment: an MCP server usually needs PATH to find itself.
+      env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
+    });
+  }
+  if (!config.url) throw new Error("an http server needs a url");
+  return new StreamableHTTPClientTransport(new URL(config.url), {
+    requestInit: { headers: config.headers ?? {} },
+  });
+}
+
+export interface McpProbe {
+  ok: boolean;
+  error: string;
+  tools: { name: string; description: string }[];
+}
+
+/**
+ * Connects to a config that may not be saved yet, lists its tools, and hangs up.
+ *
+ * This is what the "Test connection" button calls: a config is easy to get subtly wrong, and
+ * finding out at 3am when the task runs is too late. The client is disposable — the pool keeps
+ * the long-lived ones.
+ */
+export async function probe(config: McpConnection): Promise<McpProbe> {
+  const client = new Client({ name: "task-server-probe", version: "0.1.0" });
+  try {
+    await client.connect(createTransport(config));
+    const { tools } = await client.listTools();
+    return {
+      ok: true,
+      error: "",
+      tools: tools.map((tool) => ({ name: tool.name, description: tool.description ?? "" })),
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error), tools: [] };
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
 export interface McpServerState {
   id: string;
   slug: string;
@@ -63,18 +115,7 @@ class McpPool {
 
     try {
       const client = new Client({ name: "task-server", version: "0.1.0" });
-      const transport =
-        config.transport === "stdio"
-          ? new StdioClientTransport({
-              command: config.command,
-              args: config.args ?? [],
-              env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
-            })
-          : new StreamableHTTPClientTransport(new URL(config.url), {
-              requestInit: { headers: config.headers ?? {} },
-            });
-
-      await client.connect(transport);
+      await client.connect(createTransport(config));
       const { tools } = await client.listTools();
 
       entry.client = client;

@@ -1,6 +1,7 @@
 import { buildSchema, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import {
   GraphQLBoolean,
+  GraphQLInputObjectType,
   GraphQLList,
   GraphQLNonNull,
   GraphQLObjectType,
@@ -8,9 +9,10 @@ import {
   GraphQLSchema,
   GraphQLString,
 } from "graphql";
+import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
 import { listModels } from "../runner/llm.ts";
-import { mcp } from "../runner/mcp.ts";
+import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { runTask } from "../runner/run.ts";
 import { state as scheduleState, syncSoon } from "../scheduler/cron.ts";
 
@@ -86,6 +88,29 @@ const McpServerStatusType = new GraphQLObjectType({
   },
 });
 
+const McpConnectionInput = new GraphQLInputObjectType({
+  name: "McpConnectionInput",
+  description: "How to reach an MCP server — the connection half of a row, without its identity.",
+  fields: {
+    transport: { type: new GraphQLNonNull(GraphQLString) },
+    command: { type: GraphQLString },
+    args: { type: new GraphQLList(new GraphQLNonNull(GraphQLString)) },
+    env: { type: GraphQLJSON },
+    url: { type: GraphQLString },
+    headers: { type: GraphQLJSON },
+  },
+});
+
+const McpProbeType = new GraphQLObjectType({
+  name: "McpProbe",
+  description: "The result of dialling an MCP server once, without saving or pooling it.",
+  fields: {
+    ok: { type: new GraphQLNonNull(GraphQLBoolean) },
+    error: { type: new GraphQLNonNull(GraphQLString) },
+    tools: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpToolType))) },
+  },
+});
+
 const ScheduleEntryType = new GraphQLObjectType({
   name: "ScheduleEntry",
   description: "A cron trigger that is currently armed, and when it next fires.",
@@ -126,6 +151,22 @@ export const schema = new GraphQLSchema({
         description: "Runs a task immediately and resolves with the finished run.",
         args: { taskId: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: (_source, args: { taskId: string }) => runTask(args.taskId),
+      },
+      testMcpServer: {
+        type: new GraphQLNonNull(McpProbeType),
+        description:
+          "Connects to a config that need not be saved yet and lists its tools, so a server " +
+          "can be checked before a task depends on it.",
+        args: { config: { type: new GraphQLNonNull(McpConnectionInput) } },
+        resolve: (_source, args: { config: Partial<McpConnection> }) =>
+          probe({
+            transport: args.config.transport === "http" ? "http" : "stdio",
+            command: args.config.command ?? "",
+            args: args.config.args ?? null,
+            env: args.config.env ?? null,
+            url: args.config.url ?? "",
+            headers: args.config.headers ?? null,
+          }),
       },
       reconnectMcp: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpServerStatusType))),

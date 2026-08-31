@@ -2113,6 +2113,11 @@ type Mutation {
   """Runs a task immediately and resolves with the finished run."""
   runTask(taskId: String!): Run!
 
+  """
+  Connects to a config that need not be saved yet and lists its tools, so a server can be checked before a task depends on it.
+  """
+  testMcpServer(config: McpConnectionInput!): McpProbe!
+
   """Tears down and rebuilds every MCP connection."""
   reconnectMcp: [McpServerStatus!]!
 
@@ -2120,4 +2125,25 @@ type Mutation {
   Writes the API key. Separate from updateSetting because the key is write-only: it is excluded from the Setting type so it can never be read back out.
   """
   setApiKey(apiKey: String!): Boolean!
+}
+
+"""
+The result of dialling an MCP server once, without saving or pooling it.
+"""
+type McpProbe {
+  ok: Boolean!
+  error: String!
+  tools: [McpTool!]!
+}
+
+"""
+How to reach an MCP server — the connection half of a row, without its identity.
+"""
+input McpConnectionInput {
+  transport: String!
+  command: String
+  args: [String!]
+  env: JSON
+  url: String
+  headers: JSON
 }

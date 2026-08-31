@@ -1,0 +1,60 @@
+query McpServers {
+  mcpServers(orderBy: { slug: { direction: asc, priority: 1 } }) {
+    id
+    slug
+    label
+    enabled
+    transport
+    command
+    args
+    env
+    url
+    headers
+  }
+  mcpStatus {
+    id
+    status
+    error
+    tools {
+      name
+      description
+    }
+  }
+}
+
+mutation CreateMcpServer($values: CreateMcpServerInput!) {
+  createMcpServer(values: $values) {
+    id
+  }
+}
+
+mutation UpdateMcpServer($id: String!, $set: UpdateMcpServerInput!) {
+  updateMcpServerSingle(where: { id: { eq: $id } }, set: $set) {
+    id
+  }
+}
+
+mutation DeleteMcpServer($id: String!) {
+  deleteMcpServerSingle(where: { id: { eq: $id } }) {
+    id
+  }
+}
+
+mutation TestMcpServer($config: McpConnectionInput!) {
+  testMcpServer(config: $config) {
+    ok
+    error
+    tools {
+      name
+      description
+    }
+  }
+}
+
+mutation ReconnectMcp {
+  reconnectMcp {
+    id
+    status
+    error
+  }
+}

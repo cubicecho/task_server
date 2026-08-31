@@ -1,10 +1,11 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { History, ListChecks, SlidersHorizontal, Zap } from "lucide-react";
+import { History, ListChecks, Plug, SlidersHorizontal, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/tasks", label: "Tasks", icon: ListChecks },
   { to: "/runs", label: "Runs", icon: History },
+  { to: "/mcp", label: "MCP servers", icon: Plug },
   { to: "/settings", label: "Settings", icon: SlidersHorizontal },
 ] as const;
 
