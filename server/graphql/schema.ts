@@ -31,20 +31,18 @@ import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./step
 const { entities } = buildSchema(db, {
   // `tasks` → type `Task`, queries `tasks` (list) and `task` (single).
   typeNameMapper: "singularize",
-  // A SQLite timestamp is an integer column under the hood, so built-in detection leaves it
-  // as `JSON`. It is a date to everyone who reads it, and `DateTime` transports ISO-8601.
-  mapColumnType: (column) =>
-    column.columnType === "SQLiteTimestamp" ? GraphQLDateTime : undefined,
+  // Built-in detection leaves a timestamp column as `JSON`. It is a date to everyone who
+  // reads it, and `DateTime` transports ISO-8601.
+  mapColumnType: (column) => (column.columnType === "PgTimestamp" ? GraphQLDateTime : undefined),
   // The run history — the run and the steps it took — is written by the runner, never by a
   // client: a hand-made row would claim something happened that did not.
   features: {
     insert: (table) => table !== "runs" && table !== "runSteps" && table !== "settings",
     update: (table) => table !== "runs" && table !== "runSteps",
     delete: (table) => table !== "settings",
-    // `nestedWrites` (triggers created inline under createTask) is off: it needs an async
-    // SQLite driver for its multi-statement transaction, and node:sqlite is synchronous.
-    // Switching db/client.ts to libsql would turn it on; until then the UI writes the task,
-    // then its triggers.
+    // `nestedWrites` (triggers created inline under createTask) is off. Nothing in the driver
+    // stops it any more; it is simply not earned yet — the UI writes the task and then its
+    // triggers, and a flow is written by `setTaskSteps` rather than row at a time regardless.
   },
   exclude: {
     // The key never needs to travel back to the browser; the UI only ever writes it.
@@ -360,7 +358,7 @@ export const schema = new GraphQLSchema({
               { extensions: { code: "BAD_STEPS" } },
             );
           }
-          writeTaskSteps(args.taskId, rows);
+          await writeTaskSteps(args.taskId, rows);
 
           const written = await db.select().from(steps).where(eq(steps.taskId, args.taskId));
           const order = new Map(rows.map((row, at) => [row.id, at]));

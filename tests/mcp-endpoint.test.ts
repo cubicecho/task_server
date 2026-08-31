@@ -20,7 +20,7 @@ let client: Client;
 
 beforeAll(async () => {
   const { ensureSchema } = await import("../server/db/migrate.ts");
-  ensureSchema();
+  await ensureSchema();
   events = await import("../server/runner/events.ts");
   const { mountMcp } = await import("../server/mcp-endpoint.ts");
 

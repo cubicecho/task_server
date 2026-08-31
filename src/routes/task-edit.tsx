@@ -141,7 +141,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
           task.id)
         : (await request(CreateTaskDocument, { values })).createTask.id;
 
-      // Triggers are saved one by one because nested writes need an async SQLite driver (see
+      // Triggers are saved one by one because `nestedWrites` is off (see
       // `server/graphql/schema.ts`). The flow is not: `setTaskSteps` writes the tree in one
       // transaction, so a flow either lands whole or not at all.
       for (const id of removed) await request(DeleteTriggerDocument, { id });

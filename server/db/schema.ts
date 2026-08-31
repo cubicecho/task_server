@@ -1,15 +1,21 @@
 import { defineRelations } from "drizzle-orm";
 import {
-  type AnySQLiteColumn,
+  type AnyPgColumn,
+  boolean,
   index,
   integer,
+  jsonb,
+  pgTable,
   real,
-  sqliteTable,
   text,
-} from "drizzle-orm/sqlite-core";
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 /**
- * The whole domain: a **task** is a prompt plus the model settings to run it with, a
+ * The whole domain, in one place. Postgres is the only database; `client.ts` chooses which
+ * postgres — embedded or a server — and nothing above this directory has to care.
+ *
+ * A **task** is a prompt plus the model settings to run it with, a
  * **trigger** is a reason to run it, a **step** is something that happens after the prompt,
  * and a **run** is one execution with its output.
  *
@@ -18,6 +24,9 @@ import {
  * is a second row against the same task, not a second column on every task that will never use
  * it. `kind` discriminates; `cron`/`timezone` belong to cron rows and `event`/`config` to event
  * rows, which is why both sets are nullable.
+ *
+ * Column names stay camelCase. Postgres folds unquoted identifiers to lower case, so the DDL
+ * in `ensure.ts` quotes every one of them.
  */
 
 const id = () =>
@@ -26,11 +35,11 @@ const id = () =>
     .$defaultFn(() => crypto.randomUUID());
 
 const createdAt = () =>
-  integer({ mode: "timestamp_ms" })
+  timestamp({ mode: "date", withTimezone: true })
     .notNull()
     .$defaultFn(() => new Date());
 
-export const tasks = sqliteTable("tasks", {
+export const tasks = pgTable("tasks", {
   id: id(),
   name: text().notNull(),
   /** What the agent is asked to do, each time this task fires. */
@@ -39,15 +48,15 @@ export const tasks = sqliteTable("tasks", {
   model: text().notNull().default(""),
   /** Empty falls back to the default system prompt in settings. */
   systemPrompt: text().notNull().default(""),
-  enabled: integer({ mode: "boolean" }).notNull().default(true),
+  enabled: boolean().notNull().default(true),
   createdAt: createdAt(),
-  updatedAt: integer({ mode: "timestamp_ms" })
+  updatedAt: timestamp({ mode: "date", withTimezone: true })
     .notNull()
     .$defaultFn(() => new Date())
     .$onUpdateFn(() => new Date()),
 });
 
-export const triggers = sqliteTable(
+export const triggers = pgTable(
   "triggers",
   {
     id: id(),
@@ -65,8 +74,8 @@ export const triggers = sqliteTable(
     /** Event name, for `kind: "event"` — e.g. `email.received`. */
     event: text().notNull().default(""),
     /** Free-form JSON for the event's matching rules. Opaque to the server for now. */
-    config: text({ mode: "json" }).$type<Record<string, unknown>>(),
-    enabled: integer({ mode: "boolean" }).notNull().default(true),
+    config: jsonb().$type<Record<string, unknown>>(),
+    enabled: boolean().notNull().default(true),
     createdAt: createdAt(),
   },
   (table) => [index("triggers_task_idx").on(table.taskId)],
@@ -86,7 +95,7 @@ export const triggers = sqliteTable(
  * it one level at a time, and both the runner and the editor would rather have the flat list
  * and build the tree themselves.
  */
-export const steps = sqliteTable(
+export const steps = pgTable(
   "steps",
   {
     id: id(),
@@ -94,7 +103,7 @@ export const steps = sqliteTable(
       .notNull()
       .references(() => tasks.id, { onDelete: "cascade" }),
     /** The decision this step hangs off. Null means the task's own top-level sequence. */
-    parentId: text().references((): AnySQLiteColumn => steps.id, { onDelete: "cascade" }),
+    parentId: text().references((): AnyPgColumn => steps.id, { onDelete: "cascade" }),
     /** Which arm of the parent decision this sits in. Empty at the top level. */
     branch: text().notNull().default(""),
     /** Where in its sequence this step runs. */
@@ -107,7 +116,7 @@ export const steps = sqliteTable(
     name: text().notNull().default(""),
     prompt: text().notNull().default(""),
     /** Decision only: the arms it may choose between. `default` is always available. */
-    cases: text({ mode: "json" }).$type<string[]>(),
+    cases: jsonb().$type<string[]>(),
     /** Empty falls back to the task's model, then to settings. */
     model: text().notNull().default(""),
     systemPrompt: text().notNull().default(""),
@@ -115,7 +124,7 @@ export const steps = sqliteTable(
     context: text({ enum: ["all", "previous", "none"] })
       .notNull()
       .default("all"),
-    enabled: integer({ mode: "boolean" }).notNull().default(true),
+    enabled: boolean().notNull().default(true),
     createdAt: createdAt(),
   },
   (table) => [
@@ -124,7 +133,7 @@ export const steps = sqliteTable(
   ],
 );
 
-export const runs = sqliteTable(
+export const runs = pgTable(
   "runs",
   {
     id: id(),
@@ -138,12 +147,12 @@ export const runs = sqliteTable(
       .notNull()
       .default("running"),
     startedAt: createdAt(),
-    finishedAt: integer({ mode: "timestamp_ms" }),
+    finishedAt: timestamp({ mode: "date", withTimezone: true }),
     /** The agent's final reply. */
     output: text().notNull().default(""),
     error: text().notNull().default(""),
     /** Every tool the run called, in order, as JSON — enough to see what it actually did. */
-    toolCalls: text({ mode: "json" }).$type<{ name: string; ok: boolean }[]>(),
+    toolCalls: jsonb().$type<{ name: string; ok: boolean }[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),
@@ -164,7 +173,7 @@ export const runs = sqliteTable(
  * The rendered input is deliberately absent: it is the earlier steps' outputs, which are
  * already here, and storing it again would double what a run costs on disk.
  */
-export const runSteps = sqliteTable(
+export const runSteps = pgTable(
   "run_steps",
   {
     id: id(),
@@ -187,10 +196,10 @@ export const runSteps = sqliteTable(
     /** Decision only: the arm it took. */
     branch: text().notNull().default(""),
     startedAt: createdAt(),
-    finishedAt: integer({ mode: "timestamp_ms" }),
+    finishedAt: timestamp({ mode: "date", withTimezone: true }),
     output: text().notNull().default(""),
     error: text().notNull().default(""),
-    toolCalls: text({ mode: "json" }).$type<{ name: string; ok: boolean }[]>(),
+    toolCalls: jsonb().$type<{ name: string; ok: boolean }[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),
@@ -198,24 +207,24 @@ export const runSteps = sqliteTable(
   (table) => [index("run_steps_run_idx").on(table.runId)],
 );
 
-export const mcpServers = sqliteTable("mcp_servers", {
+export const mcpServers = pgTable("mcp_servers", {
   id: id(),
   /** Namespace for this server's tools: the agent sees `<slug>__<tool name>`. */
   slug: text().notNull().unique(),
   label: text().notNull().default(""),
-  enabled: integer({ mode: "boolean" }).notNull().default(true),
+  enabled: boolean().notNull().default(true),
   transport: text({ enum: ["stdio", "http"] })
     .notNull()
     .default("stdio"),
   command: text().notNull().default(""),
-  args: text({ mode: "json" }).$type<string[]>(),
-  env: text({ mode: "json" }).$type<Record<string, string>>(),
+  args: jsonb().$type<string[]>(),
+  env: jsonb().$type<Record<string, string>>(),
   url: text().notNull().default(""),
-  headers: text({ mode: "json" }).$type<Record<string, string>>(),
+  headers: jsonb().$type<Record<string, string>>(),
 });
 
 /** One row, `id: "default"`. A table rather than a file so it comes free over GraphQL. */
-export const settings = sqliteTable("settings", {
+export const settings = pgTable("settings", {
   id: text().primaryKey().default("default"),
   /** Any OpenAI-compatible endpoint: OpenAI, Ollama, LM Studio, vLLM, OpenRouter, ... */
   baseUrl: text().notNull().default("http://localhost:11434/v1"),

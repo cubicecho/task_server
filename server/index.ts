@@ -9,7 +9,7 @@ import { PORT, ROOT } from "./paths.ts";
 import { mcp } from "./runner/mcp.ts";
 import * as cron from "./scheduler/cron.ts";
 
-ensureSchema();
+await ensureSchema();
 
 const app = express();
 

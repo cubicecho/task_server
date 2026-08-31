@@ -32,7 +32,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # Vitest against a temp SQLite file per suite; no services needed.
+      # Vitest against an in-memory PGlite per suite; no services needed.
       - name: Test
         run: npm test
 
@@ -73,3 +73,36 @@ jobs:
           echo '::error::the container never answered on :8787'
           docker logs task-server-ci
           exit 1
+
+  # The tests run on PGlite, which is postgres but not a postgres *server*: it
+  # says nothing about the node-postgres driver, the connection URL, or a boot
+  # that has to wait for a database in another container. The compose file is
+  # how that deployment is meant to be run, so CI runs that rather than a rig
+  # of its own.
+  postgres:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+
+      # `--wait` holds until both healthchecks pass, and the server's own is a
+      # GraphQL query — so reaching the next step already means postgres
+      # answered one.
+      - name: Boot the stack
+        run: docker compose -f docker-compose.pg.yml up -d --build --wait
+
+      # A write and a read back, over the driver that only this job exercises.
+      - name: A task round-trips through postgres
+        run: |
+          gql() {
+            curl -fsS -X POST localhost:8787/graphql \
+              -H 'content-type: application/json' -d "{\"query\": $1}"
+          }
+          gql '"mutation { createTask(values: { name: \"ci\", prompt: \"hi\" }) { id } }"'
+          gql '"{ tasks { name enabled createdAt } }"' | tee tasks.json
+          grep -q '"name":"ci"' tasks.json
+          grep -q '"enabled":true' tasks.json
+
+      - name: Logs, if it did not
+        if: failure()
+        run: docker compose -f docker-compose.pg.yml logs

@@ -17,5 +17,16 @@ export default defineConfig({
       graphql: resolve("graphql"),
     },
   },
-  test: { environment: "node", include: ["tests/**/*.test.ts"] },
+  test: {
+    environment: "node",
+    include: ["tests/**/*.test.ts"],
+    // Every suite gets its own PGlite, in memory: real postgres, no server to start, and
+    // nothing left behind when the process ends. See `server/db/client.ts`.
+    env: { DATABASE_URL: "memory://" },
+    // A postgres per worker is real work, and the suites that spawn MCP servers over stdio are
+    // waiting on child processes while it happens. The default 5s is tight enough that a
+    // loaded machine trips it; nothing here is meant to take anything like this long.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
+  },
 });

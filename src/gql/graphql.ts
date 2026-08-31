@@ -251,6 +251,8 @@ export type JsonFilter = {
   NOT?: InputMaybe<JsonFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<JsonFilter>>;
+  /** Value structurally contains this JSON (Postgres `@>` / MySQL JSON_CONTAINS) */
+  contains?: InputMaybe<Scalars['JSON']['input']>;
   /** JSON equality on the whole value */
   eq?: InputMaybe<Scalars['JSON']['input']>;
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;

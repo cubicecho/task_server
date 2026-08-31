@@ -50,8 +50,8 @@ const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLow
 /**
  * Flattens the nested input into rows, assigning `parentId`, `branch` and `position`.
  *
- * Pre-order, so a parent is always written before the children that reference it — SQLite
- * checks foreign keys as each row goes in, not at the end of the transaction.
+ * Pre-order, so a parent is always written before the children that reference it: the foreign
+ * key is checked as each row goes in, not at the end of the transaction.
  */
 export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
   const rows: NewStep[] = [];
@@ -130,29 +130,30 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
 }
 
 /**
- * Replaces a task's steps with these.
+ * Replaces a task's steps with these, all of it or none of it.
  *
- * Rows are updated in place rather than deleted and recreated, so a step that survives an edit
- * keeps its id — and with it the `run_steps` rows of every past run that point at it. The
- * parents are broken first because deleting a step cascades to its children, and a step being
- * *moved* out of a branch would otherwise be deleted along with the branch it left.
+ * The parents are broken first because deleting a step cascades to its children, and a step
+ * being *moved* out of a branch would otherwise be deleted along with the branch it left.
+ * Surviving rows are updated in place rather than deleted and recreated, so a step that lives
+ * through an edit keeps its id — and with it the `run_steps` rows of every past run that point
+ * at it.
  */
-export function writeTaskSteps(taskId: string, rows: NewStep[]): void {
+export async function writeTaskSteps(taskId: string, rows: NewStep[]): Promise<void> {
   const keep = rows.map((row) => row.id);
 
-  db.transaction((tx) => {
-    tx.update(steps).set({ parentId: null }).where(eq(steps.taskId, taskId)).run();
-    tx.delete(steps)
+  await db.transaction(async (tx) => {
+    await tx.update(steps).set({ parentId: null }).where(eq(steps.taskId, taskId));
+    await tx
+      .delete(steps)
       .where(
         keep.length
           ? and(eq(steps.taskId, taskId), notInArray(steps.id, keep))
           : eq(steps.taskId, taskId),
-      )
-      .run();
+      );
 
     for (const row of rows) {
       const { id: _id, taskId: _taskId, ...set } = row;
-      tx.insert(steps).values(row).onConflictDoUpdate({ target: steps.id, set }).run();
+      await tx.insert(steps).values(row).onConflictDoUpdate({ target: steps.id, set });
     }
   });
 }

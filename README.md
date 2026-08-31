@@ -21,9 +21,11 @@ server (Ollama `http://localhost:11434/v1`, LM Studio `http://localhost:1234/v1`
 OpenRouter), pick a model, and save. Then create a task, give it a cron expression, and hit
 **Run now** to try it without waiting for the clock.
 
-The SQLite file is created on first boot under `data/`; there is no migration step to run.
-Copy `.env.example` to `.env` if you want to move the port, the database, or supply the API key
-from the environment instead of the UI.
+The database is postgres, and with nothing configured it is an embedded one — PGlite, running
+in the server's own process against `data/`. Nothing to install, nothing to start, and the
+tables are created on first boot; see **Postgres**. Copy `.env.example` to `.env` if you want
+to move the port, point at a postgres server, or supply the API key from the environment
+instead of the UI.
 
 ## The model
 
@@ -146,9 +148,8 @@ express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `r
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so
 editing a trigger in the UI takes effect immediately.
 
-`features.nestedWrites` is off: it needs an asynchronous SQLite driver, and this app uses Node's
-synchronous built-in `node:sqlite` to stay free of native dependencies. The UI therefore saves a
-task and its triggers as separate mutations.
+`features.nestedWrites` is off, so the UI saves a task and its triggers as separate mutations.
+A flow is written by `setTaskSteps` rather than a row at a time in any case — see **Flows**.
 
 ## MCP endpoint
 
@@ -196,8 +197,17 @@ docker compose up --build
 ```
 
 The server is on `http://localhost:8787` — the dashboard, `/graphql`, and `/mcp` all from the
-one container, the same as `npm start`. The database is a file on the volume, bind-mounted at
-`./data`, so the tasks survive the container and can be copied somewhere else.
+one container, the same as `npm start`. The embedded postgres keeps its data on the volume,
+bind-mounted at `./data`, so the tasks survive the container.
+
+For a postgres server of its own, `docker-compose.pg.yml` is the same image beside a
+`postgres:17` service, with `DATABASE_URL` pointed at it and the tasks in a named volume:
+
+```sh
+docker compose -f docker-compose.pg.yml up --build
+```
+
+Nothing in the image changes between the two — see **Postgres** below.
 
 Set `TZ` in a `.env` beside the compose file if cron triggers should fire on your clock rather
 than UTC. `OPENAI_API_KEY` is optional and only a fallback: the key the settings screen saves
@@ -228,9 +238,33 @@ shape changes breaks compilation rather than at runtime. Re-run it after changin
 
 ## Postgres
 
-Only SQLite is wired up. The swap is confined to `server/db/client.ts`, which throws on a
-non-`file:` `DATABASE_URL` pointing at itself; the table definitions in `server/db/schema.ts`
-would move to `drizzle-orm/pg-core`.
+Postgres is the only database, and it comes in two shapes.
+
+With nothing set, the server runs **PGlite**: postgres itself, compiled to WebAssembly and
+running inside the Node process against a directory under `data/`. A fresh clone has a database
+the moment it boots, with nothing installed and nothing to start — and it is the same engine,
+the same SQL and the same types as the deployed thing, which is the point of it. The tests run
+one in memory, a throwaway per suite.
+
+With `DATABASE_URL` set it is a postgres server over `pg`, for the deployment that has outgrown
+a single process — more than one server, a managed backup, storage that is not the app's own
+disk.
+
+```sh
+DATABASE_URL=postgres://tasks:tasks@localhost:5432/tasks npm start
+```
+
+That variable is the whole switch, and `server/db/client.ts` is the only place in the server
+that acts on it — everything above `server/db/` is written against one `db` and one set of
+tables. The schema is created on first boot either way, so an empty database is all a postgres
+server has to arrive with; `docker-compose.pg.yml` is the same image against a `postgres:17`
+service — see **Docker** above.
+
+It is a swap, not a migration: the two databases share no data, and moving tasks from one to
+the other is your own `pg_dump`-shaped problem.
+
+`npm run db:push` and `db:studio` follow `DATABASE_URL` too, and write their diffs to
+`drizzle/`.
 
 ## Scripts
 
