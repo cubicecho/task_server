@@ -3,6 +3,7 @@ import { RefreshCw, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/app-shell";
+import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -121,6 +122,8 @@ export function RunsRoute() {
 
             {expanded ? (
               <div className="flex flex-col gap-2 border-t pt-3">
+                {/* A run in flight has no stored output yet — this is the run itself, live. */}
+                {running ? <RunStream runId={run.id} /> : null}
                 {tools.length ? (
                   <div className="flex flex-wrap gap-1">
                     {tools.map((tool, index) => (
@@ -136,9 +139,11 @@ export function RunsRoute() {
                     ))}
                   </div>
                 ) : null}
-                <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-                  {run.error || run.output || "(no output)"}
-                </pre>
+                {running ? null : (
+                  <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
+                    {run.error || run.output || "(no output)"}
+                  </pre>
+                )}
               </div>
             ) : null}
           </Card>

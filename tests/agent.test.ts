@@ -4,17 +4,22 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
+import { replyWith } from "./fixtures/sse.ts";
 
 // Loading the runner pulls in the database module, so give it somewhere disposable first.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-agent-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
 
 /** Chat completions the fake model server hands back, one per request, in order. */
-let replies: unknown[] = [];
+let replies: ReturnType<typeof completion>[] = [];
 let server: http.Server;
 let baseUrl = "";
 
-const completion = (message: unknown) => ({
+const completion = (message: {
+  role: string;
+  content?: string | null;
+  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
+}) => ({
   id: "chatcmpl-test",
   object: "chat.completion",
   created: 0,
@@ -25,12 +30,13 @@ const completion = (message: unknown) => ({
 
 beforeAll(async () => {
   server = http.createServer((request, response) => {
-    request.resume();
+    let body = "";
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
     request.on("end", () => {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(
-        JSON.stringify(replies.shift() ?? completion({ role: "assistant", content: "" })),
-      );
+      const sent = JSON.parse(body);
+      replyWith(response, replies.shift() ?? completion({ role: "assistant", content: "" }), sent);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -78,6 +84,30 @@ test("returns the reply and sums usage across turns", async () => {
   // the model gets the error back as the tool result and decides what to do with it.
   expect(result.toolCalls).toEqual([{ name: "missing__tool", ok: false }]);
   expect(result.totalTokens).toBe(30);
+});
+
+test("reports the run as it happens, tokens and tool calls alike", async () => {
+  const { runAgent } = await import("../server/runner/agent.ts");
+  replies = [toolCall("missing__tool"), completion({ role: "assistant", content: "all done" })];
+
+  const events: { kind: string; text: string; name?: string; ok?: boolean | null }[] = [];
+  await runAgent({
+    config: config(),
+    model: "fake",
+    systemPrompt: "",
+    prompt: "go",
+    onEvent: (event) => events.push(event as (typeof events)[number]),
+  });
+
+  expect(events.filter((event) => event.kind === "step")).toHaveLength(2);
+  // Content arrives in pieces and is reported as it does, not in one lump at the end.
+  const output = events.filter((event) => event.kind === "output");
+  expect(output.length).toBeGreaterThan(1);
+  expect(output.map((event) => event.text).join("")).toBe("all done");
+  expect(events.find((event) => event.kind === "tool-call")).toMatchObject({
+    name: "missing__tool",
+  });
+  expect(events.find((event) => event.kind === "tool-result")).toMatchObject({ ok: false });
 });
 
 test("gives up once it has spent its tool iterations", async () => {

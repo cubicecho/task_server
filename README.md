@@ -33,12 +33,30 @@ from the environment instead of the UI.
   A run in flight can be called off from either the Runs or the Tasks page (`stopTask`), which
   aborts the request and finishes the run as `stopped` — neither a success nor a failure.
   Neither the run nor its task can be deleted while it is going: both deletes are refused
-  server-side until it has stopped.
+  server-side until it has stopped. Expanding a running run on the **Runs** page shows it
+  happening — see below.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
   will dial a config (`testMcpServer`) to list its tools before you save it.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
   temperature limits, the cap on tool iterations per run, and how MCP tools are discovered.
+
+## Watching a run
+
+A run row is a before and an after. Everything in between — the thinking, the tool the model
+reached for, the argument it got wrong — is what you need when a task misbehaves, and it is
+gone by the time the row is written. So the runner streams its completions and reports what it
+is doing as it does it: reasoning and reply tokens, each tool call with its arguments, each
+result, and the step boundaries between them.
+
+Those events go to an in-memory bus (`server/runner/events.ts`) and out over a GraphQL
+subscription, `runEvents(runId:)`, which yoga serves as SSE — the browser reads it with its own
+`EventSource`, so the client needs no library for it. Expand a running run on the **Runs** page
+to watch. A watcher that joins halfway through is replayed the run so far, so opening it late
+reads the same as having watched from the start.
+
+It is debugging output, not the record: nothing is persisted, nothing survives a restart, and a
+finished run is forgotten a minute later. The row remains the lasting account of what happened.
 
 With several servers connected, tool definitions cost more per request than the task's own
 prompt — they are mostly JSON Schema, and every one is sent on every step. Settings offers two
