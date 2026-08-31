@@ -1,0 +1,99 @@
+import { createHttpHandler } from "@cubicecho/graphql-mcp";
+import express from "express";
+// The version a client is told it is talking to; without it the wrapper library reports its own.
+import { version } from "../package.json" with { type: "json" };
+import { schema } from "./graphql/schema.ts";
+
+/**
+ * The tools an outside client is handed, and nothing else.
+ *
+ * The schema has forty-odd root fields — aggregates, group-bys, bulk writes, the settings row
+ * with the API key behind it — and projecting all of them would spend an agent's context on
+ * things no agent should be reaching for. These are the ones that make this a task server to
+ * someone driving it from outside: read the tasks and their runs, watch a run, start or stop
+ * one, and write tasks and their schedules.
+ *
+ * Left out on purpose: `settings`/`setApiKey` (the server's own credentials are the operator's
+ * business, not a visiting agent's), the MCP-server rows (same), and every bulk mutation — a
+ * `deleteTask` with no `where` empties the table, and `deleteTaskSingle` cannot.
+ */
+const TOOLS = [
+  "Query.tasks",
+  "Query.runs",
+  "Query.runEvents",
+  "Query.triggers",
+  "Query.schedule",
+  "Query.models",
+  "Mutation.createTask",
+  "Mutation.updateTaskSingle",
+  "Mutation.deleteTaskSingle",
+  "Mutation.createTrigger",
+  "Mutation.updateTriggerSingle",
+  "Mutation.deleteTriggerSingle",
+  "Mutation.runTask",
+  "Mutation.stopTask",
+];
+
+/**
+ * A line of orientation on the tools whose GraphQL fields are generated, and so describe
+ * themselves only as "the `tasks` query". A visiting agent has no other way to learn that a
+ * task without a trigger never fires, or that a run it just started can be watched.
+ */
+const HINTS: Record<string, string> = {
+  tasks:
+    "Every task on this server: its prompt, the model it runs on, and whether it is enabled. " +
+    "Filter with `where: { id: { eq: … } }` for one of them.",
+  runs:
+    "What happened when tasks ran — `status` is `running`, `ok`, `error` or `stopped`, and a " +
+    "finished run carries its output, its error, the tools it called and what it cost. Order " +
+    "by `startedAt` descending for the latest; filter by `taskId` for one task's history.",
+  triggers: "When tasks fire: one cron expression per trigger, read in its own timezone.",
+  createTask:
+    "Adds a task. It will not fire on its own until it has a trigger — add one with " +
+    "`createTrigger`, or call `runTask` to run it now.",
+  updateTaskSingle:
+    "Edits one task. `set: { enabled: false }` keeps a task but stops it firing, which is the " +
+    "gentler alternative to deleting it.",
+  deleteTaskSingle:
+    "Deletes one task, its triggers and its history. Refused while the task is running: stop " +
+    "it first with `stopTask`.",
+  createTrigger:
+    "Schedules a task: `kind: cron` with a five-field expression such as `0 9 * * *`, and a " +
+    "`timezone` if it should not follow the server's.",
+  deleteTriggerSingle: "Unschedules a task without deleting the task itself.",
+};
+
+/**
+ * The same schema the web app uses, offered to other clients as MCP tools.
+ *
+ * A task server whose own API is a set of tools can be driven by an agent — "add a task that
+ * checks the build every morning" — which is the shortest path from this being a CRUD app to
+ * being something an assistant operates.
+ *
+ * Stateless: each request builds its own server and answers as JSON, so nothing is pinned to a
+ * process and a client can reconnect whenever it likes. Sessions would buy server-initiated
+ * messages over an open stream; nothing here sends any.
+ */
+export const mcpHandler = createHttpHandler({
+  schema,
+  name: "task-server",
+  version,
+  include: TOOLS,
+  // One level: the leaf fields of what a tool returns. Two would pull every run — output and
+  // all — into a listing of tasks, which is a lot of context for a question about names.
+  selectionDepth: 1,
+  decorate: (descriptor) => {
+    const hint = HINTS[descriptor.name];
+    return hint ? { description: `${hint}\n\n${descriptor.description}` } : undefined;
+  },
+});
+
+/**
+ * Mounts the endpoint. `all`, not `post`: a client does more than call tools — it opens the
+ * notification stream with a `GET` and ends its session with a `DELETE` — and the transport
+ * answers all three, in JSON-RPC, including when the request is wrong. Mounted on `post`
+ * alone, the other two met Express's 404 page instead, which reads as "wrong URL".
+ */
+export function mountMcp(app: express.Application, route = "/mcp") {
+  app.all(route, express.json(), mcpHandler);
+}

@@ -132,3 +132,30 @@ export const history = (runId: string): RunEvent[] => [...(streams.get(runId)?.e
 
 /** Test seam: forget every run, so one test's events cannot be read by the next. */
 export const reset = () => streams.clear();
+
+/**
+ * Consecutive tokens of one kind are one thing being said, not hundreds of things.
+ *
+ * A client that reads a run in snapshots rather than token by token wants it that way: a
+ * reasoning model spends ten thousand deltas on a paragraph, and a paragraph is what it meant.
+ * Each block carries the `seq` of its last event, so asking for what came after one block
+ * picks up exactly where it left off.
+ */
+export function fold(events: RunEvent[]): RunEvent[] {
+  const blocks: RunEvent[] = [];
+  for (const event of events) {
+    const last = blocks[blocks.length - 1];
+    const mergeable = event.kind === "thinking" || event.kind === "output";
+    if (last && mergeable && last.kind === event.kind) {
+      blocks[blocks.length - 1] = {
+        ...last,
+        seq: event.seq,
+        at: event.at,
+        text: last.text + event.text,
+      };
+    } else {
+      blocks.push(event);
+    }
+  }
+  return blocks;
+}

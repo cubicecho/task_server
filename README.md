@@ -100,14 +100,12 @@ tests/         vitest
 The API is generated from the Drizzle tables by
 [`@vantreeseba/drizzle-graphql`](https://github.com/vantreeseba/drizzle-graphql), so a new
 column is queryable as soon as it exists. Hand-written fields fill the gaps that CRUD cannot
-express: `models`, `mcpStatus` and `schedule` on the query side, `runTask`, `reconnectMcp` and
-`setApiKey` on the mutation side.
+express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `runTask`,
+`stopTask`, `reconnectMcp` and `setApiKey` on the mutation side.
 
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
-- **`POST /mcp`** — for agents, not the web app, which talks only GraphQL. In dev it is
-  reached on the server's own port (`:8787`); vite proxies `/graphql` alone. This is
-  the same schema served as MCP tools by `@cubicecho/graphql-mcp`, so an
-  agent elsewhere can create and run tasks here.
+- **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,
+  which talks only GraphQL.
 
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so
 editing a trigger in the UI takes effect immediately.
@@ -115,6 +113,45 @@ editing a trigger in the UI takes effect immediately.
 `features.nestedWrites` is off: it needs an asynchronous SQLite driver, and this app uses Node's
 synchronous built-in `node:sqlite` to stay free of native dependencies. The UI therefore saves a
 task and its triggers as separate mutations.
+
+## MCP endpoint
+
+`/mcp` serves this server's own API as MCP tools over Streamable HTTP, so another client —
+Claude Code, Claude Desktop, anything that speaks MCP — can read and write tasks here without
+going through the web app. In dev it is on the server's own port (`:8787`); vite proxies
+`/graphql` alone.
+
+```sh
+claude mcp add --transport http tasks http://localhost:8787/mcp
+```
+
+Fourteen tools, chosen in `server/mcp-endpoint.ts` rather than projected from the whole schema:
+
+- **read** — `tasks`, `runs`, `triggers`, `schedule`, `models`
+- **write** — `createTask`, `updateTaskSingle`, `deleteTaskSingle`, and the same three for
+  triggers
+- **run** — `runTask`, `stopTask`, `runEvents`
+
+The schema has forty-odd root fields, and the rest are left out on purpose: the settings row and
+`setApiKey` (the server's own credentials are the operator's business, not a visiting agent's),
+the MCP-server rows, the aggregates and group-bys, and every bulk mutation — `deleteTask` with
+no `where` empties the table, where `deleteTaskSingle` cannot. Each tool selects one level of
+fields, so a listing of tasks does not drag every run's output along with it.
+
+`runTask` does not answer until the run is over, which for a real task is minutes. To watch one
+meanwhile, poll `runEvents(runId, afterSeq)` — the snapshot form of the subscription the Runs
+page uses, with consecutive thinking and output tokens folded into one entry each. Pass the
+`seq` of the last entry you read as `afterSeq` and you get what came after it, and nothing
+twice.
+
+It is stateless: each request builds its own server and answers as JSON, so there is no session
+to keep alive and a client can reconnect whenever it likes. The endpoint is mounted for every
+method, not just `POST`, so the `GET` a client uses to offer a notification stream and the
+`DELETE` it uses to end a session are answered by the transport in JSON-RPC rather than by
+Express's 404 page.
+
+No CORS headers, deliberately: this server has no authentication, so anyone who can reach the
+port can drive it, and there is no reason to also let a web page from another origin do so.
 
 ## Codegen
 

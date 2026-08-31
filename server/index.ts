@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createHttpHandler } from "@cubicecho/graphql-mcp";
 import express from "express";
 import { createYoga } from "graphql-yoga";
 import { ensureSchema } from "./db/migrate.ts";
 import { schema } from "./graphql/schema.ts";
+import { mcpHandler, mountMcp } from "./mcp-endpoint.ts";
 import { PORT, ROOT } from "./paths.ts";
 import { mcp } from "./runner/mcp.ts";
 import * as cron from "./scheduler/cron.ts";
@@ -16,14 +16,9 @@ const app = express();
 const yoga = createYoga({ schema, graphqlEndpoint: "/graphql" });
 app.use(yoga.graphqlEndpoint, yoga);
 
-/**
- * The same schema, offered to agents as MCP tools.
- *
- * A task server whose own API is a set of tools can be driven by an agent — "add a task that
- * checks the build every morning" — which is the shortest path from this being a CRUD app to
- * being something an assistant operates. It mounts beside GraphQL rather than replacing it.
- */
-app.post("/mcp", express.json(), createHttpHandler({ schema }));
+// The same schema, offered to other clients as MCP tools, beside GraphQL rather than
+// replacing it. What it exposes and why is in `mcp-endpoint.ts`.
+mountMcp(app);
 
 // In production the built client is served from the same origin.
 const dist = path.join(ROOT, "dist");
@@ -41,6 +36,7 @@ app.use(
 
 const server = app.listen(PORT, () => {
   console.log(`[task-server] http://localhost:${PORT}/graphql`);
+  console.log(`[task-server] mcp: http://localhost:${PORT}/mcp`);
 });
 
 await mcp.sync();
@@ -48,6 +44,7 @@ await cron.sync();
 
 const shutdown = async () => {
   cron.stop();
+  await mcpHandler.close();
   await mcp.shutdown();
   server.close();
   process.exit(0);
