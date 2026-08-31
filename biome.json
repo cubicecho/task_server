@@ -11,7 +11,8 @@
       "scripts/**",
       "*.ts",
       "*.json",
-      "!src/gql"
+      "!src/gql",
+      "!.claude"
     ]
   },
   "formatter": {
