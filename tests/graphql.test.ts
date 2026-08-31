@@ -70,6 +70,22 @@ test("disabling the task takes its triggers off the schedule with it", async () 
   expect(schedule).toEqual([]);
 });
 
+test("a broken MCP config is reported, not thrown", async () => {
+  const { testMcpServer } = await run(
+    `mutation { testMcpServer(config: { transport: "stdio", command: "" }) { ok error tools { name } } }`,
+  );
+  // A test that cannot connect is a normal answer for this mutation — the point of the button
+  // is to find out, so the reason belongs in the payload rather than in an errors array.
+  expect(testMcpServer).toMatchObject({ ok: false, tools: [] });
+  expect(testMcpServer.error).toMatch(/command/);
+
+  const { testMcpServer: missing } = await run(
+    `mutation { testMcpServer(config: { transport: "stdio", command: "definitely-not-a-real-binary" }) { ok error } }`,
+  );
+  expect(missing.ok).toBe(false);
+  expect(missing.error).not.toBe("");
+});
+
 test("the api key is write-only", async () => {
   const result = await graphql({ schema, source: `{ settings { apiKey } }` });
   expect(result.errors?.[0].message).toMatch(/apiKey/);

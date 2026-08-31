@@ -31,7 +31,8 @@ from the environment instead of the UI.
   never dispatched.
 - **run** — one execution: status, timings, output or error, which tools were called, tokens.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
-  model as `slug__tool-name`.
+  model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
+  will dial a config (`testMcpServer`) to list its tools before you save it.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
   temperature limits, and the cap on tool iterations per run.
 
@@ -48,6 +49,7 @@ server/
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write
   index.ts     express + yoga + the MCP endpoint + the built SPA
 src/           vite + react + tanstack router/query + shadcn
+               (tasks, runs, mcp servers, settings)
 tests/         vitest
 ```
 

@@ -1,23 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plug, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/app-shell";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  CreateMcpServerDocument,
-  DeleteMcpServerDocument,
-  McpServersTransportEnum,
   ModelsDocument,
-  ReconnectMcpDocument,
   SetApiKeyDocument,
   SettingsDocument,
-  UpdateMcpServerDocument,
   UpdateSettingsDocument,
 } from "@/gql/graphql";
 import { request } from "@/lib/gql";
@@ -76,50 +70,13 @@ export function SettingsRoute() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const reconnect = useMutation({
-    mutationFn: () => request(ReconnectMcpDocument),
-    onSuccess: () => {
-      toast.success("Reconnected");
-      refresh();
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const addServer = useMutation({
-    mutationFn: () =>
-      request(CreateMcpServerDocument, {
-        values: {
-          slug: `server-${Date.now().toString(36)}`,
-          transport: McpServersTransportEnum.Stdio,
-          command: "npx",
-        },
-      }),
-    onSuccess: refresh,
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const removeServer = useMutation({
-    mutationFn: (id: string) => request(DeleteMcpServerDocument, { id }),
-    onSuccess: refresh,
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const updateServer = useMutation({
-    mutationFn: (input: { id: string; set: Record<string, unknown> }) =>
-      request(UpdateMcpServerDocument, input),
-    onSuccess: refresh,
-    onError: (error: Error) => toast.error(error.message),
-  });
-
   const field = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((current) => (current ? { ...current, [key]: value } : current));
-
-  const statusOf = (id: string) => settings.data?.mcpStatus.find((entry) => entry.id === id);
 
   return (
     <Page
       title="Settings"
-      description="The model tasks run on, and the MCP servers they can reach."
+      description="The model every task runs on, unless it overrides it."
       actions={
         <Button onClick={() => save.mutate()} disabled={!form || save.isPending}>
           {save.isPending ? "Saving…" : "Save"}
@@ -224,84 +181,6 @@ export function SettingsRoute() {
         ) : (
           <p className="text-sm text-muted-foreground">Loading…</p>
         )}
-      </Card>
-
-      <Card className="gap-4 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 font-medium">
-            <Plug className="size-4" />
-            MCP servers
-          </h2>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="sm" onClick={() => reconnect.mutate()}>
-              <RefreshCw className="size-4" />
-              Reconnect
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => addServer.mutate()}>
-              <Plus className="size-4" />
-              Add
-            </Button>
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Every enabled server's tools are offered to each task run as <code>slug__tool-name</code>.
-        </p>
-
-        {settings.data?.mcpServers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No servers. Without one, tasks can think but not act.
-          </p>
-        ) : null}
-
-        {settings.data?.mcpServers.map((server) => {
-          const status = statusOf(server.id);
-          return (
-            <div key={server.id} className="flex flex-col gap-2 rounded-md border p-3">
-              <div className="flex items-center gap-2">
-                <Input
-                  className="w-40 font-mono"
-                  defaultValue={server.slug}
-                  onBlur={(event) =>
-                    event.target.value !== server.slug &&
-                    updateServer.mutate({ id: server.id, set: { slug: event.target.value } })
-                  }
-                />
-                <Input
-                  className="flex-1"
-                  defaultValue={server.command}
-                  placeholder="npx"
-                  onBlur={(event) =>
-                    event.target.value !== server.command &&
-                    updateServer.mutate({ id: server.id, set: { command: event.target.value } })
-                  }
-                />
-                <Badge variant={status?.status === "ready" ? "secondary" : "outline"}>
-                  {status?.status ?? "unknown"}
-                  {status?.tools.length ? ` · ${status.tools.length}` : ""}
-                </Badge>
-                <Button variant="ghost" size="icon" onClick={() => removeServer.mutate(server.id)}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-              <Input
-                className="font-mono text-xs"
-                defaultValue={JSON.stringify(server.args ?? [])}
-                placeholder='["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]'
-                onBlur={(event) => {
-                  try {
-                    updateServer.mutate({
-                      id: server.id,
-                      set: { args: JSON.parse(event.target.value) },
-                    });
-                  } catch {
-                    toast.error("args must be a JSON array");
-                  }
-                }}
-              />
-              {status?.error ? <p className="text-xs text-destructive">{status.error}</p> : null}
-            </div>
-          );
-        })}
       </Card>
     </Page>
   );

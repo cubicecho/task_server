@@ -1,5 +1,6 @@
 import { createRootRoute, createRoute, createRouter, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
+import { McpRoute } from "@/routes/mcp";
 import { RunsRoute } from "@/routes/runs";
 import { SettingsRoute } from "@/routes/settings";
 import { TasksRoute } from "@/routes/tasks";
@@ -26,6 +27,12 @@ const runsRoute = createRoute({
   component: RunsRoute,
 });
 
+const mcpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/mcp",
+  component: McpRoute,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -33,7 +40,7 @@ const settingsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, tasksRoute, runsRoute, settingsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, tasksRoute, runsRoute, mcpRoute, settingsRoute]),
   defaultPreload: "intent",
 });
 
