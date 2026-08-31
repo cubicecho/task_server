@@ -562,7 +562,7 @@ export type Mutation = {
   deleteTriggerSingle?: Maybe<Trigger>;
   /** Tears down and rebuilds every MCP connection. */
   reconnectMcp: Array<McpServerStatus>;
-  /** Runs a task immediately and resolves with the finished run. */
+  /** Runs a task immediately and resolves with the finished run — which means it does not answer until the run is over, and a long task is a long call. Read `runEvents` meanwhile to watch it, or `stopTask` to call it off. */
   runTask: Run;
   /** Writes the API key. Separate from updateSetting because the key is write-only: it is excluded from the Setting type so it can never be read back out. */
   setApiKey: Scalars['Boolean']['output'];
@@ -771,6 +771,8 @@ export type Query = {
   /** Model ids the configured OpenAI-compatible server reports. */
   models: Array<Scalars['String']['output']>;
   run?: Maybe<Run>;
+  /** What a run has said so far, oldest first, with consecutive thinking and output tokens folded into one entry each. The snapshot form of the `runEvents` subscription, for a client that polls rather than holds a stream open: pass the `seq` of the last entry you read as `afterSeq` to pick up exactly where you left off. Empty for a run that has not started, or one that finished over a minute ago. */
+  runEvents: Array<RunEvent>;
   runs: Array<Run>;
   runsAggregate: RunAggregate;
   runsGroupBy: Array<RunGroupBy>;
@@ -823,6 +825,13 @@ export type QueryRunArgs = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<RunOrderBy>;
   where?: InputMaybe<RunFilters>;
+};
+
+
+export type QueryRunEventsArgs = {
+  afterSeq?: InputMaybe<Scalars['Int']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  runId: Scalars['String']['input'];
 };
 
 

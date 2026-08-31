@@ -13,7 +13,7 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
-import { type RunEvent, watch } from "../runner/events.ts";
+import { fold, history, type RunEvent, watch } from "../runner/events.ts";
 import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
@@ -207,6 +207,34 @@ export const schema = new GraphQLSchema({
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(ScheduleEntryType))),
         resolve: () => scheduleState(),
       },
+      runEvents: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(RunEventType))),
+        description:
+          "What a run has said so far, oldest first, with consecutive thinking and output " +
+          "tokens folded into one entry each. The snapshot form of the `runEvents` " +
+          "subscription, for a client that polls rather than holds a stream open: pass the " +
+          "`seq` of the last entry you read as `afterSeq` to pick up exactly where you left " +
+          "off. Empty for a run that has not started, or one that finished over a minute ago.",
+        args: {
+          runId: { type: new GraphQLNonNull(GraphQLString) },
+          afterSeq: {
+            type: GraphQLInt,
+            description: "Only what is numbered above this. Omit for the whole run.",
+          },
+          limit: {
+            type: GraphQLInt,
+            description: "At most this many entries, oldest first. Default 200.",
+          },
+        },
+        resolve: (
+          _source,
+          args: { runId: string; afterSeq?: number | null; limit?: number | null },
+        ) =>
+          fold(history(args.runId).filter((event) => event.seq > (args.afterSeq ?? 0))).slice(
+            0,
+            args.limit ?? 200,
+          ),
+      },
     },
   }),
   mutation: new GraphQLObjectType({
@@ -215,7 +243,10 @@ export const schema = new GraphQLSchema({
       ...entities.mutations,
       runTask: {
         type: new GraphQLNonNull(generatedType("Run")),
-        description: "Runs a task immediately and resolves with the finished run.",
+        description:
+          "Runs a task immediately and resolves with the finished run — which means it does " +
+          "not answer until the run is over, and a long task is a long call. Read `runEvents` " +
+          "meanwhile to watch it, or `stopTask` to call it off.",
         args: { taskId: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: (_source, args: { taskId: string }) => runTask(args.taskId),
       },
