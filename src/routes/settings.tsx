@@ -1,19 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/app-shell";
+import { ModelSelect } from "@/components/model-select";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  ModelsDocument,
-  SetApiKeyDocument,
-  SettingsDocument,
-  UpdateSettingsDocument,
-} from "@/gql/graphql";
+import { SetApiKeyDocument, SettingsDocument, UpdateSettingsDocument } from "@/gql/graphql";
 import { request } from "@/lib/gql";
 
 interface Form {
@@ -41,14 +36,6 @@ export function SettingsRoute() {
       setForm({ baseUrl, model, systemPrompt, maxTokens, temperature, maxToolIterations });
     }
   }, [loaded, form]);
-
-  // Only fetched on demand: it is a live call to whatever server baseUrl points at, which may
-  // not be running.
-  const models = useQuery({
-    queryKey: ["models"],
-    queryFn: () => request(ModelsDocument),
-    enabled: false,
-  });
 
   const save = useMutation({
     mutationFn: async () => {
@@ -113,28 +100,15 @@ export function SettingsRoute() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="model">Model</Label>
-                <Button variant="ghost" size="sm" onClick={() => models.refetch()}>
-                  <RefreshCw className="size-4" />
-                  List models
-                </Button>
-              </div>
-              <Input
+              <Label htmlFor="model">Model</Label>
+              <ModelSelect
                 id="model"
-                list="model-options"
                 value={form.model}
-                onChange={(event) => field("model", event.target.value)}
-                placeholder="llama3.1:8b"
+                onChange={(model) => field("model", model)}
               />
-              <datalist id="model-options">
-                {models.data?.models.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-              {models.error ? (
-                <p className="text-xs text-destructive">{(models.error as Error).message}</p>
-              ) : null}
+              <p className="text-xs text-muted-foreground">
+                Opening the list asks the server above for its models, so save a new base URL first.
+              </p>
             </div>
 
             <div className="flex flex-col gap-2">
