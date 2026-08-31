@@ -30,8 +30,12 @@ const { entities } = buildSchema(db, {
   typeNameMapper: "singularize",
   // A SQLite timestamp is an integer column under the hood, so built-in detection leaves it
   // as `JSON`. It is a date to everyone who reads it, and `DateTime` transports ISO-8601.
+  // Postgres is named here too, so that the API a client sees — and the types codegen writes
+  // from it — are the same whichever database is underneath.
   mapColumnType: (column) =>
-    column.columnType === "SQLiteTimestamp" ? GraphQLDateTime : undefined,
+    column.columnType === "SQLiteTimestamp" || column.columnType === "PgTimestamp"
+      ? GraphQLDateTime
+      : undefined,
   // The run history is written by the runner, never by a client: a hand-made run row would
   // claim something happened that did not.
   features: {
@@ -39,9 +43,9 @@ const { entities } = buildSchema(db, {
     update: (table) => table !== "runs",
     delete: (table) => table !== "settings",
     // `nestedWrites` (triggers created inline under createTask) is off: it needs an async
-    // SQLite driver for its multi-statement transaction, and node:sqlite is synchronous.
-    // Switching db/client.ts to libsql would turn it on; until then the UI writes the task,
-    // then its triggers.
+    // driver for its multi-statement transaction, and node:sqlite is synchronous. Postgres
+    // could have it, but the schema would then differ by dialect — and the generated client
+    // is one file for both — so the UI writes the task, then its triggers, either way.
   },
   exclude: {
     // The key never needs to travel back to the browser; the UI only ever writes it.

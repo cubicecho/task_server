@@ -73,3 +73,38 @@ jobs:
           echo '::error::the container never answered on :8787'
           docker logs task-server-ci
           exit 1
+
+  # Postgres is a second set of table definitions, a second driver and a second
+  # pile of DDL, none of which a SQLite boot touches. tests/schema-parity.test.ts
+  # keeps the two schemas honest about each other, but only a real database says
+  # whether the DDL runs and the rows come back. The compose file is how this is
+  # meant to be used, so CI uses that rather than a rig of its own.
+  postgres:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+
+      # `--wait` holds until both healthchecks pass, and the server's own is a
+      # GraphQL query — so reaching the next step already means postgres
+      # answered one.
+      - name: Boot the stack
+        run: docker compose -f docker-compose.pg.yml up -d --build --wait
+
+      # A write and a read back. A task row carries a boolean, two timestamps
+      # and two generated defaults, and a trigger carries JSON — the columns
+      # that are stored differently here than in SQLite.
+      - name: A task round-trips through postgres
+        run: |
+          gql() {
+            curl -fsS -X POST localhost:8787/graphql \
+              -H 'content-type: application/json' -d "{\"query\": $1}"
+          }
+          gql '"mutation { createTask(values: { name: \"ci\", prompt: \"hi\" }) { id } }"'
+          gql '"{ tasks { name enabled createdAt } }"' | tee tasks.json
+          grep -q '"name":"ci"' tasks.json
+          grep -q '"enabled":true' tasks.json
+
+      - name: Logs, if it did not
+        if: failure()
+        run: docker compose -f docker-compose.pg.yml logs

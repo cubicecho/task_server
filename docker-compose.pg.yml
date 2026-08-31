@@ -1,0 +1,65 @@
+# The same server as docker-compose.yml, on postgres instead of the SQLite file:
+#
+#   docker compose -f docker-compose.pg.yml up --build
+#
+# Nothing in the image changes. `DATABASE_URL` is the whole switch — the server reads the
+# scheme, picks the postgres tables and driver, and creates the schema on first boot the same
+# way it does for a new SQLite file.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tasks
+      POSTGRES_DB: tasks
+      # Fine as it stands: the port below is not published, so only the app's container can
+      # reach this. Set POSTGRES_PASSWORD in a .env beside this file before exposing it.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tasks}
+    volumes:
+      # A named volume, not a bind mount: postgres owns this directory's layout and permissions
+      # in a way the SQLite file does not. `docker compose down` keeps it; `down -v` is what
+      # throws the tasks away.
+      - pgdata:/var/lib/postgresql/data
+    # Uncomment to reach the database from the host, e.g. for psql or drizzle studio.
+    # ports:
+    #   - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasks -d tasks"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  task-server:
+    build: .
+    image: task-server
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    depends_on:
+      # The server creates its tables on boot, so it has to start second. `service_healthy`,
+      # not `service_started`: postgres accepts connections some seconds after the container
+      # does, and a restart loop is a poor substitute for waiting.
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://tasks:${POSTGRES_PASSWORD:-tasks}@db:5432/tasks
+      # Cron triggers fire on this zone (e.g. America/Chicago). A container left on UTC runs
+      # the 7am brief at 7am UTC.
+      TZ: ${TZ:-UTC}
+      # Optional: the settings row holds the API key the UI saves, and this is only the
+      # fallback for a server that has never been configured.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/graphql',{method:'POST',headers:{'content-type':'application/json'},body:'{\"query\":\"{tasks{id}}\"}'}).then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  pgdata:

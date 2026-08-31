@@ -44,9 +44,10 @@ VOLUME /data
 
 EXPOSE 8787
 
-# A GraphQL query, not a TCP probe: it round-trips to SQLite, so a database the
-# process can no longer read counts as unhealthy. Uses node — already here —
-# rather than adding curl to a slim base.
+# A GraphQL query, not a TCP probe: it round-trips to the database, so a store
+# the process can no longer read — a deleted SQLite file, a postgres that went
+# away — counts as unhealthy. Uses node, already here, rather than adding curl
+# to a slim base.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/graphql',{method:'POST',headers:{'content-type':'application/json'},body:'{\"query\":\"{tasks{id}}\"}'}).then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 

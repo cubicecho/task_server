@@ -1,28 +1,44 @@
 import fs from "node:fs";
 import path from "node:path";
-import { drizzle } from "drizzle-orm/node-sqlite";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import { drizzle as drizzleSqlite } from "drizzle-orm/node-sqlite";
+import pg from "pg";
 import { DATABASE_URL } from "../paths.ts";
-import { relations } from "./schema.ts";
+import { isPostgres } from "./dialect.ts";
+import * as pgSchema from "./schema.pg.ts";
+import * as sqliteSchema from "./schema.sqlite.ts";
 
 /**
- * SQLite via Node's built-in `node:sqlite` — no native module to build.
+ * The database, opened from `DATABASE_URL`.
  *
- * The postgres swap is deliberately confined to this file plus `schema.ts`: everything above
- * imports `db` and nothing else. Making it real means a `pg-core` copy of the table
- * definitions and `drizzle-orm/node-postgres` here, chosen off the `postgres://` URL. Doing
- * that now would mean maintaining two schemas before either has a user, so the seam is a
- * thrown error rather than a half-written dialect.
+ * SQLite is the default and the zero-install path: `node:sqlite` is built into Node, so a
+ * fresh clone has a database the moment it boots, with nothing to run beside the server.
+ * Postgres is for a deployment that has outgrown a file — more than one server process, a
+ * managed backup, storage that is not the app's own disk.
+ *
+ * The choice is made here and nowhere else. `schema.ts` picks the matching table definitions,
+ * `migrate.ts` the matching DDL, and everything above them is written against one `db`.
  */
-function open() {
-  if (!DATABASE_URL.startsWith("file:") && !DATABASE_URL.startsWith("/")) {
-    throw new Error(
-      `Only SQLite is wired up; DATABASE_URL was ${DATABASE_URL}. See server/db/client.ts.`,
-    );
-  }
+
+/** The connection pool, on postgres. Null on SQLite. `ensure.pg.ts` is the only other reader. */
+export const pool = isPostgres ? new pg.Pool({ connectionString: DATABASE_URL }) : null;
+
+function openSqlite() {
   const file = DATABASE_URL.replace(/^file:/, "");
-  fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
-  return drizzle({ connection: { path: file }, relations });
+  if (file !== ":memory:") fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+  return drizzleSqlite({ connection: { path: file }, relations: sqliteSchema.relations });
 }
 
-export const db = open();
+/**
+ * The postgres client is handed out under the SQLite client's type, for the same reason the
+ * tables are — see `schema.ts`. The two answer the query builder identically; they differ in
+ * the raw handle beneath, and the only code that wants that reaches for `pool` instead.
+ */
+export const db = pool
+  ? (drizzlePg({
+      client: pool,
+      relations: pgSchema.relations,
+    }) as unknown as ReturnType<typeof openSqlite>)
+  : openSqlite();
+
 export type Db = typeof db;

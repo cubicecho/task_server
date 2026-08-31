@@ -22,6 +22,7 @@
   "dependencies": {
     "@cubicecho/graphql-mcp": "^0.2.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/pg": "^8.23.1",
     "@vantreeseba/drizzle-graphql": "^9.0.0",
     "drizzle-orm": "1.0.0-rc.4",
     "express": "^5.2.1",
@@ -30,7 +31,8 @@
     "graphql-scalars": "^2.0.0",
     "graphql-yoga": "^5.22.0",
     "node-cron": "^4.6.0",
-    "openai": "^7.8.0"
+    "openai": "^7.8.0",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",

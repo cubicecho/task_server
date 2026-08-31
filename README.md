@@ -165,6 +165,15 @@ The server is on `http://localhost:8787` — the dashboard, `/graphql`, and `/mc
 one container, the same as `npm start`. The database is a file on the volume, bind-mounted at
 `./data`, so the tasks survive the container and can be copied somewhere else.
 
+For postgres instead, `docker-compose.pg.yml` is the same image beside a `postgres:17` service,
+with `DATABASE_URL` pointed at it and the tasks in a named volume:
+
+```sh
+docker compose -f docker-compose.pg.yml up --build
+```
+
+Nothing in the image changes between the two — see **Postgres** below.
+
 Set `TZ` in a `.env` beside the compose file if cron triggers should fire on your clock rather
 than UTC. `OPENAI_API_KEY` is optional and only a fallback: the key the settings screen saves
 lives in the database and wins.
@@ -194,9 +203,47 @@ shape changes breaks compilation rather than at runtime. Re-run it after changin
 
 ## Postgres
 
-Only SQLite is wired up. The swap is confined to `server/db/client.ts`, which throws on a
-non-`file:` `DATABASE_URL` pointing at itself; the table definitions in `server/db/schema.ts`
-would move to `drizzle-orm/pg-core`.
+SQLite is the default and needs nothing: `node:sqlite` is built into Node, so a fresh clone
+has a database the moment it boots. Postgres is one environment variable away, for the
+deployment that has outgrown a file — more than one server process, a managed backup, storage
+that is not the app's own disk.
+
+```sh
+DATABASE_URL=postgres://tasks:tasks@localhost:5432/tasks npm start
+```
+
+The URL's scheme is the whole switch. The tables are created on first boot exactly as they are
+for a new SQLite file, so an empty database is all postgres has to arrive with, and
+`docker-compose.pg.yml` is the same image against a `postgres:17` service — see **Docker**
+above.
+
+It is a swap, not a migration: the two databases share no data, and moving tasks from one to
+the other is your own `pg_dump`-shaped problem.
+
+Three files know which database it is, and nothing above `server/db/` does:
+
+- **`dialect.ts`** reads `DATABASE_URL` and answers `sqlite` or `postgres`. An unrecognised
+  scheme throws rather than guessing.
+- **`schema.ts`** picks between `schema.sqlite.ts` and `schema.pg.ts` — the same tables twice,
+  once in each dialect. `boolean` for an integer 0/1, `timestamptz` for epoch milliseconds,
+  `jsonb` for JSON in a `text` column: different storage, identical JavaScript values coming
+  back. So the postgres tables are handed out under the SQLite tables' *types*, and the
+  runner, the GraphQL layer and the tests are written once against one `Task`.
+- **`client.ts`** opens `node:sqlite` or a `pg` pool, and `migrate.ts` runs the matching DDL.
+
+Two schemas is the cost of the arrangement, and the risk is that they drift: a column added to
+one and forgotten in the other typechecks, passes every other test, and fails at runtime on
+whichever database the author was not using. `tests/schema-parity.test.ts` compares them
+column by column — names, nullability, defaults — and fails CI when they disagree.
+
+`npm run db:push` and `db:studio` follow `DATABASE_URL` too, and write their diffs to
+`drizzle/<dialect>/`.
+
+The GraphQL API does not change with the database — the same queries, the same generated
+client — with one exception: postgres can filter JSON by containment, so running `npm run
+codegen` against a `postgres://` URL adds `contains` to `JSONFilter`. The committed
+`schema.graphql` is the SQLite one and nothing in the app uses that filter, so that is a diff
+to throw away rather than commit.
 
 ## Scripts
 

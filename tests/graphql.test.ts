@@ -14,7 +14,7 @@ let cron: typeof import("../server/scheduler/cron.ts");
 
 beforeAll(async () => {
   const { ensureSchema } = await import("../server/db/migrate.ts");
-  ensureSchema();
+  await ensureSchema();
   schema = (await import("../server/graphql/schema.ts")).schema;
   cron = await import("../server/scheduler/cron.ts");
 });

@@ -13,7 +13,7 @@ let schema: import("graphql").GraphQLSchema;
 
 beforeAll(async () => {
   const { ensureSchema } = await import("../server/db/migrate.ts");
-  ensureSchema();
+  await ensureSchema();
   events = await import("../server/runner/events.ts");
   schema = (await import("../server/graphql/schema.ts")).schema;
 });

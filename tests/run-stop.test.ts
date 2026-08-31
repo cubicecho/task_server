@@ -24,7 +24,7 @@ beforeAll(async () => {
   const port = typeof address === "object" && address ? address.port : 0;
 
   const { ensureSchema } = await import("../server/db/migrate.ts");
-  ensureSchema();
+  await ensureSchema();
   schema = (await import("../server/graphql/schema.ts")).schema;
   runner = await import("../server/runner/run.ts");
   cron = await import("../server/scheduler/cron.ts");
