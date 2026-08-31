@@ -54,10 +54,16 @@ docker compose up --build
 **Relative imports carry the `.ts`/`.tsx` extension.** Both tsx and Node's type stripping
 require it, and `allowImportingTsExtensions` is on for that reason.
 
-**The schema is the contract, and it is generated.** Add a column to `server/db/schema.ts`,
-run `npm run codegen`, and the typed documents in `src/graphql/*.graphql` see it. Never
-hand-write a type that codegen produces, and never edit `src/gql/graphql.ts` — biome ignores it
-because it is output.
+**The schema is the contract, and it is generated.** Add a column to `server/db/schema.ts` and
+the typed documents in `src/graphql/*.graphql` see it. Never hand-write a type that codegen
+produces, and never edit `src/gql/graphql.ts` — biome ignores it because it is output.
+
+`npm run codegen` does it explicitly, but under `npm run dev` you should not need to: the
+server rewrites `schema.graphql` on boot and regenerates with it when the SDL moved, and vite
+runs codegen off its own watcher for the documents. Both are dev-only — `@graphql-codegen/cli`
+is a devDependency and `server/dev/codegen.ts` is behind a `NODE_ENV !== "production"` guard,
+because the image has neither codegen nor the sources it would write. `npm run build` runs
+codegen before the typecheck, and CI regenerates and diffs it against what is committed.
 
 **A schema change is two edits.** `server/db/schema.ts` for the table definition and
 `server/db/ensure.ts` for the DDL that creates it on boot. `ensure.ts` writes the camelCase

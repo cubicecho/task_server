@@ -233,8 +233,22 @@ npm run codegen    # prints schema.graphql, then generates src/gql/
 ```
 
 That produces `src/gql/graphql.ts`: a typed document node per operation, so a query whose
-shape changes breaks compilation rather than at runtime. Re-run it after changing a table or a
-`.graphql` document in `src/graphql/`.
+shape changes breaks compilation rather than at runtime.
+
+In development you rarely run it by hand, because both halves of `npm run dev` keep it current
+from the side they can see:
+
+- the **server** rewrites `schema.graphql` on boot, and regenerates the types with it — that is
+  the moment after a table changes, and it only does the work when the SDL actually moved
+- **vite** watches `schema.graphql` and `src/graphql/**/*.graphql` through
+  `vite-plugin-graphql-codegen`, so editing a document regenerates its typed node and hot-reloads
+
+Both are dev-only. The production image has no codegen in it and nothing to regenerate: it
+serves a `dist/` that was built against the types it was typechecked with.
+
+`npm run build` runs codegen before the typecheck, so a stale `src/gql/graphql.ts` cannot reach
+a build. CI additionally regenerates and diffs against what is committed — the artefacts are
+generated *and* checked in, and that step is what stops the two from drifting apart.
 
 ## Postgres
 
