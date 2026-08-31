@@ -127,6 +127,16 @@ export const settings = sqliteTable("settings", {
   temperature: real().notNull().default(0.7),
   /** Ceiling on tool round-trips in one run, so a stuck task cannot loop forever. */
   maxToolIterations: integer().notNull().default(20),
+  /**
+   * `eager` sends every MCP tool definition on every request. `ondemand` sends a name-only
+   * catalogue and lets the model load the schemas it needs — far cheaper with many tools,
+   * at the cost of a round trip on the runs that use them.
+   */
+  toolDiscovery: text({ enum: ["eager", "ondemand"] })
+    .notNull()
+    .default("eager"),
+  /** Small model that guesses a run's tools before it starts. Empty uses the task's model. */
+  toolSelectModel: text().notNull().default(""),
 });
 
 export const schema = { tasks, triggers, runs, mcpServers, settings };

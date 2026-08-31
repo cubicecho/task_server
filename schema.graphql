@@ -507,11 +507,21 @@ type Setting {
   maxTokens: Int!
   temperature: Float!
   maxToolIterations: Int!
+  toolDiscovery: SettingsToolDiscoveryEnum!
+  toolSelectModel: String!
 
   """
   Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
   """
   cursor: String
+}
+
+enum SettingsToolDiscoveryEnum {
+  """Value: eager"""
+  eager
+
+  """Value: ondemand"""
+  ondemand
 }
 
 type SettingAggregate {
@@ -544,6 +554,8 @@ type SettingMinAggregate {
   maxTokens: Int
   temperature: Float
   maxToolIterations: Int
+  toolDiscovery: SettingsToolDiscoveryEnum
+  toolSelectModel: String
 }
 
 type SettingMaxAggregate {
@@ -554,6 +566,8 @@ type SettingMaxAggregate {
   maxTokens: Int
   temperature: Float
   maxToolIterations: Int
+  toolDiscovery: SettingsToolDiscoveryEnum
+  toolSelectModel: String
 }
 
 type SettingCountNonNullAggregate {
@@ -564,6 +578,8 @@ type SettingCountNonNullAggregate {
   maxTokens: Int!
   temperature: Int!
   maxToolIterations: Int!
+  toolDiscovery: Int!
+  toolSelectModel: Int!
 }
 
 type SettingCountDistinctAggregate {
@@ -574,6 +590,8 @@ type SettingCountDistinctAggregate {
   maxTokens: Int!
   temperature: Int!
   maxToolIterations: Int!
+  toolDiscovery: Int!
+  toolSelectModel: Int!
 }
 
 type SettingGroupBy {
@@ -598,6 +616,8 @@ type SettingGroupKeys {
   maxTokens: Int
   temperature: Float
   maxToolIterations: Int
+  toolDiscovery: SettingsToolDiscoveryEnum
+  toolSelectModel: String
 }
 
 input CreateTaskInput {
@@ -1668,6 +1688,8 @@ input UpdateSettingInput {
   maxTokens: Int
   temperature: Float
   maxToolIterations: Int
+  toolDiscovery: SettingsToolDiscoveryEnum
+  toolSelectModel: String
 }
 
 """
@@ -1687,6 +1709,8 @@ input SettingFilters {
   maxTokens: IntFilter
   temperature: FloatFilter
   maxToolIterations: IntFilter
+  toolDiscovery: SettingsToolDiscoveryEnumFilter
+  toolSelectModel: StringFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [SettingFilters!]
@@ -1739,6 +1763,80 @@ input FloatFilter {
   NOT: FloatFilter
 }
 
+input SettingsToolDiscoveryEnumFilter {
+  """Equal to"""
+  eq: SettingsToolDiscoveryEnum
+
+  """Not equal to"""
+  ne: SettingsToolDiscoveryEnum
+
+  """Less than"""
+  lt: SettingsToolDiscoveryEnum
+
+  """Less than or equal to"""
+  lte: SettingsToolDiscoveryEnum
+
+  """Greater than"""
+  gt: SettingsToolDiscoveryEnum
+
+  """Greater than or equal to"""
+  gte: SettingsToolDiscoveryEnum
+  like: String
+  notLike: String
+  ilike: String
+  notIlike: String
+
+  """
+  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
+  """
+  startsWith: String
+
+  """
+  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
+  """
+  endsWith: String
+
+  """
+  Matches values containing the given string. `%`, `_` and `\` are matched literally.
+  """
+  contains: String
+
+  """Case-insensitive `startsWith`."""
+  iStartsWith: String
+
+  """Case-insensitive `endsWith`."""
+  iEndsWith: String
+
+  """Case-insensitive `contains`."""
+  iContains: String
+
+  """
+  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
+  """
+  insensitive: Boolean
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [SettingsToolDiscoveryEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [SettingsToolDiscoveryEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [SettingsToolDiscoveryEnumFilter!]
+
+  """Every branch matches"""
+  AND: [SettingsToolDiscoveryEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: SettingsToolDiscoveryEnumFilter
+}
+
 input SettingOrderBy {
   id: InnerOrder
   baseUrl: InnerOrder
@@ -1747,6 +1845,8 @@ input SettingOrderBy {
   maxTokens: InnerOrder
   temperature: InnerOrder
   maxToolIterations: InnerOrder
+  toolDiscovery: InnerOrder
+  toolSelectModel: InnerOrder
 }
 
 """Filters Setting groups by their aggregated values"""
@@ -1793,6 +1893,8 @@ input SettingCountNonNullHaving {
   maxTokens: AggregateNumberFilter
   temperature: AggregateNumberFilter
   maxToolIterations: AggregateNumberFilter
+  toolDiscovery: AggregateNumberFilter
+  toolSelectModel: AggregateNumberFilter
 }
 
 input SettingCountDistinctHaving {
@@ -1803,6 +1905,8 @@ input SettingCountDistinctHaving {
   maxTokens: AggregateNumberFilter
   temperature: AggregateNumberFilter
   maxToolIterations: AggregateNumberFilter
+  toolDiscovery: AggregateNumberFilter
+  toolSelectModel: AggregateNumberFilter
 }
 
 type Query {
@@ -2028,6 +2132,8 @@ enum SettingDistinctColumn {
   maxTokens
   temperature
   maxToolIterations
+  toolDiscovery
+  toolSelectModel
 }
 
 """Columns of Setting that a query can group by"""
@@ -2039,6 +2145,8 @@ enum SettingGroupByColumn {
   maxTokens
   temperature
   maxToolIterations
+  toolDiscovery
+  toolSelectModel
 }
 
 """

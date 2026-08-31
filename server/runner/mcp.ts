@@ -61,6 +61,13 @@ export async function probe(config: McpConnection): Promise<McpProbe> {
   }
 }
 
+/** One server's tools, without their JSON schemas — the cheap half of a tool definition. */
+export interface CatalogServer {
+  id: string;
+  label: string;
+  tools: { name: string; description: string }[];
+}
+
 export interface McpServerState {
   id: string;
   slug: string;
@@ -147,16 +154,22 @@ class McpPool {
     return `${slug}${SEPARATOR}${tool}`.slice(0, 64);
   }
 
-  /** Every ready tool, in OpenAI function-tool shape. */
-  tools(): OpenAI.ChatCompletionTool[] {
+  /**
+   * Tool definitions for the model. Pass `names` to get only those — on-demand loading sends
+   * a handful of schemas instead of every one.
+   */
+  tools(names?: string[]): OpenAI.ChatCompletionTool[] {
+    const wanted = names && new Set(names);
     const tools: OpenAI.ChatCompletionTool[] = [];
     for (const entry of this.entries.values()) {
       if (entry.status !== "ready") continue;
       for (const tool of entry.tools) {
+        const name = McpPool.qualify(entry.config.slug, tool.name);
+        if (wanted && !wanted.has(name)) continue;
         tools.push({
           type: "function",
           function: {
-            name: McpPool.qualify(entry.config.slug, tool.name),
+            name,
             description: `[${entry.config.label || entry.config.slug}] ${tool.description}`.trim(),
             parameters: tool.inputSchema,
           },
@@ -164,6 +177,23 @@ class McpPool {
       }
     }
     return tools;
+  }
+
+  /** Names and descriptions only — what the model browses before loading any schemas. */
+  catalog(): CatalogServer[] {
+    const catalog: CatalogServer[] = [];
+    for (const entry of this.entries.values()) {
+      if (entry.status !== "ready" || !entry.tools.length) continue;
+      catalog.push({
+        id: entry.config.id,
+        label: entry.config.label || entry.config.slug,
+        tools: entry.tools.map((tool) => ({
+          name: McpPool.qualify(entry.config.slug, tool.name),
+          description: tool.description,
+        })),
+      });
+    }
+    return catalog;
   }
 
   /** Runs one tool call and returns text for a tool message. */

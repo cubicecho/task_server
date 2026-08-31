@@ -1,8 +1,21 @@
 import type OpenAI from "openai";
 import type { Settings } from "../db/schema.ts";
 import { getClient } from "./llm.ts";
-import { mcp } from "./mcp.ts";
+import { type CatalogServer, mcp } from "./mcp.ts";
 import { isGrammarError, relaxTools, sanitizeTools } from "./schema-compat.ts";
+import { ask, parseJson, tryAsk } from "./side-task.ts";
+import {
+  catalogPrompt,
+  expandNames,
+  inCatalog,
+  LOAD_TOOLS,
+  loadResult,
+  loadToolsDefinition,
+  PRESELECT_SYSTEM,
+  preselectInput,
+  preselection,
+  requestedNames,
+} from "./tool-loading.ts";
 
 /**
  * llama.cpp-backed servers compile every tool schema into one grammar and reject keywords
@@ -29,13 +42,39 @@ export interface AgentOptions {
 }
 
 /**
+ * Guesses the tools this task will need, before the run starts.
+ *
+ * On-demand loading otherwise spends a round trip on reading the catalogue and calling
+ * `load_tools`. A small model reading the same catalogue usually picks the right names, and
+ * then the task model opens with them already in hand.
+ *
+ * Guessing wrong is cheap: an unused definition costs a few hundred tokens for one run, and
+ * the model can still load what it actually wanted. So this never blocks or overrides the
+ * model's own loading — it only tries to make it unnecessary.
+ */
+async function preselect(
+  config: Settings,
+  model: string,
+  catalog: CatalogServer[],
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const reply = await ask(config, model, PRESELECT_SYSTEM, preselectInput(catalog, prompt), {
+    maxTokens: 256,
+    signal,
+  });
+  const chosen = preselection(parseJson<unknown>(reply), catalog);
+  if (chosen.length) console.log(`[agent] preselected: ${chosen.join(", ")}`);
+  return chosen;
+}
+
+/**
  * Runs one task to completion: send the prompt, execute whatever MCP tools the model asks
  * for, loop until it stops asking, and return its final reply.
  *
  * Unlike a chat this is not streamed and keeps no history — a task run starts from nothing
- * every time, so the only state is the messages built up inside this call. Every tool
- * definition is sent up front: a task's prompt is fixed and written by hand, so the
- * on-demand catalogue a chat needs buys nothing here.
+ * every time, so the only state is the messages built up inside this call. That also means
+ * nothing is learned between runs: whatever the model loads, it loads again next time.
  */
 export async function runAgent({
   config,
@@ -47,12 +86,27 @@ export async function runAgent({
   if (!model) throw new Error("No model selected — pick one in Settings.");
 
   const client = getClient(config);
-  // MCP servers emit JSON Schema shapes a strict backend cannot compile — Gmail's, for one.
-  // Normalising them here is cheap and cloud providers accept the result unchanged.
-  const tools = sanitizeTools(mcp.tools());
-  const relaxed = relaxTools(tools);
+
+  // In on-demand mode the model sees a name-only catalogue up front and pulls in the schemas
+  // it needs as the run goes; `loaded` grows between iterations.
+  const catalog = mcp.catalog();
+  const onDemand = config.toolDiscovery === "ondemand" && catalog.length > 0;
+  const loaded = new Set<string>();
+
+  const preselected = onDemand
+    ? ((await tryAsk("preselect", () =>
+        preselect(config, config.toolSelectModel || model, catalog, prompt, signal),
+      )) ?? [])
+    : [];
+  for (const name of preselected) loaded.add(name);
+
+  // Rebuilt each iteration: `loaded` grows as the run goes, and the catalogue has to stop
+  // advertising a tool the moment the model can actually call it.
+  const systemPromptFor = () =>
+    onDemand ? `${systemPrompt}\n\n${catalogPrompt(catalog, loaded)}`.trim() : systemPrompt;
+
   const messages: OpenAI.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPrompt },
+    { role: "system", content: systemPromptFor() },
     { role: "user", content: prompt },
   ];
 
@@ -65,15 +119,32 @@ export async function runAgent({
   };
 
   for (let iteration = 0; iteration < config.maxToolIterations; iteration++) {
+    // With a preselection in hand the first step gets the shortlist and nothing else — no
+    // catalogue, no `load_tools`. Left with the menu in front of it the model shops: it
+    // reloads what it already has, or picks a sibling of the right tool. Taking the menu away
+    // for one step removes the choice, and everything comes back on the step after.
+    const routed = preselected.length > 0 && iteration === 0;
+    messages[0] = { role: "system", content: routed ? systemPrompt : systemPromptFor() };
+
+    // MCP servers emit JSON Schema shapes a strict backend cannot compile — Gmail's, for one.
+    // Normalising them here is cheap and cloud providers accept the result unchanged.
+    const declared = sanitizeTools(
+      routed
+        ? mcp.tools(preselected)
+        : onDemand
+          ? [loadToolsDefinition(), ...mcp.tools([...loaded])]
+          : mcp.tools(),
+    );
+
     const complete = (strict: boolean) => {
-      const declared = strict ? tools : relaxed;
+      const tools = strict ? declared : relaxTools(declared);
       return client.chat.completions.create(
         {
           model,
           max_tokens: config.maxTokens,
           temperature: config.temperature,
           messages,
-          ...(declared.length ? { tools: declared } : {}),
+          ...(tools.length ? { tools } : {}),
         },
         { signal },
       );
@@ -107,15 +178,29 @@ export async function runAgent({
     for (const call of calls) {
       // Only function tools carry a name and arguments; anything else has nothing to run.
       if (call.type !== "function") continue;
+      const name = call.function.name;
       let content: string;
       let ok = true;
       try {
-        content = await mcp.call(call.function.name, parseArgs(call.function.arguments));
+        const args = parseArgs(call.function.arguments);
+        if (name === LOAD_TOOLS) {
+          const resolved = expandNames(requestedNames(args), catalog);
+          for (const loadedName of resolved.matched) loaded.add(loadedName);
+          content = loadResult(resolved, catalog);
+          ok = resolved.matched.length > 0;
+        } else {
+          // A model that skips `load_tools` and calls a catalogued tool straight from its name
+          // is right about what it wants; load it and run it rather than erroring.
+          if (onDemand && !loaded.has(name) && inCatalog(catalog, name)) loaded.add(name);
+          content = await mcp.call(name, args);
+        }
       } catch (error) {
         content = error instanceof Error ? error.message : String(error);
         ok = false;
       }
-      result.toolCalls.push({ name: call.function.name, ok });
+      // `load_tools` is recorded alongside the real calls: the run history is what the task
+      // actually did, and "spent three steps loading tools" is part of that.
+      result.toolCalls.push({ name, ok });
       messages.push({ role: "tool", tool_call_id: call.id, content });
     }
   }

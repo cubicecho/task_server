@@ -34,7 +34,20 @@ from the environment instead of the UI.
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
   will dial a config (`testMcpServer`) to list its tools before you save it.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
-  temperature limits, and the cap on tool iterations per run.
+  temperature limits, the cap on tool iterations per run, and how MCP tools are discovered.
+
+With several servers connected, tool definitions cost more per request than the task's own
+prompt — they are mostly JSON Schema, and every one is sent on every step. Settings offers two
+discovery modes (`runner/tool-loading.ts`):
+
+- **eager** — every definition on every request. Simple, and fine with a handful of tools.
+- **on demand** — the system prompt carries a name-only catalogue and the model calls
+  `load_tools` for the schemas it wants, which arrive on the step after. Names cost roughly a
+  fortieth of what the schemas do. Before the run starts, an optional small **tool-picking
+  model** reads the same catalogue and guesses the tools the task needs; when it guesses well
+  the first step opens with that shortlist alone — no catalogue, no `load_tools`, no extra
+  round trip. A wrong guess only costs an unused definition for one run, and the model can
+  still load whatever it actually wanted.
 
 MCP tool schemas are normalised before they reach the model (`runner/schema-compat.ts`):
 llama.cpp-backed servers compile every tool into one grammar, so a single shape their
@@ -52,7 +65,7 @@ for to make it stop.
 server/
   db/          drizzle schema, client, and the boot-time CREATE TABLE IF NOT EXISTS
   graphql/     the schema: drizzle-graphql entities plus a few hand-written fields
-  runner/      llm client, MCP pool, tool-schema compat, the agent loop, run recorder
+  runner/      llm client, MCP pool, tool loading + schema compat, agent loop, recorder
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write
   index.ts     express + yoga + the MCP endpoint + the built SPA
 src/           vite + react + tanstack router/query + shadcn
