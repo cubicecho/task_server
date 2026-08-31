@@ -1,0 +1,28 @@
+services:
+  task-server:
+    build: .
+    image: task-server
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      # tasks.db and its WAL. Bind-mounted rather than a named volume so the
+      # database is a file you can copy, inspect, and back up.
+      - ./data:/data
+    environment:
+      # Cron triggers fire on this zone (e.g. America/Chicago). A container
+      # left on UTC runs the 7am brief at 7am UTC.
+      TZ: ${TZ:-UTC}
+      # Optional: the settings row holds the API key the UI saves, and this is
+      # only the fallback for a server that has never been configured.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/graphql',{method:'POST',headers:{'content-type':'application/json'},body:'{\"query\":\"{tasks{id}}\"}'}).then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

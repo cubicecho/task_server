@@ -1,0 +1,27 @@
+# The image installs its own dependencies — copying the host's would layer a
+# developer's machine, and its platform-specific binaries, on top of what
+# `npm ci` just resolved.
+node_modules
+
+# Runtime state. The container keeps its own on the volume; a developer's
+# tasks.db has no business being baked into an image.
+data
+
+# Built inside the image, from the sources copied in beside it.
+dist
+
+# Neither built nor shipped.
+.git
+.github
+coverage
+.env
+.env.local
+*.local
+*.log
+.claude
+
+# Copying these in would invalidate the source layer every time one of them is
+# edited, and the build never reads them.
+Dockerfile
+.dockerignore
+docker-compose.yml
