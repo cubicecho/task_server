@@ -1284,6 +1284,8 @@ export type Setting = {
   model: Scalars['String']['output'];
   systemPrompt: Scalars['String']['output'];
   temperature: Scalars['Float']['output'];
+  toolDiscovery: SettingsToolDiscoveryEnum;
+  toolSelectModel: Scalars['String']['output'];
 };
 
 export type SettingAggregate = {
@@ -1316,6 +1318,8 @@ export type SettingCountDistinctAggregate = {
   model: Scalars['Int']['output'];
   systemPrompt: Scalars['Int']['output'];
   temperature: Scalars['Int']['output'];
+  toolDiscovery: Scalars['Int']['output'];
+  toolSelectModel: Scalars['Int']['output'];
 };
 
 export type SettingCountDistinctHaving = {
@@ -1326,6 +1330,8 @@ export type SettingCountDistinctHaving = {
   model?: InputMaybe<AggregateNumberFilter>;
   systemPrompt?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
+  toolDiscovery?: InputMaybe<AggregateNumberFilter>;
+  toolSelectModel?: InputMaybe<AggregateNumberFilter>;
 };
 
 export type SettingCountNonNullAggregate = {
@@ -1336,6 +1342,8 @@ export type SettingCountNonNullAggregate = {
   model: Scalars['Int']['output'];
   systemPrompt: Scalars['Int']['output'];
   temperature: Scalars['Int']['output'];
+  toolDiscovery: Scalars['Int']['output'];
+  toolSelectModel: Scalars['Int']['output'];
 };
 
 export type SettingCountNonNullHaving = {
@@ -1346,6 +1354,8 @@ export type SettingCountNonNullHaving = {
   model?: InputMaybe<AggregateNumberFilter>;
   systemPrompt?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
+  toolDiscovery?: InputMaybe<AggregateNumberFilter>;
+  toolSelectModel?: InputMaybe<AggregateNumberFilter>;
 };
 
 /** Columns of Setting that a query can be made distinct on */
@@ -1356,7 +1366,9 @@ export enum SettingDistinctColumn {
   MaxToolIterations = 'maxToolIterations',
   Model = 'model',
   SystemPrompt = 'systemPrompt',
-  Temperature = 'temperature'
+  Temperature = 'temperature',
+  ToolDiscovery = 'toolDiscovery',
+  ToolSelectModel = 'toolSelectModel'
 }
 
 export type SettingFilters = {
@@ -1373,6 +1385,8 @@ export type SettingFilters = {
   model?: InputMaybe<StringFilter>;
   systemPrompt?: InputMaybe<StringFilter>;
   temperature?: InputMaybe<FloatFilter>;
+  toolDiscovery?: InputMaybe<SettingsToolDiscoveryEnumFilter>;
+  toolSelectModel?: InputMaybe<StringFilter>;
 };
 
 export type SettingGroupBy = {
@@ -1394,7 +1408,9 @@ export enum SettingGroupByColumn {
   MaxToolIterations = 'maxToolIterations',
   Model = 'model',
   SystemPrompt = 'systemPrompt',
-  Temperature = 'temperature'
+  Temperature = 'temperature',
+  ToolDiscovery = 'toolDiscovery',
+  ToolSelectModel = 'toolSelectModel'
 }
 
 /** The grouped column values of one Setting group. A column the query did not group by is null. */
@@ -1406,6 +1422,8 @@ export type SettingGroupKeys = {
   model?: Maybe<Scalars['String']['output']>;
   systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
+  toolDiscovery?: Maybe<SettingsToolDiscoveryEnum>;
+  toolSelectModel?: Maybe<Scalars['String']['output']>;
 };
 
 /** Filters Setting groups by their aggregated values */
@@ -1428,6 +1446,8 @@ export type SettingMaxAggregate = {
   model?: Maybe<Scalars['String']['output']>;
   systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
+  toolDiscovery?: Maybe<SettingsToolDiscoveryEnum>;
+  toolSelectModel?: Maybe<Scalars['String']['output']>;
 };
 
 export type SettingMaxHaving = {
@@ -1444,6 +1464,8 @@ export type SettingMinAggregate = {
   model?: Maybe<Scalars['String']['output']>;
   systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
+  toolDiscovery?: Maybe<SettingsToolDiscoveryEnum>;
+  toolSelectModel?: Maybe<Scalars['String']['output']>;
 };
 
 export type SettingMinHaving = {
@@ -1460,6 +1482,8 @@ export type SettingOrderBy = {
   model?: InputMaybe<InnerOrder>;
   systemPrompt?: InputMaybe<InnerOrder>;
   temperature?: InputMaybe<InnerOrder>;
+  toolDiscovery?: InputMaybe<InnerOrder>;
+  toolSelectModel?: InputMaybe<InnerOrder>;
 };
 
 export type SettingSumAggregate = {
@@ -1472,6 +1496,60 @@ export type SettingSumHaving = {
   maxTokens?: InputMaybe<AggregateNumberFilter>;
   maxToolIterations?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
+};
+
+export enum SettingsToolDiscoveryEnum {
+  /** Value: eager */
+  Eager = 'eager',
+  /** Value: ondemand */
+  Ondemand = 'ondemand'
+}
+
+export type SettingsToolDiscoveryEnumFilter = {
+  /** Every branch matches */
+  AND?: InputMaybe<Array<SettingsToolDiscoveryEnumFilter>>;
+  /** Negates the nested operators */
+  NOT?: InputMaybe<SettingsToolDiscoveryEnumFilter>;
+  /** At least one branch matches; ANDed with any sibling operators */
+  OR?: InputMaybe<Array<SettingsToolDiscoveryEnumFilter>>;
+  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
+  contains?: InputMaybe<Scalars['String']['input']>;
+  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
+  endsWith?: InputMaybe<Scalars['String']['input']>;
+  /** Equal to */
+  eq?: InputMaybe<SettingsToolDiscoveryEnum>;
+  /** Greater than */
+  gt?: InputMaybe<SettingsToolDiscoveryEnum>;
+  /** Greater than or equal to */
+  gte?: InputMaybe<SettingsToolDiscoveryEnum>;
+  /** Case-insensitive `contains`. */
+  iContains?: InputMaybe<Scalars['String']['input']>;
+  /** Case-insensitive `endsWith`. */
+  iEndsWith?: InputMaybe<Scalars['String']['input']>;
+  /** Case-insensitive `startsWith`. */
+  iStartsWith?: InputMaybe<Scalars['String']['input']>;
+  ilike?: InputMaybe<Scalars['String']['input']>;
+  /** Matches any one of these values (SQL `IN`) */
+  inArray?: InputMaybe<Array<SettingsToolDiscoveryEnum>>;
+  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
+  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
+  /** When true, matches rows where the column is not NULL */
+  isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
+  /** When true, matches rows where the column is NULL */
+  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  like?: InputMaybe<Scalars['String']['input']>;
+  /** Less than */
+  lt?: InputMaybe<SettingsToolDiscoveryEnum>;
+  /** Less than or equal to */
+  lte?: InputMaybe<SettingsToolDiscoveryEnum>;
+  /** Not equal to */
+  ne?: InputMaybe<SettingsToolDiscoveryEnum>;
+  notIlike?: InputMaybe<Scalars['String']['input']>;
+  /** Matches none of these values (SQL `NOT IN`) */
+  notInArray?: InputMaybe<Array<SettingsToolDiscoveryEnum>>;
+  notLike?: InputMaybe<Scalars['String']['input']>;
+  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
+  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type StringFilter = {
@@ -2010,6 +2088,8 @@ export type UpdateSettingInput = {
   model?: InputMaybe<Scalars['String']['input']>;
   systemPrompt?: InputMaybe<Scalars['String']['input']>;
   temperature?: InputMaybe<Scalars['Float']['input']>;
+  toolDiscovery?: InputMaybe<SettingsToolDiscoveryEnum>;
+  toolSelectModel?: InputMaybe<Scalars['String']['input']>;
 };
 
 /** One entry of a batch update of Setting: the rows `where` matches get this entry's `set` applied. */
@@ -2112,7 +2192,7 @@ export type DeleteRunMutation = { deleteRunSingle?: { id: string } | null };
 export type SettingsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type SettingsQuery = { settings: Array<{ id: string, baseUrl: string, model: string, systemPrompt: string, maxTokens: number, temperature: number, maxToolIterations: number }> };
+export type SettingsQuery = { settings: Array<{ id: string, baseUrl: string, model: string, systemPrompt: string, maxTokens: number, temperature: number, maxToolIterations: number, toolDiscovery: SettingsToolDiscoveryEnum, toolSelectModel: string }> };
 
 export type ModelsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -2200,7 +2280,7 @@ export const TestMcpServerDocument = {"kind":"Document","definitions":[{"kind":"
 export const ReconnectMcpDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ReconnectMcp"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reconnectMcp"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"error"}}]}}]}}]} as unknown as DocumentNode<ReconnectMcpMutation, ReconnectMcpMutationVariables>;
 export const RunsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Runs"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"runs"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"100"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"taskId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"startedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"direction"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"ObjectField","name":{"kind":"Name","value":"priority"},"value":{"kind":"IntValue","value":"1"}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"taskId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"startedAt"}},{"kind":"Field","name":{"kind":"Name","value":"finishedAt"}},{"kind":"Field","name":{"kind":"Name","value":"output"}},{"kind":"Field","name":{"kind":"Name","value":"error"}},{"kind":"Field","name":{"kind":"Name","value":"toolCalls"}},{"kind":"Field","name":{"kind":"Name","value":"totalTokens"}},{"kind":"Field","name":{"kind":"Name","value":"task"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<RunsQuery, RunsQueryVariables>;
 export const DeleteRunDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteRun"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteRunSingle"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<DeleteRunMutation, DeleteRunMutationVariables>;
-export const SettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"baseUrl"}},{"kind":"Field","name":{"kind":"Name","value":"model"}},{"kind":"Field","name":{"kind":"Name","value":"systemPrompt"}},{"kind":"Field","name":{"kind":"Name","value":"maxTokens"}},{"kind":"Field","name":{"kind":"Name","value":"temperature"}},{"kind":"Field","name":{"kind":"Name","value":"maxToolIterations"}}]}}]}}]} as unknown as DocumentNode<SettingsQuery, SettingsQueryVariables>;
+export const SettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"baseUrl"}},{"kind":"Field","name":{"kind":"Name","value":"model"}},{"kind":"Field","name":{"kind":"Name","value":"systemPrompt"}},{"kind":"Field","name":{"kind":"Name","value":"maxTokens"}},{"kind":"Field","name":{"kind":"Name","value":"temperature"}},{"kind":"Field","name":{"kind":"Name","value":"maxToolIterations"}},{"kind":"Field","name":{"kind":"Name","value":"toolDiscovery"}},{"kind":"Field","name":{"kind":"Name","value":"toolSelectModel"}}]}}]}}]} as unknown as DocumentNode<SettingsQuery, SettingsQueryVariables>;
 export const ModelsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Models"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"models"}}]}}]} as unknown as DocumentNode<ModelsQuery, ModelsQueryVariables>;
 export const UpdateSettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateSettings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"set"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateSettingInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateSettingSingle"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"StringValue","value":"default","block":false}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"set"},"value":{"kind":"Variable","name":{"kind":"Name","value":"set"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateSettingsMutation, UpdateSettingsMutationVariables>;
 export const SetApiKeyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SetApiKey"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"apiKey"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"setApiKey"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"apiKey"},"value":{"kind":"Variable","name":{"kind":"Name","value":"apiKey"}}}]}]}}]} as unknown as DocumentNode<SetApiKeyMutation, SetApiKeyMutationVariables>;

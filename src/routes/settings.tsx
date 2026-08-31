@@ -7,8 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { SetApiKeyDocument, SettingsDocument, UpdateSettingsDocument } from "@/gql/graphql";
+import {
+  SetApiKeyDocument,
+  SettingsDocument,
+  SettingsToolDiscoveryEnum,
+  UpdateSettingsDocument,
+} from "@/gql/graphql";
 import { request } from "@/lib/gql";
 
 interface Form {
@@ -18,6 +30,8 @@ interface Form {
   maxTokens: number;
   temperature: number;
   maxToolIterations: number;
+  toolDiscovery: SettingsToolDiscoveryEnum;
+  toolSelectModel: string;
 }
 
 export function SettingsRoute() {
@@ -33,7 +47,16 @@ export function SettingsRoute() {
   useEffect(() => {
     if (loaded && !form) {
       const { baseUrl, model, systemPrompt, maxTokens, temperature, maxToolIterations } = loaded;
-      setForm({ baseUrl, model, systemPrompt, maxTokens, temperature, maxToolIterations });
+      setForm({
+        baseUrl,
+        model,
+        systemPrompt,
+        maxTokens,
+        temperature,
+        maxToolIterations,
+        toolDiscovery: loaded.toolDiscovery,
+        toolSelectModel: loaded.toolSelectModel,
+      });
     }
   }, [loaded, form]);
 
@@ -156,6 +179,52 @@ export function SettingsRoute() {
           <p className="text-sm text-muted-foreground">Loading…</p>
         )}
       </Card>
+
+      {form ? (
+        <Card className="gap-4 p-4">
+          <h2 className="font-medium">MCP tools</h2>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="toolDiscovery">Discovery</Label>
+            <Select
+              value={form.toolDiscovery}
+              onValueChange={(value) => field("toolDiscovery", value as SettingsToolDiscoveryEnum)}
+            >
+              <SelectTrigger id="toolDiscovery" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SettingsToolDiscoveryEnum.Eager}>
+                  Eager — send every definition every time
+                </SelectItem>
+                <SelectItem value={SettingsToolDiscoveryEnum.Ondemand}>
+                  On demand — load definitions as needed
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              On demand puts a name-only catalogue in the system prompt and lets the model pull in
+              the schemas it needs mid-run. Much cheaper with many tools; costs one extra round trip
+              on the runs that use them.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="toolSelectModel">Tool-picking model</Label>
+            <ModelSelect
+              id="toolSelectModel"
+              value={form.toolSelectModel}
+              onChange={(model) => field("toolSelectModel", model)}
+              defaultLabel="Same model as the task"
+            />
+            <p className="text-xs text-muted-foreground">
+              Guesses which tools a task needs before it starts, so on-demand loading usually costs
+              no round trip at all. A small fast model is enough. Unused unless discovery is on
+              demand.
+            </p>
+          </div>
+        </Card>
+      ) : null}
     </Page>
   );
 }

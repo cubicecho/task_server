@@ -1,6 +1,15 @@
 import { sql } from "drizzle-orm";
 import { db } from "./client.ts";
 
+/** Adds a column unless it is already there. SQLite has no `ADD COLUMN IF NOT EXISTS`. */
+function addColumn(table: string, column: string, definition: string) {
+  try {
+    db.$client.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  } catch (error) {
+    if (!/duplicate column/i.test((error as Error).message)) throw error;
+  }
+}
+
 /**
  * Creates the tables on boot, so a fresh clone runs with no migration step.
  *
@@ -75,9 +84,17 @@ export function ensureSchema() {
       systemPrompt TEXT NOT NULL DEFAULT '',
       maxTokens INTEGER NOT NULL DEFAULT 4096,
       temperature REAL NOT NULL DEFAULT 0.7,
-      maxToolIterations INTEGER NOT NULL DEFAULT 20
+      maxToolIterations INTEGER NOT NULL DEFAULT 20,
+      toolDiscovery TEXT NOT NULL DEFAULT 'eager',
+      toolSelectModel TEXT NOT NULL DEFAULT ''
     );
   `);
+
+  // Columns added after a database was first created: `CREATE TABLE IF NOT EXISTS` above
+  // does nothing for a file that already exists, so each addition is also an ALTER whose
+  // "duplicate column" complaint is the expected outcome on every boot but the first.
+  addColumn("settings", "toolDiscovery", "TEXT NOT NULL DEFAULT 'eager'");
+  addColumn("settings", "toolSelectModel", "TEXT NOT NULL DEFAULT ''");
 
   // The settings row is a singleton the UI edits in place, so it has to exist before the UI
   // can load. Column defaults fill the rest in.
