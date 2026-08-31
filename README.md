@@ -4,12 +4,14 @@ Scheduled AI tasks. You write a prompt, attach a cron trigger, and the server ru
 an OpenAI-compatible model with your MCP servers' tools attached — keeping the output of every
 run.
 
-It is the shape of [min-agent](../../min-agent) with the chat taken out: there is no
-conversation here, only tasks that fire on their own.
+It is the shape of min-agent with the chat taken out: there is no conversation here, only
+tasks that fire on their own.
 
 ## Quick start
 
 ```sh
+git clone git@github.com:cubicecho/task_server.git
+cd task_server
 npm install
 npm run dev        # express on :8787, vite on :3000
 ```
