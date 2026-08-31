@@ -14,6 +14,9 @@ const inFlight = new Map<string, { runId: string; controller: AbortController }>
 /** Task ids running right now. A task cannot be deleted while it is one of them. */
 export const runningTaskIds = () => new Set(inFlight.keys());
 
+/** Run ids in flight. Deleting one would leave `finish` with no row to write the outcome to. */
+export const runningRunIds = () => new Set([...inFlight.values()].map((entry) => entry.runId));
+
 /**
  * Calls off a running task. Returns false if it was not running — which is the honest answer
  * to a stale button, not an error.

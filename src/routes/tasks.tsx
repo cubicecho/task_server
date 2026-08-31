@@ -56,6 +56,7 @@ export function TasksRoute() {
       // refresh below is what the user actually wanted to see.
       if (data.stopTask) toast.success("Stopping…");
       refresh();
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
