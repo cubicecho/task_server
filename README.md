@@ -36,6 +36,13 @@ from the environment instead of the UI.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
   temperature limits, and the cap on tool iterations per run.
 
+MCP tool schemas are normalised before they reach the model (`runner/schema-compat.ts`):
+llama.cpp-backed servers compile every tool into one grammar, so a single shape their
+converter dislikes — a `type: ["string", "null"]`, a lookaround `pattern`, a bare type name
+where a schema belongs — fails the whole request rather than the one tool. If the server still
+reports a grammar failure, the advisory `pattern` and `format` keywords are dropped and the
+call is retried once. Cloud providers accept all of it, so the retry never fires against them.
+
 Disabling a task disables its triggers with it — the switch on the task is what a user reaches
 for to make it stop.
 
@@ -45,7 +52,7 @@ for to make it stop.
 server/
   db/          drizzle schema, client, and the boot-time CREATE TABLE IF NOT EXISTS
   graphql/     the schema: drizzle-graphql entities plus a few hand-written fields
-  runner/      llm client, MCP pool, the agent loop, and the run recorder
+  runner/      llm client, MCP pool, tool-schema compat, the agent loop, run recorder
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write
   index.ts     express + yoga + the MCP endpoint + the built SPA
 src/           vite + react + tanstack router/query + shadcn

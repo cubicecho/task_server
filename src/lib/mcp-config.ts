@@ -1,3 +1,4 @@
+import type { McpConnectionInput, McpServersQuery } from "@/gql/graphql";
 import { McpServersTransportEnum } from "@/gql/graphql";
 
 /** What a pasted config can fill in: the connection fields, and a slug if the paste named one. */
@@ -62,5 +63,22 @@ export function parseMcpJson(text: string): PastedConfig {
     env: JSON.stringify(body.env ?? {}),
     url,
     headers: JSON.stringify(body.headers ?? {}),
+  };
+}
+
+/**
+ * A saved row's connection fields, in the shape `testMcpServer` takes.
+ *
+ * The JSON columns arrive as `unknown` — the scalar carries no shape — so this is the one
+ * place that asserts what they hold.
+ */
+export function toConnection(server: McpServersQuery["mcpServers"][number]): McpConnectionInput {
+  return {
+    transport: server.transport,
+    command: server.command,
+    args: (server.args as string[] | null) ?? [],
+    env: server.env ?? {},
+    url: server.url,
+    headers: server.headers ?? {},
   };
 }

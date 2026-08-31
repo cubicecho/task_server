@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ModelSelect } from "@/components/model-select";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -143,11 +144,11 @@ export function TaskDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="model">Model</Label>
-              <Input
+              <ModelSelect
                 id="model"
                 value={model}
-                onChange={(event) => setModel(event.target.value)}
-                placeholder="(default from Settings)"
+                onChange={setModel}
+                defaultLabel="Default from Settings"
               />
             </div>
             <div className="flex flex-col gap-2">
