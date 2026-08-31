@@ -16,6 +16,19 @@ query Runs($taskId: String) {
     task {
       name
     }
+    steps(orderBy: { position: { direction: asc, priority: 1 } }) {
+      id
+      position
+      depth
+      name
+      kind
+      status
+      branch
+      output
+      error
+      toolCalls
+      totalTokens
+    }
   }
 }
 
@@ -31,6 +44,7 @@ subscription RunEvents($runId: String!) {
     kind
     text
     name
+    step
     ok
   }
 }

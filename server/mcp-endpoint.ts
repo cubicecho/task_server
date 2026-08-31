@@ -12,8 +12,8 @@ import { schema } from "./graphql/schema.ts";
  * The schema has forty-odd root fields — aggregates, group-bys, bulk writes, the settings row
  * with the API key behind it — and projecting all of them would spend an agent's context on
  * things no agent should be reaching for. These are the ones that make this a task server to
- * someone driving it from outside: read the tasks and their runs, watch a run, start or stop
- * one, and write tasks and their schedules.
+ * someone driving it from outside: read the tasks, their flows and their runs, watch a run,
+ * start or stop one, and write tasks, their flows and their schedules.
  *
  * Left out on purpose: `settings`/`setApiKey` (the server's own credentials are the operator's
  * business, not a visiting agent's), the MCP-server rows (same), and every bulk mutation — a
@@ -21,7 +21,9 @@ import { schema } from "./graphql/schema.ts";
  */
 const TOOLS = [
   "Query.tasks",
+  "Query.steps",
   "Query.runs",
+  "Query.runSteps",
   "Query.runEvents",
   "Query.triggers",
   "Query.schedule",
@@ -29,6 +31,7 @@ const TOOLS = [
   "Mutation.createTask",
   "Mutation.updateTaskSingle",
   "Mutation.deleteTaskSingle",
+  "Mutation.setTaskSteps",
   "Mutation.createTrigger",
   "Mutation.updateTriggerSingle",
   "Mutation.deleteTriggerSingle",
@@ -49,6 +52,14 @@ const HINTS: Record<string, string> = {
     "What happened when tasks ran — `status` is `running`, `ok`, `error` or `stopped`, and a " +
     "finished run carries its output, its error, the tools it called and what it cost. Order " +
     "by `startedAt` descending for the latest; filter by `taskId` for one task's history.",
+  steps:
+    "What a task does after its own prompt: a flat list of the steps of its flow. `parentId` " +
+    "and `branch` say which decision's arm a step sits in — both empty for the task's own " +
+    "top-level sequence — and `position` orders it among its siblings. Filter by `taskId`.",
+  runSteps:
+    "The path one run actually took, a row per step it executed, in `position` order. On a " +
+    "decision, `branch` is the arm it chose — which is the thing you open a run to find out. " +
+    "Filter by `runId`.",
   triggers: "When tasks fire: one cron expression per trigger, read in its own timezone.",
   createTask:
     "Adds a task. It will not fire on its own until it has a trigger — add one with " +
@@ -59,6 +70,12 @@ const HINTS: Record<string, string> = {
   deleteTaskSingle:
     "Deletes one task, its triggers and its history. Refused while the task is running: stop " +
     "it first with `stopTask`.",
+  setTaskSteps:
+    "Gives a task the steps that run after its own prompt, replacing whatever it had. Steps " +
+    "run in order and each one sees what the ones before it produced; a step of kind " +
+    "`decision` picks one of its own `cases` and only that arm's `branches` run, nested as " +
+    "deep as you like. Read the current flow with `steps` first and send existing ids back to " +
+    "edit in place. An empty list leaves the task with just its prompt.",
   createTrigger:
     "Schedules a task: `kind: cron` with a five-field expression such as `0 9 * * *`, and a " +
     "`timezone` if it should not follow the server's.",

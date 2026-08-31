@@ -86,6 +86,132 @@ test("a broken MCP config is reported, not thrown", async () => {
   expect(missing.error).not.toBe("");
 });
 
+const FLOW = `
+  mutation Set($taskId: String!, $steps: [StepInput!]!) {
+    setTaskSteps(taskId: $taskId, steps: $steps) {
+      id parentId branch position kind name prompt cases context enabled
+    }
+  }`;
+
+test("a flow is written as a tree and comes back as the rows that run it", async () => {
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "mail", prompt: "read the last five emails" }) { id } }`,
+  );
+
+  const { setTaskSteps: rows } = await run(FLOW, {
+    taskId: task.id,
+    steps: [
+      {
+        kind: "decision",
+        name: "any errors?",
+        prompt: "do any of these report an application error?",
+        cases: ["error", "clean"],
+        branches: [
+          { case: "error", steps: [{ name: "write it up", prompt: "write an md file" }] },
+          { case: "clean", steps: [{ name: "print", prompt: "print the subject lines" }] },
+        ],
+      },
+      { name: "done", prompt: "say so", context: "previous" },
+    ],
+  });
+
+  // Flattened depth-first, so a parent is always written before the children that name it.
+  expect(rows.map((row: { name: string }) => row.name)).toEqual([
+    "any errors?",
+    "write it up",
+    "print",
+    "done",
+  ]);
+  const [decision, wrote, printed, done] = rows;
+  expect(decision).toMatchObject({ parentId: null, branch: "", position: 0, kind: "decision" });
+  expect(decision.cases).toEqual(["error", "clean"]);
+  expect(wrote).toMatchObject({ parentId: decision.id, branch: "error", position: 0 });
+  expect(printed).toMatchObject({ parentId: decision.id, branch: "clean", position: 0 });
+  // A sibling of the decision, not a child of it — the arms do not consume the sequence.
+  expect(done).toMatchObject({ parentId: null, branch: "", position: 1, context: "previous" });
+
+  // Sent back with their ids, the surviving steps are edited in place rather than replaced, so
+  // the run history that points at them stays pointed at them.
+  const { setTaskSteps: edited } = await run(FLOW, {
+    taskId: task.id,
+    steps: [
+      {
+        id: decision.id,
+        kind: "decision",
+        name: "any errors?",
+        prompt: "look again",
+        cases: ["error", "clean"],
+        branches: [{ case: "error", steps: [{ id: wrote.id, name: "write it up", prompt: "md" }] }],
+      },
+    ],
+  });
+  expect(edited.map((row: { id: string }) => row.id)).toEqual([decision.id, wrote.id]);
+  expect(edited[0].prompt).toBe("look again");
+  // The arm that went away took its step with it.
+  const { steps } = await run(
+    `query S($id: String!) { steps(where: { taskId: { eq: $id } }) { id } }`,
+    {
+      id: task.id,
+    },
+  );
+  expect(steps.map((row: { id: string }) => row.id).sort()).toEqual([decision.id, wrote.id].sort());
+
+  // And an empty list leaves the task with nothing but its own prompt.
+  const { setTaskSteps: cleared } = await run(FLOW, { taskId: task.id, steps: [] });
+  expect(cleared).toEqual([]);
+});
+
+test("a flow that cannot run is refused before any of it is written", async () => {
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "bad", prompt: "go" }) { id } }`,
+  );
+
+  const cases = [
+    {
+      why: /not one of its cases/,
+      steps: [
+        {
+          kind: "decision",
+          name: "pick",
+          prompt: "which?",
+          cases: ["error"],
+          branches: [{ case: "clean", steps: [{ prompt: "never" }] }],
+        },
+      ],
+    },
+    {
+      why: /no cases to choose between/,
+      steps: [{ kind: "decision", name: "pick", prompt: "which?" }],
+    },
+    {
+      why: /not a decision/,
+      steps: [
+        { name: "plain", prompt: "go", branches: [{ case: "error", steps: [{ prompt: "no" }] }] },
+      ],
+    },
+    { why: /has no prompt/, steps: [{ name: "empty", prompt: "  " }] },
+    { why: /Unknown step kind/, steps: [{ kind: "sideways", prompt: "go" }] },
+  ];
+
+  for (const { why, steps } of cases) {
+    const result = await graphql({
+      schema,
+      source: FLOW,
+      variableValues: { taskId: task.id, steps },
+    });
+    expect(result.errors?.[0].message).toMatch(why);
+  }
+
+  // Every one of them was refused before anything was written, so the task still has no flow.
+  const { steps } = await run(
+    `query S($id: String!) { steps(where: { taskId: { eq: $id } }) { id } }`,
+    {
+      id: task.id,
+    },
+  );
+  expect(steps).toEqual([]);
+});
+
 test("the api key is write-only", async () => {
   const result = await graphql({ schema, source: `{ settings { apiKey } }` });
   expect(result.errors?.[0].message).toMatch(/apiKey/);
