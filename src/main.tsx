@@ -11,18 +11,15 @@ const queryClient = new QueryClient({
     queries: {
       retry: false,
       refetchOnWindowFocus: false,
-      // Cache-first: a cached result inside `staleTime` is used as-is, with no request at all,
-      // so moving between pages is instant instead of refetching what we just had. Past it the
-      // cache still renders immediately and the refetch happens behind it — never a spinner on
-      // data we already hold. `gcTime` is how long an unused result is kept to be first with.
+      // Cache-and-network: `staleTime: 0` means every mount refetches, but the cached result
+      // is rendered the whole time and only replaced once the server answers — a revisited
+      // page shows what it showed before, never a spinner or a blank. That falls out of
+      // `isPending` (no data at all) being distinct from `isFetching` (a request in flight),
+      // so the views gate their loading states on `isPending` alone.
       //
-      // Anything we change ourselves is invalidated by its mutation, which refetches regardless
-      // of staleness: the cache is keyed by query, not normalised the way Apollo's is, so a
-      // mutation result never quietly updates another query's copy of the same row. The window
-      // only covers what the *server* changes on its own — a cron run, an agent over MCP — and
-      // the pages where that matters poll on their own `refetchInterval`, which staleness does
-      // not gate either.
-      staleTime: 30_000,
+      // `gcTime` is what keeps the cache there to render: an unused result is dropped after
+      // it, and the 5-minute default meant a page returned to later had nothing to show.
+      staleTime: 0,
       gcTime: 30 * 60_000,
     },
   },
