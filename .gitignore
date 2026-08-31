@@ -4,3 +4,5 @@ dist
 data
 .env
 *.local
+# Claude Code's own scratch space — worktrees, session state. Not part of the app.
+.claude
