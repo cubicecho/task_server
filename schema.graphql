@@ -2263,3 +2263,29 @@ input McpConnectionInput {
   url: String
   headers: JSON
 }
+
+type Subscription {
+  """
+  Watches a run as it happens. Replays what the run has said so far, then follows it live, and completes when the run ends. Subscribing to a run that has not started waits for it; subscribing to one long finished ends straight away.
+  """
+  runEvents(runId: String!): RunEvent!
+}
+
+"""
+Something a run did while it was running — a token, a tool call, a step boundary. Held in memory for the length of the run and a minute after; the run row is the lasting record.
+"""
+type RunEvent {
+  runId: String!
+
+  """Per-run counter from 1, so a client can order and de-duplicate."""
+  seq: Int!
+  at: DateTime!
+
+  """step | thinking | output | tool-call | tool-result | notice | done."""
+  kind: String!
+  text: String!
+
+  """Tool name, where there is one."""
+  name: String!
+  ok: Boolean
+}

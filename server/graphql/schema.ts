@@ -3,6 +3,7 @@ import {
   GraphQLBoolean,
   GraphQLError,
   GraphQLInputObjectType,
+  GraphQLInt,
   GraphQLList,
   GraphQLNonNull,
   GraphQLObjectType,
@@ -12,6 +13,7 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
+import { type RunEvent, watch } from "../runner/events.ts";
 import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
@@ -162,6 +164,31 @@ const ScheduleEntryType = new GraphQLObjectType({
   },
 });
 
+const RunEventType = new GraphQLObjectType({
+  name: "RunEvent",
+  description:
+    "Something a run did while it was running — a token, a tool call, a step boundary. Held in " +
+    "memory for the length of the run and a minute after; the run row is the lasting record.",
+  fields: {
+    runId: { type: new GraphQLNonNull(GraphQLString) },
+    seq: {
+      type: new GraphQLNonNull(GraphQLInt),
+      description: "Per-run counter from 1, so a client can order and de-duplicate.",
+    },
+    at: { type: new GraphQLNonNull(GraphQLDateTime) },
+    kind: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "step | thinking | output | tool-call | tool-result | notice | done.",
+    },
+    text: { type: new GraphQLNonNull(GraphQLString) },
+    name: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "Tool name, where there is one.",
+    },
+    ok: { type: GraphQLBoolean },
+  },
+});
+
 export const schema = new GraphQLSchema({
   query: new GraphQLObjectType({
     name: "Query",
@@ -237,6 +264,21 @@ export const schema = new GraphQLSchema({
           await db.update(settings).set({ apiKey: args.apiKey }).where(eq(settings.id, "default"));
           return true;
         },
+      },
+    },
+  }),
+  subscription: new GraphQLObjectType({
+    name: "Subscription",
+    fields: {
+      runEvents: {
+        type: new GraphQLNonNull(RunEventType),
+        description:
+          "Watches a run as it happens. Replays what the run has said so far, then follows it " +
+          "live, and completes when the run ends. Subscribing to a run that has not started " +
+          "waits for it; subscribing to one long finished ends straight away.",
+        args: { runId: { type: new GraphQLNonNull(GraphQLString) } },
+        subscribe: (_source, args: { runId: string }) => watch(args.runId),
+        resolve: (event: RunEvent) => event,
       },
     },
   }),

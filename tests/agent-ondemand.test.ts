@@ -5,13 +5,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { McpServerRow, Settings } from "../server/db/schema.ts";
+import { replyWith } from "./fixtures/sse.ts";
 
 // Loading the runner pulls in the database module, so give it somewhere disposable first.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-ondemand-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
 
 /** Chat completions the fake model server hands back, one per request, in order. */
-let replies: unknown[] = [];
+let replies: ReturnType<typeof completion>[] = [];
 /** Every request body it was sent, so the tests can see what the tool array looked like. */
 let sent: ChatRequest[] = [];
 let server: http.Server;
@@ -20,9 +21,15 @@ let baseUrl = "";
 interface ChatRequest {
   messages: { role: string; content: string }[];
   tools?: { function: { name: string; parameters?: unknown } }[];
+  stream?: boolean;
+  stream_options?: { include_usage?: boolean };
 }
 
-const completion = (message: unknown) => ({
+const completion = (message: {
+  role: string;
+  content?: string | null;
+  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
+}) => ({
   id: "chatcmpl-test",
   object: "chat.completion",
   created: 0,
@@ -47,9 +54,9 @@ beforeAll(async () => {
       body += chunk;
     });
     request.on("end", () => {
-      sent.push(JSON.parse(body) as ChatRequest);
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify(replies.shift() ?? text("")));
+      const parsed = JSON.parse(body) as ChatRequest;
+      sent.push(parsed);
+      replyWith(response, replies.shift() ?? text(""), parsed);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

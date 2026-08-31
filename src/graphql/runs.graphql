@@ -24,3 +24,13 @@ mutation DeleteRun($id: String!) {
     id
   }
 }
+
+subscription RunEvents($runId: String!) {
+  runEvents(runId: $runId) {
+    seq
+    kind
+    text
+    name
+    ok
+  }
+}

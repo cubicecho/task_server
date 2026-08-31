@@ -19,7 +19,9 @@ export default defineConfig({
     // Nothing else is proxied: GraphQL is the only thing the web app talks to. The `/mcp`
     // endpoint is for agents, which reach the server on :8787 directly.
     proxy: {
-      "^/graphql$": { target: "http://localhost:8787", changeOrigin: true },
+      // Anchored, but the query string has to be allowed through: a subscription arrives as
+      // `GET /graphql?query=…` over SSE, and `^/graphql$` would not match it.
+      "^/graphql(\\?|$)": { target: "http://localhost:8787", changeOrigin: true },
     },
   },
 });

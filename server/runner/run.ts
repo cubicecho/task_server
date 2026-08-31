@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Run, runs, tasks } from "../db/schema.ts";
 import { runAgent } from "./agent.ts";
+import { emit } from "./events.ts";
 import { loadSettings } from "./llm.ts";
 
 /**
@@ -50,6 +51,9 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
 
   const controller = new AbortController();
   inFlight.set(taskId, { runId: run.id, controller });
+  // Everything the run says as it goes, for anyone watching it — see `runner/events.ts`.
+  const onEvent = (event: Parameters<typeof emit>[1]) => emit(run.id, event);
+  onEvent({ kind: "notice", text: `${task.name} started` });
   try {
     const config = await loadSettings();
     const result = await runAgent({
@@ -58,7 +62,9 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
       systemPrompt: task.systemPrompt || config.systemPrompt,
       prompt: task.prompt,
       signal: controller.signal,
+      onEvent,
     });
+    onEvent({ kind: "done", ok: true, text: "finished" });
     return await finish(run.id, {
       status: "ok",
       output: result.output,
@@ -71,10 +77,12 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
     // A stopped run is not a failed one: it did what was asked of it, which was to stop.
     if (controller.signal.aborted) {
       console.log(`[run] ${task.name}: stopped`);
+      onEvent({ kind: "done", ok: false, text: "stopped" });
       return await finish(run.id, { status: "stopped" });
     }
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[run] ${task.name}: ${message}`);
+    onEvent({ kind: "done", ok: false, text: message });
     return await finish(run.id, { status: "error", error: message });
   } finally {
     inFlight.delete(taskId);
