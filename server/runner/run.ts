@@ -4,8 +4,29 @@ import { type Run, runs, tasks } from "../db/schema.ts";
 import { runAgent } from "./agent.ts";
 import { loadSettings } from "./llm.ts";
 
-/** Tasks already in flight, so a slow task cannot be started on top of itself. */
-const inFlight = new Set<string>();
+/**
+ * Tasks in flight, so a slow task cannot be started on top of itself — and so a run can be
+ * called off. The controller is the only handle on a run once it has started: the loop is
+ * inside `runAgent`, and nothing else can reach it.
+ */
+const inFlight = new Map<string, { runId: string; controller: AbortController }>();
+
+/** Task ids running right now. A task cannot be deleted while it is one of them. */
+export const runningTaskIds = () => new Set(inFlight.keys());
+
+/**
+ * Calls off a running task. Returns false if it was not running — which is the honest answer
+ * to a stale button, not an error.
+ *
+ * The request in flight is aborted at once; a tool call already handed to an MCP server has
+ * to come back on its own, and the loop stops on the step after.
+ */
+export function stopTask(taskId: string): boolean {
+  const entry = inFlight.get(taskId);
+  if (!entry) return false;
+  entry.controller.abort();
+  return true;
+}
 
 /**
  * Executes one task and records the run.
@@ -24,7 +45,8 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
     .values({ taskId, triggerId: triggerId ?? null, status: "running" })
     .returning();
 
-  inFlight.add(taskId);
+  const controller = new AbortController();
+  inFlight.set(taskId, { runId: run.id, controller });
   try {
     const config = await loadSettings();
     const result = await runAgent({
@@ -32,6 +54,7 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
       model: task.model || config.model,
       systemPrompt: task.systemPrompt || config.systemPrompt,
       prompt: task.prompt,
+      signal: controller.signal,
     });
     return await finish(run.id, {
       status: "ok",
@@ -42,6 +65,11 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
       totalTokens: result.totalTokens,
     });
   } catch (error) {
+    // A stopped run is not a failed one: it did what was asked of it, which was to stop.
+    if (controller.signal.aborted) {
+      console.log(`[run] ${task.name}: stopped`);
+      return await finish(run.id, { status: "stopped" });
+    }
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[run] ${task.name}: ${message}`);
     return await finish(run.id, { status: "error", error: message });

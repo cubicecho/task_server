@@ -30,6 +30,9 @@ from the environment instead of the UI.
   event` exists as the row shape for the next step (a new email, a webhook), and is stored but
   never dispatched.
 - **run** — one execution: status, timings, output or error, which tools were called, tokens.
+  A run in flight can be called off from the Tasks page (`stopTask`), which aborts the request
+  and finishes the run as `stopped` — neither a success nor a failure. A task cannot be deleted
+  while it is running: the delete is refused server-side until its run has stopped.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
   will dial a config (`testMcpServer`) to list its tools before you save it.

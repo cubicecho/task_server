@@ -73,7 +73,8 @@ export const runs = sqliteTable(
       .references(() => tasks.id, { onDelete: "cascade" }),
     /** Null for a run started by hand from the UI. */
     triggerId: text().references(() => triggers.id, { onDelete: "set null" }),
-    status: text({ enum: ["running", "ok", "error"] })
+    /** `stopped` is a run called off by hand — not a failure, and not a result either. */
+    status: text({ enum: ["running", "ok", "error", "stopped"] })
       .notNull()
       .default("running"),
     startedAt: createdAt(),

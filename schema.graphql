@@ -294,6 +294,9 @@ enum RunsStatusEnum {
 
   """Value: error"""
   error
+
+  """Value: stopped"""
+  stopped
 }
 
 type RunAggregate {
@@ -2220,6 +2223,11 @@ type Mutation {
 
   """Runs a task immediately and resolves with the finished run."""
   runTask(taskId: String!): Run!
+
+  """
+  Calls off a running task. False means it was not running — a stale button, not a failure. The run is recorded as `stopped`.
+  """
+  stopTask(taskId: String!): Boolean!
 
   """
   Connects to a config that need not be saved yet and lists its tools, so a server can be checked before a task depends on it.

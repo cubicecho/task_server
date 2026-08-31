@@ -1,6 +1,7 @@
 import { buildSchema, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import {
   GraphQLBoolean,
+  GraphQLError,
   GraphQLInputObjectType,
   GraphQLList,
   GraphQLNonNull,
@@ -13,7 +14,7 @@ import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
 import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
-import { runTask } from "../runner/run.ts";
+import { runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { state as scheduleState, syncSoon } from "../scheduler/cron.ts";
 
 /**
@@ -48,13 +49,40 @@ const { entities } = buildSchema(db, {
   // expression — so the scheduler is rebuilt after each one rather than at named call sites
   // that would drift from the mutations that need them.
   onWrite: {
-    tasks: () => syncSoon(),
+    tasks: { before: guardTaskDelete, after: () => syncSoon() },
     triggers: () => syncSoon(),
     mcpServers: () => {
       void mcp.sync().catch((error) => console.error("[mcp] sync failed:", error));
     },
   },
 });
+
+/**
+ * Refuses to delete a task that is running right now — the run would keep going with nothing
+ * left to record it against, and its history would be deleted out from under it. Stop it first.
+ *
+ * Only deletes are guarded, and only by the `id.eq` filter the UI actually sends: a filter this
+ * cannot read is refused outright while anything is running, which is a rare, recoverable no
+ * rather than a wrong yes. Throwing here rolls the mutation back before it writes.
+ */
+function guardTaskDelete({ operation, args }: { operation: string; args: unknown }) {
+  if (operation !== "delete") return;
+  const running = runningTaskIds();
+  if (running.size === 0) return;
+
+  const where = (args as { where?: { id?: { eq?: unknown } } } | undefined)?.where;
+  const id = typeof where?.id?.eq === "string" ? where.id.eq : undefined;
+  // A plain Error would reach the client as "Internal server error" — the library only lets a
+  // GraphQLError of its own through. This one is the client's to act on, so it says why.
+  if (id === undefined || running.has(id)) {
+    throw new GraphQLError(
+      id === undefined
+        ? "A task is running. Stop it before deleting tasks."
+        : "This task is running. Stop it first, then delete it.",
+      { extensions: { code: "TASK_RUNNING" } },
+    );
+  }
+}
 
 /** Generated types are keyed by the mapped name; a rename should fail loudly, not silently. */
 function generatedType(name: string): GraphQLOutputType {
@@ -151,6 +179,14 @@ export const schema = new GraphQLSchema({
         description: "Runs a task immediately and resolves with the finished run.",
         args: { taskId: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: (_source, args: { taskId: string }) => runTask(args.taskId),
+      },
+      stopTask: {
+        type: new GraphQLNonNull(GraphQLBoolean),
+        description:
+          "Calls off a running task. False means it was not running — a stale button, not a " +
+          "failure. The run is recorded as `stopped`.",
+        args: { taskId: { type: new GraphQLNonNull(GraphQLString) } },
+        resolve: (_source, args: { taskId: string }) => stopTask(args.taskId),
       },
       testMcpServer: {
         type: new GraphQLNonNull(McpProbeType),
