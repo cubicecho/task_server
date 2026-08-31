@@ -42,7 +42,7 @@ docker compose up --build
 
 | Choice | Why |
 | --- | --- |
-| **`node:sqlite` + Drizzle** | No native dependency to build, so the container is a `node:26-slim` with nothing compiled in it. Postgres is the same tables in `pg-core` and a `pg` pool, chosen off `DATABASE_URL` — see below |
+| **Postgres + Drizzle** | One dialect everywhere. With no `DATABASE_URL` the server runs PGlite — postgres as WebAssembly, in-process, against `data/` — so a clone and the tests need no database of their own; set the variable and it is a `pg` pool instead. Same SQL, same types, either way |
 | **`@vantreeseba/drizzle-graphql`** | The API is generated from the tables — a new column is queryable as soon as it exists. Hand-written fields fill what CRUD cannot say |
 | **graphql-yoga** | Serves the query API and the `runEvents` subscription as SSE, which the browser reads with a plain `EventSource` |
 | **`@cubicecho/graphql-mcp`** | Projects the same schema as MCP tools. `server/mcp-endpoint.ts` curates which ones — see below |
@@ -54,21 +54,18 @@ docker compose up --build
 **Relative imports carry the `.ts`/`.tsx` extension.** Both tsx and Node's type stripping
 require it, and `allowImportingTsExtensions` is on for that reason.
 
-**The schema is the contract, and it is generated.** Add a column to `server/db/schema.sqlite.ts`
-*and* `server/db/schema.pg.ts`, run `npm run codegen`, and the typed documents in
-`src/graphql/*.graphql` see it. Never hand-write a type that codegen produces, and never edit
-`src/gql/graphql.ts` — biome ignores it because it is output.
+**The schema is the contract, and it is generated.** Add a column to `server/db/schema.ts`,
+run `npm run codegen`, and the typed documents in `src/graphql/*.graphql` see it. Never
+hand-write a type that codegen produces, and never edit `src/gql/graphql.ts` — biome ignores it
+because it is output.
 
-**Codegen runs on SQLite.** The SDL is the same on both but for one field — postgres adds
-`contains` to `JSONFilter` — so `npm run codegen` under a `postgres://` URL produces a
-one-field diff to discard, not commit.
+**A schema change is two edits.** `server/db/schema.ts` for the table definition and
+`server/db/ensure.ts` for the DDL that creates it on boot. `ensure.ts` writes the camelCase
+column names quoted, because postgres folds unquoted identifiers to lower case.
 
-**Both dialects, every time.** `server/db/` is the only place that knows whether this is SQLite
-or postgres: `dialect.ts` reads `DATABASE_URL`, `schema.ts` picks the tables, `client.ts` the
-driver, `migrate.ts` the DDL in `ensure.sqlite.ts` / `ensure.pg.ts`. Above that directory the
-postgres tables wear the SQLite tables' types, which holds only while the two schemas agree —
-`tests/schema-parity.test.ts` fails when they stop. A schema change is four edits: both schema
-files, both DDL files.
+**Only `client.ts` knows which postgres this is.** It reads `DATABASE_URL` and opens either a
+`pg` pool or a PGlite instance, and hands out one `db` under one set of types. Nothing above
+`server/db/` should branch on it.
 
 **Hand-written GraphQL fields go in `server/graphql/`**, beside the generated entities:
 `models`, `mcpStatus`, `schedule`, `runEvents` on the query side; `runTask`, `stopTask`,
@@ -79,10 +76,9 @@ is what an agent on `/mcp` reads to decide whether to call it.
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change
 either of those belongs in a hook, not in a route handler.
 
-**`features.nestedWrites` is off** — it needs an asynchronous driver and `node:sqlite` is
-synchronous. Postgres could have it, but then the GraphQL schema would depend on the database
-and one generated client could not serve both. A task and its triggers save as separate
-mutations.
+**`features.nestedWrites` is off.** Nothing in the driver stops it; it is simply not earned —
+a task and its triggers save as separate mutations, and a flow is written whole by
+`setTaskSteps` rather than a row at a time.
 
 **The `/mcp` surface is curated, not the whole schema.** `server/mcp-endpoint.ts` lists the
 seventeen tools an outside client gets. Nothing that empties a table in one call, and nothing

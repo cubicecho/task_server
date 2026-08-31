@@ -1,10 +1,10 @@
-# The same server as docker-compose.yml, on postgres instead of the SQLite file:
+# The same server as docker-compose.yml, against a postgres of its own rather than the
+# embedded one it runs in-process:
 #
 #   docker compose -f docker-compose.pg.yml up --build
 #
-# Nothing in the image changes. `DATABASE_URL` is the whole switch — the server reads the
-# scheme, picks the postgres tables and driver, and creates the schema on first boot the same
-# way it does for a new SQLite file.
+# Nothing in the image changes. `DATABASE_URL` is the whole switch — set, the server connects
+# to that server instead, and creates its schema on first boot either way.
 services:
   db:
     image: postgres:17-alpine
@@ -16,9 +16,8 @@ services:
       # reach this. Set POSTGRES_PASSWORD in a .env beside this file before exposing it.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tasks}
     volumes:
-      # A named volume, not a bind mount: postgres owns this directory's layout and permissions
-      # in a way the SQLite file does not. `docker compose down` keeps it; `down -v` is what
-      # throws the tasks away.
+      # A named volume, not a bind mount: postgres owns this directory's layout and
+      # permissions. `docker compose down` keeps it; `down -v` is what throws the tasks away.
       - pgdata:/var/lib/postgresql/data
     # Uncomment to reach the database from the host, e.g. for psql or drizzle studio.
     # ports:

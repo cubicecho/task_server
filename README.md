@@ -21,9 +21,11 @@ server (Ollama `http://localhost:11434/v1`, LM Studio `http://localhost:1234/v1`
 OpenRouter), pick a model, and save. Then create a task, give it a cron expression, and hit
 **Run now** to try it without waiting for the clock.
 
-The SQLite file is created on first boot under `data/`; there is no migration step to run.
-Copy `.env.example` to `.env` if you want to move the port, the database, or supply the API key
-from the environment instead of the UI.
+The database is postgres, and with nothing configured it is an embedded one — PGlite, running
+in the server's own process against `data/`. Nothing to install, nothing to start, and the
+tables are created on first boot; see **Postgres**. Copy `.env.example` to `.env` if you want
+to move the port, point at a postgres server, or supply the API key from the environment
+instead of the UI.
 
 ## The model
 
@@ -146,9 +148,8 @@ express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `r
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so
 editing a trigger in the UI takes effect immediately.
 
-`features.nestedWrites` is off: it needs an asynchronous SQLite driver, and this app uses Node's
-synchronous built-in `node:sqlite` to stay free of native dependencies. The UI therefore saves a
-task and its triggers as separate mutations.
+`features.nestedWrites` is off, so the UI saves a task and its triggers as separate mutations.
+A flow is written by `setTaskSteps` rather than a row at a time in any case — see **Flows**.
 
 ## MCP endpoint
 
@@ -196,11 +197,11 @@ docker compose up --build
 ```
 
 The server is on `http://localhost:8787` — the dashboard, `/graphql`, and `/mcp` all from the
-one container, the same as `npm start`. The database is a file on the volume, bind-mounted at
-`./data`, so the tasks survive the container and can be copied somewhere else.
+one container, the same as `npm start`. The embedded postgres keeps its data on the volume,
+bind-mounted at `./data`, so the tasks survive the container.
 
-For postgres instead, `docker-compose.pg.yml` is the same image beside a `postgres:17` service,
-with `DATABASE_URL` pointed at it and the tasks in a named volume:
+For a postgres server of its own, `docker-compose.pg.yml` is the same image beside a
+`postgres:17` service, with `DATABASE_URL` pointed at it and the tasks in a named volume:
 
 ```sh
 docker compose -f docker-compose.pg.yml up --build
@@ -237,47 +238,33 @@ shape changes breaks compilation rather than at runtime. Re-run it after changin
 
 ## Postgres
 
-SQLite is the default and needs nothing: `node:sqlite` is built into Node, so a fresh clone
-has a database the moment it boots. Postgres is one environment variable away, for the
-deployment that has outgrown a file — more than one server process, a managed backup, storage
-that is not the app's own disk.
+Postgres is the only database, and it comes in two shapes.
+
+With nothing set, the server runs **PGlite**: postgres itself, compiled to WebAssembly and
+running inside the Node process against a directory under `data/`. A fresh clone has a database
+the moment it boots, with nothing installed and nothing to start — and it is the same engine,
+the same SQL and the same types as the deployed thing, which is the point of it. The tests run
+one in memory, a throwaway per suite.
+
+With `DATABASE_URL` set it is a postgres server over `pg`, for the deployment that has outgrown
+a single process — more than one server, a managed backup, storage that is not the app's own
+disk.
 
 ```sh
 DATABASE_URL=postgres://tasks:tasks@localhost:5432/tasks npm start
 ```
 
-The URL's scheme is the whole switch. The tables are created on first boot exactly as they are
-for a new SQLite file, so an empty database is all postgres has to arrive with, and
-`docker-compose.pg.yml` is the same image against a `postgres:17` service — see **Docker**
-above.
+That variable is the whole switch, and `server/db/client.ts` is the only place in the server
+that acts on it — everything above `server/db/` is written against one `db` and one set of
+tables. The schema is created on first boot either way, so an empty database is all a postgres
+server has to arrive with; `docker-compose.pg.yml` is the same image against a `postgres:17`
+service — see **Docker** above.
 
 It is a swap, not a migration: the two databases share no data, and moving tasks from one to
 the other is your own `pg_dump`-shaped problem.
 
-Three files know which database it is, and nothing above `server/db/` does:
-
-- **`dialect.ts`** reads `DATABASE_URL` and answers `sqlite` or `postgres`. An unrecognised
-  scheme throws rather than guessing.
-- **`schema.ts`** picks between `schema.sqlite.ts` and `schema.pg.ts` — the same tables twice,
-  once in each dialect. `boolean` for an integer 0/1, `timestamptz` for epoch milliseconds,
-  `jsonb` for JSON in a `text` column: different storage, identical JavaScript values coming
-  back. So the postgres tables are handed out under the SQLite tables' *types*, and the
-  runner, the GraphQL layer and the tests are written once against one `Task`.
-- **`client.ts`** opens `node:sqlite` or a `pg` pool, and `migrate.ts` runs the matching DDL.
-
-Two schemas is the cost of the arrangement, and the risk is that they drift: a column added to
-one and forgotten in the other typechecks, passes every other test, and fails at runtime on
-whichever database the author was not using. `tests/schema-parity.test.ts` compares them
-column by column — names, nullability, defaults — and fails CI when they disagree.
-
 `npm run db:push` and `db:studio` follow `DATABASE_URL` too, and write their diffs to
-`drizzle/<dialect>/`.
-
-The GraphQL API does not change with the database — the same queries, the same generated
-client — with one exception: postgres can filter JSON by containment, so running `npm run
-codegen` against a `postgres://` URL adds `contains` to `JSONFilter`. The committed
-`schema.graphql` is the SQLite one and nothing in the app uses that filter, so that is a diff
-to throw away rather than commit.
+`drizzle/`.
 
 ## Scripts
 

@@ -31,24 +31,18 @@ import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./step
 const { entities } = buildSchema(db, {
   // `tasks` → type `Task`, queries `tasks` (list) and `task` (single).
   typeNameMapper: "singularize",
-  // A SQLite timestamp is an integer column under the hood, so built-in detection leaves it
-  // as `JSON`. It is a date to everyone who reads it, and `DateTime` transports ISO-8601.
-  // Postgres is named here too, so that the API a client sees — and the types codegen writes
-  // from it — are the same whichever database is underneath.
-  mapColumnType: (column) =>
-    column.columnType === "SQLiteTimestamp" || column.columnType === "PgTimestamp"
-      ? GraphQLDateTime
-      : undefined,
+  // Built-in detection leaves a timestamp column as `JSON`. It is a date to everyone who
+  // reads it, and `DateTime` transports ISO-8601.
+  mapColumnType: (column) => (column.columnType === "PgTimestamp" ? GraphQLDateTime : undefined),
   // The run history — the run and the steps it took — is written by the runner, never by a
   // client: a hand-made row would claim something happened that did not.
   features: {
     insert: (table) => table !== "runs" && table !== "runSteps" && table !== "settings",
     update: (table) => table !== "runs" && table !== "runSteps",
     delete: (table) => table !== "settings",
-    // `nestedWrites` (triggers created inline under createTask) is off: it needs an async
-    // driver for its multi-statement transaction, and node:sqlite is synchronous. Postgres
-    // could have it, but the schema would then differ by dialect — and the generated client
-    // is one file for both — so the UI writes the task, then its triggers, either way.
+    // `nestedWrites` (triggers created inline under createTask) is off. Nothing in the driver
+    // stops it any more; it is simply not earned yet — the UI writes the task and then its
+    // triggers, and a flow is written by `setTaskSteps` rather than row at a time regardless.
   },
   exclude: {
     // The key never needs to travel back to the browser; the UI only ever writes it.

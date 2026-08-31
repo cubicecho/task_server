@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@cubicecho/graphql-mcp": "^0.2.1",
+    "@electric-sql/pglite": "^0.5.8",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/pg": "^8.23.1",
     "@vantreeseba/drizzle-graphql": "^9.0.0",

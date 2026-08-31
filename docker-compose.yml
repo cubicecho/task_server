@@ -1,3 +1,8 @@
+# The server on its own, storing everything in the embedded postgres under ./data:
+#
+#   docker compose up --build
+#
+# For a postgres server of its own, see docker-compose.pg.yml.
 services:
   task-server:
     build: .
@@ -6,8 +11,9 @@ services:
     ports:
       - "8787:8787"
     volumes:
-      # tasks.db and its WAL. Bind-mounted rather than a named volume so the
-      # database is a file you can copy, inspect, and back up.
+      # The embedded postgres (PGlite) keeps its data here, so the tasks
+      # survive a rebuild. Point DATABASE_URL at a real postgres instead and
+      # this holds nothing that matters — see docker-compose.pg.yml.
       - ./data:/data
     environment:
       # Cron triggers fire on this zone (e.g. America/Chicago). A container

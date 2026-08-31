@@ -1,16 +1,16 @@
+import path from "node:path";
 import { defineConfig } from "drizzle-kit";
-import { DIALECT } from "./server/db/dialect.ts";
-import { DATABASE_URL } from "./server/paths.ts";
+import { DATA_DIR, DATABASE_URL } from "./server/paths.ts";
 
 /**
- * Follows `DATABASE_URL` like the server does, so `db:push` and `db:studio` act on the
- * database that is actually configured. The schema file and the output directory are per
- * dialect: a postgres diff and a SQLite diff describe different tables and must not share a
- * folder.
+ * Follows `DATABASE_URL` like the server does, so `db:push` and `db:studio` act on the database
+ * that is actually configured — the embedded PGlite one when nothing is set.
  */
 export default defineConfig({
-  dialect: DIALECT === "postgres" ? "postgresql" : "sqlite",
-  schema: DIALECT === "postgres" ? "./server/db/schema.pg.ts" : "./server/db/schema.sqlite.ts",
-  out: `./drizzle/${DIALECT}`,
-  dbCredentials: { url: DATABASE_URL },
+  dialect: "postgresql",
+  schema: "./server/db/schema.ts",
+  out: "./drizzle",
+  ...(DATABASE_URL
+    ? { dbCredentials: { url: DATABASE_URL } }
+    : { driver: "pglite", dbCredentials: { url: path.join(DATA_DIR, "pg") } }),
 });

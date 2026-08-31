@@ -32,7 +32,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # Vitest against a temp SQLite file per suite; no services needed.
+      # Vitest against an in-memory PGlite per suite; no services needed.
       - name: Test
         run: npm test
 
@@ -74,11 +74,11 @@ jobs:
           docker logs task-server-ci
           exit 1
 
-  # Postgres is a second set of table definitions, a second driver and a second
-  # pile of DDL, none of which a SQLite boot touches. tests/schema-parity.test.ts
-  # keeps the two schemas honest about each other, but only a real database says
-  # whether the DDL runs and the rows come back. The compose file is how this is
-  # meant to be used, so CI uses that rather than a rig of its own.
+  # The tests run on PGlite, which is postgres but not a postgres *server*: it
+  # says nothing about the node-postgres driver, the connection URL, or a boot
+  # that has to wait for a database in another container. The compose file is
+  # how that deployment is meant to be run, so CI runs that rather than a rig
+  # of its own.
   postgres:
     runs-on: ubuntu-latest
     steps:
@@ -91,9 +91,7 @@ jobs:
       - name: Boot the stack
         run: docker compose -f docker-compose.pg.yml up -d --build --wait
 
-      # A write and a read back. A task row carries a boolean, two timestamps
-      # and two generated defaults, and a trigger carries JSON — the columns
-      # that are stored differently here than in SQLite.
+      # A write and a read back, over the driver that only this job exercises.
       - name: A task round-trips through postgres
         run: |
           gql() {

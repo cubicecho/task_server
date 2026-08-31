@@ -1555,6 +1555,11 @@ input JSONFilter {
   ne: JSON
 
   """
+  Value structurally contains this JSON (Postgres `@>` / MySQL JSON_CONTAINS)
+  """
+  contains: JSON
+
+  """
   Compares the value at one path inside the document. Several entries are ANDed; a single object may be passed without the list brackets.
   """
   path: [JSONPathFilter!]

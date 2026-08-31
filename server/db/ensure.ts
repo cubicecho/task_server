@@ -1,22 +1,17 @@
-import { pool } from "./client.ts";
+import { runScript } from "./client.ts";
 
 /**
- * The postgres half of `ensureSchema()`, statement for statement the same tables as
- * `ensure.sqlite.ts`.
+ * Creates the tables, on a database that may or may not already have them.
  *
  * The camelCase column names are quoted because postgres folds unquoted identifiers to lower
- * case, and `schema.pg.ts` — like `schema.sqlite.ts` — names them as they are written in
- * TypeScript. `ADD COLUMN IF NOT EXISTS` is real here, so the later additions need none of
- * SQLite's catch-and-ignore.
+ * case, and `schema.ts` names them as they are written in TypeScript.
  *
- * One `query` with several statements rather than one apiece: node-postgres sends an
- * unparameterised query over the simple protocol, which runs the lot in a single implicit
- * transaction — so a boot that fails halfway leaves no half-made schema behind.
+ * One script rather than a statement apiece: `runScript` sends the batch over the simple query
+ * protocol, which runs the lot in a single implicit transaction — so a boot that fails halfway
+ * leaves no half-made schema behind.
  */
-export async function ensurePgTables() {
-  if (!pool) throw new Error("ensurePgTables() called without a postgres pool");
-
-  await pool.query(`
+export async function ensureTables() {
+  await runScript(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,

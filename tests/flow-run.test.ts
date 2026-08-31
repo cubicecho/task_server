@@ -55,7 +55,7 @@ beforeAll(async () => {
   const port = typeof address === "object" && address ? address.port : 0;
 
   const { ensureSchema } = await import("../server/db/migrate.ts");
-  ensureSchema();
+  await ensureSchema();
   client = await import("../server/db/client.ts");
   tables = await import("../server/db/schema.ts");
   runner = await import("../server/runner/run.ts");
