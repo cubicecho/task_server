@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to a branch makes the first run's answer worthless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '26'
+          cache: npm
+
+      - run: npm ci
+
+      # Formatting, lint, and import order in one pass. `ci` differs from
+      # `npm run lint` only in never writing fixes.
+      - name: Lint
+        run: npx biome ci .
+
+      # `npm run build` typechecks too, but a type error and a bundler error
+      # deserve to fail on different lines.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Vitest against a temp SQLite file per suite; no services needed.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # The image is only pushed from main, so without this a broken Dockerfile
+  # would first be noticed by a release. Builds, does not push.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: task-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The image runs the server's TypeScript through Node's type stripping
+      # rather than tsx. That either works or the container dies on boot, and
+      # nothing else in CI covers it.
+      - name: The container boots and answers
+        run: |
+          docker run -d --name task-server-ci -p 8787:8787 task-server:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS -X POST localhost:8787/graphql \
+              -H 'content-type: application/json' \
+              -d '{"query":"{ tasks { id } }"}' > /dev/null; then
+              echo 'server answered'
+              exit 0
+            fi
+            sleep 1
+          done
+          echo '::error::the container never answered on :8787'
+          docker logs task-server-ci
+          exit 1

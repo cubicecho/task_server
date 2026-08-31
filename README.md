@@ -153,6 +153,31 @@ Express's 404 page.
 No CORS headers, deliberately: this server has no authentication, so anyone who can reach the
 port can drive it, and there is no reason to also let a web page from another origin do so.
 
+## Docker
+
+```sh
+docker compose up --build
+```
+
+The server is on `http://localhost:8787` — the dashboard, `/graphql`, and `/mcp` all from the
+one container, the same as `npm start`. The database is a file on the volume, bind-mounted at
+`./data`, so the tasks survive the container and can be copied somewhere else.
+
+Set `TZ` in a `.env` beside the compose file if cron triggers should fire on your clock rather
+than UTC. `OPENAI_API_KEY` is optional and only a fallback: the key the settings screen saves
+lives in the database and wins.
+
+The image builds the client with the dev dependencies and then throws them away, and the
+runtime stage has no `tsx` in it — Node runs the server's TypeScript by stripping the types.
+That is the one thing about the image that could break on a source change, so CI builds it,
+boots it, and asks it a question on every pull request.
+
+Releases are cut from the commit log by semantic-release and push four tags — `latest` and the
+version, to both `ghcr.io/<owner>/<repo>` and Docker Hub. That needs `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN` as repository secrets; GHCR authenticates with the built-in `GITHUB_TOKEN`.
+Only `feat:`/`fix:` commits produce a version, so the Release workflow also takes a manual run
+with a version typed in, which publishes the images without tagging a release.
+
 ## Codegen
 
 The schema is built at runtime from the tables, so codegen needs it written out first:

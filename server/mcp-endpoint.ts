@@ -1,7 +1,9 @@
 import { createHttpHandler } from "@cubicecho/graphql-mcp";
 import express from "express";
 // The version a client is told it is talking to; without it the wrapper library reports its own.
-import { version } from "../package.json" with { type: "json" };
+// Default import, not a named one: Node's own JSON modules only export a default, and the
+// container runs this file through Node rather than tsx.
+import pkg from "../package.json" with { type: "json" };
 import { schema } from "./graphql/schema.ts";
 
 /**
@@ -77,7 +79,7 @@ const HINTS: Record<string, string> = {
 export const mcpHandler = createHttpHandler({
   schema,
   name: "task-server",
-  version,
+  version: pkg.version,
   include: TOOLS,
   // One level: the leaf fields of what a tool returns. Two would pull every run — output and
   // all — into a listing of tasks, which is a lot of context for a question about names.
