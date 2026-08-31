@@ -2,9 +2,23 @@ import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import codegen from "vite-plugin-graphql-codegen";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Regenerates `src/gql/graphql.ts` off vite's own watcher, so editing a document in
+    // `src/graphql/` updates its typed node and hot-reloads without a second watch process.
+    codegen({
+      // Off by default, and the half that matters here: `schema.graphql` is rewritten by the
+      // dev server whenever the tables change, and that is what has to reach the types.
+      matchOnSchemas: true,
+      // `npm run build` runs codegen before typecheck — it has to, or tsc reads stale types —
+      // so by the time vite starts there is nothing left to do.
+      runOnBuild: false,
+    }),
+  ],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
