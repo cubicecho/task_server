@@ -64,7 +64,7 @@ export function RunsRoute() {
                     variant={
                       run.status === "error"
                         ? "destructive"
-                        : run.status === "running"
+                        : run.status === "running" || run.status === "stopped"
                           ? "outline"
                           : "secondary"
                     }

@@ -68,6 +68,10 @@ mutation DeleteTrigger($id: String!) {
   }
 }
 
+mutation StopTask($taskId: String!) {
+  stopTask(taskId: $taskId)
+}
+
 mutation RunTask($taskId: String!) {
   runTask(taskId: $taskId) {
     id

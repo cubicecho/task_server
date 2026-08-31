@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/app-shell";
@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   DeleteTaskDocument,
   RunTaskDocument,
+  StopTaskDocument,
   type TaskFieldsFragment,
   TasksDocument,
   UpdateTaskDocument,
@@ -22,7 +23,14 @@ export function TasksRoute() {
   const [editing, setEditing] = useState<TaskFieldsFragment | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => request(TasksDocument) });
+  const tasks = useQuery({
+    queryKey: ["tasks"],
+    queryFn: () => request(TasksDocument),
+    // A run started by cron, or by another tab, only shows up if we look. Polling while
+    // anything is running is what makes the Stop button appear — and disappear again.
+    refetchInterval: (query) =>
+      query.state.data?.tasks.some((task) => task.runs[0]?.status === "running") ? 2000 : false,
+  });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
   const toggle = useMutation({
@@ -41,11 +49,23 @@ export function TasksRoute() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const stop = useMutation({
+    mutationFn: (taskId: string) => request(StopTaskDocument, { taskId }),
+    onSuccess: (data) => {
+      // False means the run had already finished on its own — nothing was stopped, and the
+      // refresh below is what the user actually wanted to see.
+      if (data.stopTask) toast.success("Stopping…");
+      refresh();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const run = useMutation({
     mutationFn: (taskId: string) => request(RunTaskDocument, { taskId }),
     onSuccess: (data) => {
       const { status, error } = data.runTask;
       if (status === "error") toast.error(error || "Run failed");
+      else if (status === "stopped") toast.success("Run stopped");
       else toast.success("Run finished — see Runs for the output");
       refresh();
     },
@@ -79,6 +99,10 @@ export function TasksRoute() {
 
       {tasks.data?.tasks.map((task) => {
         const lastRun = task.runs[0];
+        // `runTask` resolves only when the run finishes, so the mutation being in flight is a
+        // run in flight too — before the poll has had a chance to see the row.
+        const running =
+          lastRun?.status === "running" || (run.isPending && run.variables === task.id);
         return (
           <Card key={task.id} className="gap-3 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -86,7 +110,15 @@ export function TasksRoute() {
                 <div className="flex items-center gap-2">
                   <h2 className="truncate font-medium">{task.name}</h2>
                   {lastRun ? (
-                    <Badge variant={lastRun.status === "error" ? "destructive" : "secondary"}>
+                    <Badge
+                      variant={
+                        lastRun.status === "error"
+                          ? "destructive"
+                          : lastRun.status === "running"
+                            ? "outline"
+                            : "secondary"
+                      }
+                    >
                       {lastRun.status}
                     </Badge>
                   ) : null}
@@ -99,22 +131,35 @@ export function TasksRoute() {
                   onCheckedChange={() => toggle.mutate(task)}
                   aria-label="Enabled"
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Run now"
-                  disabled={run.isPending}
-                  onClick={() => run.mutate(task.id)}
-                >
-                  <Play className="size-4" />
-                </Button>
+                {running ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Stop this run"
+                    disabled={stop.isPending}
+                    onClick={() => stop.mutate(task.id)}
+                  >
+                    <Square className="size-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Run now"
+                    disabled={run.isPending}
+                    onClick={() => run.mutate(task.id)}
+                  >
+                    <Play className="size-4" />
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" title="Edit" onClick={() => setEditing(task)}>
                   <Pencil className="size-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  title="Delete"
+                  title={running ? "Stop the run before deleting" : "Delete"}
+                  disabled={running}
                   onClick={() => remove.mutate(task.id)}
                 >
                   <Trash2 className="size-4" />

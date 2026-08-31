@@ -119,6 +119,10 @@ export async function runAgent({
   };
 
   for (let iteration = 0; iteration < config.maxToolIterations; iteration++) {
+    // A stop aborts the request in flight, but a tool call already handed to an MCP server
+    // runs to its own end — so the signal is checked between steps as well.
+    signal?.throwIfAborted();
+
     // With a preselection in hand the first step gets the shortlist and nothing else — no
     // catalogue, no `load_tools`. Left with the menu in front of it the model shops: it
     // reloads what it already has, or picks a sibling of the right tool. Taking the menu away
@@ -176,6 +180,7 @@ export async function runAgent({
     }
 
     for (const call of calls) {
+      signal?.throwIfAborted();
       // Only function tools carry a name and arguments; anything else has nothing to run.
       if (call.type !== "function") continue;
       const name = call.function.name;
