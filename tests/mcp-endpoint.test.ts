@@ -275,3 +275,30 @@ test("rejects an argument it does not recognise instead of dropping it", async (
   expect(badType.isError).toBe(true);
   expect(badType.text).toContain("limit");
 });
+
+test("marks only the tools that actually destroy something", async () => {
+  const { tools } = await client.listTools();
+  const destructive = tools
+    .filter((tool) => tool.annotations?.destructiveHint)
+    .map((tool) => tool.name)
+    .sort();
+
+  // The updates rewrite a row, `set_task_steps` replaces a whole flow, and the deletes are the
+  // real thing. Creating a task or starting a run is none of those, and a client that stops to
+  // ask the operator should be spending that interruption on the deletes.
+  expect(destructive).toEqual([
+    "delete_task_single",
+    "delete_trigger_single",
+    "set_task_steps",
+    "update_task_single",
+    "update_trigger_single",
+  ]);
+
+  // Overriding one hint must not cost the others: they are merged, not replaced.
+  const created = tools.find((tool) => tool.name === "create_task");
+  expect(created?.annotations?.title).toBe("Create Task");
+  expect(created?.annotations?.readOnlyHint).toBe(false);
+
+  // Reads stay reads.
+  expect(tools.find((tool) => tool.name === "tasks")?.annotations?.readOnlyHint).toBe(true);
+});

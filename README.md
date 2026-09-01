@@ -215,6 +215,11 @@ Tool names are snake_case while the GraphQL fields they come from are camelCase:
 reads a tool name as a name, and snake_case is the convention it meets everywhere else. The
 arguments and the fields in the answer are the schema's own, so they keep their spelling.
 
+Only five tools are marked `destructiveHint`: the two updates, `set_task_steps`, and the two
+deletes. The hint is otherwise derived from the operation kind, which marks every mutation
+destructive — so creating a task looks the same to a client as dropping one, and a client that
+stops to ask before a destructive call spends that interruption in the wrong place.
+
 The schema has forty-odd root fields, and the rest are left out on purpose: the settings row and
 `setApiKey` (the server's own credentials are the operator's business, not a visiting agent's),
 the MCP-server rows, the aggregates and group-bys, and every bulk mutation — `deleteTask` with
