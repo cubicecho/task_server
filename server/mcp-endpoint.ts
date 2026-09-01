@@ -1,5 +1,13 @@
-import { createHttpHandler } from "@cubicecho/graphql-mcp";
+import { argsToZodShape, createHttpHandler } from "@cubicecho/graphql-mcp";
 import express from "express";
+import type { GraphQLArgument, GraphQLInputFieldConfigMap, GraphQLInputType } from "graphql";
+import {
+  GraphQLInputObjectType,
+  GraphQLList,
+  GraphQLNonNull,
+  getNamedType,
+  isInputObjectType,
+} from "graphql";
 // The version a client is told it is talking to; without it the wrapper library reports its own.
 // Default import, not a named one: Node's own JSON modules only export a default, and the
 // container runs this file through Node rather than tsx.
@@ -89,6 +97,87 @@ const HINTS: Record<string, string> = {
 };
 
 /**
+ * Drops the relation filters from a `where` argument before it becomes a tool's input schema.
+ *
+ * The generated `TaskFilters` can filter a task by its triggers, its steps and its runs, and each
+ * of those filters by its own relations back — `RunFilters.task` is a `TaskFilters`. In GraphQL
+ * that costs nothing, because the SDL names a type it has already defined. Rendered as the JSON
+ * Schema a tool advertises it has to be written out, and mutual recursion between four tables
+ * expands into something enormous: the `tasks` tool alone was 2.8 MB, and the seventeen together
+ * were about 18 MB — call it four and a half million tokens of tool definitions, which is more
+ * than any model will read. It is the whole listing, so it lands before a client can call
+ * anything.
+ *
+ * Self-reference is not the problem: `OR`, `AND` and `NOT` are the same type as their parent, and
+ * zod emits those as a `$ref` costing a couple of hundred bytes. It is the recursion *between*
+ * types, which is rebuilt structurally at every level and so cannot be deduplicated.
+ *
+ * So the relations come out and the columns stay. `where: { enabled: { eq: true } }` is what an
+ * agent actually reaches for; "tasks having a run whose step failed" is not worth what it costs
+ * here, and is still one `runs` call away. `/graphql` keeps all of it — this prunes a copy of the
+ * types, made for the tools, and never the schema the web app is served from.
+ */
+const pruned = new Map<string, GraphQLInputObjectType>();
+
+/**
+ * A field that reaches another table, as opposed to one that constrains a column.
+ *
+ * Two shapes say so: the list form is its own `…ListRelationFilter` of `some`/`none`/`every`, and
+ * the to-one form is simply that table's `…Filters`. The parent's own name is excluded because
+ * that is `OR`/`AND`/`NOT`, which cost nothing and are worth keeping.
+ */
+const isRelationFilter = (named: unknown, parent: GraphQLInputObjectType) =>
+  isInputObjectType(named) &&
+  (named.name.endsWith("ListRelationFilter") ||
+    (named.name.endsWith("Filters") && named.name !== parent.name));
+
+function pruneFilters(type: GraphQLInputObjectType): GraphQLInputObjectType {
+  const cached = pruned.get(type.name);
+  if (cached) return cached;
+
+  // Registered before the fields are built, because they are a thunk that reads it back: `OR` on
+  // the pruned type has to point at the pruned type, not at the original it was copied from.
+  const copy: GraphQLInputObjectType = new GraphQLInputObjectType({
+    name: type.name,
+    description: type.description,
+    fields: () => {
+      const fields: GraphQLInputFieldConfigMap = {};
+      for (const field of Object.values(type.getFields())) {
+        if (isRelationFilter(getNamedType(field.type), type)) continue;
+        fields[field.name] = {
+          description: field.description,
+          type: rewireSelf(field.type, type, copy),
+        };
+      }
+      return fields;
+    },
+  });
+  pruned.set(type.name, copy);
+  return copy;
+}
+
+/** Swaps the parent type for its pruned copy, keeping any list and non-null wrappers around it. */
+function rewireSelf(
+  type: GraphQLInputType,
+  parent: GraphQLInputObjectType,
+  copy: GraphQLInputObjectType,
+): GraphQLInputType {
+  if (type instanceof GraphQLNonNull) {
+    return new GraphQLNonNull(rewireSelf(type.ofType, parent, copy));
+  }
+  if (type instanceof GraphQLList) return new GraphQLList(rewireSelf(type.ofType, parent, copy));
+  return isInputObjectType(type) && type.name === parent.name ? copy : type;
+}
+
+/** The field's arguments with every `…Filters` among them replaced by its pruned copy. */
+const prunedArgs = (args: readonly GraphQLArgument[]) =>
+  args.map((arg) => {
+    const named = getNamedType(arg.type);
+    if (!isInputObjectType(named) || !named.name.endsWith("Filters")) return arg;
+    return { ...arg, type: rewireSelf(arg.type, named, pruneFilters(named)) };
+  });
+
+/**
  * The same schema the web app uses, offered to other clients as MCP tools.
  *
  * A task server whose own API is a set of tools can be driven by an agent — "add a task that
@@ -107,10 +196,12 @@ export const mcpHandler = createHttpHandler({
   // One level: the leaf fields of what a tool returns. Two would pull every run — output and
   // all — into a listing of tasks, which is a lot of context for a question about names.
   selectionDepth: 1,
-  decorate: (descriptor) => {
-    const hint = HINTS[descriptor.name];
-    return hint ? { description: `${hint}\n\n${descriptor.description}` } : undefined;
-  },
+  decorate: (descriptor, field) => ({
+    description: HINTS[descriptor.name]
+      ? `${HINTS[descriptor.name]}\n\n${descriptor.description}`
+      : descriptor.description,
+    inputSchema: argsToZodShape(prunedArgs(field.args)),
+  }),
 });
 
 /**

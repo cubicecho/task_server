@@ -51,6 +51,16 @@ async function call(name: string, args: Record<string, unknown> = {}) {
   return envelope.data ?? {};
 }
 
+/** Just enough of a tool's JSON Schema to reach the keys of its `where` argument. */
+interface WhereSchema {
+  properties?: {
+    where?: {
+      anyOf?: { properties?: Record<string, unknown> }[];
+      properties?: Record<string, unknown>;
+    };
+  };
+}
+
 test("offers the task tools, and only those", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((tool) => tool.name).sort();
@@ -80,6 +90,39 @@ test("offers the task tools, and only those", async () => {
   expect(names).not.toContain("set_api_key");
   expect(names).not.toContain("settings");
   expect(names).not.toContain("delete_task");
+});
+
+test("advertises tools small enough for a client to read", async () => {
+  const { tools } = await client.listTools();
+
+  // Every tool definition a client is handed, before it can call anything. The generated
+  // `where` reaches through relations — a task filtered by its runs, a run filtered back by its
+  // task — and the JSON Schema this becomes has to write that recursion out in full rather than
+  // naming a type. Unpruned, `tasks` alone was 2.8 MB and the seventeen together were 18 MB,
+  // which no model will read: the listing is what jams, not the call.
+  const sizes = tools.map((tool) => [tool.name, JSON.stringify(tool).length] as const);
+  for (const [name, size] of sizes) {
+    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(150_000);
+  }
+  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(1_000_000);
+
+  // The columns are what an agent filters on, and they are all still there.
+  const where = (tools.find((tool) => tool.name === "tasks")?.inputSchema as WhereSchema)
+    ?.properties?.where;
+  const props = (where?.anyOf?.[0] ?? where)?.properties ?? {};
+  expect(Object.keys(props)).toEqual([
+    "id",
+    "name",
+    "prompt",
+    "model",
+    "systemPrompt",
+    "enabled",
+    "createdAt",
+    "updatedAt",
+    "OR",
+    "AND",
+    "NOT",
+  ]);
 });
 
 test("writes a task, reads it back, and deletes it", async () => {
