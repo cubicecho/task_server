@@ -27,6 +27,17 @@ jobs:
       - name: Lint
         run: npx biome ci .
 
+      # `schema.graphql` and `src/gql/graphql.ts` are generated from the Drizzle
+      # tables and committed, so a column added without a `npm run codegen` puts
+      # the repo's types behind its API and nothing else notices. Regenerating
+      # and diffing is the only thing that does. Runs before the typecheck so
+      # drift is reported as drift rather than as a puzzling type error.
+      - name: The committed schema and types are current
+        run: |
+          npm run codegen
+          git diff --exit-code -- schema.graphql src/gql/graphql.ts \
+            || { echo '::error::run `npm run codegen` and commit the result'; exit 1; }
+
       # `npm run build` typechecks too, but a type error and a bundler error
       # deserve to fail on different lines.
       - name: Typecheck

@@ -11,6 +11,15 @@ import * as cron from "./scheduler/cron.ts";
 
 await ensureSchema();
 
+// The GraphQL schema comes from the tables, so a column added upstairs changes the API here.
+// In dev that is regenerated into `schema.graphql` and `src/gql/graphql.ts` on boot; the
+// production image has neither codegen nor sources to write. See `dev/codegen.ts`.
+if (process.env.NODE_ENV !== "production") {
+  await import("./dev/codegen.ts")
+    .then((dev) => dev.runCodegen())
+    .catch((error: unknown) => console.warn("[task-server] codegen skipped:", error));
+}
+
 const app = express();
 
 const yoga = createYoga({ schema, graphqlEndpoint: "/graphql" });
