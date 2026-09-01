@@ -174,6 +174,16 @@ export function TasksRoute() {
                 <span>No triggers — it only runs when you press play.</span>
               ) : null}
               {task.triggers.map((trigger) => {
+                // A webhook has no next time to show and is not waiting on the scheduler: it
+                // fires when someone posts to it. Saying "not scheduled" of one reads as a
+                // fault, when it is simply a different kind of trigger.
+                if (trigger.kind === "event") {
+                  return (
+                    <span key={trigger.id} className="rounded-md border px-2 py-1 font-mono">
+                      POST /webhooks/{trigger.event}
+                    </span>
+                  );
+                }
                 const next = nextRuns.get(trigger.id);
                 return (
                   <span
@@ -181,7 +191,7 @@ export function TasksRoute() {
                     className="rounded-md border px-2 py-1 font-mono"
                     title={next ? `next: ${new Date(next).toLocaleString()}` : undefined}
                   >
-                    {trigger.kind === "cron" ? trigger.cron : `on ${trigger.event}`}
+                    {trigger.cron}
                     {trigger.timezone ? ` (${trigger.timezone})` : ""}
                     {next ? ` · next ${new Date(next).toLocaleString()}` : " · not scheduled"}
                   </span>

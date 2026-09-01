@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/app-shell";
 import { ModelSelect } from "@/components/model-select";
 import { StepList } from "@/components/step-editor";
+import { type DraftTrigger, TriggerEditor, toDraftTriggers } from "@/components/trigger-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,19 +25,6 @@ import {
 } from "@/gql/graphql";
 import { type DraftStep, fromYaml, toDraft, toInput, toYaml } from "@/lib/flow";
 import { request } from "@/lib/gql";
-
-/** A trigger being edited. `id` is absent until it has been saved. */
-interface DraftTrigger {
-  id?: string;
-  cron: string;
-  timezone: string;
-}
-
-const EXAMPLES = [
-  { label: "Every hour", cron: "0 * * * *" },
-  { label: "Weekday mornings", cron: "0 9 * * 1-5" },
-  { label: "Every 15 minutes", cron: "*/15 * * * *" },
-];
 
 /**
  * The page behind `/tasks/new` and `/tasks/$taskId`.
@@ -94,10 +82,8 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
   const [prompt, setPrompt] = useState(task?.prompt ?? "");
   const [model, setModel] = useState(task?.model ?? "");
   const [systemPrompt, setSystemPrompt] = useState(task?.systemPrompt ?? "");
-  const [triggers, setTriggers] = useState<DraftTrigger[]>(
-    task?.triggers
-      .filter((trigger) => trigger.kind === TriggersKindEnum.Cron)
-      .map((trigger) => ({ id: trigger.id, cron: trigger.cron, timezone: trigger.timezone })) ?? [],
+  const [triggers, setTriggers] = useState<DraftTrigger[]>(() =>
+    toDraftTriggers(task?.triggers ?? []),
   );
   const [removed, setRemoved] = useState<string[]>([]);
 
@@ -146,13 +132,16 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       // transaction, so a flow either lands whole or not at all.
       for (const id of removed) await request(DeleteTriggerDocument, { id });
       for (const trigger of triggers) {
-        if (!trigger.cron.trim()) continue;
-        const set = { cron: trigger.cron.trim(), timezone: trigger.timezone.trim() };
+        // A row left blank is one that was added and never filled in, which is not an edit to
+        // save. A webhook with no id would be worse than nothing: no address reaches it.
+        const cron = trigger.cron.trim();
+        const event = trigger.event.trim();
+        if (trigger.kind === "cron" ? !cron : !event) continue;
+
+        const kind = trigger.kind === "cron" ? TriggersKindEnum.Cron : TriggersKindEnum.Event;
+        const set = { kind, cron, timezone: trigger.timezone.trim(), event };
         if (trigger.id) await request(UpdateTriggerDocument, { id: trigger.id, set });
-        else
-          await request(CreateTriggerDocument, {
-            values: { taskId, kind: TriggersKindEnum.Cron, ...set },
-          });
+        else await request(CreateTriggerDocument, { values: { taskId, ...set } });
       }
 
       const written = await request(SetTaskStepsDocument, { taskId, steps: toInput(flow) });
@@ -172,17 +161,6 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     },
     onError: (error: Error) => toast.error(error.message),
   });
-
-  const setTrigger = (index: number, patch: Partial<DraftTrigger>) =>
-    setTriggers((current) =>
-      current.map((trigger, i) => (i === index ? { ...trigger, ...patch } : trigger)),
-    );
-
-  const dropTrigger = (index: number) => {
-    const trigger = triggers[index];
-    if (trigger.id) setRemoved((current) => [...current, trigger.id as string]);
-    setTriggers((current) => current.filter((_, i) => i !== index));
-  };
 
   return (
     <Page
@@ -244,60 +222,11 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <Label>Schedule</Label>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setTriggers((current) => [...current, { cron: "", timezone: "" }])}
-          >
-            <Plus className="size-4" />
-            Add
-          </Button>
-        </div>
-
-        {triggers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No schedule — the task only runs when you press play.
-          </p>
-        ) : null}
-
-        {triggers.map((trigger, index) => (
-          <div key={trigger.id ?? `new-${index}`} className="flex items-center gap-2">
-            <Input
-              className="font-mono"
-              value={trigger.cron}
-              onChange={(event) => setTrigger(index, { cron: event.target.value })}
-              placeholder="0 9 * * *"
-            />
-            <Input
-              className="w-52"
-              value={trigger.timezone}
-              onChange={(event) => setTrigger(index, { timezone: event.target.value })}
-              placeholder="America/Chicago"
-            />
-            <Button variant="ghost" size="icon" onClick={() => dropTrigger(index)}>
-              <Trash2 className="size-4" />
-            </Button>
-          </div>
-        ))}
-
-        <div className="flex gap-2 text-xs text-muted-foreground">
-          {EXAMPLES.map((example) => (
-            <button
-              key={example.cron}
-              type="button"
-              className="rounded-md border px-2 py-1 hover:bg-accent"
-              onClick={() =>
-                setTriggers((current) => [...current, { cron: example.cron, timezone: "" }])
-              }
-            >
-              {example.label} <span className="font-mono">{example.cron}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      <TriggerEditor
+        triggers={triggers}
+        onChange={setTriggers}
+        onRemoveSaved={(id) => setRemoved((current) => [...current, id])}
+      />
 
       <Tabs value={tab} onValueChange={switchTab} className="gap-3">
         <div className="flex items-center justify-between">

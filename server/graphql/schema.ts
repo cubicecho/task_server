@@ -74,9 +74,9 @@ const { entities } = buildSchema(db, {
         ),
     },
     triggers: {
-      // An expression node-cron will not take is caught here rather than at the next sync,
-      // where it is a line in a log nobody is reading and a trigger that quietly never fires.
-      before: ({ args }) => refuseBadCron(args),
+      // A trigger nothing can fire — a bad expression, or a webhook with no address — is
+      // caught here rather than becoming a row that looks armed and silently never runs.
+      before: ({ args }) => refuseUnfireableTrigger(args),
       after: () => syncSoon(),
     },
     mcpServers: () => {
@@ -86,17 +86,22 @@ const { entities } = buildSchema(db, {
 });
 
 /**
- * Refuses a write that would store a cron expression node-cron cannot parse.
+ * Refuses a write that would store a trigger nothing can ever fire.
  *
- * The scheduler is the only thing that ever reads the column, and it can do nothing with a bad
- * expression but log and skip it — so the trigger sits in the table looking armed and never
- * fires. Every mutation shape the generated CRUD offers puts the values somewhere different,
- * hence the sweep: `values` for a create, `set` for an update, and `updates[].set` for the
- * many-row form.
+ * Both failures look identical from the outside — a row in the table, `enabled: true`, that
+ * never runs — because the two things that read these columns can only skip what they cannot
+ * use. The scheduler logs a cron expression it cannot parse and moves on; `POST /webhooks/<id>`
+ * matches on the id, so a `kind: "event"` trigger with no id is an address nobody can reach.
+ * Caught here, at the write, both are a message the client can act on.
  *
- * An empty expression is left alone. That is an `event` trigger, which has no schedule.
+ * Every mutation shape the generated CRUD offers puts the values somewhere different, hence the
+ * sweep: `values` for a create, `set` for an update, and `updates[].set` for the many-row form.
+ *
+ * A `cron` of `""` is not checked: that is what an event trigger's unused column holds. The
+ * webhook id is only demanded when the write says `kind: "event"` itself, because an update
+ * that touches one other column says nothing about which kind the row it lands on is.
  */
-function refuseBadCron(args: unknown) {
+function refuseUnfireableTrigger(args: unknown) {
   const arg = args as
     | { values?: unknown; set?: unknown; updates?: { set?: unknown }[] }
     | undefined;
@@ -106,12 +111,20 @@ function refuseBadCron(args: unknown) {
     ...(arg?.updates ?? []).map((update) => update?.set),
   ];
 
-  for (const candidate of candidates) {
-    const cron = (candidate as { cron?: unknown } | undefined)?.cron;
-    if (typeof cron !== "string" || !cron.trim()) continue;
-    if (!isValidCron(cron)) {
+  for (const raw of candidates) {
+    const candidate = raw as { cron?: unknown; kind?: unknown; event?: unknown } | undefined;
+    if (!candidate) continue;
+
+    const { cron } = candidate;
+    if (typeof cron === "string" && cron.trim() && !isValidCron(cron)) {
       throw new GraphQLError(`"${cron}" is not a cron expression this scheduler can read.`, {
         extensions: { code: "BAD_CRON" },
+      });
+    }
+
+    if (candidate.kind === "event" && !String(candidate.event ?? "").trim()) {
+      throw new GraphQLError("An event trigger needs a webhook id — it is the whole address.", {
+        extensions: { code: "BAD_EVENT" },
       });
     }
   }

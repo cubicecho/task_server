@@ -251,3 +251,26 @@ test("an expression the scheduler cannot read is refused, not stored", async () 
   );
   expect(event.kind).toBe("event");
 });
+
+test("an event trigger with no webhook id is refused", async () => {
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "on push", prompt: "build" }) { id } }`,
+  );
+
+  // `POST /webhooks/<id>` matches on the id, so a trigger without one is an address that
+  // cannot be written down — a row that looks armed and nothing can ever reach.
+  const rejected = await graphql({
+    schema,
+    source: `mutation Create($taskId: String!) {
+       createTrigger(values: { taskId: $taskId, kind: event }) { id }
+     }`,
+    variableValues: { taskId: task.id },
+  });
+  expect(rejected.errors?.[0].message).toMatch(/needs a webhook id/);
+
+  const { triggers } = await run(
+    `query T($id: String!) { triggers(where: { taskId: { eq: $id } }) { id } }`,
+    { id: task.id },
+  );
+  expect(triggers).toEqual([]);
+});

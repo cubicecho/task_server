@@ -173,8 +173,18 @@ them on the **Runs** page like any other run. The body is parsed and thrown away
 read from it yet.
 
 There is no signature, no secret, and no auth — the id is all there is, so pick one that is
-not worth guessing if it matters (`uuidgen` is a fine source). This is deliberate: the server
-is meant to sit somewhere you already trust.
+not worth guessing if it matters. This is deliberate: the server is meant to sit somewhere you
+already trust.
+
+**Webhooks** on a task's edit page adds and removes them. **Add** generates an unguessable id
+and shows the full URL to copy; **New id** replaces it, which is how a webhook is revoked — the
+old address stops matching the moment the change is saved. The id is editable if you would
+rather it read as something (`nightly-import`), at the cost of being guessable. A task can have
+several, and several tasks can share one: a post fires all of them.
+
+Both halves of a trigger are checked when it is written, over the UI or the API alike, because
+either mistake produces the same thing — a row that looks armed and never runs. A cron
+expression the scheduler cannot parse is refused, and so is an `event` trigger with no id.
 
 ## Retention
 
