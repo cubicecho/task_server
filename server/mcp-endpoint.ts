@@ -58,7 +58,9 @@ const HINTS: Record<string, string> = {
   steps:
     "What a task does after its own prompt: a flat list of the steps of its flow. `parentId` " +
     "and `branch` say which decision's arm a step sits in — both empty for the task's own " +
-    "top-level sequence — and `position` orders it among its siblings. Filter by `taskId`.",
+    "top-level sequence — and `position` orders it among its siblings. Filter by `taskId`. " +
+    "This is the reading shape only; `set_task_steps` takes the same tree nested, and these " +
+    "rows cannot be handed back to it as they stand.",
   run_steps:
     "The path one run actually took, a row per step it executed, in `position` order. On a " +
     "decision, `branch` is the arm it chose — which is the thing you open a run to find out. " +
@@ -78,9 +80,16 @@ const HINTS: Record<string, string> = {
   set_task_steps:
     "Gives a task the steps that run after its own prompt, replacing whatever it had. Steps " +
     "run in order and each one sees what the ones before it produced; a step of kind " +
-    "`decision` picks one of its own `cases` and only that arm's `branches` run, nested as " +
-    "deep as you like. Read the current flow with `steps` first and send existing ids back to " +
-    "edit in place. An empty list leaves the task with just its prompt.",
+    "`decision` picks one of its own `cases`, and what runs next is that arm's entry in " +
+    '`branches` — `{ case: "yes", steps: [ … ] }` — nested as deep as you like. An empty ' +
+    "list leaves the task with just its prompt.\n\n" +
+    "The flow is written nested and read back flat, so a read is not an input. `steps` and " +
+    "this tool's own result describe the tree with `parentId` and `branch`, which are not " +
+    "fields you can send: handing those rows back is refused, and handing them back with the " +
+    "unrecognised keys stripped out is worse — it is accepted, and every step arrives at the " +
+    "top level, so a decision keeps its `cases` and silently loses the arms under them. Build " +
+    "the nesting yourself, and send each existing step's `id` back inside it so the run " +
+    "history stays pointed at it.",
   create_trigger:
     "Starts a task on something: `kind: cron` with a five-field expression such as " +
     "`0 9 * * *`, and a `timezone` if it should not follow the server's; or `kind: event` " +
