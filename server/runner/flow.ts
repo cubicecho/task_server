@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
+import { errorMessage } from "../errors.ts";
 import { runAgent } from "./agent.ts";
 import type { RunEventInput } from "./events.ts";
 import { ask, parseJson, tryAsk } from "./side-task.ts";
@@ -119,17 +120,18 @@ export function renderPrompt(
   step: Pick<Step, "prompt" | "context">,
   context: ContextEntry[],
 ): string {
-  if (PLACEHOLDER.test(step.prompt)) {
-    PLACEHOLDER.lastIndex = 0;
-    return step.prompt.replace(PLACEHOLDER, (_match, token: string) => {
-      if (token.toLowerCase() === "previous") return context[context.length - 1]?.output ?? "";
-      const wanted = token.slice("steps.".length);
-      const entry = context.find((item) => sameName(item.name, wanted));
-      // Saying so beats substituting an empty string and leaving the model to invent the rest.
-      return entry ? entry.output : `(no step named "${wanted.trim()}" has run)`;
-    });
-  }
-  PLACEHOLDER.lastIndex = 0;
+  // One pass says both whether the prompt places its own context and what that reads as —
+  // `test` on a global regex would leave `lastIndex` behind for the next call to trip over.
+  let placed = false;
+  const substituted = step.prompt.replace(PLACEHOLDER, (_match, token: string) => {
+    placed = true;
+    if (token.toLowerCase() === "previous") return context[context.length - 1]?.output ?? "";
+    const wanted = token.slice("steps.".length);
+    const entry = context.find((item) => sameName(item.name, wanted));
+    // Saying so beats substituting an empty string and leaving the model to invent the rest.
+    return entry ? entry.output : `(no step named "${wanted.trim()}" has run)`;
+  });
+  if (placed) return substituted;
 
   const visible =
     step.context === "none" ? [] : step.context === "previous" ? context.slice(-1) : context;
@@ -323,7 +325,7 @@ export async function runFlow({
       const stopped = signal?.aborted === true;
       await close(row.id, {
         status: stopped ? "stopped" : "error",
-        error: stopped ? "" : error instanceof Error ? error.message : String(error),
+        error: stopped ? "" : errorMessage(error),
       });
       throw error;
     }
