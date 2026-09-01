@@ -1,7 +1,7 @@
-import type OpenAI from "openai";
+import OpenAI from "openai";
 import type { Settings } from "../db/schema.ts";
 import type { RunEventInput } from "./events.ts";
-import { getClient } from "./llm.ts";
+import { getClient, timeoutMs } from "./llm.ts";
 import { type CatalogServer, mcp } from "./mcp.ts";
 import { isGrammarError, relaxTools, sanitizeTools } from "./schema-compat.ts";
 import { ask, parseJson, tryAsk } from "./side-task.ts";
@@ -51,6 +51,46 @@ export interface AgentOptions {
   onEvent?: (event: RunEventInput) => void;
 }
 
+/** The endpoint stopped answering mid-request. Its own class so the retry can recognise it. */
+class EndpointSilent extends Error {
+  override readonly name = "EndpointSilent";
+}
+
+/**
+ * Whether a failed request is worth trying again.
+ *
+ * The question is whether the request was *refused or lost*, rather than answered with a
+ * complaint about its contents: a connection that never landed, a server too busy or too broken
+ * to answer, an endpoint that went quiet. A 400 for a malformed tool schema would fail exactly
+ * the same way on every attempt, and the two capability cases below are negotiated rather than
+ * retried blindly.
+ */
+function isTransient(error: unknown): boolean {
+  if (error instanceof EndpointSilent) return true;
+  if (error instanceof OpenAI.APIConnectionError) return true;
+  if (!(error instanceof OpenAI.APIError)) return false;
+  const { status } = error;
+  return status === 408 || status === 409 || status === 429 || (status ?? 0) >= 500;
+}
+
+/** Exponential, with jitter so several tasks failing at once do not return in lockstep. */
+const backoffMs = (attempt: number) =>
+  Math.min(8000, 2 ** attempt * 500) * (0.5 + Math.random() / 2);
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new Error("aborted"));
+    };
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+
 /** One streamed turn, put back together into the shape the loop and the history work with. */
 interface Step {
   content: string;
@@ -83,57 +123,95 @@ async function streamStep(
     signal,
     onEvent,
     produced,
+    idleMs,
   }: {
     signal?: AbortSignal;
     onEvent?: (event: RunEventInput) => void;
     /** Set as soon as the server has said anything, so a failed call knows if it can be retried. */
     produced: { any: boolean };
+    /** Silence allowed before the request is given up on. Undefined waits forever. */
+    idleMs?: number;
   },
 ): Promise<Step> {
-  const stream = await client.chat.completions.create(body, { signal });
-  const content: string[] = [];
-  const calls = new Map<number, { id: string; name: string; arguments: string }>();
-  const usage = { prompt: 0, completion: 0, total: 0 };
+  // Silence, not duration: the timer is rearmed on every chunk, so a model that is still
+  // talking is never cut off however long it takes, and one that has stopped talking does not
+  // hang the run until someone notices. A request that never answers at all is the same case
+  // with no chunks in it.
+  const watchdog = new AbortController();
+  const linked = signal ? AbortSignal.any([signal, watchdog.signal]) : watchdog.signal;
+  let idle: NodeJS.Timeout | undefined;
+  const rearm = () => {
+    if (!idleMs) return;
+    clearTimeout(idle);
+    idle = setTimeout(() => watchdog.abort(), idleMs);
+  };
 
-  for await (const chunk of stream) {
-    produced.any = true;
-    if (chunk.usage) {
-      usage.prompt = chunk.usage.prompt_tokens ?? 0;
-      usage.completion = chunk.usage.completion_tokens ?? 0;
-      usage.total = chunk.usage.total_tokens ?? 0;
+  try {
+    rearm();
+    return await collect();
+  } catch (error) {
+    // The caller's own stop has to stay distinguishable from ours: one is a run that was
+    // called off, the other is an endpoint that stopped answering and may be worth retrying.
+    if (watchdog.signal.aborted && !signal?.aborted) {
+      throw new EndpointSilent(`the model endpoint sent nothing for ${(idleMs ?? 0) / 1000}s`);
     }
-    const delta = chunk.choices[0]?.delta as ReasoningDelta | undefined;
-    if (!delta) continue;
-
-    const thinking = delta.reasoning_content || delta.reasoning || "";
-    if (thinking) onEvent?.({ kind: "thinking", text: thinking });
-    if (delta.content) {
-      content.push(delta.content);
-      onEvent?.({ kind: "output", text: delta.content });
-    }
-    // Tool calls arrive in pieces, keyed by position: the name in one chunk, the arguments
-    // spread across the next several.
-    for (const part of delta.tool_calls ?? []) {
-      const call = calls.get(part.index) ?? { id: "", name: "", arguments: "" };
-      if (part.id) call.id = part.id;
-      if (part.function?.name) call.name += part.function.name;
-      if (part.function?.arguments) call.arguments += part.function.arguments;
-      calls.set(part.index, call);
-    }
+    throw error;
+  } finally {
+    clearTimeout(idle);
   }
 
-  return {
-    content: content.join(""),
-    toolCalls: [...calls.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([index, call]) => ({
-        // A server that streams a call without an id still needs one for the result to answer.
-        id: call.id || `call_${index}`,
-        type: "function" as const,
-        function: { name: call.name, arguments: call.arguments },
-      })),
-    usage,
-  };
+  async function collect(): Promise<Step> {
+    const stream = await client.chat.completions.create(body, { signal: linked });
+    const content: string[] = [];
+    const calls = new Map<number, { id: string; name: string; arguments: string }>();
+    const usage = { prompt: 0, completion: 0, total: 0 };
+
+    for await (const chunk of stream) {
+      produced.any = true;
+      rearm();
+      if (chunk.usage) {
+        usage.prompt = chunk.usage.prompt_tokens ?? 0;
+        usage.completion = chunk.usage.completion_tokens ?? 0;
+        usage.total = chunk.usage.total_tokens ?? 0;
+      }
+      const delta = chunk.choices[0]?.delta as ReasoningDelta | undefined;
+      if (!delta) continue;
+
+      const thinking = delta.reasoning_content || delta.reasoning || "";
+      if (thinking) onEvent?.({ kind: "thinking", text: thinking });
+      if (delta.content) {
+        content.push(delta.content);
+        onEvent?.({ kind: "output", text: delta.content });
+      }
+      // Tool calls arrive in pieces, keyed by position: the name in one chunk, the arguments
+      // spread across the next several.
+      for (const part of delta.tool_calls ?? []) {
+        const call = calls.get(part.index) ?? { id: "", name: "", arguments: "" };
+        if (part.id) call.id = part.id;
+        if (part.function?.name) call.name += part.function.name;
+        if (part.function?.arguments) call.arguments += part.function.arguments;
+        calls.set(part.index, call);
+      }
+    }
+
+    // An aborted stream ends its iteration rather than throwing, so without this a turn cut
+    // off halfway — by the watchdog or by someone stopping the run — would come back looking
+    // like a complete one, and a truncated answer would be recorded as the task's output.
+    linked.throwIfAborted();
+
+    return {
+      content: content.join(""),
+      toolCalls: [...calls.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([index, call]) => ({
+          // A server that streams a call without an id still needs one for the result to answer.
+          id: call.id || `call_${index}`,
+          type: "function" as const,
+          function: { name: call.name, arguments: call.arguments },
+        })),
+      usage,
+    };
+  }
 }
 
 /**
@@ -186,6 +264,10 @@ export async function runAgent({
   if (!model) throw new Error("No model selected — pick one in Settings.");
 
   const client = getClient(config);
+  const idleMs = timeoutMs(config);
+  // Both columns are `notNull` with a default, so this is belt and braces — but an unbounded
+  // retry loop is a bad way to find out about a row that predates them.
+  const maxRetries = Math.max(0, Number(config.maxRetries) || 0);
 
   // In on-demand mode the model sees a name-only catalogue up front and pulls in the schemas
   // it needs as the run goes; `loaded` grows between iterations.
@@ -254,27 +336,54 @@ export async function runAgent({
       };
     };
 
-    const produced = { any: false };
-    let step: Step;
-    try {
-      step = await streamStep(client, request(), { signal, onEvent, produced });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      // Nothing is retried once the server has started answering: the tokens are already out,
-      // and a second attempt would say everything twice. Both of these fail before that.
-      if (produced.any) throw error;
-      if (strictSchemas && isGrammarError(detail)) {
-        const notice = "server could not build a grammar; retrying without pattern/format";
+    // One turn, given as many attempts as the settings allow.
+    //
+    // Two different things are being recovered from here, and they nest. The inner one is a
+    // capability the endpoint turns out not to have: it is negotiated away and tried once more,
+    // and it latches for the life of the process so it costs one failed call rather than one a
+    // run. The outer one is the endpoint being unreachable, busy or silent, which is not about
+    // this request at all and is worth simply waiting out.
+    //
+    // Both are bounded by the same rule: nothing is retried once the server has started
+    // answering. The tokens are already out and on their way to whoever is watching, and a
+    // second attempt would say everything twice.
+    let step: Step | undefined;
+    for (let attempt = 0; ; attempt++) {
+      const produced = { any: false };
+      try {
+        step = await negotiate(produced);
+        break;
+      } catch (error) {
+        if (produced.any || signal?.aborted) throw error;
+        if (attempt >= maxRetries || !isTransient(error)) throw error;
+        const wait = backoffMs(attempt);
+        const detail = error instanceof Error ? error.message : String(error);
+        const notice = `${detail} — retrying in ${Math.round(wait / 1000)}s (${attempt + 1}/${maxRetries})`;
         console.warn(`[agent] ${notice}`);
         onEvent?.({ kind: "notice", text: notice });
-        strictSchemas = false;
-      } else if (usageInStream && /stream_options/i.test(detail)) {
-        console.warn("[agent] server rejected stream_options; token counts will be unavailable");
-        usageInStream = false;
-      } else {
-        throw error;
+        await sleep(wait, signal);
       }
-      step = await streamStep(client, request(), { signal, onEvent, produced });
+    }
+
+    async function negotiate(produced: { any: boolean }): Promise<Step> {
+      try {
+        return await streamStep(client, request(), { signal, onEvent, produced, idleMs });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        if (produced.any) throw error;
+        if (strictSchemas && isGrammarError(detail)) {
+          const notice = "server could not build a grammar; retrying without pattern/format";
+          console.warn(`[agent] ${notice}`);
+          onEvent?.({ kind: "notice", text: notice });
+          strictSchemas = false;
+        } else if (usageInStream && /stream_options/i.test(detail)) {
+          console.warn("[agent] server rejected stream_options; token counts will be unavailable");
+          usageInStream = false;
+        } else {
+          throw error;
+        }
+        return await streamStep(client, request(), { signal, onEvent, produced, idleMs });
+      }
     }
 
     result.promptTokens += step.usage.prompt;

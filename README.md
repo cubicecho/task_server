@@ -34,9 +34,8 @@ instead of the UI.
 - **step** — one node of that flow: its own prompt, optional model and system prompt, and how
   much of the run so far it is shown. A `decision` step also carries the cases it may choose
   between, and the steps that hang under each of them. See **Flows**.
-- **trigger** — what starts a task. `kind: cron` is the only one that fires today; `kind:
-  event` exists as the row shape for the next step (a new email, a webhook), and is stored but
-  never dispatched.
+- **trigger** — what starts a task. `kind: cron` fires on a schedule; `kind: event` fires when
+  a `POST` arrives at `/webhooks/<its event id>` — see **Webhooks**.
 - **run** — one execution: status, timings, output or error, which tools were called, tokens.
   A run in flight can be called off from either the Runs or the Tasks page (`stopTask`), which
   aborts the request and finishes the run as `stopped` — neither a success nor a failure.
@@ -123,11 +122,13 @@ for to make it stop.
 
 ```
 server/
-  db/          drizzle schema, client, and the boot-time CREATE TABLE IF NOT EXISTS
+  db/          drizzle schema and client; migrate.ts applies drizzle/ on boot
   graphql/     the schema: drizzle-graphql entities plus a few hand-written fields
   runner/      llm client, MCP pool, tool loading + schema compat, agent loop, flow, recorder
-  scheduler/   node-cron, rebuilt from the triggers table on every relevant write
-  index.ts     express + yoga + the MCP endpoint + the built SPA
+  scheduler/   node-cron, rebuilt from the triggers table on every relevant write;
+               cleanup.ts prunes old runs hourly
+  webhooks.ts  POST /webhooks/:id, which fires matching event triggers
+  index.ts     express + yoga + the MCP endpoint + the webhook route + the built SPA
 src/           vite + react + tanstack router/query + shadcn
                (tasks, runs, mcp servers, settings)
 tests/         vitest
@@ -150,6 +151,37 @@ editing a trigger in the UI takes effect immediately.
 
 `features.nestedWrites` is off, so the UI saves a task and its triggers as separate mutations.
 A flow is written by `setTaskSteps` rather than a row at a time in any case — see **Flows**.
+
+## Webhooks
+
+A trigger with `kind: event` carries an `event` id, and that id is the whole of its address:
+
+```sh
+curl -X POST http://localhost:8787/webhooks/nightly-import
+```
+
+The route always answers `200`, whether or not anything was listening — a caller learns
+nothing about what exists here from the status code. What it started comes back in the body:
+
+```json
+{ "ok": true, "event": "nightly-import", "dispatched": [{ "taskId": "...", "name": "Import" }] }
+```
+
+A post fires every enabled `event` trigger on an enabled task whose `event` matches exactly,
+and returns as soon as those runs are started rather than waiting for them to finish. Watch
+them on the **Runs** page like any other run. The body is parsed and thrown away; nothing is
+read from it yet.
+
+There is no signature, no secret, and no auth — the id is all there is, so pick one that is
+not worth guessing if it matters (`uuidgen` is a fine source). This is deliberate: the server
+is meant to sit somewhere you already trust.
+
+## Retention
+
+**Settings → Keep runs for** sets how many days of runs to keep. At `0`, the default, nothing
+is ever deleted. Above zero, an hourly sweep — and one at boot — deletes runs that started
+longer ago than that, along with their run steps. A run that is still going is never touched,
+however old it is.
 
 ## MCP endpoint
 
@@ -278,11 +310,14 @@ tables. The schema is created on first boot either way, so an empty database is 
 server has to arrive with; `docker-compose.pg.yml` is the same image against a `postgres:17`
 service — see **Docker** above.
 
+The schema comes from the migrations committed in `drizzle/`, which `server/db/migrate.ts`
+applies on boot against either database. Changing `server/db/schema.ts` means running
+`npm run db:generate` and committing the migration it writes.
+
 It is a swap, not a migration: the two databases share no data, and moving tasks from one to
 the other is your own `pg_dump`-shaped problem.
 
-`npm run db:push` and `db:studio` follow `DATABASE_URL` too, and write their diffs to
-`drizzle/`.
+`npm run db:generate`, `db:migrate` and `db:studio` follow `DATABASE_URL` too.
 
 ## Scripts
 
@@ -294,4 +329,6 @@ the other is your own `pg_dump`-shaped problem.
 | `npm run codegen` | print `schema.graphql` and regenerate `src/gql/` |
 | `npm test` | vitest |
 | `npm run lint` / `format` | biome |
+| `npm run db:generate` | write a migration into `drizzle/` after a schema change |
+| `npm run db:migrate` | apply `drizzle/` by hand; the server does it on boot anyway |
 | `npm run db:studio` | drizzle studio |

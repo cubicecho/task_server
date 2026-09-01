@@ -13,9 +13,25 @@ export async function loadSettings(): Promise<Settings> {
 export const resolveApiKey = (config: Settings) =>
   config.apiKey || process.env.OPENAI_API_KEY || "";
 
-/** The SDK insists on a non-empty key even where the server will not look at it. */
+/**
+ * The SDK insists on a non-empty key even where the server will not look at it.
+ *
+ * `maxRetries: 0` turns the SDK's own retrying off. Streaming is what this server does, and a
+ * stream that has already emitted tokens must not be replayed from the top — the caller in
+ * `agent.ts` knows whether anything has been produced yet and the SDK does not. The one-shot
+ * calls in `side-task.ts` get their safety from `timeout`, which does apply to both.
+ */
 export const getClient = (config: Settings) =>
-  new OpenAI({ baseURL: config.baseUrl, apiKey: resolveApiKey(config) || "task-server" });
+  new OpenAI({
+    baseURL: config.baseUrl,
+    apiKey: resolveApiKey(config) || "task-server",
+    timeout: timeoutMs(config),
+    maxRetries: 0,
+  });
+
+/** Zero or less means no limit, which the SDK spells as `undefined`. */
+export const timeoutMs = (config: Settings): number | undefined =>
+  config.requestTimeoutSeconds > 0 ? config.requestTimeoutSeconds * 1000 : undefined;
 
 export async function listModels(): Promise<string[]> {
   const { data } = await getClient(await loadSettings()).models.list();

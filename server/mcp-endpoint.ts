@@ -60,7 +60,9 @@ const HINTS: Record<string, string> = {
     "The path one run actually took, a row per step it executed, in `position` order. On a " +
     "decision, `branch` is the arm it chose — which is the thing you open a run to find out. " +
     "Filter by `runId`.",
-  triggers: "When tasks fire: one cron expression per trigger, read in its own timezone.",
+  triggers:
+    "What makes tasks fire: a `cron` trigger carries an expression read in its own timezone, " +
+    "an `event` trigger carries the id it answers to at `POST /webhooks/<event>`.",
   createTask:
     "Adds a task. It will not fire on its own until it has a trigger — add one with " +
     "`createTrigger`, or call `runTask` to run it now.",
@@ -77,8 +79,9 @@ const HINTS: Record<string, string> = {
     "deep as you like. Read the current flow with `steps` first and send existing ids back to " +
     "edit in place. An empty list leaves the task with just its prompt.",
   createTrigger:
-    "Schedules a task: `kind: cron` with a five-field expression such as `0 9 * * *`, and a " +
-    "`timezone` if it should not follow the server's.",
+    "Starts a task on something: `kind: cron` with a five-field expression such as " +
+    "`0 9 * * *`, and a `timezone` if it should not follow the server's; or `kind: event` " +
+    "with an `event` id, which then fires whenever a `POST` reaches `/webhooks/<that id>`.",
   deleteTriggerSingle: "Unschedules a task without deleting the task itself.",
 };
 

@@ -9,6 +9,9 @@ query Settings {
     maxToolIterations
     toolDiscovery
     toolSelectModel
+    requestTimeoutSeconds
+    maxRetries
+    runRetentionDays
   }
 }
 

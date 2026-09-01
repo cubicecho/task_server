@@ -34,6 +34,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY server server
+# The generated migrations, which the server applies on boot. Without them a fresh
+# container comes up against an empty database and every query fails.
+COPY drizzle drizzle
 COPY --from=builder /app/dist dist
 
 # The embedded postgres, and anything else the server writes, lives on the
