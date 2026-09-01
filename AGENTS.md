@@ -95,11 +95,13 @@ generated description does not say enough. The driver renames after it filters, 
 list names GraphQL fields in camelCase while `HINTS` — and the client — sees the snake_case tool
 name: `Mutation.createTask` is the tool `create_task`.
 
-**A tool's `where` is pruned to its own columns.** The generated relation filters recurse between
-tables, and written out as JSON Schema rather than named as SDL they made the tool listing 18 MB
-— more than a model will read, and it arrives before any call. `pruneFilters` in
-`server/mcp-endpoint.ts` copies each `…Filters` type without them; a test holds every tool under
-150 kB. Anything added here that grows the listing needs the same treatment.
+**The tool listing has a size test, and it is not incidental.** The generated relation filters
+recurse between tables, and written out as JSON Schema rather than named as SDL they once made
+the listing 18 MB — more than a model will read, and it arrives before any call. graphql-mcp
+1.0.1 builds each input type once so the repeats become `$ref`s, which brought it to ~456 kB with
+the relation filters intact; before that this file pruned them out by hand.
+`tests/mcp-endpoint.test.ts` holds every tool under 100 kB and the listing under 700 kB. Anything
+added here that grows it needs to answer to that test rather than raise the bound.
 
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
 a task only when an enabled `event` trigger on an enabled task carries that exact id, and

@@ -95,18 +95,21 @@ test("offers the task tools, and only those", async () => {
 test("advertises tools small enough for a client to read", async () => {
   const { tools } = await client.listTools();
 
-  // Every tool definition a client is handed, before it can call anything. The generated
-  // `where` reaches through relations — a task filtered by its runs, a run filtered back by its
-  // task — and the JSON Schema this becomes has to write that recursion out in full rather than
-  // naming a type. Unpruned, `tasks` alone was 2.8 MB and the seventeen together were 18 MB,
-  // which no model will read: the listing is what jams, not the call.
+  // Every tool definition a client is handed, before it can call anything, and the whole reason
+  // this is asserted: the generated `where` reaches through relations — a task filtered by its
+  // runs, each run filtered back by its task — and the same filter types are reached by dozens of
+  // routes. A driver that rebuilds them per route writes that recursion out at every level rather
+  // than emitting a `$ref`, which put the seventeen tools at 18 MB and `tasks` alone at 2.8 MB —
+  // more than any model will read, and it lands before a single call can be made. Shared, the
+  // listing is ~456 kB. The bounds are loose because it is the order of magnitude that matters.
   const sizes = tools.map((tool) => [tool.name, JSON.stringify(tool).length] as const);
   for (const [name, size] of sizes) {
-    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(150_000);
+    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(100_000);
   }
-  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(1_000_000);
+  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(700_000);
 
-  // The columns are what an agent filters on, and they are all still there.
+  // Both halves of what an agent filters on: the columns, and the relations reaching the
+  // neighbouring tables. Filtering tasks by a property of their runs is a real question to ask.
   const where = (tools.find((tool) => tool.name === "tasks")?.inputSchema as WhereSchema)
     ?.properties?.where;
   const props = (where?.anyOf?.[0] ?? where)?.properties ?? {};
@@ -119,6 +122,9 @@ test("advertises tools small enough for a client to read", async () => {
     "enabled",
     "createdAt",
     "updatedAt",
+    "triggers",
+    "steps",
+    "runs",
     "OR",
     "AND",
     "NOT",
@@ -151,6 +157,25 @@ test("writes a task, reads it back, and deletes it", async () => {
   await call("delete_task_single", { where: { id: { eq: id } } });
   const gone = (await call("tasks", { where: { id: { eq: id } } })) as { tasks: unknown[] };
   expect(gone.tasks).toEqual([]);
+});
+
+test("filters a task by a property of its triggers", async () => {
+  const created = (await call("create_task", {
+    values: { name: "webhooked", prompt: "wait for a POST" },
+  })) as { createTask: { id: string } };
+  const id = created.createTask.id;
+  await call("create_trigger", {
+    values: { taskId: id, kind: "event", event: "hook-filter-test" },
+  });
+
+  // A relation filter, which is the reach the tools' `where` costs its size to keep: the answer
+  // is a task, and the question is about its triggers.
+  const found = (await call("tasks", {
+    where: { triggers: { some: { event: { eq: "hook-filter-test" } } } },
+  })) as { tasks: { id: string }[] };
+  expect(found.tasks.map((task) => task.id)).toEqual([id]);
+
+  await call("delete_task_single", { where: { id: { eq: id } } });
 });
 
 test("hands a run's progress to a client that polls for it", async () => {

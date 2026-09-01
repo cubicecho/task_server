@@ -22,7 +22,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cubicecho/graphql-mcp": "^1.0.0",
+    "@cubicecho/graphql-mcp": "^1.0.1",
     "@electric-sql/pglite": "^0.5.8",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/pg": "^8.23.1",
