@@ -215,10 +215,17 @@ Tool names are snake_case while the GraphQL fields they come from are camelCase:
 reads a tool name as a name, and snake_case is the convention it meets everywhere else. The
 arguments and the fields in the answer are the schema's own, so they keep their spelling.
 
-Only five tools are marked `destructiveHint`: the two updates, `set_task_steps`, and the two
-deletes. The hint is otherwise derived from the operation kind, which marks every mutation
-destructive — so creating a task looks the same to a client as dropping one, and a client that
-stops to ask before a destructive call spends that interruption in the wrong place.
+Six tools are marked `destructiveHint`: the two updates, `set_task_steps`, the two deletes, and
+`stop_task`, which throws away whatever the run it aborts had done. The driver's own default
+marks every mutation destructive, so creating a task would look the same to a client as dropping
+one, and a client that stops to ask before a destructive call would spend that interruption in
+the wrong place. `mutationHints: "byName"` reads the conventional `create`/`delete` prefixes off
+the field name instead, which settles seven of the nine; `runTask` and `stopTask` are named after
+neither and are corrected by hand.
+
+`idempotentHint` follows from the same reading: the deletes land the same way twice, and so does
+a second `stop_task`, which finds nothing in flight and says so. `run_task` does not, and that is
+the one a client must not retry blind — running a task twice runs it twice.
 
 The schema has forty-odd root fields, and the rest are left out on purpose: the settings row and
 `setApiKey` (the server's own credentials are the operator's business, not a visiting agent's),

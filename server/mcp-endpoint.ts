@@ -89,19 +89,29 @@ const HINTS: Record<string, string> = {
 };
 
 /**
- * Tools that do not destroy anything, against a default that assumes every mutation does.
+ * The two mutations a naming convention cannot classify, and what they actually do.
  *
- * `destructiveHint` is derived from the operation kind, so all nine mutations arrive marked
- * destructive. Five of them are: the updates rewrite a row and `set_task_steps` replaces a whole
- * flow, and the deletes are the real thing. The other four are not. A client that gates on this
- * hint — asking the operator before it proceeds — should be spending that interruption on the
- * delete, and it cannot if adding a task looks the same as dropping one.
+ * `mutationHints: "byName"` reads the conventional prefixes off the GraphQL field name, which
+ * settles seven of the nine: the creates destroy nothing, the deletes do and land the same way
+ * twice, and the updates and `set_task_steps` rewrite what they touch. A client that gates on
+ * `destructiveHint` — asking the operator before it proceeds — should be spending that
+ * interruption on the delete, and it cannot if adding a task looks the same as dropping one.
  *
- * `run_task` and `stop_task` change no rows at all; they start and end work. Neither is
- * idempotent: running a task twice runs it twice, and only the deletes and updates land the same
- * way each time.
+ * `runTask` and `stopTask` are named after neither prefix, so they arrive under the conservative
+ * default of destructive and not idempotent. Only one of them earns it.
+ *
+ * `run_task` destroys nothing: it adds a run and waits for it. It is not idempotent, though —
+ * running a task twice runs it twice — so the default is overridden in one direction only.
+ *
+ * `stop_task` keeps the destructive mark. Aborting a run discards it: the run is finished as
+ * `stopped` with no output, so whatever it had done by then is gone and cannot be resumed, which
+ * is worth an operator's confirmation. Calling it a second time is free — nothing is in flight
+ * and it answers `false` — and that is the part the convention has no way to know.
  */
-const ADDITIVE = new Set(["create_task", "create_trigger", "run_task", "stop_task"]);
+const WRITE_HINTS: Record<string, { destructiveHint?: boolean; idempotentHint?: boolean }> = {
+  run_task: { destructiveHint: false },
+  stop_task: { idempotentHint: true },
+};
 
 /**
  * The same schema the web app uses, offered to other clients as MCP tools.
@@ -122,11 +132,12 @@ export const mcpHandler = createHttpHandler({
   // One level: the leaf fields of what a tool returns. Two would pull every run — output and
   // all — into a listing of tasks, which is a lot of context for a question about names.
   selectionDepth: 1,
+  mutationHints: "byName",
   decorate: (descriptor) => ({
     description: HINTS[descriptor.name]
       ? `${HINTS[descriptor.name]}\n\n${descriptor.description}`
       : descriptor.description,
-    ...(ADDITIVE.has(descriptor.name) ? { annotations: { destructiveHint: false } } : {}),
+    ...(WRITE_HINTS[descriptor.name] ? { annotations: WRITE_HINTS[descriptor.name] } : {}),
   }),
 });
 
