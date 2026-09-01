@@ -43,12 +43,26 @@ afterAll(async () => {
 
 /** Tools answer with the GraphQL envelope as JSON text; this is the `data` half of it. */
 async function call(name: string, args: Record<string, unknown> = {}) {
+  const { text } = await raw(name, args);
+  // Not every failure arrives as an envelope: an argument the driver rejects comes back as a bare
+  // `MCP error -32602: …` string. Parsing that blind reports a `SyntaxError` about a stray `M`,
+  // which says nothing about the call that actually went wrong.
+  let envelope: { data?: Record<string, unknown>; errors?: unknown };
+  try {
+    envelope = JSON.parse(text);
+  } catch {
+    throw new Error(`${name} did not answer with an envelope: ${text}`);
+  }
+  if (envelope.errors) throw new Error(`${name}: ${JSON.stringify(envelope.errors)}`);
+  return envelope.data ?? {};
+}
+
+/** The result as the client meets it, for the calls that are meant to fail. */
+async function raw(name: string, args: Record<string, unknown> = {}) {
   const result = (await client.callTool({ name, arguments: args })) as CallToolResult;
   const [content] = result.content;
   if (content?.type !== "text") throw new Error(`no text in the result of ${name}`);
-  const envelope = JSON.parse(content.text) as { data?: Record<string, unknown>; errors?: unknown };
-  if (envelope.errors) throw new Error(`${name}: ${JSON.stringify(envelope.errors)}`);
-  return envelope.data ?? {};
+  return { isError: result.isError === true, text: content.text };
 }
 
 /** A node of a tool's JSON Schema, as far as reaching the keys of its `where` argument needs. */
@@ -244,4 +258,20 @@ test("answers the whole transport, not just the calls", async () => {
   const wrong = await fetch(endpoint);
   expect(wrong.status).toBe(406);
   expect(await wrong.json()).toMatchObject({ jsonrpc: "2.0", error: { code: -32000 } });
+});
+
+test("rejects an argument it does not recognise instead of dropping it", async () => {
+  // The README promises this, and it is the driver's behaviour rather than ours — it changed once
+  // already, in the other direction, and a silent revert would let a misspelled key through as a
+  // success with that part of the write quietly discarded.
+  const misspelled = await raw("tasks", { wehre: { id: { eq: "x" } } });
+  expect(misspelled.isError).toBe(true);
+  expect(misspelled.text).toContain("wehre");
+
+  // The shape of a rejection is the driver's to choose and is not asserted here: today the body is
+  // a bare `MCP error …` string rather than the `{ errors: [...] }` envelope a success uses.
+  // What has to hold is that the call fails and names the key that made it fail.
+  const badType = await raw("tasks", { limit: "ten" });
+  expect(badType.isError).toBe(true);
+  expect(badType.text).toContain("limit");
 });
