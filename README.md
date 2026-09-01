@@ -206,10 +206,14 @@ claude mcp add --transport http tasks http://localhost:8787/mcp
 
 Seventeen tools, chosen in `server/mcp-endpoint.ts` rather than projected from the whole schema:
 
-- **read** — `tasks`, `steps`, `runs`, `runSteps`, `triggers`, `schedule`, `models`
-- **write** — `createTask`, `updateTaskSingle`, `deleteTaskSingle`, and the same three for
-  triggers, plus `setTaskSteps` for a task's whole flow
-- **run** — `runTask`, `stopTask`, `runEvents`
+- **read** — `tasks`, `steps`, `runs`, `run_steps`, `triggers`, `schedule`, `models`
+- **write** — `create_task`, `update_task_single`, `delete_task_single`, and the same three for
+  triggers, plus `set_task_steps` for a task's whole flow
+- **run** — `run_task`, `stop_task`, `run_events`
+
+Tool names are snake_case while the GraphQL fields they come from are camelCase: an MCP client
+reads a tool name as a name, and snake_case is the convention it meets everywhere else. The
+arguments and the fields in the answer are the schema's own, so they keep their spelling.
 
 The schema has forty-odd root fields, and the rest are left out on purpose: the settings row and
 `setApiKey` (the server's own credentials are the operator's business, not a visiting agent's),
@@ -217,8 +221,8 @@ the MCP-server rows, the aggregates and group-bys, and every bulk mutation — `
 no `where` empties the table, where `deleteTaskSingle` cannot. Each tool selects one level of
 fields, so a listing of tasks does not drag every run's output along with it.
 
-`runTask` does not answer until the run is over, which for a real task is minutes. To watch one
-meanwhile, poll `runEvents(runId, afterSeq)` — the snapshot form of the subscription the Runs
+`run_task` does not answer until the run is over, which for a real task is minutes. To watch one
+meanwhile, poll `run_events(runId, afterSeq)` — the snapshot form of the subscription the Runs
 page uses, with consecutive thinking and output tokens folded into one entry each. Pass the
 `seq` of the last entry you read as `afterSeq` and you get what came after it, and nothing
 twice.

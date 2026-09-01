@@ -91,7 +91,9 @@ a task and its triggers save as separate mutations, and a flow is written whole 
 **The `/mcp` surface is curated, not the whole schema.** `server/mcp-endpoint.ts` lists the
 seventeen tools an outside client gets. Nothing that empties a table in one call, and nothing
 that reads the API key. A new tool goes in that list deliberately, with a `HINTS` entry if the
-generated description does not say enough.
+generated description does not say enough. The driver renames after it filters, so the `include`
+list names GraphQL fields in camelCase while `HINTS` — and the client — sees the snake_case tool
+name: `Mutation.createTask` is the tool `create_task`.
 
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
 a task only when an enabled `event` trigger on an enabled task carries that exact id, and

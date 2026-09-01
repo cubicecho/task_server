@@ -55,33 +55,35 @@ test("offers the task tools, and only those", async () => {
   const { tools } = await client.listTools();
   const names = tools.map((tool) => tool.name).sort();
 
+  // snake_case: the driver renames after it filters, so `include` names the GraphQL field and
+  // this names the tool. The two spellings are the same seventeen root fields.
   expect(names).toEqual([
-    "createTask",
-    "createTrigger",
-    "deleteTaskSingle",
-    "deleteTriggerSingle",
+    "create_task",
+    "create_trigger",
+    "delete_task_single",
+    "delete_trigger_single",
     "models",
-    "runEvents",
-    "runSteps",
-    "runTask",
+    "run_events",
+    "run_steps",
+    "run_task",
     "runs",
     "schedule",
-    "setTaskSteps",
+    "set_task_steps",
     "steps",
-    "stopTask",
+    "stop_task",
     "tasks",
     "triggers",
-    "updateTaskSingle",
-    "updateTriggerSingle",
+    "update_task_single",
+    "update_trigger_single",
   ]);
   // The settings row holds the API key, and a bulk delete with no `where` empties a table.
-  expect(names).not.toContain("setApiKey");
+  expect(names).not.toContain("set_api_key");
   expect(names).not.toContain("settings");
-  expect(names).not.toContain("deleteTask");
+  expect(names).not.toContain("delete_task");
 });
 
 test("writes a task, reads it back, and deletes it", async () => {
-  const created = (await call("createTask", {
+  const created = (await call("create_task", {
     values: { name: "from mcp", prompt: "say hello" },
   })) as { createTask: { id: string; name: string } };
   const id = created.createTask.id;
@@ -93,8 +95,8 @@ test("writes a task, reads it back, and deletes it", async () => {
   expect(listed.tasks).toHaveLength(1);
   expect(listed.tasks[0].prompt).toBe("say hello");
 
-  await call("updateTaskSingle", { where: { id: { eq: id } }, set: { enabled: false } });
-  const trigger = (await call("createTrigger", {
+  await call("update_task_single", { where: { id: { eq: id } }, set: { enabled: false } });
+  const trigger = (await call("create_trigger", {
     values: { taskId: id, kind: "cron", cron: "0 9 * * *" },
   })) as { createTrigger: { id: string } };
   expect(trigger.createTrigger.id).toBeTruthy();
@@ -103,7 +105,7 @@ test("writes a task, reads it back, and deletes it", async () => {
   const runs = (await call("runs", { where: { taskId: { eq: id } } })) as { runs: unknown[] };
   expect(runs.runs).toEqual([]);
 
-  await call("deleteTaskSingle", { where: { id: { eq: id } } });
+  await call("delete_task_single", { where: { id: { eq: id } } });
   const gone = (await call("tasks", { where: { id: { eq: id } } })) as { tasks: unknown[] };
   expect(gone.tasks).toEqual([]);
 });
@@ -116,7 +118,7 @@ test("hands a run's progress to a client that polls for it", async () => {
   }
   events.emit("run-mcp", { kind: "tool-call", name: "echo__ping", text: "{}" });
 
-  const first = (await call("runEvents", { runId: "run-mcp" })) as {
+  const first = (await call("run_events", { runId: "run-mcp" })) as {
     runEvents: { seq: number; kind: string; text: string }[];
   };
   // Four thinking deltas are one thought: a client reading in snapshots gets prose, not tokens.
@@ -125,7 +127,7 @@ test("hands a run's progress to a client that polls for it", async () => {
 
   const last = first.runEvents[first.runEvents.length - 1].seq;
   events.emit("run-mcp", { kind: "done", ok: true, text: "finished" });
-  const next = (await call("runEvents", { runId: "run-mcp", afterSeq: last })) as {
+  const next = (await call("run_events", { runId: "run-mcp", afterSeq: last })) as {
     runEvents: { kind: string; text: string }[];
   };
   // Resuming from the last `seq` reads what came after it, and nothing twice.

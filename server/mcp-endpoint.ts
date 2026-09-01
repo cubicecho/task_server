@@ -43,6 +43,9 @@ const TOOLS = [
  * A line of orientation on the tools whose GraphQL fields are generated, and so describe
  * themselves only as "the `tasks` query". A visiting agent has no other way to learn that a
  * task without a trigger never fires, or that a run it just started can be watched.
+ *
+ * Keyed by tool name, which is the snake_case one the client sees — `decorate` runs after the
+ * rename. The `include` list above is not: filtering happens before it, on the GraphQL field.
  */
 const HINTS: Record<string, string> = {
   tasks:
@@ -56,33 +59,33 @@ const HINTS: Record<string, string> = {
     "What a task does after its own prompt: a flat list of the steps of its flow. `parentId` " +
     "and `branch` say which decision's arm a step sits in — both empty for the task's own " +
     "top-level sequence — and `position` orders it among its siblings. Filter by `taskId`.",
-  runSteps:
+  run_steps:
     "The path one run actually took, a row per step it executed, in `position` order. On a " +
     "decision, `branch` is the arm it chose — which is the thing you open a run to find out. " +
     "Filter by `runId`.",
   triggers:
     "What makes tasks fire: a `cron` trigger carries an expression read in its own timezone, " +
     "an `event` trigger carries the id it answers to at `POST /webhooks/<event>`.",
-  createTask:
+  create_task:
     "Adds a task. It will not fire on its own until it has a trigger — add one with " +
-    "`createTrigger`, or call `runTask` to run it now.",
-  updateTaskSingle:
+    "`create_trigger`, or call `run_task` to run it now.",
+  update_task_single:
     "Edits one task. `set: { enabled: false }` keeps a task but stops it firing, which is the " +
     "gentler alternative to deleting it.",
-  deleteTaskSingle:
+  delete_task_single:
     "Deletes one task, its triggers and its history. Refused while the task is running: stop " +
-    "it first with `stopTask`.",
-  setTaskSteps:
+    "it first with `stop_task`.",
+  set_task_steps:
     "Gives a task the steps that run after its own prompt, replacing whatever it had. Steps " +
     "run in order and each one sees what the ones before it produced; a step of kind " +
     "`decision` picks one of its own `cases` and only that arm's `branches` run, nested as " +
     "deep as you like. Read the current flow with `steps` first and send existing ids back to " +
     "edit in place. An empty list leaves the task with just its prompt.",
-  createTrigger:
+  create_trigger:
     "Starts a task on something: `kind: cron` with a five-field expression such as " +
     "`0 9 * * *`, and a `timezone` if it should not follow the server's; or `kind: event` " +
     "with an `event` id, which then fires whenever a `POST` reaches `/webhooks/<that id>`.",
-  deleteTriggerSingle: "Unschedules a task without deleting the task itself.",
+  delete_trigger_single: "Unschedules a task without deleting the task itself.",
 };
 
 /**
