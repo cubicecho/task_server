@@ -2,7 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzleNode } from "drizzle-orm/node-postgres";
-import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { migrate as migrateNode } from "drizzle-orm/node-postgres/migrator";
+import { drizzle as drizzlePglite, type PgliteDatabase } from "drizzle-orm/pglite";
+import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
 import pg from "pg";
 import { DATA_DIR, DATABASE_URL } from "../paths.ts";
 import { relations } from "./schema.ts";
@@ -52,11 +54,13 @@ export const db = pool
 export type Db = typeof db;
 
 /**
- * Runs a script of several statements as one implicit transaction — `ensure.ts` is the only
- * caller, and it wants a half-made schema to be impossible.
+ * Applies the generated migrations under `drizzle/`.
  *
- * Both drivers send it over the simple query protocol, which is what makes the batch atomic;
- * the query builder's own `execute` uses the extended protocol, which takes one statement.
+ * The two drivers have one migrator each and they are not interchangeable, which is the only
+ * reason this lives here rather than in `migrate.ts`: choosing between them is choosing which
+ * postgres, and that decision belongs to this file alone.
  */
-export const runScript = (sql: string): Promise<unknown> =>
-  pool ? pool.query(sql) : (embedded as PGlite).exec(sql);
+export const runMigrations = (migrationsFolder: string): Promise<unknown> =>
+  pool
+    ? migrateNode(db, { migrationsFolder })
+    : migratePglite(db as unknown as PgliteDatabase<typeof relations>, { migrationsFolder });

@@ -1886,9 +1886,12 @@ export type Setting = {
   /** Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query. */
   cursor?: Maybe<Scalars['String']['output']>;
   id: Scalars['String']['output'];
+  maxRetries: Scalars['Int']['output'];
   maxTokens: Scalars['Int']['output'];
   maxToolIterations: Scalars['Int']['output'];
   model: Scalars['String']['output'];
+  requestTimeoutSeconds: Scalars['Int']['output'];
+  runRetentionDays: Scalars['Int']['output'];
   systemPrompt: Scalars['String']['output'];
   temperature: Scalars['Float']['output'];
   toolDiscovery: SettingsToolDiscoveryEnum;
@@ -1906,23 +1909,32 @@ export type SettingAggregate = {
 };
 
 export type SettingAvgAggregate = {
+  maxRetries?: Maybe<Scalars['Float']['output']>;
   maxTokens?: Maybe<Scalars['Float']['output']>;
   maxToolIterations?: Maybe<Scalars['Float']['output']>;
+  requestTimeoutSeconds?: Maybe<Scalars['Float']['output']>;
+  runRetentionDays?: Maybe<Scalars['Float']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
 };
 
 export type SettingAvgHaving = {
+  maxRetries?: InputMaybe<AggregateNumberFilter>;
   maxTokens?: InputMaybe<AggregateNumberFilter>;
   maxToolIterations?: InputMaybe<AggregateNumberFilter>;
+  requestTimeoutSeconds?: InputMaybe<AggregateNumberFilter>;
+  runRetentionDays?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
 };
 
 export type SettingCountDistinctAggregate = {
   baseUrl: Scalars['Int']['output'];
   id: Scalars['Int']['output'];
+  maxRetries: Scalars['Int']['output'];
   maxTokens: Scalars['Int']['output'];
   maxToolIterations: Scalars['Int']['output'];
   model: Scalars['Int']['output'];
+  requestTimeoutSeconds: Scalars['Int']['output'];
+  runRetentionDays: Scalars['Int']['output'];
   systemPrompt: Scalars['Int']['output'];
   temperature: Scalars['Int']['output'];
   toolDiscovery: Scalars['Int']['output'];
@@ -1932,9 +1944,12 @@ export type SettingCountDistinctAggregate = {
 export type SettingCountDistinctHaving = {
   baseUrl?: InputMaybe<AggregateNumberFilter>;
   id?: InputMaybe<AggregateNumberFilter>;
+  maxRetries?: InputMaybe<AggregateNumberFilter>;
   maxTokens?: InputMaybe<AggregateNumberFilter>;
   maxToolIterations?: InputMaybe<AggregateNumberFilter>;
   model?: InputMaybe<AggregateNumberFilter>;
+  requestTimeoutSeconds?: InputMaybe<AggregateNumberFilter>;
+  runRetentionDays?: InputMaybe<AggregateNumberFilter>;
   systemPrompt?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
   toolDiscovery?: InputMaybe<AggregateNumberFilter>;
@@ -1944,9 +1959,12 @@ export type SettingCountDistinctHaving = {
 export type SettingCountNonNullAggregate = {
   baseUrl: Scalars['Int']['output'];
   id: Scalars['Int']['output'];
+  maxRetries: Scalars['Int']['output'];
   maxTokens: Scalars['Int']['output'];
   maxToolIterations: Scalars['Int']['output'];
   model: Scalars['Int']['output'];
+  requestTimeoutSeconds: Scalars['Int']['output'];
+  runRetentionDays: Scalars['Int']['output'];
   systemPrompt: Scalars['Int']['output'];
   temperature: Scalars['Int']['output'];
   toolDiscovery: Scalars['Int']['output'];
@@ -1956,9 +1974,12 @@ export type SettingCountNonNullAggregate = {
 export type SettingCountNonNullHaving = {
   baseUrl?: InputMaybe<AggregateNumberFilter>;
   id?: InputMaybe<AggregateNumberFilter>;
+  maxRetries?: InputMaybe<AggregateNumberFilter>;
   maxTokens?: InputMaybe<AggregateNumberFilter>;
   maxToolIterations?: InputMaybe<AggregateNumberFilter>;
   model?: InputMaybe<AggregateNumberFilter>;
+  requestTimeoutSeconds?: InputMaybe<AggregateNumberFilter>;
+  runRetentionDays?: InputMaybe<AggregateNumberFilter>;
   systemPrompt?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
   toolDiscovery?: InputMaybe<AggregateNumberFilter>;
@@ -1969,9 +1990,12 @@ export type SettingCountNonNullHaving = {
 export enum SettingDistinctColumn {
   BaseUrl = 'baseUrl',
   Id = 'id',
+  MaxRetries = 'maxRetries',
   MaxTokens = 'maxTokens',
   MaxToolIterations = 'maxToolIterations',
   Model = 'model',
+  RequestTimeoutSeconds = 'requestTimeoutSeconds',
+  RunRetentionDays = 'runRetentionDays',
   SystemPrompt = 'systemPrompt',
   Temperature = 'temperature',
   ToolDiscovery = 'toolDiscovery',
@@ -1987,9 +2011,12 @@ export type SettingFilters = {
   OR?: InputMaybe<Array<SettingFilters>>;
   baseUrl?: InputMaybe<StringFilter>;
   id?: InputMaybe<StringFilter>;
+  maxRetries?: InputMaybe<IntFilter>;
   maxTokens?: InputMaybe<IntFilter>;
   maxToolIterations?: InputMaybe<IntFilter>;
   model?: InputMaybe<StringFilter>;
+  requestTimeoutSeconds?: InputMaybe<IntFilter>;
+  runRetentionDays?: InputMaybe<IntFilter>;
   systemPrompt?: InputMaybe<StringFilter>;
   temperature?: InputMaybe<FloatFilter>;
   toolDiscovery?: InputMaybe<SettingsToolDiscoveryEnumFilter>;
@@ -2011,9 +2038,12 @@ export type SettingGroupBy = {
 export enum SettingGroupByColumn {
   BaseUrl = 'baseUrl',
   Id = 'id',
+  MaxRetries = 'maxRetries',
   MaxTokens = 'maxTokens',
   MaxToolIterations = 'maxToolIterations',
   Model = 'model',
+  RequestTimeoutSeconds = 'requestTimeoutSeconds',
+  RunRetentionDays = 'runRetentionDays',
   SystemPrompt = 'systemPrompt',
   Temperature = 'temperature',
   ToolDiscovery = 'toolDiscovery',
@@ -2024,9 +2054,12 @@ export enum SettingGroupByColumn {
 export type SettingGroupKeys = {
   baseUrl?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['String']['output']>;
+  maxRetries?: Maybe<Scalars['Int']['output']>;
   maxTokens?: Maybe<Scalars['Int']['output']>;
   maxToolIterations?: Maybe<Scalars['Int']['output']>;
   model?: Maybe<Scalars['String']['output']>;
+  requestTimeoutSeconds?: Maybe<Scalars['Int']['output']>;
+  runRetentionDays?: Maybe<Scalars['Int']['output']>;
   systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
   toolDiscovery?: Maybe<SettingsToolDiscoveryEnum>;
@@ -2048,9 +2081,12 @@ export type SettingHaving = {
 export type SettingMaxAggregate = {
   baseUrl?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['String']['output']>;
+  maxRetries?: Maybe<Scalars['Int']['output']>;
   maxTokens?: Maybe<Scalars['Int']['output']>;
   maxToolIterations?: Maybe<Scalars['Int']['output']>;
   model?: Maybe<Scalars['String']['output']>;
+  requestTimeoutSeconds?: Maybe<Scalars['Int']['output']>;
+  runRetentionDays?: Maybe<Scalars['Int']['output']>;
   systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
   toolDiscovery?: Maybe<SettingsToolDiscoveryEnum>;
@@ -2058,17 +2094,23 @@ export type SettingMaxAggregate = {
 };
 
 export type SettingMaxHaving = {
+  maxRetries?: InputMaybe<AggregateNumberFilter>;
   maxTokens?: InputMaybe<AggregateNumberFilter>;
   maxToolIterations?: InputMaybe<AggregateNumberFilter>;
+  requestTimeoutSeconds?: InputMaybe<AggregateNumberFilter>;
+  runRetentionDays?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
 };
 
 export type SettingMinAggregate = {
   baseUrl?: Maybe<Scalars['String']['output']>;
   id?: Maybe<Scalars['String']['output']>;
+  maxRetries?: Maybe<Scalars['Int']['output']>;
   maxTokens?: Maybe<Scalars['Int']['output']>;
   maxToolIterations?: Maybe<Scalars['Int']['output']>;
   model?: Maybe<Scalars['String']['output']>;
+  requestTimeoutSeconds?: Maybe<Scalars['Int']['output']>;
+  runRetentionDays?: Maybe<Scalars['Int']['output']>;
   systemPrompt?: Maybe<Scalars['String']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
   toolDiscovery?: Maybe<SettingsToolDiscoveryEnum>;
@@ -2076,17 +2118,23 @@ export type SettingMinAggregate = {
 };
 
 export type SettingMinHaving = {
+  maxRetries?: InputMaybe<AggregateNumberFilter>;
   maxTokens?: InputMaybe<AggregateNumberFilter>;
   maxToolIterations?: InputMaybe<AggregateNumberFilter>;
+  requestTimeoutSeconds?: InputMaybe<AggregateNumberFilter>;
+  runRetentionDays?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
 };
 
 export type SettingOrderBy = {
   baseUrl?: InputMaybe<InnerOrder>;
   id?: InputMaybe<InnerOrder>;
+  maxRetries?: InputMaybe<InnerOrder>;
   maxTokens?: InputMaybe<InnerOrder>;
   maxToolIterations?: InputMaybe<InnerOrder>;
   model?: InputMaybe<InnerOrder>;
+  requestTimeoutSeconds?: InputMaybe<InnerOrder>;
+  runRetentionDays?: InputMaybe<InnerOrder>;
   systemPrompt?: InputMaybe<InnerOrder>;
   temperature?: InputMaybe<InnerOrder>;
   toolDiscovery?: InputMaybe<InnerOrder>;
@@ -2094,14 +2142,20 @@ export type SettingOrderBy = {
 };
 
 export type SettingSumAggregate = {
+  maxRetries?: Maybe<Scalars['Float']['output']>;
   maxTokens?: Maybe<Scalars['Float']['output']>;
   maxToolIterations?: Maybe<Scalars['Float']['output']>;
+  requestTimeoutSeconds?: Maybe<Scalars['Float']['output']>;
+  runRetentionDays?: Maybe<Scalars['Float']['output']>;
   temperature?: Maybe<Scalars['Float']['output']>;
 };
 
 export type SettingSumHaving = {
+  maxRetries?: InputMaybe<AggregateNumberFilter>;
   maxTokens?: InputMaybe<AggregateNumberFilter>;
   maxToolIterations?: InputMaybe<AggregateNumberFilter>;
+  requestTimeoutSeconds?: InputMaybe<AggregateNumberFilter>;
+  runRetentionDays?: InputMaybe<AggregateNumberFilter>;
   temperature?: InputMaybe<AggregateNumberFilter>;
 };
 
@@ -3137,9 +3191,12 @@ export type UpdateMcpServerManyInput = {
 export type UpdateSettingInput = {
   baseUrl?: InputMaybe<Scalars['String']['input']>;
   id?: InputMaybe<Scalars['String']['input']>;
+  maxRetries?: InputMaybe<Scalars['Int']['input']>;
   maxTokens?: InputMaybe<Scalars['Int']['input']>;
   maxToolIterations?: InputMaybe<Scalars['Int']['input']>;
   model?: InputMaybe<Scalars['String']['input']>;
+  requestTimeoutSeconds?: InputMaybe<Scalars['Int']['input']>;
+  runRetentionDays?: InputMaybe<Scalars['Int']['input']>;
   systemPrompt?: InputMaybe<Scalars['String']['input']>;
   temperature?: InputMaybe<Scalars['Float']['input']>;
   toolDiscovery?: InputMaybe<SettingsToolDiscoveryEnum>;
@@ -3277,7 +3334,7 @@ export type RunEventsSubscription = { runEvents: { seq: number, kind: string, te
 export type SettingsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type SettingsQuery = { settings: Array<{ id: string, baseUrl: string, model: string, systemPrompt: string, maxTokens: number, temperature: number, maxToolIterations: number, toolDiscovery: SettingsToolDiscoveryEnum, toolSelectModel: string }> };
+export type SettingsQuery = { settings: Array<{ id: string, baseUrl: string, model: string, systemPrompt: string, maxTokens: number, temperature: number, maxToolIterations: number, toolDiscovery: SettingsToolDiscoveryEnum, toolSelectModel: string, requestTimeoutSeconds: number, maxRetries: number, runRetentionDays: number }> };
 
 export type ModelsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -3394,7 +3451,7 @@ export const ReconnectMcpDocument = {"kind":"Document","definitions":[{"kind":"O
 export const RunsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Runs"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"runs"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"100"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"taskId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"startedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"direction"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"ObjectField","name":{"kind":"Name","value":"priority"},"value":{"kind":"IntValue","value":"1"}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"taskId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"startedAt"}},{"kind":"Field","name":{"kind":"Name","value":"finishedAt"}},{"kind":"Field","name":{"kind":"Name","value":"output"}},{"kind":"Field","name":{"kind":"Name","value":"error"}},{"kind":"Field","name":{"kind":"Name","value":"toolCalls"}},{"kind":"Field","name":{"kind":"Name","value":"totalTokens"}},{"kind":"Field","name":{"kind":"Name","value":"task"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"steps"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"position"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"direction"},"value":{"kind":"EnumValue","value":"asc"}},{"kind":"ObjectField","name":{"kind":"Name","value":"priority"},"value":{"kind":"IntValue","value":"1"}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"depth"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"branch"}},{"kind":"Field","name":{"kind":"Name","value":"output"}},{"kind":"Field","name":{"kind":"Name","value":"error"}},{"kind":"Field","name":{"kind":"Name","value":"toolCalls"}},{"kind":"Field","name":{"kind":"Name","value":"totalTokens"}}]}}]}}]}}]} as unknown as DocumentNode<RunsQuery, RunsQueryVariables>;
 export const DeleteRunDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteRun"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteRunSingle"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<DeleteRunMutation, DeleteRunMutationVariables>;
 export const RunEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"RunEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"runId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"runEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"seq"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"step"}},{"kind":"Field","name":{"kind":"Name","value":"ok"}}]}}]}}]} as unknown as DocumentNode<RunEventsSubscription, RunEventsSubscriptionVariables>;
-export const SettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"baseUrl"}},{"kind":"Field","name":{"kind":"Name","value":"model"}},{"kind":"Field","name":{"kind":"Name","value":"systemPrompt"}},{"kind":"Field","name":{"kind":"Name","value":"maxTokens"}},{"kind":"Field","name":{"kind":"Name","value":"temperature"}},{"kind":"Field","name":{"kind":"Name","value":"maxToolIterations"}},{"kind":"Field","name":{"kind":"Name","value":"toolDiscovery"}},{"kind":"Field","name":{"kind":"Name","value":"toolSelectModel"}}]}}]}}]} as unknown as DocumentNode<SettingsQuery, SettingsQueryVariables>;
+export const SettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"baseUrl"}},{"kind":"Field","name":{"kind":"Name","value":"model"}},{"kind":"Field","name":{"kind":"Name","value":"systemPrompt"}},{"kind":"Field","name":{"kind":"Name","value":"maxTokens"}},{"kind":"Field","name":{"kind":"Name","value":"temperature"}},{"kind":"Field","name":{"kind":"Name","value":"maxToolIterations"}},{"kind":"Field","name":{"kind":"Name","value":"toolDiscovery"}},{"kind":"Field","name":{"kind":"Name","value":"toolSelectModel"}},{"kind":"Field","name":{"kind":"Name","value":"requestTimeoutSeconds"}},{"kind":"Field","name":{"kind":"Name","value":"maxRetries"}},{"kind":"Field","name":{"kind":"Name","value":"runRetentionDays"}}]}}]}}]} as unknown as DocumentNode<SettingsQuery, SettingsQueryVariables>;
 export const ModelsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Models"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"models"}}]}}]} as unknown as DocumentNode<ModelsQuery, ModelsQueryVariables>;
 export const UpdateSettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateSettings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"set"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateSettingInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateSettingSingle"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"StringValue","value":"default","block":false}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"set"},"value":{"kind":"Variable","name":{"kind":"Name","value":"set"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateSettingsMutation, UpdateSettingsMutationVariables>;
 export const SetApiKeyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SetApiKey"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"apiKey"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"setApiKey"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"apiKey"},"value":{"kind":"Variable","name":{"kind":"Name","value":"apiKey"}}}]}]}}]} as unknown as DocumentNode<SetApiKeyMutation, SetApiKeyMutationVariables>;

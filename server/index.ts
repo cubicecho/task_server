@@ -7,7 +7,9 @@ import { schema } from "./graphql/schema.ts";
 import { mcpHandler, mountMcp } from "./mcp-endpoint.ts";
 import { PORT, ROOT } from "./paths.ts";
 import { mcp } from "./runner/mcp.ts";
+import * as cleanup from "./scheduler/cleanup.ts";
 import * as cron from "./scheduler/cron.ts";
+import { mountWebhooks } from "./webhooks.ts";
 
 await ensureSchema();
 
@@ -28,6 +30,10 @@ app.use(yoga.graphqlEndpoint, yoga);
 // The same schema, offered to other clients as MCP tools, beside GraphQL rather than
 // replacing it. What it exposes and why is in `mcp-endpoint.ts`.
 mountMcp(app);
+
+// The inbound end of an `event` trigger. POST only, so it cannot collide with the client's
+// routes below however the sender spells the id.
+mountWebhooks(app);
 
 // In production the built client is served from the same origin.
 const dist = path.join(ROOT, "dist");
@@ -50,9 +56,11 @@ const server = app.listen(PORT, () => {
 
 await mcp.sync();
 await cron.sync();
+cleanup.start();
 
 const shutdown = async () => {
   cron.stop();
+  cleanup.stop();
   await mcpHandler.close();
   await mcp.shutdown();
   server.close();

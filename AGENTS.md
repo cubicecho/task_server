@@ -1,11 +1,11 @@
 # AGENTS.md — task-server
 
-Scheduled AI tasks. A **task** is a prompt; a **trigger** starts it (cron today, `event` is a
-stored row shape with no dispatcher yet); a **run** is one execution, with its status, output,
-token counts and error kept. The runner sends the prompt to any OpenAI-compatible model with
-every enabled MCP server's tools attached, streaming as it goes. The same API is served three
-ways from one process: GraphQL at `/graphql`, MCP tools at `/mcp`, and the built React app on
-everything else.
+Scheduled AI tasks. A **task** is a prompt; a **trigger** starts it (`cron` on a schedule,
+`event` when `POST /webhooks/<id>` arrives); a **run** is one execution, with its status,
+output, token counts and error kept. The runner sends the prompt to any OpenAI-compatible
+model with every enabled MCP server's tools attached, streaming as it goes. The same API is
+served three ways from one process: GraphQL at `/graphql`, MCP tools at `/mcp`, and the built
+React app on everything else, with `POST /webhooks/:id` alongside them.
 
 Read [`README.md`](README.md) first — it holds the design decisions this file only summarises.
 
@@ -29,7 +29,8 @@ npm test                 # vitest run
 # Schema and types
 npm run schema           # prints the runtime schema to schema.graphql
 npm run codegen          # schema, then graphql-codegen into src/gql/graphql.ts
-npm run db:push          # drizzle-kit, for a column that changed shape
+npm run db:generate      # drizzle-kit, after a change to server/db/schema.ts
+npm run db:migrate       # apply drizzle/ by hand; the server does this on boot anyway
 npm run db:studio
 
 # Build / run
@@ -65,9 +66,10 @@ is a devDependency and `server/dev/codegen.ts` is behind a `NODE_ENV !== "produc
 because the image has neither codegen nor the sources it would write. `npm run build` runs
 codegen before the typecheck, and CI regenerates and diffs it against what is committed.
 
-**A schema change is two edits.** `server/db/schema.ts` for the table definition and
-`server/db/ensure.ts` for the DDL that creates it on boot. `ensure.ts` writes the camelCase
-column names quoted, because postgres folds unquoted identifiers to lower case.
+**A schema change is an edit and a generate.** Change `server/db/schema.ts`, then run
+`npm run db:generate` and commit what lands in `drizzle/` — the SQL and the snapshot both.
+`server/db/migrate.ts` applies that folder on boot, against PGlite or a `pg` pool alike, so
+nothing hand-writes DDL any more. Never edit a migration that has shipped; generate another.
 
 **Only `client.ts` knows which postgres this is.** It reads `DATABASE_URL` and opens either a
 `pg` pool or a PGlite instance, and hands out one `db` under one set of types. Nothing above
@@ -90,6 +92,19 @@ a task and its triggers save as separate mutations, and a flow is written whole 
 seventeen tools an outside client gets. Nothing that empties a table in one call, and nothing
 that reads the API key. A new tool goes in that list deliberately, with a `HINTS` entry if the
 generated description does not say enough.
+
+**A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
+a task only when an enabled `event` trigger on an enabled task carries that exact id, and
+reports which ones it started in `dispatched`. There is no signature and no secret — the id is
+the whole of the address, so make it unguessable if it matters. The body is parsed and
+discarded; the route mounts its own JSON parser rather than `app.use`, because yoga and the
+MCP handler read their own bodies.
+
+**The LLM call retries only before the model has spoken.** `server/runner/agent.ts` owns the
+retry loop, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn
+is unrepeatable, so a failure after that propagates. `requestTimeoutSeconds` is a silence
+watchdog that rearms on every chunk, not a deadline on the request, and an aborted stream ends
+its iteration rather than throwing — hence the `throwIfAborted()` after the loop.
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.

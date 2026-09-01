@@ -908,6 +908,9 @@ type Setting {
   maxToolIterations: Int!
   toolDiscovery: SettingsToolDiscoveryEnum!
   toolSelectModel: String!
+  runRetentionDays: Int!
+  requestTimeoutSeconds: Int!
+  maxRetries: Int!
 
   """
   Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
@@ -937,12 +940,18 @@ type SettingAvgAggregate {
   maxTokens: Float
   temperature: Float
   maxToolIterations: Float
+  runRetentionDays: Float
+  requestTimeoutSeconds: Float
+  maxRetries: Float
 }
 
 type SettingSumAggregate {
   maxTokens: Float
   temperature: Float
   maxToolIterations: Float
+  runRetentionDays: Float
+  requestTimeoutSeconds: Float
+  maxRetries: Float
 }
 
 type SettingMinAggregate {
@@ -955,6 +964,9 @@ type SettingMinAggregate {
   maxToolIterations: Int
   toolDiscovery: SettingsToolDiscoveryEnum
   toolSelectModel: String
+  runRetentionDays: Int
+  requestTimeoutSeconds: Int
+  maxRetries: Int
 }
 
 type SettingMaxAggregate {
@@ -967,6 +979,9 @@ type SettingMaxAggregate {
   maxToolIterations: Int
   toolDiscovery: SettingsToolDiscoveryEnum
   toolSelectModel: String
+  runRetentionDays: Int
+  requestTimeoutSeconds: Int
+  maxRetries: Int
 }
 
 type SettingCountNonNullAggregate {
@@ -979,6 +994,9 @@ type SettingCountNonNullAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  runRetentionDays: Int!
+  requestTimeoutSeconds: Int!
+  maxRetries: Int!
 }
 
 type SettingCountDistinctAggregate {
@@ -991,6 +1009,9 @@ type SettingCountDistinctAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  runRetentionDays: Int!
+  requestTimeoutSeconds: Int!
+  maxRetries: Int!
 }
 
 type SettingGroupBy {
@@ -1017,6 +1038,9 @@ type SettingGroupKeys {
   maxToolIterations: Int
   toolDiscovery: SettingsToolDiscoveryEnum
   toolSelectModel: String
+  runRetentionDays: Int
+  requestTimeoutSeconds: Int
+  maxRetries: Int
 }
 
 input CreateTaskInput {
@@ -2630,6 +2654,9 @@ input UpdateSettingInput {
   maxToolIterations: Int
   toolDiscovery: SettingsToolDiscoveryEnum
   toolSelectModel: String
+  runRetentionDays: Int
+  requestTimeoutSeconds: Int
+  maxRetries: Int
 }
 
 """
@@ -2651,6 +2678,9 @@ input SettingFilters {
   maxToolIterations: IntFilter
   toolDiscovery: SettingsToolDiscoveryEnumFilter
   toolSelectModel: StringFilter
+  runRetentionDays: IntFilter
+  requestTimeoutSeconds: IntFilter
+  maxRetries: IntFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [SettingFilters!]
@@ -2787,6 +2817,9 @@ input SettingOrderBy {
   maxToolIterations: InnerOrder
   toolDiscovery: InnerOrder
   toolSelectModel: InnerOrder
+  runRetentionDays: InnerOrder
+  requestTimeoutSeconds: InnerOrder
+  maxRetries: InnerOrder
 }
 
 """Filters Setting groups by their aggregated values"""
@@ -2805,24 +2838,36 @@ input SettingAvgHaving {
   maxTokens: AggregateNumberFilter
   temperature: AggregateNumberFilter
   maxToolIterations: AggregateNumberFilter
+  runRetentionDays: AggregateNumberFilter
+  requestTimeoutSeconds: AggregateNumberFilter
+  maxRetries: AggregateNumberFilter
 }
 
 input SettingSumHaving {
   maxTokens: AggregateNumberFilter
   temperature: AggregateNumberFilter
   maxToolIterations: AggregateNumberFilter
+  runRetentionDays: AggregateNumberFilter
+  requestTimeoutSeconds: AggregateNumberFilter
+  maxRetries: AggregateNumberFilter
 }
 
 input SettingMinHaving {
   maxTokens: AggregateNumberFilter
   temperature: AggregateNumberFilter
   maxToolIterations: AggregateNumberFilter
+  runRetentionDays: AggregateNumberFilter
+  requestTimeoutSeconds: AggregateNumberFilter
+  maxRetries: AggregateNumberFilter
 }
 
 input SettingMaxHaving {
   maxTokens: AggregateNumberFilter
   temperature: AggregateNumberFilter
   maxToolIterations: AggregateNumberFilter
+  runRetentionDays: AggregateNumberFilter
+  requestTimeoutSeconds: AggregateNumberFilter
+  maxRetries: AggregateNumberFilter
 }
 
 input SettingCountNonNullHaving {
@@ -2835,6 +2880,9 @@ input SettingCountNonNullHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  runRetentionDays: AggregateNumberFilter
+  requestTimeoutSeconds: AggregateNumberFilter
+  maxRetries: AggregateNumberFilter
 }
 
 input SettingCountDistinctHaving {
@@ -2847,6 +2895,9 @@ input SettingCountDistinctHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  runRetentionDays: AggregateNumberFilter
+  requestTimeoutSeconds: AggregateNumberFilter
+  maxRetries: AggregateNumberFilter
 }
 
 type Query {
@@ -3176,6 +3227,9 @@ enum SettingDistinctColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  runRetentionDays
+  requestTimeoutSeconds
+  maxRetries
 }
 
 """Columns of Setting that a query can group by"""
@@ -3189,6 +3243,9 @@ enum SettingGroupByColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  runRetentionDays
+  requestTimeoutSeconds
+  maxRetries
 }
 
 """

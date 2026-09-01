@@ -102,6 +102,9 @@ interface Form {
   maxToolIterations: number;
   toolDiscovery: SettingsToolDiscoveryEnum;
   toolSelectModel: string;
+  requestTimeoutSeconds: number;
+  maxRetries: number;
+  runRetentionDays: number;
 }
 
 export function SettingsRoute() {
@@ -126,6 +129,9 @@ export function SettingsRoute() {
         maxToolIterations,
         toolDiscovery: loaded.toolDiscovery,
         toolSelectModel: loaded.toolSelectModel,
+        requestTimeoutSeconds: loaded.requestTimeoutSeconds,
+        maxRetries: loaded.maxRetries,
+        runRetentionDays: loaded.runRetentionDays,
       });
     }
   }, [loaded, form]);
@@ -134,7 +140,14 @@ export function SettingsRoute() {
     mutationFn: async () => {
       if (!form) return;
       // An emptied number input parses to NaN, which would go over the wire as null.
-      for (const key of ["maxTokens", "temperature", "maxToolIterations"] as const) {
+      for (const key of [
+        "maxTokens",
+        "temperature",
+        "maxToolIterations",
+        "requestTimeoutSeconds",
+        "maxRetries",
+        "runRetentionDays",
+      ] as const) {
         if (!Number.isFinite(form[key])) throw new Error(`${key} must be a number.`);
       }
       await request(UpdateSettingsDocument, { set: form });
@@ -242,6 +255,42 @@ export function SettingsRoute() {
                   value={form.maxToolIterations}
                   onChange={(event) => field("maxToolIterations", Number(event.target.value))}
                 />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="requestTimeoutSeconds">Silence before giving up (s)</Label>
+                <Input
+                  id="requestTimeoutSeconds"
+                  type="number"
+                  value={form.requestTimeoutSeconds}
+                  onChange={(event) => field("requestTimeoutSeconds", Number(event.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Resets on every token, so a long answer is never cut off. 0 waits forever.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="maxRetries">Retries</Label>
+                <Input
+                  id="maxRetries"
+                  type="number"
+                  value={form.maxRetries}
+                  onChange={(event) => field("maxRetries", Number(event.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  For a request that failed before the model said anything.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="runRetentionDays">Keep runs for (days)</Label>
+                <Input
+                  id="runRetentionDays"
+                  type="number"
+                  value={form.runRetentionDays}
+                  onChange={(event) => field("runRetentionDays", Number(event.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Older runs are deleted hourly. 0 keeps every run forever.
+                </p>
               </div>
             </div>
           </>

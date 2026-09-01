@@ -25,8 +25,10 @@ import {
  * it. `kind` discriminates; `cron`/`timezone` belong to cron rows and `event`/`config` to event
  * rows, which is why both sets are nullable.
  *
- * Column names stay camelCase. Postgres folds unquoted identifiers to lower case, so the DDL
- * in `ensure.ts` quotes every one of them.
+ * Column names stay camelCase. Postgres folds unquoted identifiers to lower case, so the
+ * generated migrations under `drizzle/` quote every one of them. This file is the only
+ * definition of the tables: change it, then `npm run db:generate` to write the migration that
+ * gets the change into a database.
  */
 
 const id = () =>
@@ -63,7 +65,7 @@ export const triggers = pgTable(
     taskId: text()
       .notNull()
       .references(() => tasks.id, { onDelete: "cascade" }),
-    /** `cron` fires on a schedule. `event` is the seam for inbound events; nothing fires it yet. */
+    /** `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives. */
     kind: text({ enum: ["cron", "event"] })
       .notNull()
       .default("cron"),
@@ -71,7 +73,13 @@ export const triggers = pgTable(
     cron: text().notNull().default(""),
     /** IANA zone the expression is read in. Empty means the server's own zone. */
     timezone: text().notNull().default(""),
-    /** Event name, for `kind: "event"` — e.g. `email.received`. */
+    /**
+     * The webhook id, for `kind: "event"`. `POST /webhooks/<this>` runs the task.
+     *
+     * It is the whole of the address: any id is accepted by the route, and one that no trigger
+     * is listening for is answered and dropped. Pick something unguessable if the server is
+     * reachable by anyone you would rather not have firing your tasks.
+     */
     event: text().notNull().default(""),
     /** Free-form JSON for the event's matching rules. Opaque to the server for now. */
     config: jsonb().$type<Record<string, unknown>>(),
@@ -251,6 +259,27 @@ export const settings = pgTable("settings", {
     .default("eager"),
   /** Small model that guesses a run's tools before it starts. Empty uses the task's model. */
   toolSelectModel: text().notNull().default(""),
+  /**
+   * How long a finished run is kept, in days. Zero — the default — keeps every run forever.
+   *
+   * A run row holds the whole output and error text, so a task on a five-minute cron writes
+   * something over a hundred thousand of them a year. This is the ceiling on that. See
+   * `scheduler/cleanup.ts`.
+   */
+  runRetentionDays: integer().notNull().default(0),
+  /**
+   * Seconds of silence from the model endpoint before a request is given up on.
+   *
+   * Silence, not total duration: the clock resets on every chunk, so a long answer is never
+   * cut off halfway and an endpoint that has stopped talking does not hang the run forever.
+   */
+  requestTimeoutSeconds: integer().notNull().default(120),
+  /**
+   * How many times a request that failed *before producing anything* is tried again.
+   *
+   * Only that case is safe to retry — see `runner/agent.ts`. Zero turns retries off.
+   */
+  maxRetries: integer().notNull().default(2),
 });
 
 export const schema = { tasks, triggers, steps, runs, runSteps, mcpServers, settings };
