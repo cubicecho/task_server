@@ -99,10 +99,13 @@ name: `Mutation.createTask` is the tool `create_task`.
 recurse between tables, and written out as JSON Schema rather than named as SDL they once made
 the listing 18 MB — more than a model will read, and it arrives before any call. graphql-mcp
 1.0.1 builds each input type once so the repeats become `$ref`s, which brought it to ~456 kB with
-the relation filters intact; before that this file pruned them out by hand. It is ~528 kB now, on
-zod 4 — 2.0.0 made zod a peer dependency, and v4 renders the same schema less compactly than the
-v3 copy the package used to bundle. `tests/mcp-endpoint.test.ts` holds every tool under 150 kB
-and the listing under 900 kB. Anything added here that grows it needs to answer to that test
+the relation filters intact; before that this file pruned them out by hand. It went to ~528 kB on
+zod 4 — 2.0.0 made zod a peer dependency, and v4 rendered the same schema less compactly than the
+v3 copy the package used to bundle — and back to ~419 kB on 2.2.0, which also named the shared
+types after the GraphQL types they came from rather than by position.
+`tests/mcp-endpoint.test.ts` holds every tool under 100 kB and the listing under 650 kB. The
+bounds sit well above the real figure on purpose: it is the driver's to move, and what the test
+is for is the order of magnitude. Anything added here that grows it needs to answer to that test
 rather than raise the bound.
 
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
