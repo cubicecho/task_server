@@ -1,5 +1,14 @@
 import { parse, stringify } from "yaml";
 import type { StepFieldsFragment, StepInput } from "@/gql/graphql";
+import { errorMessage } from "../../shared/errors.ts";
+import {
+  CONTEXTS,
+  DEFAULT_BRANCH,
+  KINDS,
+  MAX_DEPTH,
+  type StepContext,
+  type StepKind,
+} from "../../shared/flow.ts";
 
 /**
  * A task's flow, as the editor holds it.
@@ -10,14 +19,10 @@ import type { StepFieldsFragment, StepInput } from "@/gql/graphql";
  * YAML pair for the tab that edits the whole thing as text.
  */
 
-export const KINDS = ["agent", "decision"] as const;
-export const CONTEXTS = ["all", "previous", "none"] as const;
-export const DEFAULT_BRANCH = "default";
-/** Mirrors `server/runner/flow.ts` — the editor stops offering what the server would refuse. */
-export const MAX_DEPTH = 8;
-
-export type StepKind = (typeof KINDS)[number];
-export type StepContext = (typeof CONTEXTS)[number];
+export type { StepContext, StepKind };
+// Shared with the server rather than mirrored: the editor stops offering what the server would
+// refuse, and that only holds while there is one copy of the numbers.
+export { CONTEXTS, DEFAULT_BRANCH, KINDS, MAX_DEPTH };
 
 export interface DraftBranch {
   case: string;
@@ -192,7 +197,7 @@ export function fromYaml(text: string): DraftStep[] {
   try {
     parsed = parse(text);
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : String(error));
+    throw new Error(errorMessage(error));
   }
   return readSteps(parsed, "the flow");
 }

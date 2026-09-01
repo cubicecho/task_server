@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import express, { type Express, type Request, type Response } from "express";
+import { errorMessage } from "../shared/errors.ts";
 import { db } from "./db/client.ts";
 import { tasks, triggers } from "./db/schema.ts";
 import { runTask } from "./runner/run.ts";
@@ -68,7 +69,7 @@ async function dispatch(event: string): Promise<{ taskId: string; name: string }
 
   for (const row of rows) {
     void runTask(row.taskId, row.triggerId).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       console.error(`[webhook] ${event}: ${row.name}: ${message}`);
     });
   }

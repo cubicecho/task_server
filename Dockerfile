@@ -34,6 +34,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY server server
+# The rules both halves of the app agree on — step kinds, context modes, nesting
+# limits. server/ imports them at runtime, so they ship with it rather than being
+# baked into the bundle alone.
+COPY shared shared
 # The generated migrations, which the server applies on boot. Without them a fresh
 # container comes up against an empty database and every query fails.
 COPY drizzle drizzle

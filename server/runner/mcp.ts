@@ -2,9 +2,9 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type OpenAI from "openai";
+import { errorMessage } from "../../shared/errors.ts";
 import { db } from "../db/client.ts";
 import { type McpServerRow, mcpServers } from "../db/schema.ts";
-import { errorMessage } from "../errors.ts";
 
 const SEPARATOR = "__";
 

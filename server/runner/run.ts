@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { errorMessage } from "../../shared/errors.ts";
 import { db } from "../db/client.ts";
 import { type Run, runs, steps, tasks } from "../db/schema.ts";
 import { emit } from "./events.ts";
@@ -86,7 +87,7 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
       onEvent({ kind: "done", ok: false, text: "stopped" });
       return await finish(run.id, { status: "stopped" });
     }
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     console.error(`[run] ${task.name}: ${message}`);
     onEvent({ kind: "done", ok: false, text: message });
     return await finish(run.id, { status: "error", error: message });

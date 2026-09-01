@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
+import { errorMessage } from "../../shared/errors.ts";
+import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
-import { errorMessage } from "../errors.ts";
 import { runAgent } from "./agent.ts";
 import type { RunEventInput } from "./events.ts";
 import { ask, parseJson, tryAsk } from "./side-task.ts";
@@ -23,12 +24,9 @@ import { ask, parseJson, tryAsk } from "./side-task.ts";
  * bounded by `settings.maxToolIterations` as before.
  */
 
-/** How deep the arms may nest, and how many steps one run may execute. */
-export const MAX_DEPTH = 8;
-export const MAX_STEPS = 64;
-
-/** The arm a decision falls to when nothing it declared applies. */
-export const DEFAULT_BRANCH = "default";
+// The editor enforces the same three, so they live where both halves can read them, and are
+// re-exported here because this is the module the rest of the server already asks.
+export { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS };
 
 export interface FlowNode {
   step: Step;

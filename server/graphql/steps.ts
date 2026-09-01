@@ -1,9 +1,9 @@
 import { and, eq, getTableColumns, inArray, notInArray, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { GraphQLError } from "graphql";
+import { CONTEXTS, DEFAULT_BRANCH, KINDS, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { steps } from "../db/schema.ts";
-import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS } from "../runner/flow.ts";
 
 /**
  * Writing a task's flow: one call that replaces the whole tree.
@@ -36,9 +36,6 @@ export interface StepInput {
 }
 
 type NewStep = typeof steps.$inferInsert & { id: string };
-
-const KINDS = ["agent", "decision"] as const;
-const CONTEXTS = ["all", "previous", "none"] as const;
 
 const reject = (message: string): never => {
   // A plain Error reaches the client as "Internal server error"; every one of these is

@@ -1,6 +1,6 @@
 import OpenAI from "openai";
+import { errorMessage } from "../../shared/errors.ts";
 import type { Settings } from "../db/schema.ts";
-import { errorMessage } from "../errors.ts";
 import type { RunEventInput } from "./events.ts";
 import { getClient, timeoutMs } from "./llm.ts";
 import { type CatalogServer, mcp } from "./mcp.ts";
