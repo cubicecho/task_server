@@ -1,11 +1,22 @@
-import { createRootRoute, createRoute, createRouter, redirect } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+  redirect,
+} from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { McpRoute } from "@/routes/mcp";
-import { RunsRoute } from "@/routes/runs";
-import { SettingsRoute } from "@/routes/settings";
-import { TaskEditRoute } from "@/routes/task-edit";
-import { TasksRoute } from "@/routes/tasks";
 
+/**
+ * Each page is its own chunk, fetched when it is first needed.
+ *
+ * Statically imported, every route was in the one bundle the browser waits for before it can
+ * draw anything — and most of a page's weight is the editor, the YAML parser or the markdown
+ * it alone uses. `defaultPreload: "intent"` below starts the fetch on hover, so a chunk is
+ * usually already there by the time the click lands and the split costs no perceived delay.
+ *
+ * `AppShell` is not lazy: it is the frame every route renders inside.
+ */
 const rootRoute = createRootRoute({ component: AppShell });
 
 const indexRoute = createRoute({
@@ -19,7 +30,7 @@ const indexRoute = createRoute({
 const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks",
-  component: TasksRoute,
+  component: lazyRouteComponent(() => import("@/routes/tasks"), "TasksRoute"),
 });
 
 // Both edit pages are the same component: whether it creates or edits is whether the route
@@ -27,19 +38,19 @@ const tasksRoute = createRoute({
 const taskNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks/new",
-  component: TaskEditRoute,
+  component: lazyRouteComponent(() => import("@/routes/task-edit"), "TaskEditRoute"),
 });
 
 const taskEditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks/$taskId",
-  component: TaskEditRoute,
+  component: lazyRouteComponent(() => import("@/routes/task-edit"), "TaskEditRoute"),
 });
 
 const runsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/runs",
-  component: RunsRoute,
+  component: lazyRouteComponent(() => import("@/routes/runs"), "RunsRoute"),
 });
 
 const mcpRoute = createRoute({
@@ -47,13 +58,13 @@ const mcpRoute = createRoute({
   // Not `/mcp`: that path is the MCP endpoint the server answers on, and in dev the vite
   // proxy would hand this page to it.
   path: "/servers",
-  component: McpRoute,
+  component: lazyRouteComponent(() => import("@/routes/mcp"), "McpRoute"),
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
-  component: SettingsRoute,
+  component: lazyRouteComponent(() => import("@/routes/settings"), "SettingsRoute"),
 });
 
 export const router = createRouter({
