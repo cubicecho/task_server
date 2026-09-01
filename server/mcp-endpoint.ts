@@ -89,6 +89,21 @@ const HINTS: Record<string, string> = {
 };
 
 /**
+ * Tools that do not destroy anything, against a default that assumes every mutation does.
+ *
+ * `destructiveHint` is derived from the operation kind, so all nine mutations arrive marked
+ * destructive. Five of them are: the updates rewrite a row and `set_task_steps` replaces a whole
+ * flow, and the deletes are the real thing. The other four are not. A client that gates on this
+ * hint — asking the operator before it proceeds — should be spending that interruption on the
+ * delete, and it cannot if adding a task looks the same as dropping one.
+ *
+ * `run_task` and `stop_task` change no rows at all; they start and end work. Neither is
+ * idempotent: running a task twice runs it twice, and only the deletes and updates land the same
+ * way each time.
+ */
+const ADDITIVE = new Set(["create_task", "create_trigger", "run_task", "stop_task"]);
+
+/**
  * The same schema the web app uses, offered to other clients as MCP tools.
  *
  * A task server whose own API is a set of tools can be driven by an agent — "add a task that
@@ -111,6 +126,7 @@ export const mcpHandler = createHttpHandler({
     description: HINTS[descriptor.name]
       ? `${HINTS[descriptor.name]}\n\n${descriptor.description}`
       : descriptor.description,
+    ...(ADDITIVE.has(descriptor.name) ? { annotations: { destructiveHint: false } } : {}),
   }),
 });
 
