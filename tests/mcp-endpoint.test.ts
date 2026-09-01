@@ -139,15 +139,15 @@ test("advertises tools small enough for a client to read", async () => {
   // than emitting a `$ref`, which put the seventeen tools at 18 MB and `tasks` alone at 2.8 MB —
   // more than any model will read, and it lands before a single call can be made.
   //
-  // Shared, the listing is ~528 kB, the largest tool ~92 kB. The bounds sit well above that
-  // because the exact figure is not ours to hold: it moved from ~456 kB when zod 4 became the
-  // conversion path, which renders the same schema less compactly than zod 3 did. What is being
-  // caught here is the order of magnitude — a return to per-route copies trips this by 30×.
+  // Shared, the listing is ~419 kB, the largest tool ~48 kB. The bounds sit well above that
+  // because the exact figure is not ours to hold: it went to ~528 kB when zod 4 became the
+  // conversion path and back again on 2.2.0. What is being caught here is the order of
+  // magnitude — a return to per-route copies trips this by 30×.
   const sizes = tools.map((tool) => [tool.name, JSON.stringify(tool).length] as const);
   for (const [name, size] of sizes) {
-    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(150_000);
+    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(100_000);
   }
-  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(900_000);
+  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(650_000);
 
   // Both halves of what an agent filters on: the columns, and the relations reaching the
   // neighbouring tables. Filtering tasks by a property of their runs is a real question to ask.

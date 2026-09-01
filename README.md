@@ -226,7 +226,7 @@ the MCP-server rows, the aggregates and group-bys, and every bulk mutation — `
 no `where` empties the table, where `deleteTaskSingle` cannot. Each tool selects one level of
 fields, so a listing of tasks does not drag every run's output along with it.
 
-The whole listing is about 528 kB, which is worth saying because it very nearly was not. The
+The whole listing is about 419 kB, which is worth saying because it very nearly was not. The
 generated filters reach through relations — a task filtered by its runs, each run filtered back by
 its task — which costs nothing in the SDL, where a type is named rather than written out. As the
 JSON Schema a tool advertises, a driver that rebuilds each type per route has to spell that
