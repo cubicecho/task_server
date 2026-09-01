@@ -851,6 +851,7 @@ export type Query = {
   mcpServers: Array<McpServer>;
   mcpServersAggregate: McpServerAggregate;
   mcpServersGroupBy: Array<McpServerGroupBy>;
+  /** Which of the configured MCP servers this one actually reached, and the tools it found on each. A server that is enabled but absent here failed to connect, and its tools are not offered to any run. */
   mcpStatus: Array<McpServerStatus>;
   /** Model ids the configured OpenAI-compatible server reports. */
   models: Array<Scalars['String']['output']>;
@@ -864,6 +865,7 @@ export type Query = {
   runs: Array<Run>;
   runsAggregate: RunAggregate;
   runsGroupBy: Array<RunGroupBy>;
+  /** When each armed cron trigger fires next, read from the running scheduler rather than the table — so it answers what will happen, not what was asked for. A `cron` trigger missing here is not armed, which usually means it or its task is disabled. `event` triggers never appear; they fire on a webhook, not a clock. */
   schedule: Array<ScheduleEntry>;
   setting?: Maybe<Setting>;
   settings: Array<Setting>;

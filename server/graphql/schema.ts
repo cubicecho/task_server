@@ -19,7 +19,7 @@ import { fold, history, type RunEvent, watch } from "../runner/events.ts";
 import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
-import { isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
+import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
 import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
 
 /**
@@ -76,7 +76,7 @@ const { entities } = buildSchema(db, {
     triggers: {
       // A trigger nothing can fire — a bad expression, or a webhook with no address — is
       // caught here rather than becoming a row that looks armed and silently never runs.
-      before: ({ args }) => refuseUnfireableTrigger(args),
+      before: ({ operation, args }) => refuseUnfireableTrigger(operation, args),
       after: () => syncSoon(),
     },
     mcpServers: () => {
@@ -97,11 +97,13 @@ const { entities } = buildSchema(db, {
  * Every mutation shape the generated CRUD offers puts the values somewhere different, hence the
  * sweep: `values` for a create, `set` for an update, and `updates[].set` for the many-row form.
  *
- * A `cron` of `""` is not checked: that is what an event trigger's unused column holds. The
- * webhook id is only demanded when the write says `kind: "event"` itself, because an update
- * that touches one other column says nothing about which kind the row it lands on is.
+ * Each kind is only held to its own column when the write says which kind it is. An update that
+ * touches one other column says nothing about the row it lands on, and an empty `cron` is what
+ * an event trigger's unused column holds — so neither is read as a mistake on its own. A create
+ * always says: `kind` defaults to `cron`, so values with no `kind` are a cron trigger, and one
+ * with no expression is the same silent nothing as an event trigger with no address.
  */
-function refuseUnfireableTrigger(args: unknown) {
+function refuseUnfireableTrigger(operation: string, args: unknown) {
   const arg = args as
     | { values?: unknown; set?: unknown; updates?: { set?: unknown }[] }
     | undefined;
@@ -122,7 +124,17 @@ function refuseUnfireableTrigger(args: unknown) {
       });
     }
 
-    if (candidate.kind === "event" && !String(candidate.event ?? "").trim()) {
+    // On a create the column's default settles it; on an update, silence about `kind` says
+    // nothing about the row being written to.
+    const kind = candidate.kind ?? (operation === "insert" ? "cron" : undefined);
+
+    if (kind === "cron" && !String(cron ?? "").trim()) {
+      throw new GraphQLError("A cron trigger needs an expression — without one it never fires.", {
+        extensions: { code: "BAD_CRON" },
+      });
+    }
+
+    if (kind === "event" && !String(candidate.event ?? "").trim()) {
       throw new GraphQLError("An event trigger needs a webhook id — it is the whole address.", {
         extensions: { code: "BAD_EVENT" },
       });
@@ -315,11 +327,25 @@ export const schema = new GraphQLSchema({
       },
       mcpStatus: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpServerStatusType))),
+        description:
+          "Which of the configured MCP servers this one actually reached, and the tools it " +
+          "found on each. A server that is enabled but absent here failed to connect, and its " +
+          "tools are not offered to any run.",
         resolve: () => mcp.state(),
       },
       schedule: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(ScheduleEntryType))),
-        resolve: () => scheduleState(),
+        description:
+          "When each armed cron trigger fires next, read from the running scheduler rather " +
+          "than the table — so it answers what will happen, not what was asked for. A `cron` " +
+          "trigger missing here is not armed, which usually means it or its task is disabled. " +
+          "`event` triggers never appear; they fire on a webhook, not a clock.",
+        // A rebuild owed from a write that just landed is paid off here, so that reading this
+        // straight after `createTrigger` answers about the trigger you just wrote.
+        resolve: async () => {
+          await flush();
+          return scheduleState();
+        },
       },
       runEvents: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(RunEventType))),

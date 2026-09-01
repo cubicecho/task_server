@@ -3086,7 +3086,15 @@ type Query {
 
   """Model ids the configured OpenAI-compatible server reports."""
   models: [String!]!
+
+  """
+  Which of the configured MCP servers this one actually reached, and the tools it found on each. A server that is enabled but absent here failed to connect, and its tools are not offered to any run.
+  """
   mcpStatus: [McpServerStatus!]!
+
+  """
+  When each armed cron trigger fires next, read from the running scheduler rather than the table — so it answers what will happen, not what was asked for. A `cron` trigger missing here is not armed, which usually means it or its task is disabled. `event` triggers never appear; they fire on a webhook, not a clock.
+  """
   schedule: [ScheduleEntry!]!
 
   """

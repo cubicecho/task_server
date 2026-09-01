@@ -47,9 +47,9 @@ test("a task with a cron trigger lands on the schedule", async () => {
   );
   expect(trigger.kind).toBe("cron");
 
-  // The onWrite hook debounces its scheduler rebuild past the mutation's own transaction.
-  await cron.sync();
-
+  // No `cron.sync()` here on purpose. The rebuild is debounced past the mutation's own
+  // transaction, and reading `schedule` is what pays it off — the assertion below is the whole
+  // point of that: an agent calls these two back to back and must not be shown the old answer.
   const { schedule } = await run(`{ schedule { triggerId taskId cron nextRun } }`);
   expect(schedule).toHaveLength(1);
   expect(schedule[0]).toMatchObject({ triggerId: trigger.id, taskId: task.id, cron: "0 9 * * *" });
@@ -65,9 +65,51 @@ test("disabling the task takes its triggers off the schedule with it", async () 
     },
   );
 
-  await cron.sync();
   const { schedule } = await run(`{ schedule { triggerId } }`);
   expect(schedule).toEqual([]);
+});
+
+test("a cron trigger with no expression is refused, whether or not the kind is spelled out", async () => {
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "unarmed", prompt: "nothing" }) { id } }`,
+  );
+
+  // Both of these used to be stored: `enabled: true`, and fired by neither a clock nor a
+  // webhook. The second is the one that costs something — `kind` defaults to `cron`, so writing
+  // only an `event` id produces a cron trigger whose expression is empty, and `POST
+  // /webhooks/<id>` dispatches on `kind: "event"` and will never reach it either.
+  for (const values of ["kind: cron", 'event: "deploy"']) {
+    const rejected = await graphql({
+      schema,
+      source: `mutation Create($taskId: String!) {
+         createTrigger(values: { taskId: $taskId, ${values} }) { id }
+       }`,
+      variableValues: { taskId: task.id },
+    });
+    expect(rejected.errors?.[0].message).toMatch(/needs an expression/);
+  }
+
+  const { triggers } = await run(
+    `query T($id: String!) { triggers(where: { taskId: { eq: $id } }) { id } }`,
+    { id: task.id },
+  );
+  expect(triggers).toEqual([]);
+
+  // An update that names no kind still says nothing about the row it lands on, so it is left
+  // alone: an event trigger's `cron` column is legitimately empty.
+  const { createTrigger: event } = await run(
+    `mutation Create($taskId: String!) {
+       createTrigger(values: { taskId: $taskId, kind: event, event: "deploy" }) { id }
+     }`,
+    { taskId: task.id },
+  );
+  const { updateTriggerSingle: renamed } = await run(
+    `mutation Rename($id: String!) {
+       updateTriggerSingle(set: { event: "released" }, where: { id: { eq: $id } }) { id event }
+     }`,
+    { id: event.id },
+  );
+  expect(renamed.event).toBe("released");
 });
 
 test("a broken MCP config is reported, not thrown", async () => {
