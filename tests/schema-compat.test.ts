@@ -83,3 +83,26 @@ test("recognises grammar failures but not a missing user turn", () => {
   );
   expect(isGrammarError("model not found")).toBe(false);
 });
+
+test("leaves a reference standing alone, whatever it was wrapped in", () => {
+  const out = paramsOf(
+    sanitizeTools([
+      tool({
+        type: "object",
+        properties: {
+          // What a schema-generated server emits for an optional object argument. Collapsing the
+          // union used to leave `nullable` beside the `$ref` that survived — a sibling this file
+          // exists to remove, reintroduced two lines above the code that removes it.
+          where: { anyOf: [{ $ref: "#/definitions/Filters" }, { type: "null" }] },
+          note: { $ref: "#/definitions/Note", description: "ignored under draft-07", default: {} },
+        },
+        definitions: { Filters: { type: "object", properties: {} }, Note: { type: "string" } },
+      }),
+    ]),
+  );
+  const properties = out.properties as Record<string, Record<string, unknown>>;
+  expect(properties.where).toEqual({ $ref: "#/definitions/Filters" });
+  expect(properties.note).toEqual({ $ref: "#/definitions/Note" });
+  // The targets are still there: the reference is narrowed, never severed.
+  expect(Object.keys(out.definitions as object)).toEqual(["Filters", "Note"]);
+});
