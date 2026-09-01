@@ -86,8 +86,13 @@ function normalize(node: Schema): Schema {
   if (typeof out.pattern === "string" && LOOKAROUND.test(out.pattern)) delete out.pattern;
   // `{"type": "object"}` with no properties produces invalid GBNF.
   if (out.type === "object" && !isObject(out.properties)) out.properties = {};
-  // Strict validators reject any sibling of `$ref`.
-  if ("$ref" in out) delete out.default;
+  // Strict validators reject any sibling of `$ref`, and draft-07 ignores them, so a reference
+  // stands alone or not at all. This is not hypothetical tidying: collapsing `anyOf: [{$ref},
+  // {type: "null"}]` — the shape a schema-generated server emits at every optional argument —
+  // lands `nullable` right next to the `$ref` that survived. Whatever is dropped here was
+  // already unreadable to a conforming consumer; optionality still lives in the parent's
+  // `required`.
+  if ("$ref" in out) return { $ref: out.$ref };
 
   return out;
 }
