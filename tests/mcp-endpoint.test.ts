@@ -51,14 +51,37 @@ async function call(name: string, args: Record<string, unknown> = {}) {
   return envelope.data ?? {};
 }
 
-/** Just enough of a tool's JSON Schema to reach the keys of its `where` argument. */
-interface WhereSchema {
-  properties?: {
-    where?: {
-      anyOf?: { properties?: Record<string, unknown> }[];
-      properties?: Record<string, unknown>;
-    };
+/** A node of a tool's JSON Schema, as far as reaching the keys of its `where` argument needs. */
+interface SchemaNode {
+  $ref?: string;
+  anyOf?: SchemaNode[];
+  properties?: Record<string, SchemaNode>;
+  definitions?: Record<string, SchemaNode>;
+  $defs?: Record<string, SchemaNode>;
+}
+
+/**
+ * The property names of a `where` argument, whichever shape the driver rendered it in.
+ *
+ * zod decides where a shared object lands and the two majors disagree: v3 writes it inline, v4
+ * hoists it into `definitions` and leaves a `$ref`. Both are correct JSON Schema and neither is
+ * this repo's choice, so the test follows a pointer rather than asserting a layout.
+ */
+function whereKeys(root: SchemaNode): string[] {
+  const defs = root.definitions ?? root.$defs ?? {};
+  const deref = (node: SchemaNode | undefined, depth = 0): SchemaNode | undefined => {
+    if (!node || depth > 8) return node;
+    if (node.$ref)
+      return deref(defs[node.$ref.replace(/^#\/(definitions|\$defs)\//, "")], depth + 1);
+    // A nullable argument is `anyOf: [the type, null]`; the type is the half with content.
+    if (node.anyOf)
+      return deref(
+        node.anyOf.find((branch) => branch.$ref ?? branch.properties),
+        depth + 1,
+      );
+    return node;
   };
+  return Object.keys(deref(root.properties?.where)?.properties ?? {});
 }
 
 test("offers the task tools, and only those", async () => {
@@ -100,20 +123,22 @@ test("advertises tools small enough for a client to read", async () => {
   // runs, each run filtered back by its task — and the same filter types are reached by dozens of
   // routes. A driver that rebuilds them per route writes that recursion out at every level rather
   // than emitting a `$ref`, which put the seventeen tools at 18 MB and `tasks` alone at 2.8 MB —
-  // more than any model will read, and it lands before a single call can be made. Shared, the
-  // listing is ~456 kB. The bounds are loose because it is the order of magnitude that matters.
+  // more than any model will read, and it lands before a single call can be made.
+  //
+  // Shared, the listing is ~528 kB, the largest tool ~92 kB. The bounds sit well above that
+  // because the exact figure is not ours to hold: it moved from ~456 kB when zod 4 became the
+  // conversion path, which renders the same schema less compactly than zod 3 did. What is being
+  // caught here is the order of magnitude — a return to per-route copies trips this by 30×.
   const sizes = tools.map((tool) => [tool.name, JSON.stringify(tool).length] as const);
   for (const [name, size] of sizes) {
-    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(100_000);
+    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(150_000);
   }
-  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(700_000);
+  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(900_000);
 
   // Both halves of what an agent filters on: the columns, and the relations reaching the
   // neighbouring tables. Filtering tasks by a property of their runs is a real question to ask.
-  const where = (tools.find((tool) => tool.name === "tasks")?.inputSchema as WhereSchema)
-    ?.properties?.where;
-  const props = (where?.anyOf?.[0] ?? where)?.properties ?? {};
-  expect(Object.keys(props)).toEqual([
+  const input = tools.find((tool) => tool.name === "tasks")?.inputSchema as SchemaNode;
+  expect(whereKeys(input)).toEqual([
     "id",
     "name",
     "prompt",

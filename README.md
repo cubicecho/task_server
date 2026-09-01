@@ -221,7 +221,7 @@ the MCP-server rows, the aggregates and group-bys, and every bulk mutation — `
 no `where` empties the table, where `deleteTaskSingle` cannot. Each tool selects one level of
 fields, so a listing of tasks does not drag every run's output along with it.
 
-The whole listing is about 456 kB, which is worth saying because it very nearly was not. The
+The whole listing is about 528 kB, which is worth saying because it very nearly was not. The
 generated filters reach through relations — a task filtered by its runs, each run filtered back by
 its task — which costs nothing in the SDL, where a type is named rather than written out. As the
 JSON Schema a tool advertises, a driver that rebuilds each type per route has to spell that
@@ -230,6 +230,10 @@ some four and a half million tokens of tool definitions handed over before a cli
 anything. graphql-mcp 1.0.1 builds each input type once and emits a `$ref` for the repeats, so
 the relation filters cost almost nothing and stay — `where: { triggers: { some: { event: { eq:
 "…" } } } }` is a question worth being able to ask. A test keeps it that way.
+
+Unknown fields in a tool's arguments are rejected rather than dropped, as of 1.0.2: a misspelled
+key comes back as `Unrecognized key: "order"` instead of a success with that part of the request
+quietly discarded, which is the correction an agent can act on.
 
 `run_task` does not answer until the run is over, which for a real task is minutes. To watch one
 meanwhile, poll `run_events(runId, afterSeq)` — the snapshot form of the subscription the Runs
