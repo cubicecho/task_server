@@ -278,27 +278,47 @@ test("rejects an argument it does not recognise instead of dropping it", async (
 
 test("marks only the tools that actually destroy something", async () => {
   const { tools } = await client.listTools();
-  const destructive = tools
-    .filter((tool) => tool.annotations?.destructiveHint)
-    .map((tool) => tool.name)
-    .sort();
+  const named = (name: string) => tools.find((tool) => tool.name === name)?.annotations;
+  const flagged = (hint: "destructiveHint" | "idempotentHint") =>
+    tools
+      .filter((tool) => tool.annotations?.[hint])
+      .map((tool) => tool.name)
+      .sort();
 
-  // The updates rewrite a row, `set_task_steps` replaces a whole flow, and the deletes are the
-  // real thing. Creating a task or starting a run is none of those, and a client that stops to
-  // ask the operator should be spending that interruption on the deletes.
-  expect(destructive).toEqual([
+  // The updates rewrite a row, `set_task_steps` replaces a whole flow, the deletes are the real
+  // thing, and stopping a run throws away what it had done. Creating a task or starting a run is
+  // none of those, and a client that stops to ask the operator should be spending that
+  // interruption on the deletes.
+  expect(flagged("destructiveHint")).toEqual([
     "delete_task_single",
     "delete_trigger_single",
     "set_task_steps",
+    "stop_task",
     "update_task_single",
     "update_trigger_single",
   ]);
 
+  // Reads are idempotent by definition; of the writes, only the deletes and a second `stop_task`
+  // land the same way twice. `run_task` must not be here — running a task twice runs it twice.
+  expect(flagged("idempotentHint")).toEqual([
+    "delete_task_single",
+    "delete_trigger_single",
+    "models",
+    "run_events",
+    "run_steps",
+    "runs",
+    "schedule",
+    "steps",
+    "stop_task",
+    "tasks",
+    "triggers",
+  ]);
+
   // Overriding one hint must not cost the others: they are merged, not replaced.
-  const created = tools.find((tool) => tool.name === "create_task");
-  expect(created?.annotations?.title).toBe("Create Task");
-  expect(created?.annotations?.readOnlyHint).toBe(false);
+  expect(named("run_task")?.title).toBe("Run Task");
+  expect(named("run_task")?.readOnlyHint).toBe(false);
+  expect(named("create_task")?.destructiveHint).toBe(false);
 
   // Reads stay reads.
-  expect(tools.find((tool) => tool.name === "tasks")?.annotations?.readOnlyHint).toBe(true);
+  expect(named("tasks")?.readOnlyHint).toBe(true);
 });
