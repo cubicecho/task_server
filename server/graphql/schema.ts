@@ -14,7 +14,7 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
-import { steps, tasks } from "../db/schema.ts";
+import { settings, steps, tasks } from "../db/schema.ts";
 import { fold, history, type RunEvent, watch } from "../runner/events.ts";
 import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
@@ -397,8 +397,6 @@ export const schema = new GraphQLSchema({
           "it is excluded from the Setting type so it can never be read back out.",
         args: { apiKey: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: async (_source, args: { apiKey: string }) => {
-          const { eq } = await import("drizzle-orm");
-          const { settings } = await import("../db/schema.ts");
           await db.update(settings).set({ apiKey: args.apiKey }).where(eq(settings.id, "default"));
           return true;
         },

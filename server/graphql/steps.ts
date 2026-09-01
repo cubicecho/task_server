@@ -1,4 +1,5 @@
-import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, notInArray, sql } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { GraphQLError } from "graphql";
 import { db } from "../db/client.ts";
 import { steps } from "../db/schema.ts";
@@ -130,6 +131,22 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
 }
 
 /**
+ * What a colliding row overwrites: the columns an edit is allowed to move.
+ *
+ * Read off the table rather than listed by hand, so a column added to the schema is carried
+ * through an edit without a third place to remember. `id` and `taskId` say which row this is;
+ * `createdAt` is when it first appeared, which editing it does not change — and which is what
+ * `buildTree` tie-breaks two siblings on when they share a position.
+ */
+const KEEP = new Set(["id", "taskId", "createdAt"]);
+
+const OVERWRITE = Object.fromEntries(
+  Object.entries(getTableColumns(steps))
+    .filter(([field]) => !KEEP.has(field))
+    .map(([field, column]) => [field, sql`excluded.${sql.identifier(column.name)}`]),
+) as PgUpdateSetSource<typeof steps>;
+
+/**
  * Replaces a task's steps with these, all of it or none of it.
  *
  * The parents are broken first because deleting a step cascades to its children, and a step
@@ -151,9 +168,10 @@ export async function writeTaskSteps(taskId: string, rows: NewStep[]): Promise<v
           : eq(steps.taskId, taskId),
       );
 
-    for (const row of rows) {
-      const { id: _id, taskId: _taskId, ...set } = row;
-      await tx.insert(steps).values(row).onConflictDoUpdate({ target: steps.id, set });
+    // One statement, not one per step: postgres checks the self-referencing foreign key at the
+    // end of it, so the pre-order that `flattenSteps` produces is still what makes it satisfiable.
+    if (rows.length) {
+      await tx.insert(steps).values(rows).onConflictDoUpdate({ target: steps.id, set: OVERWRITE });
     }
   });
 }
