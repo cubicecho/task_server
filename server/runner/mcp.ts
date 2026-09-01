@@ -4,6 +4,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type OpenAI from "openai";
 import { db } from "../db/client.ts";
 import { type McpServerRow, mcpServers } from "../db/schema.ts";
+import { errorMessage } from "../errors.ts";
 
 const SEPARATOR = "__";
 
@@ -55,7 +56,7 @@ export async function probe(config: McpConnection): Promise<McpProbe> {
       tools: tools.map((tool) => ({ name: tool.name, description: tool.description ?? "" })),
     };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error), tools: [] };
+    return { ok: false, error: errorMessage(error), tools: [] };
   } finally {
     await client.close().catch(() => {});
   }
@@ -77,12 +78,28 @@ export interface McpServerState {
   tools: { name: string; description: string }[];
 }
 
+/**
+ * One tool of one connected server, in every shape anything asks for it.
+ *
+ * The OpenAI definition is built once here rather than per request: the agent loop rebuilds its
+ * tool array on every iteration of every step, and the schema behind it cannot change without
+ * the connection being torn down and made again.
+ */
+interface PooledTool {
+  /** As the server named it — what `state()` reports and what a call is sent back under. */
+  name: string;
+  description: string;
+  /** `<slug>__<name>`: what the model sees, and what it calls. */
+  qualified: string;
+  definition: OpenAI.ChatCompletionTool;
+}
+
 interface Entry {
   config: McpServerRow;
   client?: Client;
   status: McpStatus;
   error?: string;
-  tools: { name: string; description: string; inputSchema: Record<string, unknown> }[];
+  tools: PooledTool[];
 }
 
 /**
@@ -95,6 +112,8 @@ interface Entry {
  */
 class McpPool {
   private entries = new Map<string, Entry>();
+  /** Qualified name -> the client that answers it. Only ever holds callable tools. */
+  private index = new Map<string, { client: Client; tool: PooledTool }>();
 
   async sync(configs?: McpServerRow[]) {
     const wanted = configs ?? (await db.select().from(mcpServers));
@@ -113,6 +132,17 @@ class McpPool {
         await this.connect(config);
       }),
     );
+    this.reindex();
+  }
+
+  /** Rebuilt whenever the pool changes, so `call` resolves a name without scanning for it. */
+  private reindex() {
+    this.index.clear();
+    for (const entry of this.entries.values()) {
+      const { client } = entry;
+      if (entry.status !== "ready" || !client) continue;
+      for (const tool of entry.tools) this.index.set(tool.qualified, { client, tool });
+    }
   }
 
   private async connect(config: McpServerRow) {
@@ -125,17 +155,30 @@ class McpPool {
       await client.connect(createTransport(config));
       const { tools } = await client.listTools();
 
+      const label = config.label || config.slug;
       entry.client = client;
       entry.status = "ready";
-      entry.tools = tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description ?? "",
-        inputSchema: (tool.inputSchema ?? { type: "object" }) as Record<string, unknown>,
-      }));
+      entry.tools = tools.map((tool) => {
+        const qualified = McpPool.qualify(config.slug, tool.name);
+        const description = tool.description ?? "";
+        return {
+          name: tool.name,
+          description,
+          qualified,
+          definition: {
+            type: "function",
+            function: {
+              name: qualified,
+              description: `[${label}] ${description}`.trim(),
+              parameters: (tool.inputSchema ?? { type: "object" }) as Record<string, unknown>,
+            },
+          },
+        };
+      });
       console.log(`[mcp] ${config.slug}: ${entry.tools.length} tool(s)`);
     } catch (error) {
       entry.status = "error";
-      entry.error = error instanceof Error ? error.message : String(error);
+      entry.error = errorMessage(error);
       console.error(`[mcp] ${config.slug}: ${entry.error}`);
     }
   }
@@ -159,24 +202,10 @@ class McpPool {
    * a handful of schemas instead of every one.
    */
   tools(names?: string[]): OpenAI.ChatCompletionTool[] {
-    const wanted = names && new Set(names);
-    const tools: OpenAI.ChatCompletionTool[] = [];
-    for (const entry of this.entries.values()) {
-      if (entry.status !== "ready") continue;
-      for (const tool of entry.tools) {
-        const name = McpPool.qualify(entry.config.slug, tool.name);
-        if (wanted && !wanted.has(name)) continue;
-        tools.push({
-          type: "function",
-          function: {
-            name,
-            description: `[${entry.config.label || entry.config.slug}] ${tool.description}`.trim(),
-            parameters: tool.inputSchema,
-          },
-        });
-      }
-    }
-    return tools;
+    const wanted = names
+      ? names.map((name) => this.index.get(name)?.tool)
+      : [...this.index.values()].map(({ tool }) => tool);
+    return wanted.filter((tool) => tool !== undefined).map((tool) => tool.definition);
   }
 
   /** Names and descriptions only — what the model browses before loading any schemas. */
@@ -188,7 +217,7 @@ class McpPool {
         id: entry.config.id,
         label: entry.config.label || entry.config.slug,
         tools: entry.tools.map((tool) => ({
-          name: McpPool.qualify(entry.config.slug, tool.name),
+          name: tool.qualified,
           description: tool.description,
         })),
       });
@@ -198,12 +227,15 @@ class McpPool {
 
   /** Runs one tool call and returns text for a tool message. */
   async call(qualifiedName: string, input: unknown): Promise<string> {
-    const [slug, ...rest] = qualifiedName.split(SEPARATOR);
-    const entry = [...this.entries.values()].find((candidate) => candidate.config.slug === slug);
-    if (!entry?.client) throw new Error(`MCP server "${slug}" is not connected`);
+    // Resolved by the whole qualified name rather than by splitting it: `qualify` truncates at
+    // 64 characters, and the split of a truncated name names a tool its server never had.
+    const found = this.index.get(qualifiedName);
+    if (!found) {
+      throw new Error(`no connected MCP server offers a tool called "${qualifiedName}"`);
+    }
 
-    const result = await entry.client.callTool({
-      name: rest.join(SEPARATOR),
+    const result = await found.client.callTool({
+      name: found.tool.name,
       arguments: (input ?? {}) as Record<string, unknown>,
     });
 
@@ -233,6 +265,7 @@ class McpPool {
   async shutdown() {
     await Promise.all([...this.entries.values()].map((entry) => this.close(entry)));
     this.entries.clear();
+    this.index.clear();
   }
 }
 
