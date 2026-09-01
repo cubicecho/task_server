@@ -219,8 +219,9 @@ That is the one thing about the image that could break on a source change, so CI
 boots it, and asks it a question on every pull request.
 
 Releases are cut from the commit log by semantic-release and push four tags — `latest` and the
-version, to both `ghcr.io/<owner>/<repo>` and Docker Hub. That needs `DOCKERHUB_USERNAME` and
-`DOCKERHUB_TOKEN` as repository secrets; GHCR authenticates with the built-in `GITHUB_TOKEN`.
+version, to both `ghcr.io/<owner>/<repo>` and Docker Hub. Docker Hub authenticates with
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`, which the organisation shares with this repo, so
+neither is a per-repo setup step; GHCR authenticates with the built-in `GITHUB_TOKEN`.
 Only `feat:`/`fix:` commits produce a version, so the Release workflow also takes a manual run
 with a version typed in, which publishes the images without tagging a release.
 

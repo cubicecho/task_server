@@ -1,9 +1,9 @@
 # Tags a release and pushes the image to GHCR and Docker Hub.
 #
-# Secrets this needs, in Settings → Secrets and variables → Actions:
-#   DOCKERHUB_USERNAME  the Docker Hub account that owns <user>/task-server
-#   DOCKERHUB_TOKEN     an access token for it, not the password
-# ghcr.io needs no secret of its own: GITHUB_TOKEN authenticates it.
+# The organisation shares DOCKERHUB_USERNAME (the Docker Hub account that owns
+# <user>/task-server) and DOCKERHUB_TOKEN (an access token for it, not the
+# password) with this repo, so there is nothing to add under Settings → Secrets
+# and variables → Actions. ghcr.io needs no secret at all: GITHUB_TOKEN does it.
 #
 # Versions come from the commit log, so a release only happens when commits say
 # what changed — `feat:` for a minor, `fix:` for a patch, `BREAKING CHANGE:` in

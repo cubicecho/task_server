@@ -122,9 +122,9 @@ query keys it affected.
   Docker image, boots it, and waits for it to answer a GraphQL query
 - `.github/workflows/release.yml` — after CI passes on `main`, semantic-release cuts the
   release and one build pushes `latest` and the version to `ghcr.io/<owner>/<repo>` and
-  `<user>/task-server` on Docker Hub. Needs the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`
-  secrets; GHCR uses the built-in `GITHUB_TOKEN`. A `workflow_dispatch` with a version
-  publishes the images without cutting a release
+  `<user>/task-server` on Docker Hub. `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` come
+  from the organisation's shared secrets; GHCR uses the built-in `GITHUB_TOKEN`. A
+  `workflow_dispatch` with a version publishes the images without cutting a release
 
 ## Finding code
 
