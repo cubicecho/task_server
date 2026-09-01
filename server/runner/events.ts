@@ -12,6 +12,15 @@
 
 /** How many events one run keeps for a watcher that joins late. A chatty run loses its oldest. */
 const MAX_EVENTS = 1000;
+/**
+ * How far past the cap the backlog is allowed to run before it is trimmed.
+ *
+ * Dropping the oldest event on every push means shifting a thousand-element array tens of
+ * thousands of times over a reasoning run — the one thing in here that would ever show up in a
+ * profile. Trimming in batches makes it a few dozen splices instead, at the cost of the backlog
+ * sometimes being a little longer than the cap, which nothing depends on.
+ */
+const TRIM_SLACK = 256;
 /** How long a finished run stays readable, for a watcher that arrives just after the end. */
 const RETAIN_MS = 60_000;
 
@@ -87,7 +96,9 @@ export function emit(runId: string, input: RunEventInput): RunEvent {
     ...input,
   };
   stream.events.push(event);
-  if (stream.events.length > MAX_EVENTS) stream.events.shift();
+  if (stream.events.length > MAX_EVENTS + TRIM_SLACK) {
+    stream.events.splice(0, stream.events.length - MAX_EVENTS);
+  }
   for (const listener of stream.listeners) listener(event);
 
   if (event.kind === "done") {

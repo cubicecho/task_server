@@ -16,31 +16,30 @@ import type { CatalogServer } from "./mcp.ts";
  */
 export const LOAD_TOOLS = "load_tools";
 
-export function loadToolsDefinition(): OpenAI.ChatCompletionTool {
-  return {
-    type: "function",
-    function: {
-      name: LOAD_TOOLS,
-      description:
-        "Load the full definitions of tools listed in the tool catalogue so you can call them. " +
-        "Pass the exact names you need, or a trailing wildcard like `server__group__*` for a " +
-        "whole group. The tools become callable on your next step — load them, then call them. " +
-        "Load only what the task actually needs.",
-      parameters: {
-        type: "object",
-        properties: {
-          names: {
-            type: "array",
-            items: { type: "string" },
-            description: "Tool names from the catalogue. Wildcards may end with `*`.",
-          },
+/** One object for the life of the process — the agent loop asks for it on every iteration. */
+export const LOAD_TOOLS_DEFINITION: OpenAI.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: LOAD_TOOLS,
+    description:
+      "Load the full definitions of tools listed in the tool catalogue so you can call them. " +
+      "Pass the exact names you need, or a trailing wildcard like `server__group__*` for a " +
+      "whole group. The tools become callable on your next step — load them, then call them. " +
+      "Load only what the task actually needs.",
+    parameters: {
+      type: "object",
+      properties: {
+        names: {
+          type: "array",
+          items: { type: "string" },
+          description: "Tool names from the catalogue. Wildcards may end with `*`.",
         },
-        required: ["names"],
-        additionalProperties: false,
       },
+      required: ["names"],
+      additionalProperties: false,
     },
-  };
-}
+  },
+};
 
 /** The catalogue as a plain grouped listing of names, loaded ones marked. */
 export function catalogList(catalog: CatalogServer[], loaded?: ReadonlySet<string>): string {
@@ -103,6 +102,8 @@ export function expandNames(requested: string[], catalog: CatalogServer[]) {
   const unknown: string[] = [];
   const overBroad: { name: string; hits: string[] }[] = [];
 
+  const known = new Set(all.map((tool) => tool.name));
+
   const resolve = (name: string): string[] => {
     if (name.endsWith("*")) {
       const stem = name.slice(0, -1);
@@ -110,8 +111,7 @@ export function expandNames(requested: string[], catalog: CatalogServer[]) {
       if (direct.length) return direct.map((tool) => tool.name);
       return all.filter((tool) => tool.name.includes(`__${stem}`)).map((tool) => tool.name);
     }
-    const exact = all.filter((tool) => tool.name === name);
-    if (exact.length) return exact.map((tool) => tool.name);
+    if (known.has(name)) return [name];
     const suffix = all.filter((tool) => tool.name.endsWith(`__${name}`));
     return suffix.length === 1 ? [suffix[0].name] : [];
   };
@@ -156,7 +156,7 @@ export function loadResult(
 }
 
 export const inCatalog = (catalog: CatalogServer[], name: string) =>
-  flatten(catalog).some((tool) => tool.name === name);
+  catalog.some((server) => server.tools.some((tool) => tool.name === name));
 
 /** `load_tools` arguments, defensively — a model may send a bare string or a nested object. */
 export function requestedNames(args: Record<string, unknown>): string[] {

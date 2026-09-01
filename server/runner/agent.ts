@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { Settings } from "../db/schema.ts";
+import { errorMessage } from "../errors.ts";
 import type { RunEventInput } from "./events.ts";
 import { getClient } from "./llm.ts";
 import { type CatalogServer, mcp } from "./mcp.ts";
@@ -10,8 +11,8 @@ import {
   expandNames,
   inCatalog,
   LOAD_TOOLS,
+  LOAD_TOOLS_DEFINITION,
   loadResult,
-  loadToolsDefinition,
   PRESELECT_SYSTEM,
   preselectInput,
   preselection,
@@ -237,7 +238,7 @@ export async function runAgent({
       routed
         ? mcp.tools(preselected)
         : onDemand
-          ? [loadToolsDefinition(), ...mcp.tools([...loaded])]
+          ? [LOAD_TOOLS_DEFINITION, ...mcp.tools([...loaded])]
           : mcp.tools(),
     );
 
@@ -259,7 +260,7 @@ export async function runAgent({
     try {
       step = await streamStep(client, request(), { signal, onEvent, produced });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = errorMessage(error);
       // Nothing is retried once the server has started answering: the tokens are already out,
       // and a second attempt would say everything twice. Both of these fail before that.
       if (produced.any) throw error;
@@ -315,7 +316,7 @@ export async function runAgent({
           content = await mcp.call(name, args);
         }
       } catch (error) {
-        content = error instanceof Error ? error.message : String(error);
+        content = errorMessage(error);
         ok = false;
       }
       // `load_tools` is recorded alongside the real calls: the run history is what the task

@@ -13,9 +13,26 @@ export async function loadSettings(): Promise<Settings> {
 export const resolveApiKey = (config: Settings) =>
   config.apiKey || process.env.OPENAI_API_KEY || "";
 
-/** The SDK insists on a non-empty key even where the server will not look at it. */
-export const getClient = (config: Settings) =>
-  new OpenAI({ baseURL: config.baseUrl, apiKey: resolveApiKey(config) || "task-server" });
+/**
+ * The client for the configured endpoint, made once and kept.
+ *
+ * The SDK holds its own connection pool, and a run makes a request per tool iteration on top of
+ * whatever side tasks it asks for — building a fresh client for each of them throws that pool
+ * away every time. Settings are editable at runtime, so the endpoint and the key are the key:
+ * change either and the next call gets a new client.
+ *
+ * The SDK insists on a non-empty key even where the server will not look at it.
+ */
+let current: { key: string; client: OpenAI } | undefined;
+
+export function getClient(config: Settings): OpenAI {
+  const apiKey = resolveApiKey(config) || "task-server";
+  const key = `${config.baseUrl}\u0000${apiKey}`;
+  if (current?.key !== key) {
+    current = { key, client: new OpenAI({ baseURL: config.baseUrl, apiKey }) };
+  }
+  return current.client;
+}
 
 export async function listModels(): Promise<string[]> {
   const { data } = await getClient(await loadSettings()).models.list();

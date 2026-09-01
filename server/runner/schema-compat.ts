@@ -26,8 +26,8 @@ const LOOKAROUND = /\(\?<?[=!]/;
 const PRIMITIVES = new Set(["object", "string", "number", "integer", "boolean", "array", "null"]);
 const EMPTY_OBJECT = () => ({ type: "object", properties: {} });
 
-/** Keys whose value is itself a schema. */
-const SCHEMA_KEYS = [
+/** Keys whose value is a schema, or a list of them — several are spelled both ways. */
+const SCHEMA_KEYS = new Set([
   "items",
   "additionalProperties",
   "not",
@@ -36,11 +36,13 @@ const SCHEMA_KEYS = [
   "else",
   "contains",
   "propertyNames",
-];
+  "anyOf",
+  "oneOf",
+  "allOf",
+  "prefixItems",
+]);
 /** Keys whose value is a name -> schema map. */
-const SCHEMA_MAPS = ["properties", "patternProperties", "$defs", "definitions"];
-/** Keys whose value is a list of schemas. */
-const SCHEMA_LISTS = ["anyOf", "oneOf", "allOf", "prefixItems"];
+const SCHEMA_MAPS = new Set(["properties", "patternProperties", "$defs", "definitions"]);
 
 /**
  * Coerces one schema position. Malformed MCP output sometimes puts a bare type name where a
@@ -66,11 +68,9 @@ function normalize(node: Schema): Schema {
       if (concrete.length === 1) out.type = concrete[0];
       else if (concrete.length > 1) out.anyOf = concrete.map((name) => ({ type: name }));
       else out.type = "null";
-    } else if (SCHEMA_KEYS.includes(key)) {
+    } else if (SCHEMA_KEYS.has(key)) {
       out[key] = Array.isArray(value) ? value.map(asSchema) : asSchema(value);
-    } else if (SCHEMA_LISTS.includes(key)) {
-      out[key] = Array.isArray(value) ? value.map(asSchema) : asSchema(value);
-    } else if (SCHEMA_MAPS.includes(key) && isObject(value)) {
+    } else if (SCHEMA_MAPS.has(key) && isObject(value)) {
       out[key] = Object.fromEntries(
         Object.entries(value).map(([name, sub]) => [name, asSchema(sub)]),
       );
@@ -132,8 +132,24 @@ const mapTools = (
       : tool,
   );
 
+/**
+ * Cached against the tool object rather than recomputed.
+ *
+ * The agent loop rebuilds its tool array on every iteration of every step, and normalising a
+ * couple of dozen MCP schemas is the only walk in a run that is neither a request nor a query.
+ * The pool hands out the same definition objects for the life of a connection, so identity is
+ * exactly the right key: a reconnect makes new ones and they are normalised again.
+ */
+const sanitized = new WeakMap<OpenAI.ChatCompletionTool, OpenAI.ChatCompletionTool>();
+
 export const sanitizeTools = (tools: OpenAI.ChatCompletionTool[]) =>
-  mapTools(tools, sanitizeParameters);
+  tools.map((tool) => {
+    const hit = sanitized.get(tool);
+    if (hit) return hit;
+    const [clean] = mapTools([tool], sanitizeParameters);
+    sanitized.set(tool, clean);
+    return clean;
+  });
 
 /**
  * The retry shape: llama.cpp's converter rejects regex escape classes (`\d`, `\w`, `\s`) in
