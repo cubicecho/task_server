@@ -77,6 +77,15 @@ the run history attached. Over the API it is one mutation, `setTaskSteps(taskId:
 which validates and writes the whole tree in a single transaction and refuses while the task is
 running.
 
+That mutation takes the tree nested — a decision carries its arms in `branches` — while `steps`
+reads it back flat, as rows carrying `parentId` and `branch`. The two are not each other's
+inverse, and the gap has a sharp edge worth knowing about before you write a client: those two
+columns are not input fields, so a read handed straight back is refused, and a read handed back
+with the unrecognised keys stripped out is *accepted* and arrives entirely at the top level,
+which leaves each decision holding its `cases` with nothing under them. Nothing on the server
+can tell that apart from a flow that was meant to be flat, so the `set_task_steps` tool
+description says it outright and `tests/mcp-endpoint.test.ts` pins that it still does.
+
 ## Watching a run
 
 A run row is a before and an after. Everything in between — the thinking, the tool the model

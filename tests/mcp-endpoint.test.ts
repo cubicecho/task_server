@@ -322,3 +322,58 @@ test("marks only the tools that actually destroy something", async () => {
   // Reads stay reads.
   expect(named("tasks")?.readOnlyHint).toBe(true);
 });
+
+test("a flow is written nested and read back flat, and says so", async () => {
+  const { createTask } = await call("create_task", {
+    values: { name: "roundtrip", prompt: "p", model: "m" },
+  });
+  const taskId = (createTask as { id: string }).id;
+
+  await call("set_task_steps", {
+    taskId,
+    steps: [
+      { kind: "agent", name: "look", prompt: "look" },
+      {
+        kind: "decision",
+        name: "pick",
+        prompt: "?",
+        cases: ["yes", "no"],
+        branches: [{ case: "yes", steps: [{ kind: "agent", name: "doit", prompt: "do" }] }],
+      },
+    ],
+  });
+
+  const { steps } = await call("steps", { where: { taskId: { eq: taskId } } });
+  const rows = steps as Record<string, unknown>[];
+  const under = rows.find((row) => row.name === "doit");
+  expect(under?.parentId).toBe(rows.find((row) => row.name === "pick")?.id);
+  expect(under?.branch).toBe("yes");
+
+  // The shape `steps` hands back is not the shape this takes. Sending it as-is is refused, which
+  // is the safe half.
+  const asRead = await raw("set_task_steps", { taskId, steps: rows });
+  expect(asRead.isError).toBe(true);
+  expect(asRead.text).toContain("parentId");
+
+  // Stripping the unrecognised keys is the obvious next move and the dangerous one: it is
+  // accepted, and the tree collapses — `doit` leaves the `yes` arm and becomes a sibling that
+  // now runs unconditionally. Nothing server-side can tell that apart from a flow meant to be
+  // flat, so the tool description is what has to carry the warning. It is asserted below.
+  const pruned = rows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    name: row.name,
+    prompt: row.prompt,
+    cases: row.cases,
+  }));
+  const { setTaskSteps } = await call("set_task_steps", { taskId, steps: pruned });
+  const flattened = setTaskSteps as Record<string, unknown>[];
+  expect(flattened.every((row) => row.parentId === null && row.branch === "")).toBe(true);
+
+  const { tools } = await client.listTools();
+  const described = tools.find((tool) => tool.name === "set_task_steps")?.description ?? "";
+  expect(described).toContain("branches");
+  expect(described).toMatch(/silently loses the arms/);
+
+  await call("delete_task_single", { where: { id: { eq: taskId } } });
+});
