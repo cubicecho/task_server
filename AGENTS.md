@@ -136,6 +136,9 @@ query keys it affected.
   wrapped at 80
 - Run `npm run lint`, `npm run typecheck` and `npm test` before every commit
 - Branch for the work; `main` is what CI and release watch
+- **Never rebase — merge.** To bring `main` into a branch, `git merge origin/main`. Rebasing
+  rewrites commits other checkouts and worktrees may already have, and this repo is worked on
+  from several at once; a merge commit records what actually happened instead
 
 ## CI / release
 
