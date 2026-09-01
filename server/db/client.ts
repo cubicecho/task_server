@@ -51,8 +51,6 @@ export const db = pool
       relations,
     }) as unknown as ReturnType<typeof drizzleNode<typeof relations>>);
 
-export type Db = typeof db;
-
 /**
  * Applies the generated migrations under `drizzle/`.
  *

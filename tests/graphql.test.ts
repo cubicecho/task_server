@@ -219,3 +219,35 @@ test("the api key is write-only", async () => {
   const { setApiKey } = await run(`mutation { setApiKey(apiKey: "sk-test") }`);
   expect(setApiKey).toBe(true);
 });
+
+test("an expression the scheduler cannot read is refused, not stored", async () => {
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "hourly", prompt: "check" }) { id } }`,
+  );
+
+  const rejected = await graphql({
+    schema,
+    source: `mutation Create($taskId: String!) {
+       createTrigger(values: { taskId: $taskId, cron: "every tuesday" }) { id }
+     }`,
+    variableValues: { taskId: task.id },
+  });
+  expect(rejected.errors?.[0].message).toMatch(/not a cron expression/);
+
+  // Refused before the insert, rather than accepted and skipped at the next sync — which is
+  // what it would look like from here either way if the check ran in the scheduler.
+  const { triggers } = await run(
+    `query T($id: String!) { triggers(where: { taskId: { eq: $id } }) { id } }`,
+    { id: task.id },
+  );
+  expect(triggers).toEqual([]);
+
+  // An event trigger has no schedule, and its empty expression is not a broken one.
+  const { createTrigger: event } = await run(
+    `mutation Create($taskId: String!) {
+       createTrigger(values: { taskId: $taskId, kind: event, event: "deploy" }) { id kind }
+     }`,
+    { taskId: task.id },
+  );
+  expect(event.kind).toBe("event");
+});

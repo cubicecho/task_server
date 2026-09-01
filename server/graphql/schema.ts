@@ -19,7 +19,7 @@ import { fold, history, type RunEvent, watch } from "../runner/events.ts";
 import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
-import { state as scheduleState, syncSoon } from "../scheduler/cron.ts";
+import { isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
 import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
 
 /**
@@ -73,12 +73,49 @@ const { entities } = buildSchema(db, {
           "This run is still going. Stop it first, then delete it.",
         ),
     },
-    triggers: () => syncSoon(),
+    triggers: {
+      // An expression node-cron will not take is caught here rather than at the next sync,
+      // where it is a line in a log nobody is reading and a trigger that quietly never fires.
+      before: ({ args }) => refuseBadCron(args),
+      after: () => syncSoon(),
+    },
     mcpServers: () => {
       void mcp.sync().catch((error) => console.error("[mcp] sync failed:", error));
     },
   },
 });
+
+/**
+ * Refuses a write that would store a cron expression node-cron cannot parse.
+ *
+ * The scheduler is the only thing that ever reads the column, and it can do nothing with a bad
+ * expression but log and skip it — so the trigger sits in the table looking armed and never
+ * fires. Every mutation shape the generated CRUD offers puts the values somewhere different,
+ * hence the sweep: `values` for a create, `set` for an update, and `updates[].set` for the
+ * many-row form.
+ *
+ * An empty expression is left alone. That is an `event` trigger, which has no schedule.
+ */
+function refuseBadCron(args: unknown) {
+  const arg = args as
+    | { values?: unknown; set?: unknown; updates?: { set?: unknown }[] }
+    | undefined;
+  const candidates = [
+    ...(Array.isArray(arg?.values) ? arg.values : [arg?.values]),
+    arg?.set,
+    ...(arg?.updates ?? []).map((update) => update?.set),
+  ];
+
+  for (const candidate of candidates) {
+    const cron = (candidate as { cron?: unknown } | undefined)?.cron;
+    if (typeof cron !== "string" || !cron.trim()) continue;
+    if (!isValidCron(cron)) {
+      throw new GraphQLError(`"${cron}" is not a cron expression this scheduler can read.`, {
+        extensions: { code: "BAD_CRON" },
+      });
+    }
+  }
+}
 
 /**
  * Refuses a delete that would pull the ground out from under a run in flight — a task whose
