@@ -75,6 +75,12 @@ nothing hand-writes DDL any more. Never edit a migration that has shipped; gener
 `pg` pool or a PGlite instance, and hands out one `db` under one set of types. Nothing above
 `server/db/` should branch on it.
 
+It also claims the data directory, because PGlite does not: two processes on one directory both
+open it and then stop seeing each other's writes. A pid in `<store>.lock` refuses the second
+one, takes over a lock whose holder is gone, and does nothing at all for a `postgres://` URL or
+`memory://`. It cannot see across a pid namespace, so a container sharing the bind-mounted
+`./data` with a host process is still on its own — that case is what `DATABASE_URL` is for.
+
 **Hand-written GraphQL fields go in `server/graphql/`**, beside the generated entities:
 `models`, `mcpStatus`, `schedule`, `runEvents` on the query side; `runTask`, `stopTask`,
 `reconnectMcp`, `setApiKey` on the mutation side. Give every one of them a `description` — it
