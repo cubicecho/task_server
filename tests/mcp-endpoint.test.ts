@@ -136,14 +136,12 @@ test("answers the whole transport, not just the calls", async () => {
   // A client that opens the notification stream, or asks to end its session, must meet the
   // transport rather than Express's 404 — which would read as "wrong URL" instead of "nothing
   // to say". Nothing is ever sent on this stream: the endpoint is stateless.
-  const stream = new AbortController();
-  const opened = await fetch(endpoint, {
-    headers: { accept: "text/event-stream" },
-    signal: stream.signal,
-  });
+  const opened = await fetch(endpoint, { headers: { accept: "text/event-stream" } });
   expect(opened.status).toBe(200);
   expect(opened.headers.get("content-type")).toContain("text/event-stream");
-  stream.abort();
+  // Cancelled rather than aborted: aborting the request rejects the body stream nobody is
+  // reading, and an unhandled rejection there takes the whole vitest worker down with it.
+  await opened.body?.cancel();
 
   expect((await fetch(endpoint, { method: "DELETE" })).status).toBe(200);
 
