@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { type ScheduledTask, schedule, validate } from "node-cron";
+import { errorMessage } from "../../shared/errors.ts";
 import { db } from "../db/client.ts";
 import { tasks, triggers } from "../db/schema.ts";
-import { runTask } from "../runner/run.ts";
+import { fireTask } from "../runner/run.ts";
 
 export const isValidCron = (expression: string) => validate(expression);
 
@@ -78,7 +79,12 @@ export async function sync() {
     const task = schedule(
       row.cron,
       () => {
-        void runTask(row.taskId, row.id);
+        // Nothing is waiting on a tick, so everything it comes to has to be written down where
+        // it can be found later: the run row for a run, a `skipped` row for a task that was
+        // still busy, and the log for the failures that leave no row at all.
+        void fireTask(row.taskId, row.id).catch((error: unknown) => {
+          console.error(`[cron] trigger ${row.id}: ${errorMessage(error)}`);
+        });
       },
       {
         name: row.id,

@@ -19,13 +19,16 @@ beforeAll(async () => {
   db = (await import("../server/db/client.ts")).db;
   tables = await import("../server/db/schema.ts");
 
-  // The dispatcher's job is deciding *what* to run; running it is `runTask`'s, and it would
-  // need a model. Recording the calls is the whole of what this needs from it.
+  // The dispatcher's job is deciding *what* to run; running it is `fireTask`'s, and it would
+  // need a model. Recording the calls is the whole of what this needs from it — along with the
+  // shape of the answer, since telling a started run from a skipped one is what is under test.
+  // `fireTask` recording the skip itself is `fire-task.test.ts`, against a real database.
   started = [];
   vi.doMock("../server/runner/run.ts", () => ({
-    runTask: (taskId: string) => {
+    fireTask: (taskId: string) => {
       started.push(taskId);
-      return Promise.resolve({ id: `run-${taskId}` });
+      const run = { id: `run-${taskId}` };
+      return Promise.resolve({ started: true, run, done: Promise.resolve(run) });
     },
   }));
 
@@ -69,7 +72,7 @@ async function task(name: string, trigger: Partial<typeof tables.triggers.$infer
 test("an id nothing is listening for is still answered", async () => {
   const { status, body } = await post("nobody-home");
   expect(status).toBe(200);
-  expect(body).toEqual({ ok: true, event: "nobody-home", dispatched: [] });
+  expect(body).toEqual({ ok: true, event: "nobody-home", dispatched: [], refused: [] });
   expect(started).toEqual([]);
 });
 
@@ -77,7 +80,7 @@ test("an id a trigger is listening for runs its task", async () => {
   const row = await task("deploy");
 
   const { body } = await post("deploy");
-  expect(body.dispatched).toEqual([{ taskId: row.id, name: "deploy" }]);
+  expect(body.dispatched).toEqual([{ taskId: row.id, name: "deploy", runId: `run-${row.id}` }]);
   expect(started).toEqual([row.id]);
 });
 
@@ -118,17 +121,59 @@ test("a disabled trigger, a disabled task and a cron trigger are all left alone"
   expect(started).toEqual([]);
 });
 
-test("a task that refuses to start does not fail the webhook", async () => {
+test("a task that was already running is reported as refused, not dispatched", async () => {
   const row = await task("already-running");
   const run = await import("../server/runner/run.ts");
+  const reason = 'task "already-running" is already running';
   const refuse = vi
-    .spyOn(run, "runTask")
-    .mockRejectedValueOnce(new Error('task "already-running" is already running'));
+    .spyOn(run, "fireTask")
+    .mockResolvedValueOnce({ started: false, run: { id: "run-skipped" } as never, reason });
 
   const { status, body } = await post("already-running");
   expect(status).toBe(200);
   expect(refuse).toHaveBeenCalledWith(row.id, expect.any(String));
-  // The sender is told what was dispatched; whether the run then started is the run's story.
-  expect(body.dispatched).toEqual([{ taskId: row.id, name: "already-running" }]);
+
+  // Nothing started, so nothing may be reported as dispatched — and the skip has a run id of
+  // its own, so what the sender is told and what the Runs page shows are one delivery.
+  expect(body.dispatched).toEqual([]);
+  expect(body.refused).toEqual([
+    { taskId: row.id, name: "already-running", runId: "run-skipped", reason },
+  ]);
   refuse.mockRestore();
+});
+
+test("a refusal for one task does not stop another listening for the same id", async () => {
+  const stuck = await task("shared");
+  const [ok] = await db.insert(tables.tasks).values({ name: "ok", prompt: "yes" }).returning();
+  await db.insert(tables.triggers).values({ taskId: ok.id, kind: "event", event: "shared" });
+
+  const run = await import("../server/runner/run.ts");
+  const real = run.fireTask as unknown as (id: string) => Promise<unknown>;
+  const refuse = vi.spyOn(run, "fireTask").mockImplementation(((id: string) => {
+    return id === stuck.id
+      ? Promise.resolve({ started: false, run: { id: "run-skipped" }, reason: "already running" })
+      : real(id);
+  }) as typeof run.fireTask);
+
+  const { body } = await post("shared");
+  expect(body.dispatched).toEqual([{ taskId: ok.id, name: "ok", runId: `run-${ok.id}` }]);
+  expect(body.refused).toEqual([
+    { taskId: stuck.id, name: "shared", runId: "run-skipped", reason: "already running" },
+  ]);
+  refuse.mockRestore();
+});
+
+test("a task that has gone missing is logged, and named in neither list", async () => {
+  const row = await task("vanished");
+  const run = await import("../server/runner/run.ts");
+  const gone = vi
+    .spyOn(run, "fireTask")
+    .mockRejectedValueOnce(new Error(`no task with id ${row.id}`));
+
+  const { status, body } = await post("vanished");
+  expect(status).toBe(200);
+  // Nothing ran and nothing was written down, so there is nothing honest to report either way.
+  expect(body).toEqual({ ok: true, event: "vanished", dispatched: [], refused: [] });
+  expect(gone).toHaveBeenCalled();
+  gone.mockRestore();
 });

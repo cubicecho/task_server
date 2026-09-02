@@ -16,6 +16,7 @@ import {
   UpdateTaskDocument,
 } from "@/gql/graphql";
 import { request } from "@/lib/gql";
+import { STATUS_VARIANT } from "@/lib/run-status";
 
 export function TasksRoute() {
   const queryClient = useQueryClient();
@@ -98,6 +99,10 @@ export function TasksRoute() {
       ) : null}
 
       {tasks.data?.tasks.map((task) => {
+        // The last run that actually ran: a `skipped` row is a trigger firing at this very
+        // task while it was busy, so taking it as the latest would hide the run it collided
+        // with — the running one, whose Stop button is the thing someone wants at that moment.
+        // Skips are the Runs page's to show.
         const lastRun = task.runs[0];
         // `runTask` resolves only when the run finishes, so the mutation being in flight is a
         // run in flight too — before the poll has had a chance to see the row.
@@ -110,15 +115,7 @@ export function TasksRoute() {
                 <div className="flex items-center gap-2">
                   <h2 className="truncate font-medium">{task.name}</h2>
                   {lastRun ? (
-                    <Badge
-                      variant={
-                        lastRun.status === "error"
-                          ? "destructive"
-                          : lastRun.status === "running"
-                            ? "outline"
-                            : "secondary"
-                      }
-                    >
+                    <Badge variant={STATUS_VARIANT[lastRun.status] ?? "secondary"}>
                       {lastRun.status}
                     </Badge>
                   ) : null}

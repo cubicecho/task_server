@@ -76,7 +76,7 @@ const { entities } = buildSchema(db, {
     triggers: {
       // A trigger nothing can fire — a bad expression, or a webhook with no address — is
       // caught here rather than becoming a row that looks armed and silently never runs.
-      before: ({ operation, args }) => refuseUnfireableTrigger(operation, args),
+      before: ({ operation, args }) => vetTrigger(operation, args),
       after: () => syncSoon(),
     },
     mcpServers: () => {
@@ -86,7 +86,8 @@ const { entities } = buildSchema(db, {
 });
 
 /**
- * Refuses a write that would store a trigger nothing can ever fire.
+ * Trims a trigger's addresses into the shape they are matched in, and refuses a write that
+ * would store one nothing can ever fire.
  *
  * Both failures look identical from the outside — a row in the table, `enabled: true`, that
  * never runs — because the two things that read these columns can only skip what they cannot
@@ -97,13 +98,19 @@ const { entities } = buildSchema(db, {
  * Every mutation shape the generated CRUD offers puts the values somewhere different, hence the
  * sweep: `values` for a create, `set` for an update, and `updates[].set` for the many-row form.
  *
+ * The sweep also trims, so that the value judged here is the value stored. Both columns are
+ * matched against exactly — a webhook id against the URL path, an expression against the
+ * scheduler's parser — and a padded one is unfireable in the same silent way an empty one is,
+ * while looking far more plausible in the table. Judging a trimmed copy and storing the padded
+ * original is what let `" deploy "` through a guard whose whole purpose is to stop it.
+ *
  * Each kind is only held to its own column when the write says which kind it is. An update that
  * touches one other column says nothing about the row it lands on, and an empty `cron` is what
  * an event trigger's unused column holds — so neither is read as a mistake on its own. A create
  * always says: `kind` defaults to `cron`, so values with no `kind` are a cron trigger, and one
  * with no expression is the same silent nothing as an event trigger with no address.
  */
-function refuseUnfireableTrigger(operation: string, args: unknown) {
+function vetTrigger(operation: string, args: unknown) {
   const arg = args as
     | { values?: unknown; set?: unknown; updates?: { set?: unknown }[] }
     | undefined;
@@ -116,6 +123,11 @@ function refuseUnfireableTrigger(operation: string, args: unknown) {
   for (const raw of candidates) {
     const candidate = raw as { cron?: unknown; kind?: unknown; event?: unknown } | undefined;
     if (!candidate) continue;
+
+    for (const column of ["cron", "event"] as const) {
+      const value = candidate[column];
+      if (typeof value === "string") candidate[column] = value.trim();
+    }
 
     const { cron } = candidate;
     if (typeof cron === "string" && cron.trim() && !isValidCron(cron)) {
@@ -386,7 +398,11 @@ export const schema = new GraphQLSchema({
         description:
           "Runs a task immediately and resolves with the finished run — which means it does " +
           "not answer until the run is over, and a long task is a long call. Read `runEvents` " +
-          "meanwhile to watch it, or `stopTask` to call it off.",
+          "meanwhile to watch it, or `stopTask` to call it off.\n\n" +
+          "Finished is not the same as succeeded. A run that failed comes back the same way a " +
+          "run that worked does, and `status` is what separates them — `ok`, `error` with the " +
+          "reason in `error`, or `stopped` if it was called off. Only a task that could not be " +
+          "started at all is an error here, and the usual reason is that it is already running.",
         args: { taskId: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: (_source, args: { taskId: string }) => runTask(args.taskId),
       },
