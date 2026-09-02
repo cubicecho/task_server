@@ -398,7 +398,11 @@ export const schema = new GraphQLSchema({
         description:
           "Runs a task immediately and resolves with the finished run — which means it does " +
           "not answer until the run is over, and a long task is a long call. Read `runEvents` " +
-          "meanwhile to watch it, or `stopTask` to call it off.",
+          "meanwhile to watch it, or `stopTask` to call it off.\n\n" +
+          "Finished is not the same as succeeded. A run that failed comes back the same way a " +
+          "run that worked does, and `status` is what separates them — `ok`, `error` with the " +
+          "reason in `error`, or `stopped` if it was called off. Only a task that could not be " +
+          "started at all is an error here, and the usual reason is that it is already running.",
         args: { taskId: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: (_source, args: { taskId: string }) => runTask(args.taskId),
       },

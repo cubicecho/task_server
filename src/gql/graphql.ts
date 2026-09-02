@@ -587,7 +587,11 @@ export type Mutation = {
   deleteTriggerSingle?: Maybe<Trigger>;
   /** Tears down and rebuilds every MCP connection. */
   reconnectMcp: Array<McpServerStatus>;
-  /** Runs a task immediately and resolves with the finished run — which means it does not answer until the run is over, and a long task is a long call. Read `runEvents` meanwhile to watch it, or `stopTask` to call it off. */
+  /**
+   * Runs a task immediately and resolves with the finished run — which means it does not answer until the run is over, and a long task is a long call. Read `runEvents` meanwhile to watch it, or `stopTask` to call it off.
+   *
+   * Finished is not the same as succeeded. A run that failed comes back the same way a run that worked does, and `status` is what separates them — `ok`, `error` with the reason in `error`, or `stopped` if it was called off. Only a task that could not be started at all is an error here, and the usual reason is that it is already running.
+   */
   runTask: Run;
   /** Writes the API key. Separate from updateSetting because the key is write-only: it is excluded from the Setting type so it can never be read back out. */
   setApiKey: Scalars['Boolean']['output'];
