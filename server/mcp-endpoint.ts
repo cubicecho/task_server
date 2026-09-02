@@ -79,25 +79,64 @@ const HINTS: Record<string, string> = {
   delete_task_single:
     "Deletes one task, its triggers and its history. Refused while the task is running: stop " +
     "it first with `stop_task`.",
+  // The generated description below already says that a flow is written whole and that ids sent
+  // back are kept, so this says neither. What it does keep is the warning, because the failure
+  // it describes is silent: an agent that loses a decision's arms gets no error to learn from.
   set_task_steps:
     "Gives a task the steps that run after its own prompt, replacing whatever it had. Steps " +
     "run in order and each one sees what the ones before it produced; a step of kind " +
     "`decision` picks one of its own `cases`, and what runs next is that arm's entry in " +
-    '`branches` — `{ case: "yes", steps: [ … ] }` — nested as deep as you like. An empty ' +
-    "list leaves the task with just its prompt.\n\n" +
-    "The flow is written nested and read back flat, so a read is not an input. `steps` and " +
-    "this tool's own result describe the tree with `parentId` and `branch`, which are not " +
-    "fields you can send: handing those rows back is refused, and handing them back with the " +
-    "unrecognised keys stripped out is worse — it is accepted, and every step arrives at the " +
-    "top level, so a decision keeps its `cases` and silently loses the arms under them. Build " +
-    "the nesting yourself, and send each existing step's `id` back inside it so the run " +
-    "history stays pointed at it.",
+    '`branches` — `{ case: "yes", steps: [ … ] }` — nested as deep as you like.\n\n' +
+    "Read back, the same flow is flat: `parentId` and `branch` describe the tree and are not " +
+    "fields you can send. A client that strips them rather than failing sends every step at " +
+    "the top level, where a decision keeps its `cases` and silently loses the arms under " +
+    "them — so build the nesting yourself.",
   create_trigger:
     "Starts a task on something: `kind: cron` with a five-field expression such as " +
     "`0 9 * * *`, and a `timezone` if it should not follow the server's; or `kind: event` " +
     "with an `event` id, which then fires whenever a `POST` reaches `/webhooks/<that id>`.",
   delete_trigger_single: "Unschedules a task without deleting the task itself.",
 };
+
+/**
+ * The tool name for every root field that becomes one, so prose can name a neighbour and be
+ * right on both surfaces.
+ *
+ * A description is written once and read twice. `schema.graphql` calls the field `runEvents`
+ * and an MCP client calls the tool `run_events`, and a cross-reference spelled for one surface
+ * is a name the other cannot find — an agent told to "read `runEvents`" has no such tool and
+ * nothing to match it against. Rewriting is better than picking one spelling by hand, which is
+ * a thing to remember every time a description mentions another field.
+ *
+ * Only names that are actually tools here are touched, so a result field keeps its own
+ * spelling: `startedAt` and `blockedBy` are columns an agent will read back in JSON, not tools.
+ */
+const TOOL_NAMES = new Map(
+  TOOLS.map((path) => {
+    const field = path.slice(path.indexOf(".") + 1);
+    return [field, field.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)];
+  }),
+);
+
+/** Where the driver's generated footer starts — everything above it is prose. */
+const FOOTER = /\n\nGraphQL (query|mutation): /;
+
+/**
+ * Respells backticked root-field names as tool names, in the prose only.
+ *
+ * The footer under it says "GraphQL mutation: `runTask` → `Run!`", which is a claim about the
+ * schema rather than about the tool surface, and stays true by staying untouched.
+ */
+function useToolNames(description: string): string {
+  const cut = description.search(FOOTER);
+  const prose = cut === -1 ? description : description.slice(0, cut);
+  const footer = cut === -1 ? "" : description.slice(cut);
+  const renamed = prose.replace(/`(\w+)`/g, (match, name) => {
+    const tool = TOOL_NAMES.get(name);
+    return tool ? `\`${tool}\`` : match;
+  });
+  return renamed + footer;
+}
 
 /**
  * The two mutations a naming convention cannot classify, and what they actually do.
@@ -144,10 +183,20 @@ export const mcpHandler = createHttpHandler({
   // all — into a listing of tasks, which is a lot of context for a question about names.
   selectionDepth: 1,
   mutationHints: "byName",
+  // `nullBranches: "never"` is left alone deliberately. It drops the explicit `null` branch from
+  // every nullable argument and takes a fifth off the listing — ~420 kB to ~337 kB, which is
+  // real money against a surface that is almost all generated filter types. It was tried and
+  // reverted: the branch it removes is not only how a mutation says "clear this", it is how a
+  // client says "this optional is absent", and a model writing `"cases": null` beside the fields
+  // it did fill in is doing the ordinary thing. That becomes a validation error with the option
+  // on, which is a worse tool surface than a larger one. Per-argument, it would be right on
+  // `where` and wrong on the mutation inputs; the option is per-server, so it stays off.
   decorate: (descriptor) => ({
-    description: HINTS[descriptor.name]
-      ? `${HINTS[descriptor.name]}\n\n${descriptor.description}`
-      : descriptor.description,
+    description: useToolNames(
+      HINTS[descriptor.name]
+        ? `${HINTS[descriptor.name]}\n\n${descriptor.description}`
+        : descriptor.description,
+    ),
     ...(WRITE_HINTS[descriptor.name] ? { annotations: WRITE_HINTS[descriptor.name] } : {}),
   }),
 });

@@ -116,6 +116,12 @@ generated description does not say enough. The driver renames after it filters, 
 list names GraphQL fields in camelCase while `HINTS` — and the client — sees the snake_case tool
 name: `Mutation.createTask` is the tool `create_task`.
 
+Descriptions are written once and read twice, so a cross-reference between fields is respelled
+on the way out: `useToolNames` rewrites a backticked root-field name to its tool name in the
+prose, leaving the driver's generated footer — which is a claim about the GraphQL schema — as it
+found it. Write `runEvents` in a description under `server/graphql/` and an agent reads
+`run_events`. Only names that are tools here are touched, so result columns keep their spelling.
+
 **The tool listing has a size test, and it is not incidental.** The generated relation filters
 recurse between tables, and written out as JSON Schema rather than named as SDL they once made
 the listing 18 MB — more than a model will read, and it arrives before any call. graphql-mcp
