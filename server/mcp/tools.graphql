@@ -46,10 +46,19 @@ fragment RunSummary on Run {
 #
 # A task with no triggers never fires on its own. A task with `enabled: false` fires from
 # nothing, trigger or not, though `run_task` will still run it by hand.
+#
+# `lastRunThatExecuted` skips `skipped` rows, so it is not necessarily the newest run. Ask
+# `list_runs` when you need the latest firing whatever its outcome.
 query list_tasks {
   tasks(orderBy: { updatedAt: { direction: desc, priority: 1 } }) {
     ...TaskSummary
-    runs(
+    # Aliased, because the filter under it is not what an unqualified `runs` would promise: a
+    # `skipped` row never executed, so it is excluded here to answer "how did this task last
+    # do?". Read as "the latest run" it is wrong whenever a skip is the newest row — which is
+    # exactly when a caller most wants to know. The alias is the whole fix: the shape of the
+    # answer now says which question it answered, and `list_runs` remains the one to ask for
+    # true chronological order.
+    lastRunThatExecuted: runs(
       limit: 1
       where: { status: { ne: skipped } }
       orderBy: { startedAt: { direction: desc, priority: 1 } }
@@ -240,6 +249,12 @@ mutation delete_task($id: String!) {
 
 # Gives a task the steps that run after its own prompt, replacing whatever flow it had. Steps
 # run in order and each one sees what the ones before it produced.
+#
+# A step is `kind: agent` — one prompt, run as a turn — or `kind: decision`. Those two are the
+# whole of it, and `agent` is the default when you send no `kind` at all. Every step needs a
+# `prompt`, a decision included: a decision is a full agent run whose answer has to land on one
+# of its `cases`, so the prompt is the work it does to decide and `cases` is only the shape of
+# the answer.
 #
 # A step of kind `decision` picks one of its own `cases`, and what runs next is that arm's
 # entry in `branches` — `{ case: "yes", steps: [ … ] }` — nested as deep as you like. Send an

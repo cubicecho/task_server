@@ -88,7 +88,11 @@ const HINTS: Record<string, string> = {
   // back are kept, so this says neither. What it does keep is the warning, because the failure
   // it describes is silent: an agent that loses a decision's arms gets no error to learn from.
   set_task_steps:
-    "Gives a task the steps that run after its own prompt, replacing whatever it had. Steps " +
+    "Gives a task the steps that run after its own prompt, replacing whatever it had. A step " +
+    "is `kind: agent` — one prompt, run as a turn, and the default when you send no `kind` — " +
+    "or `kind: decision`; there is no third. Every step needs a `prompt`, a decision " +
+    "included.\n\n" +
+    "Steps " +
     "run in order and each one sees what the ones before it produced; a step of kind " +
     "`decision` picks one of its own `cases`, and what runs next is that arm's entry in " +
     '`branches` — `{ case: "yes", steps: [ … ] }` — nested as deep as you like.\n\n' +
