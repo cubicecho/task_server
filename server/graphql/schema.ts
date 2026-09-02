@@ -273,7 +273,14 @@ const StepInputType: GraphQLInputObjectType = new GraphQLInputObjectType({
       type: GraphQLString,
       description: "What this step is called, in the run history and in `{{steps.<name>}}`.",
     },
-    prompt: { type: new GraphQLNonNull(GraphQLString) },
+    prompt: {
+      type: new GraphQLNonNull(GraphQLString),
+      description:
+        "What this step is asked to do. Required on a `decision` too, and for the same reason: " +
+        "a decision is a full agent run — reading the mail, checking the build — that has to " +
+        "end on one of its `cases`. The prompt is the work it does to decide, and `cases` is " +
+        "only the shape of the answer, so a decision with no prompt has nothing to go on.",
+    },
     cases: {
       type: new GraphQLList(new GraphQLNonNull(GraphQLString)),
       description: "Decision only, and required for one: the arms it may choose between.",

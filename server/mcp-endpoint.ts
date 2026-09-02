@@ -56,13 +56,18 @@ const HINTS: Record<string, string> = {
     "`skipped`, and a finished run carries its output, its error, the tools it called and what " +
     "it cost. A `skipped` run never started: its trigger fired while the run named by " +
     "`blockedBy` still held the task, and `attempts` counts how many firings it stands for. " +
-    "Order by `startedAt` descending for the latest; filter by `taskId` for one task's history.",
+    "Filter by `taskId` for one task's history, and order by " +
+    "`{ startedAt: { direction: desc, priority: 1 } }` for the latest — every generated " +
+    "`orderBy` takes that shape, and `priority` is required rather than defaulted.",
+  // Ordering is spelled out here as well as under `runs`, because a flow read in the wrong order
+  // is not an error — it is a tree reassembled wrongly, and the caller has no way to notice.
   steps:
     "What a task does after its own prompt: a flat list of the steps of its flow. `parentId` " +
     "and `branch` say which decision's arm a step sits in — both empty for the task's own " +
     "top-level sequence — and `position` orders it among its siblings. Filter by `taskId`. " +
     "This is the reading shape only; `set_task_steps` takes the same tree nested, and these " +
-    "rows cannot be handed back to it as they stand.",
+    "rows cannot be handed back to it as they stand. Order by " +
+    "`{ position: { direction: asc, priority: 1 } }`; `priority` is required.",
   run_steps:
     "The path one run actually took, a row per step it executed, in `position` order. On a " +
     "decision, `branch` is the arm it chose — which is the thing you open a run to find out. " +
