@@ -13,8 +13,19 @@ query Runs($taskId: String) {
     error
     toolCalls
     totalTokens
+    payload
+    attempts
+    blockedBy
     task {
       name
+    }
+    # Why this run happened. Null covers both a hand-started run and one whose trigger has since
+    # been deleted, so the UI says nothing rather than guessing which.
+    trigger {
+      id
+      kind
+      cron
+      event
     }
     steps(orderBy: { position: { direction: asc, priority: 1 } }) {
       id

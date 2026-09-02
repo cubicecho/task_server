@@ -1100,6 +1100,8 @@ export type QueryTriggersGroupByArgs = {
 };
 
 export type Run = {
+  attempts: Scalars['Int']['output'];
+  blockedBy?: Maybe<Scalars['String']['output']>;
   completionTokens: Scalars['Int']['output'];
   /** Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query. */
   cursor?: Maybe<Scalars['String']['output']>;
@@ -1107,6 +1109,7 @@ export type Run = {
   finishedAt?: Maybe<Scalars['DateTime']['output']>;
   id: Scalars['String']['output'];
   output: Scalars['String']['output'];
+  payload?: Maybe<Scalars['JSON']['output']>;
   promptTokens: Scalars['Int']['output'];
   startedAt: Scalars['DateTime']['output'];
   status: RunsStatusEnum;
@@ -1156,18 +1159,22 @@ export type RunAggregate = {
 };
 
 export type RunAvgAggregate = {
+  attempts?: Maybe<Scalars['Float']['output']>;
   completionTokens?: Maybe<Scalars['Float']['output']>;
   promptTokens?: Maybe<Scalars['Float']['output']>;
   totalTokens?: Maybe<Scalars['Float']['output']>;
 };
 
 export type RunAvgHaving = {
+  attempts?: InputMaybe<AggregateNumberFilter>;
   completionTokens?: InputMaybe<AggregateNumberFilter>;
   promptTokens?: InputMaybe<AggregateNumberFilter>;
   totalTokens?: InputMaybe<AggregateNumberFilter>;
 };
 
 export type RunCountDistinctAggregate = {
+  attempts: Scalars['Int']['output'];
+  blockedBy: Scalars['Int']['output'];
   completionTokens: Scalars['Int']['output'];
   error: Scalars['Int']['output'];
   finishedAt: Scalars['Int']['output'];
@@ -1182,6 +1189,8 @@ export type RunCountDistinctAggregate = {
 };
 
 export type RunCountDistinctHaving = {
+  attempts?: InputMaybe<AggregateNumberFilter>;
+  blockedBy?: InputMaybe<AggregateNumberFilter>;
   completionTokens?: InputMaybe<AggregateNumberFilter>;
   error?: InputMaybe<AggregateNumberFilter>;
   finishedAt?: InputMaybe<AggregateNumberFilter>;
@@ -1196,11 +1205,14 @@ export type RunCountDistinctHaving = {
 };
 
 export type RunCountNonNullAggregate = {
+  attempts: Scalars['Int']['output'];
+  blockedBy: Scalars['Int']['output'];
   completionTokens: Scalars['Int']['output'];
   error: Scalars['Int']['output'];
   finishedAt: Scalars['Int']['output'];
   id: Scalars['Int']['output'];
   output: Scalars['Int']['output'];
+  payload: Scalars['Int']['output'];
   promptTokens: Scalars['Int']['output'];
   startedAt: Scalars['Int']['output'];
   status: Scalars['Int']['output'];
@@ -1211,11 +1223,14 @@ export type RunCountNonNullAggregate = {
 };
 
 export type RunCountNonNullHaving = {
+  attempts?: InputMaybe<AggregateNumberFilter>;
+  blockedBy?: InputMaybe<AggregateNumberFilter>;
   completionTokens?: InputMaybe<AggregateNumberFilter>;
   error?: InputMaybe<AggregateNumberFilter>;
   finishedAt?: InputMaybe<AggregateNumberFilter>;
   id?: InputMaybe<AggregateNumberFilter>;
   output?: InputMaybe<AggregateNumberFilter>;
+  payload?: InputMaybe<AggregateNumberFilter>;
   promptTokens?: InputMaybe<AggregateNumberFilter>;
   startedAt?: InputMaybe<AggregateNumberFilter>;
   status?: InputMaybe<AggregateNumberFilter>;
@@ -1227,11 +1242,14 @@ export type RunCountNonNullHaving = {
 
 /** Columns of Run that a query can be made distinct on */
 export enum RunDistinctColumn {
+  Attempts = 'attempts',
+  BlockedBy = 'blockedBy',
   CompletionTokens = 'completionTokens',
   Error = 'error',
   FinishedAt = 'finishedAt',
   Id = 'id',
   Output = 'output',
+  Payload = 'payload',
   PromptTokens = 'promptTokens',
   StartedAt = 'startedAt',
   Status = 'status',
@@ -1264,11 +1282,14 @@ export type RunFilters = {
   NOT?: InputMaybe<RunFilters>;
   /** At least one branch matches; ANDed with any sibling fields */
   OR?: InputMaybe<Array<RunFilters>>;
+  attempts?: InputMaybe<IntFilter>;
+  blockedBy?: InputMaybe<StringFilter>;
   completionTokens?: InputMaybe<IntFilter>;
   error?: InputMaybe<StringFilter>;
   finishedAt?: InputMaybe<DateTimeFilter>;
   id?: InputMaybe<StringFilter>;
   output?: InputMaybe<StringFilter>;
+  payload?: InputMaybe<JsonFilter>;
   promptTokens?: InputMaybe<IntFilter>;
   startedAt?: InputMaybe<DateTimeFilter>;
   status?: InputMaybe<RunsStatusEnumFilter>;
@@ -1296,6 +1317,8 @@ export type RunGroupBy = {
 
 /** Columns of Run that a query can group by */
 export enum RunGroupByColumn {
+  Attempts = 'attempts',
+  BlockedBy = 'blockedBy',
   CompletionTokens = 'completionTokens',
   Error = 'error',
   FinishedAt = 'finishedAt',
@@ -1311,6 +1334,8 @@ export enum RunGroupByColumn {
 
 /** The grouped column values of one Run group. A column the query did not group by is null. */
 export type RunGroupKeys = {
+  attempts?: Maybe<Scalars['Int']['output']>;
+  blockedBy?: Maybe<Scalars['String']['output']>;
   completionTokens?: Maybe<Scalars['Int']['output']>;
   error?: Maybe<Scalars['String']['output']>;
   finishedAt?: Maybe<Scalars['DateTime']['output']>;
@@ -1346,6 +1371,8 @@ export type RunListRelationFilter = {
 };
 
 export type RunMaxAggregate = {
+  attempts?: Maybe<Scalars['Int']['output']>;
+  blockedBy?: Maybe<Scalars['String']['output']>;
   completionTokens?: Maybe<Scalars['Int']['output']>;
   error?: Maybe<Scalars['String']['output']>;
   finishedAt?: Maybe<Scalars['DateTime']['output']>;
@@ -1360,12 +1387,15 @@ export type RunMaxAggregate = {
 };
 
 export type RunMaxHaving = {
+  attempts?: InputMaybe<AggregateNumberFilter>;
   completionTokens?: InputMaybe<AggregateNumberFilter>;
   promptTokens?: InputMaybe<AggregateNumberFilter>;
   totalTokens?: InputMaybe<AggregateNumberFilter>;
 };
 
 export type RunMinAggregate = {
+  attempts?: Maybe<Scalars['Int']['output']>;
+  blockedBy?: Maybe<Scalars['String']['output']>;
   completionTokens?: Maybe<Scalars['Int']['output']>;
   error?: Maybe<Scalars['String']['output']>;
   finishedAt?: Maybe<Scalars['DateTime']['output']>;
@@ -1380,17 +1410,21 @@ export type RunMinAggregate = {
 };
 
 export type RunMinHaving = {
+  attempts?: InputMaybe<AggregateNumberFilter>;
   completionTokens?: InputMaybe<AggregateNumberFilter>;
   promptTokens?: InputMaybe<AggregateNumberFilter>;
   totalTokens?: InputMaybe<AggregateNumberFilter>;
 };
 
 export type RunOrderBy = {
+  attempts?: InputMaybe<InnerOrder>;
+  blockedBy?: InputMaybe<InnerOrder>;
   completionTokens?: InputMaybe<InnerOrder>;
   error?: InputMaybe<InnerOrder>;
   finishedAt?: InputMaybe<InnerOrder>;
   id?: InputMaybe<InnerOrder>;
   output?: InputMaybe<InnerOrder>;
+  payload?: InputMaybe<InnerOrder>;
   promptTokens?: InputMaybe<InnerOrder>;
   startedAt?: InputMaybe<InnerOrder>;
   status?: InputMaybe<InnerOrder>;
@@ -1810,12 +1844,14 @@ export type RunStepsStatusEnumFilter = {
 };
 
 export type RunSumAggregate = {
+  attempts?: Maybe<Scalars['Float']['output']>;
   completionTokens?: Maybe<Scalars['Float']['output']>;
   promptTokens?: Maybe<Scalars['Float']['output']>;
   totalTokens?: Maybe<Scalars['Float']['output']>;
 };
 
 export type RunSumHaving = {
+  attempts?: InputMaybe<AggregateNumberFilter>;
   completionTokens?: InputMaybe<AggregateNumberFilter>;
   promptTokens?: InputMaybe<AggregateNumberFilter>;
   totalTokens?: InputMaybe<AggregateNumberFilter>;
@@ -3323,7 +3359,7 @@ export type RunsQueryVariables = Exact<{
 }>;
 
 
-export type RunsQuery = { runs: Array<{ id: string, taskId: string, status: RunsStatusEnum, startedAt: string, finishedAt?: string | null, output: string, error: string, toolCalls?: unknown | null, totalTokens: number, task: { name: string }, steps: Array<{ id: string, position: number, depth: number, name: string, kind: string, status: RunStepsStatusEnum, branch: string, output: string, error: string, toolCalls?: unknown | null, totalTokens: number }> }> };
+export type RunsQuery = { runs: Array<{ id: string, taskId: string, status: RunsStatusEnum, startedAt: string, finishedAt?: string | null, output: string, error: string, toolCalls?: unknown | null, totalTokens: number, payload?: unknown | null, attempts: number, blockedBy?: string | null, task: { name: string }, trigger?: { id: string, kind: TriggersKindEnum, cron: string, event: string } | null, steps: Array<{ id: string, position: number, depth: number, name: string, kind: string, status: RunStepsStatusEnum, branch: string, output: string, error: string, toolCalls?: unknown | null, totalTokens: number }> }> };
 
 export type DeleteRunMutationVariables = Exact<{
   id: Scalars['String']['input'];
@@ -3456,7 +3492,7 @@ export const UpdateMcpServerDocument = {"kind":"Document","definitions":[{"kind"
 export const DeleteMcpServerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteMcpServer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteMcpServerSingle"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<DeleteMcpServerMutation, DeleteMcpServerMutationVariables>;
 export const TestMcpServerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"TestMcpServer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"config"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"McpConnectionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"testMcpServer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"config"},"value":{"kind":"Variable","name":{"kind":"Name","value":"config"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"ok"}},{"kind":"Field","name":{"kind":"Name","value":"error"}},{"kind":"Field","name":{"kind":"Name","value":"tools"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}}]}}]}}]}}]} as unknown as DocumentNode<TestMcpServerMutation, TestMcpServerMutationVariables>;
 export const ReconnectMcpDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ReconnectMcp"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reconnectMcp"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"error"}}]}}]}}]} as unknown as DocumentNode<ReconnectMcpMutation, ReconnectMcpMutationVariables>;
-export const RunsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Runs"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"runs"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"100"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"taskId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"startedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"direction"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"ObjectField","name":{"kind":"Name","value":"priority"},"value":{"kind":"IntValue","value":"1"}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"taskId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"startedAt"}},{"kind":"Field","name":{"kind":"Name","value":"finishedAt"}},{"kind":"Field","name":{"kind":"Name","value":"output"}},{"kind":"Field","name":{"kind":"Name","value":"error"}},{"kind":"Field","name":{"kind":"Name","value":"toolCalls"}},{"kind":"Field","name":{"kind":"Name","value":"totalTokens"}},{"kind":"Field","name":{"kind":"Name","value":"task"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"steps"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"position"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"direction"},"value":{"kind":"EnumValue","value":"asc"}},{"kind":"ObjectField","name":{"kind":"Name","value":"priority"},"value":{"kind":"IntValue","value":"1"}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"depth"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"branch"}},{"kind":"Field","name":{"kind":"Name","value":"output"}},{"kind":"Field","name":{"kind":"Name","value":"error"}},{"kind":"Field","name":{"kind":"Name","value":"toolCalls"}},{"kind":"Field","name":{"kind":"Name","value":"totalTokens"}}]}}]}}]}}]} as unknown as DocumentNode<RunsQuery, RunsQueryVariables>;
+export const RunsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Runs"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"runs"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"100"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"taskId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"taskId"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"startedAt"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"direction"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"ObjectField","name":{"kind":"Name","value":"priority"},"value":{"kind":"IntValue","value":"1"}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"taskId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"startedAt"}},{"kind":"Field","name":{"kind":"Name","value":"finishedAt"}},{"kind":"Field","name":{"kind":"Name","value":"output"}},{"kind":"Field","name":{"kind":"Name","value":"error"}},{"kind":"Field","name":{"kind":"Name","value":"toolCalls"}},{"kind":"Field","name":{"kind":"Name","value":"totalTokens"}},{"kind":"Field","name":{"kind":"Name","value":"payload"}},{"kind":"Field","name":{"kind":"Name","value":"attempts"}},{"kind":"Field","name":{"kind":"Name","value":"blockedBy"}},{"kind":"Field","name":{"kind":"Name","value":"task"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"trigger"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"cron"}},{"kind":"Field","name":{"kind":"Name","value":"event"}}]}},{"kind":"Field","name":{"kind":"Name","value":"steps"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"position"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"direction"},"value":{"kind":"EnumValue","value":"asc"}},{"kind":"ObjectField","name":{"kind":"Name","value":"priority"},"value":{"kind":"IntValue","value":"1"}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"depth"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"branch"}},{"kind":"Field","name":{"kind":"Name","value":"output"}},{"kind":"Field","name":{"kind":"Name","value":"error"}},{"kind":"Field","name":{"kind":"Name","value":"toolCalls"}},{"kind":"Field","name":{"kind":"Name","value":"totalTokens"}}]}}]}}]}}]} as unknown as DocumentNode<RunsQuery, RunsQueryVariables>;
 export const DeleteRunDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteRun"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteRunSingle"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eq"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<DeleteRunMutation, DeleteRunMutationVariables>;
 export const RunEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"RunEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"runId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"runEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"seq"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"step"}},{"kind":"Field","name":{"kind":"Name","value":"ok"}}]}}]}}]} as unknown as DocumentNode<RunEventsSubscription, RunEventsSubscriptionVariables>;
 export const SettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"settings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"baseUrl"}},{"kind":"Field","name":{"kind":"Name","value":"model"}},{"kind":"Field","name":{"kind":"Name","value":"systemPrompt"}},{"kind":"Field","name":{"kind":"Name","value":"maxTokens"}},{"kind":"Field","name":{"kind":"Name","value":"temperature"}},{"kind":"Field","name":{"kind":"Name","value":"maxToolIterations"}},{"kind":"Field","name":{"kind":"Name","value":"toolDiscovery"}},{"kind":"Field","name":{"kind":"Name","value":"toolSelectModel"}},{"kind":"Field","name":{"kind":"Name","value":"requestTimeoutSeconds"}},{"kind":"Field","name":{"kind":"Name","value":"maxRetries"}},{"kind":"Field","name":{"kind":"Name","value":"runRetentionDays"}}]}}]}}]} as unknown as DocumentNode<SettingsQuery, SettingsQueryVariables>;

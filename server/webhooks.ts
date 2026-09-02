@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import express, { type Express, type Request, type Response } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { errorMessage } from "../shared/errors.ts";
 import { db } from "./db/client.ts";
 import { tasks, triggers } from "./db/schema.ts";
@@ -17,14 +17,13 @@ import { fireTask } from "./runner/run.ts";
  * The id is the whole of the address and the whole of the authentication. See `AGENTS.md`.
  */
 export function mountWebhooks(app: Express) {
-  // Scoped to this route rather than the app: yoga and the MCP handler read their own bodies,
-  // and a parser in front of them would take the stream they are waiting for. Parsed and then
-  // ignored — the id is the whole of the message today — but a sender that posts JSON should
-  // get an answer rather than a hang, and the body is where an event's payload will go.
-  app.post("/webhooks/:id", express.json({ limit: "1mb" }), (req: Request, res: Response) => {
+  app.post("/webhooks/:id", readBody, (req: Request, res: Response) => {
     // Express 5 types a wildcard param as `string | string[]`; this one is a single segment.
     const event = String(req.params.id);
-    void dispatch(event)
+    // `req.body` is `any`, and everything downstream of here wants it to be `unknown`: the
+    // server never looks inside it, it only stores it and prints it into a prompt.
+    const payload: unknown = req.body ?? null;
+    void dispatch(event, payload)
       .then((outcome) => res.json({ ok: true, event, ...outcome }))
       .catch((error: unknown) => {
         // Reaching here means the lookup itself failed — the database, not any one task. The
@@ -33,6 +32,29 @@ export function mountWebhooks(app: Express) {
         console.error(`[webhook] ${event}:`, error);
         res.json({ ok: true, event, dispatched: [], refused: [] });
       });
+  });
+}
+
+const parseJson = express.json({ limit: "1mb" });
+
+/**
+ * The body, when there is one that can be read, and nothing when there is not.
+ *
+ * Scoped to this route rather than the app: yoga and the MCP handler read their own bodies, and
+ * a parser in front of them would take the stream they are waiting for.
+ *
+ * `express.json` hands a body it cannot parse — malformed JSON, or more than the limit — to
+ * Express's error handler, which is a 500 in this app and a 400 in a bare router. Either would
+ * tell a sender its delivery failed when the id arrived perfectly well, and this route answers
+ * 200 to everything. So the failure is logged and the request goes on with no payload, which is
+ * what `{{event}}` renders as. A body is an argument to the event, never a condition of it.
+ */
+function readBody(req: Request, res: Response, next: NextFunction) {
+  parseJson(req, res, (error?: unknown) => {
+    if (error) {
+      console.error(`[webhook] ${String(req.params.id)}: unreadable body: ${errorMessage(error)}`);
+    }
+    next();
   });
 }
 
@@ -60,8 +82,14 @@ type Refused = { taskId: string; name: string; runId: string; reason: string };
  *
  * Started one at a time, not in parallel: two triggers on one task are two attempts at the same
  * `inFlight` entry, and sequencing them means the second is refused rather than racing.
+ *
+ * The payload goes to every task listening for the id, and is kept on the run whether or not a
+ * run started — a skip that threw the body away would leave nothing to say what was missed.
  */
-async function dispatch(event: string): Promise<{ dispatched: Dispatched[]; refused: Refused[] }> {
+async function dispatch(
+  event: string,
+  payload: unknown,
+): Promise<{ dispatched: Dispatched[]; refused: Refused[] }> {
   if (!event) return { dispatched: [], refused: [] };
 
   const rows = await db
@@ -87,7 +115,7 @@ async function dispatch(event: string): Promise<{ dispatched: Dispatched[]; refu
 
   for (const { triggerId, taskId, name } of rows) {
     try {
-      const fired = await fireTask(taskId, triggerId);
+      const fired = await fireTask(taskId, triggerId, payload);
       if (!fired.started) {
         console.log(`[webhook] ${event}: ${name}: ${fired.reason}`);
         refused.push({ taskId, name, runId: fired.run.id, reason: fired.reason });

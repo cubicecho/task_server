@@ -12,6 +12,7 @@ let db: typeof import("../server/db/client.ts").db;
 let tables: typeof import("../server/db/schema.ts");
 let app: express.Express;
 let started: string[];
+let payloads: unknown[];
 
 beforeAll(async () => {
   const { ensureSchema } = await import("../server/db/migrate.ts");
@@ -24,9 +25,11 @@ beforeAll(async () => {
   // shape of the answer, since telling a started run from a skipped one is what is under test.
   // `fireTask` recording the skip itself is `fire-task.test.ts`, against a real database.
   started = [];
+  payloads = [];
   vi.doMock("../server/runner/run.ts", () => ({
-    fireTask: (taskId: string) => {
+    fireTask: (taskId: string, _triggerId?: string, payload?: unknown) => {
       started.push(taskId);
+      payloads.push(payload);
       const run = { id: `run-${taskId}` };
       return Promise.resolve({ started: true, run, done: Promise.resolve(run) });
     },
@@ -39,21 +42,31 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   started.length = 0;
+  payloads.length = 0;
   await db.delete(tables.triggers);
   await db.delete(tables.tasks);
 });
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-/** Drives the router over a real socket, so the route matching is the real thing too. */
-async function post(id: string): Promise<{ status: number; body: Record<string, unknown> }> {
+/**
+ * Drives the router over a real socket, so the route matching is the real thing too.
+ *
+ * `body` is sent verbatim rather than encoded, so a test can post something that is not JSON at
+ * all and see what the route makes of it.
+ */
+async function post(
+  id: string,
+  body = JSON.stringify({ hello: "world" }),
+  headers: Record<string, string> = { "content-type": "application/json" },
+): Promise<{ status: number; body: Record<string, unknown> }> {
   const server = app.listen(0);
   try {
     const { port } = server.address() as { port: number };
     const response = await fetch(`http://127.0.0.1:${port}/webhooks/${id}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ hello: "world" }),
+      headers,
+      body,
     });
     return { status: response.status, body: await response.json() };
   } finally {
@@ -131,7 +144,7 @@ test("a task that was already running is reported as refused, not dispatched", a
 
   const { status, body } = await post("already-running");
   expect(status).toBe(200);
-  expect(refuse).toHaveBeenCalledWith(row.id, expect.any(String));
+  expect(refuse).toHaveBeenCalledWith(row.id, expect.any(String), { hello: "world" });
 
   // Nothing started, so nothing may be reported as dispatched — and the skip has a run id of
   // its own, so what the sender is told and what the Runs page shows are one delivery.
@@ -148,12 +161,12 @@ test("a refusal for one task does not stop another listening for the same id", a
   await db.insert(tables.triggers).values({ taskId: ok.id, kind: "event", event: "shared" });
 
   const run = await import("../server/runner/run.ts");
-  const real = run.fireTask as unknown as (id: string) => Promise<unknown>;
-  const refuse = vi.spyOn(run, "fireTask").mockImplementation(((id: string) => {
-    return id === stuck.id
+  const real = run.fireTask;
+  const refuse = vi.spyOn(run, "fireTask").mockImplementation(((...args: unknown[]) => {
+    return args[0] === stuck.id
       ? Promise.resolve({ started: false, run: { id: "run-skipped" }, reason: "already running" })
-      : real(id);
-  }) as typeof run.fireTask);
+      : (real as (...rest: unknown[]) => unknown)(...args);
+  }) as unknown as typeof run.fireTask);
 
   const { body } = await post("shared");
   expect(body.dispatched).toEqual([{ taskId: ok.id, name: "ok", runId: `run-${ok.id}` }]);
@@ -176,4 +189,38 @@ test("a task that has gone missing is logged, and named in neither list", async 
   expect(body).toEqual({ ok: true, event: "vanished", dispatched: [], refused: [] });
   expect(gone).toHaveBeenCalled();
   gone.mockRestore();
+});
+
+test("the body is handed to every task listening for the id", async () => {
+  await task("payload");
+  const [second] = await db.insert(tables.tasks).values({ name: "two", prompt: "x" }).returning();
+  await db.insert(tables.triggers).values({ taskId: second.id, kind: "event", event: "payload" });
+
+  await post("payload", JSON.stringify({ ref: "refs/heads/main", count: 3 }));
+  expect(started.length).toBe(2);
+  expect(payloads).toEqual([
+    { ref: "refs/heads/main", count: 3 },
+    { ref: "refs/heads/main", count: 3 },
+  ]);
+});
+
+test("a body that will not parse is a delivery with no payload, not a failure", async () => {
+  const row = await task("broken-body");
+
+  // Declared as JSON and then not JSON: the parser rejects it, and the route may not turn that
+  // into a non-200 — the id arrived, which is the whole of the message.
+  const { status, body } = await post("broken-body", "{not json at all");
+  expect(status).toBe(200);
+  expect(body.dispatched).toEqual([
+    { taskId: row.id, name: "broken-body", runId: `run-${row.id}` },
+  ]);
+  expect(payloads).toEqual([null]);
+});
+
+test("a body that is not JSON at all still fires, with nothing in it", async () => {
+  await task("no-content-type");
+
+  const { status } = await post("no-content-type", "ping", { "content-type": "text/plain" });
+  expect(status).toBe(200);
+  expect(payloads).toEqual([null]);
 });

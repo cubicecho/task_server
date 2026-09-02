@@ -70,6 +70,12 @@ step before it — or `none`. Where the prompt itself contains `{{previous}}` or
 `{{steps.<name>}}`, the output goes exactly there and no preamble is added, so
 `write {{previous}} to ~/notes/errors.md` puts the data where the sentence needs it.
 
+`{{event}}` is the third of them and behaves differently: it is the body of the webhook that
+started the run, pretty-printed, and it is not step context — so placing it says nothing about
+where the earlier outputs go and does not suppress the preamble. A prompt may ask for both. In
+a run no webhook started, or one whose body could not be read, it renders as
+`(this run has no event payload)`. See **Webhooks**.
+
 Flows are capped at 64 executed steps and 8 levels of nesting per run, which is what stops a
 mis-parented tree from running away. Edit one on a task's page, either as cards or as YAML —
 the two are the same tree, and the text tab keeps step ids, so a round trip through it leaves
@@ -108,6 +114,16 @@ A run's status is `running`, then one of `ok`, `error` or `stopped` — and `ski
 that never ran at all, which is what a trigger firing at a task that was already running leaves
 behind. Only `error` is a failure; the other three are outlined rather than coloured on the
 **Runs** page for that reason.
+
+A skipped row names the run it collided with in `blockedBy`, and counts the firings it stands
+for in `attempts`: a sender posting faster than the task runs meets the same wall over and over,
+and each of those bumps the existing row rather than adding another. Three hundred rows saying
+one thing would bury the runs you opened the page to read.
+
+Each run also shows what started it — the cron expression, or the webhook path — where it still
+has a trigger to point at. Nothing is shown when it does not, because deleting a trigger clears
+the reference and a run started by hand is then indistinguishable from one whose reason has been
+thrown away.
 
 With several servers connected, tool definitions cost more per request than the task's own
 prompt — they are mostly JSON Schema, and every one is sent on every turn. Settings offers two
@@ -191,8 +207,26 @@ come back in the body:
 
 A post fires every enabled `event` trigger on an enabled task whose `event` matches exactly,
 and returns as soon as those runs are started rather than waiting for them to finish. Watch
-them on the **Runs** page like any other run. The body is parsed and thrown away; nothing is
-read from it yet.
+them on the **Runs** page like any other run.
+
+A JSON body is the event's payload. It is handed to every task the post fires, kept on the run
+row, shown under **Event payload** when you expand the run, and written into the prompt wherever
+it says `{{event}}`:
+
+```sh
+curl -X POST http://localhost:8787/webhooks/nightly-import \
+  -H 'content-type: application/json' -d '{"branch": "main"}'
+```
+
+```
+Summarise what changed on {{event}} and write it to ~/notes/deploys.md
+```
+
+The server never looks inside it. A body is an argument to the event and never a condition of
+it: one that is not JSON, is not declared as JSON, or is larger than 1 MB is a delivery with no
+payload, not a failed delivery, and still answers `200` and still fires the task. A skipped run
+keeps the payload too — a delivery that started nothing would otherwise leave no trace of what
+was in it.
 
 Only a task that actually started is in `dispatched`. A task already running is the refusal
 worth expecting — anything that fires faster than it runs meets it routinely — and it is named
@@ -214,6 +248,11 @@ and shows the full URL to copy; **New id** replaces it, which is how a webhook i
 old address stops matching the moment the change is saved. The id is editable if you would
 rather it read as something (`nightly-import`), at the cost of being guessable. A task can have
 several, and several tasks can share one: a post fires all of them.
+
+Every trigger, schedule and webhook alike, has its own switch beside it. Off is not deleted:
+a silenced webhook keeps its id, so it can be armed again without the sender having to be
+repointed, and a paused schedule is not one you have to remember to rebuild. The task's own
+switch overrides all of them — disabling a task disables its triggers with it.
 
 Both halves of a trigger are checked when it is written, over the UI or the API alike, because
 either mistake produces the same thing — a row that looks armed and never runs. A cron

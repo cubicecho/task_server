@@ -97,6 +97,9 @@ enum RunDistinctColumn {
   status
   startedAt
   finishedAt
+  payload
+  blockedBy
+  attempts
   output
   error
   toolCalls
@@ -453,6 +456,9 @@ type Run {
   status: RunsStatusEnum!
   startedAt: DateTime!
   finishedAt: DateTime
+  payload: JSON
+  blockedBy: String
+  attempts: Int!
   output: String!
   error: String!
   toolCalls: JSON
@@ -530,12 +536,14 @@ type RunAggregate {
 }
 
 type RunAvgAggregate {
+  attempts: Float
   promptTokens: Float
   completionTokens: Float
   totalTokens: Float
 }
 
 type RunSumAggregate {
+  attempts: Float
   promptTokens: Float
   completionTokens: Float
   totalTokens: Float
@@ -548,6 +556,8 @@ type RunMinAggregate {
   status: RunsStatusEnum
   startedAt: DateTime
   finishedAt: DateTime
+  blockedBy: String
+  attempts: Int
   output: String
   error: String
   promptTokens: Int
@@ -562,6 +572,8 @@ type RunMaxAggregate {
   status: RunsStatusEnum
   startedAt: DateTime
   finishedAt: DateTime
+  blockedBy: String
+  attempts: Int
   output: String
   error: String
   promptTokens: Int
@@ -576,6 +588,9 @@ type RunCountNonNullAggregate {
   status: Int!
   startedAt: Int!
   finishedAt: Int!
+  payload: Int!
+  blockedBy: Int!
+  attempts: Int!
   output: Int!
   error: Int!
   toolCalls: Int!
@@ -591,6 +606,8 @@ type RunCountDistinctAggregate {
   status: Int!
   startedAt: Int!
   finishedAt: Int!
+  blockedBy: Int!
+  attempts: Int!
   output: Int!
   error: Int!
   promptTokens: Int!
@@ -619,6 +636,8 @@ type RunGroupKeys {
   status: RunsStatusEnum
   startedAt: DateTime
   finishedAt: DateTime
+  blockedBy: String
+  attempts: Int
   output: String
   error: String
   promptTokens: Int
@@ -2066,6 +2085,9 @@ input RunFilters {
   status: RunsStatusEnumFilter
   startedAt: DateTimeFilter
   finishedAt: DateTimeFilter
+  payload: JSONFilter
+  blockedBy: StringFilter
+  attempts: IntFilter
   output: StringFilter
   error: StringFilter
   toolCalls: JSONFilter
@@ -2182,6 +2204,9 @@ input RunOrderBy {
   status: InnerOrder
   startedAt: InnerOrder
   finishedAt: InnerOrder
+  payload: InnerOrder
+  blockedBy: InnerOrder
+  attempts: InnerOrder
   output: InnerOrder
   error: InnerOrder
   toolCalls: InnerOrder
@@ -2209,24 +2234,28 @@ input RunHaving {
 }
 
 input RunAvgHaving {
+  attempts: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
 }
 
 input RunSumHaving {
+  attempts: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
 }
 
 input RunMinHaving {
+  attempts: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
 }
 
 input RunMaxHaving {
+  attempts: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
@@ -2239,6 +2268,9 @@ input RunCountNonNullHaving {
   status: AggregateNumberFilter
   startedAt: AggregateNumberFilter
   finishedAt: AggregateNumberFilter
+  payload: AggregateNumberFilter
+  blockedBy: AggregateNumberFilter
+  attempts: AggregateNumberFilter
   output: AggregateNumberFilter
   error: AggregateNumberFilter
   toolCalls: AggregateNumberFilter
@@ -2254,6 +2286,8 @@ input RunCountDistinctHaving {
   status: AggregateNumberFilter
   startedAt: AggregateNumberFilter
   finishedAt: AggregateNumberFilter
+  blockedBy: AggregateNumberFilter
+  attempts: AggregateNumberFilter
   output: AggregateNumberFilter
   error: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
@@ -3175,6 +3209,8 @@ enum RunGroupByColumn {
   status
   startedAt
   finishedAt
+  blockedBy
+  attempts
   output
   error
   promptTokens

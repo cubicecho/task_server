@@ -94,6 +94,13 @@ run of status `skipped` with the reason in `error`. A firing that did nothing ha
 visible as one that did, or a broken trigger and a busy one look the same. Only the busy case
 becomes a row; a missing task or an unwritable database still throws, and the caller logs.
 
+One row per collision, not per firing. A skip records the run that was in the way in
+`blockedBy`, and a second firing that meets the same trigger, task and blocking run finds that
+row and increments `attempts` rather than adding another — otherwise a sender posting faster
+than the task runs buries the history it is meant to be visible in. The row keeps the most
+recent payload of the firings it stands for, and `finishedAt` moves with them while `startedAt`
+stays at the first, so it spans the collision instead of naming a moment in the middle of it.
+
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change
 either of those belongs in a hook, not in a route handler.
@@ -128,8 +135,24 @@ reports the ones that actually started in `dispatched` and the ones that would n
 `refused`, with the reason and a `runId` for both. `startTask` is what makes that answerable:
 it settles once the run row exists, so the reply says what started without waiting for it. There
 is no signature and no secret — the id is the whole of the address, so make it unguessable if it
-matters. The body is parsed and discarded; the route mounts its own JSON parser rather than
-`app.use`, because yoga and the MCP handler read their own bodies.
+matters.
+
+The route mounts its own JSON parser rather than `app.use`, because yoga and the MCP handler
+read their own bodies, and it swallows that parser's failures instead of passing them to
+Express: malformed JSON or a body over the 1 MB limit would otherwise be a 500 here and a 400
+in a bare router, telling a sender its delivery failed when the id arrived perfectly well. A
+body is an argument to the event and never a condition of it, so an unreadable one is logged
+and the request goes on with no payload.
+
+**The payload is threaded, stored and templated.** A parsed body goes `webhooks.ts` →
+`fireTask` → `startTask` → `runFlow` → `renderPrompt`, is written to `runs.payload` on the way
+past, and appears in a prompt as `{{event}}`. It is stored because the prompt the agent saw
+depended on it, and a run that kept its output but not its input could not be read back. It is
+kept on `skipped` rows too. `{{event}}` deliberately does *not* set `renderPrompt`'s `placed`
+flag — that flag means the prompt has said where the earlier *step* context goes, and the
+webhook body says nothing about that — so a prompt can place the payload and still get its
+preamble. The server never looks inside a payload; whole-body `{{event}}` is the whole of the
+feature, and there is no `{{event.field}}` path access.
 
 **The LLM call retries only before the model has spoken.** `server/runner/agent.ts` owns the
 retry loop, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn

@@ -47,7 +47,9 @@ export async function sync() {
 
   // A disabled task disables its triggers with it: the switch on the task is the one a user
   // reaches for to stop it, and a trigger that kept firing past it would be a bug, not a
-  // feature. Event triggers are stored but nothing dispatches them yet.
+  // feature. Event triggers are left out because they are not on a clock at all — `POST
+  // /webhooks/<id>` in `server/webhooks.ts` is what dispatches those, and it applies the same
+  // two switches when it does.
   const live = rows.filter(
     (row) => row.kind === "cron" && row.enabled && row.taskEnabled && row.cron,
   );

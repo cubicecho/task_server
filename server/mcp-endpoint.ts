@@ -52,9 +52,11 @@ const HINTS: Record<string, string> = {
     "Every task on this server: its prompt, the model it runs on, and whether it is enabled. " +
     "Filter with `where: { id: { eq: … } }` for one of them.",
   runs:
-    "What happened when tasks ran — `status` is `running`, `ok`, `error` or `stopped`, and a " +
-    "finished run carries its output, its error, the tools it called and what it cost. Order " +
-    "by `startedAt` descending for the latest; filter by `taskId` for one task's history.",
+    "What happened when tasks ran — `status` is `running`, `ok`, `error`, `stopped` or " +
+    "`skipped`, and a finished run carries its output, its error, the tools it called and what " +
+    "it cost. A `skipped` run never started: its trigger fired while the run named by " +
+    "`blockedBy` still held the task, and `attempts` counts how many firings it stands for. " +
+    "Order by `startedAt` descending for the latest; filter by `taskId` for one task's history.",
   steps:
     "What a task does after its own prompt: a flat list of the steps of its flow. `parentId` " +
     "and `branch` say which decision's arm a step sits in — both empty for the task's own " +
