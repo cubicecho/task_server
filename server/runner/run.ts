@@ -44,6 +44,27 @@ export function stopTask(taskId: string): boolean {
  * with no steps is one step, which is the whole of what this used to do.
  */
 export async function runTask(taskId: string, triggerId?: string): Promise<Run> {
+  const { done } = await startTask(taskId, triggerId);
+  return await done;
+}
+
+/**
+ * Starts a task and hands back the run it created, without waiting for it to finish.
+ *
+ * The split is where the two honest answers are. Everything up to the run row is the refusal —
+ * no such task, or one already in flight — and it is known immediately. Everything after it is
+ * the run, which may take minutes. A caller that has to say what it started, rather than what it
+ * would have liked to start, needs the first without paying for the second: awaiting this
+ * settles once the run exists, and `done` carries the outcome to whoever wants it.
+ *
+ * `done` is a promise nobody is obliged to await, so it is written not to reject: every failure
+ * inside the run is recorded on the run row and comes back as a finished `Run`. Only a database
+ * that cannot write that row throws, which is why the webhook still attaches a `catch`.
+ */
+export async function startTask(
+  taskId: string,
+  triggerId?: string,
+): Promise<{ run: Run; done: Promise<Run> }> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   if (!task) throw new Error(`no task with id ${taskId}`);
   if (inFlight.has(taskId)) throw new Error(`task "${task.name}" is already running`);
@@ -58,6 +79,21 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
 
   const controller = new AbortController();
   inFlight.set(taskId, { runId: run.id, controller });
+  return { run, done: execute({ run, task, flow, controller }) };
+}
+
+/** The run itself, once `startTask` has decided there is going to be one. */
+async function execute({
+  run,
+  task,
+  flow,
+  controller,
+}: {
+  run: Run;
+  task: typeof tasks.$inferSelect;
+  flow: (typeof steps.$inferSelect)[];
+  controller: AbortController;
+}): Promise<Run> {
   // Everything the run says as it goes, for anyone watching it — see `runner/events.ts`.
   const onEvent = (event: Parameters<typeof emit>[1]) => emit(run.id, event);
   onEvent({ kind: "notice", text: `${task.name} started` });
@@ -92,7 +128,7 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
     onEvent({ kind: "done", ok: false, text: message });
     return await finish(run.id, { status: "error", error: message });
   } finally {
-    inFlight.delete(taskId);
+    inFlight.delete(task.id);
   }
 }
 

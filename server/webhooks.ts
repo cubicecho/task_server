@@ -3,7 +3,7 @@ import express, { type Express, type Request, type Response } from "express";
 import { errorMessage } from "../shared/errors.ts";
 import { db } from "./db/client.ts";
 import { tasks, triggers } from "./db/schema.ts";
-import { runTask } from "./runner/run.ts";
+import { startTask } from "./runner/run.ts";
 
 /**
  * `POST /webhooks/<id>` — the inbound half of an `event` trigger.
@@ -25,29 +25,40 @@ export function mountWebhooks(app: Express) {
     // Express 5 types a wildcard param as `string | string[]`; this one is a single segment.
     const event = String(req.params.id);
     void dispatch(event)
-      .then((dispatched) => res.json({ ok: true, event, dispatched }))
+      .then((outcome) => res.json({ ok: true, event, ...outcome }))
       .catch((error: unknown) => {
-        // A task that would not start is this server's problem, not the sender's: it has
-        // delivered the event and has nothing useful to do with the failure. It is reported
-        // here and acknowledged there.
+        // Reaching here means the lookup itself failed — the database, not any one task. The
+        // sender has delivered the event and has nothing useful to do with that, so it is
+        // reported here and acknowledged there.
         console.error(`[webhook] ${event}:`, error);
-        res.json({ ok: true, event, dispatched: [] });
+        res.json({ ok: true, event, dispatched: [], refused: [] });
       });
   });
 }
 
 /**
  * Starts every enabled task with an enabled `event` trigger for this id, and answers with what
- * it started.
+ * it started and what it would not.
  *
  * The runs are started and not waited on. A sender wants an acknowledgement, not the output of
- * an agent that may still be working several minutes from now — so the reply says which tasks
- * were dispatched, and the run itself is watchable over `runEvents` and lands in the run
- * history either way. A task already running is the one refusal worth expecting; `runTask`
- * rejects and the rejection is logged rather than delivered.
+ * an agent that may still be working several minutes from now — so `startTask` is awaited only
+ * as far as the run row, and the run itself is watchable over `runEvents` and lands in the run
+ * history either way.
+ *
+ * A task already running is the refusal worth expecting, and it goes in the reply rather than
+ * only to the log. Anything that fires faster than it runs meets it routinely, and a sender
+ * cannot tell a skipped delivery from a successful one by any other means: there is no new run
+ * to find, and `dispatched` used to name the task regardless. Reporting nothing at all would be
+ * no better — `dispatched: []` with no reason says only that something did not happen.
+ *
+ * Started one at a time, not in parallel: two triggers on one task are two attempts at the same
+ * `inFlight` entry, and sequencing them means the second is refused rather than racing.
  */
-async function dispatch(event: string): Promise<{ taskId: string; name: string }[]> {
-  if (!event) return [];
+type Dispatched = { taskId: string; name: string };
+type Refused = { taskId: string; name: string; reason: string };
+
+async function dispatch(event: string): Promise<{ dispatched: Dispatched[]; refused: Refused[] }> {
+  if (!event) return { dispatched: [], refused: [] };
 
   const rows = await db
     .select({ triggerId: triggers.id, taskId: triggers.taskId, name: tasks.name })
@@ -64,14 +75,27 @@ async function dispatch(event: string): Promise<{ taskId: string; name: string }
 
   if (!rows.length) {
     console.log(`[webhook] ${event}: nothing is listening`);
-    return [];
+    return { dispatched: [], refused: [] };
   }
 
-  for (const row of rows) {
-    void runTask(row.taskId, row.triggerId).catch((error: unknown) => {
-      const message = errorMessage(error);
-      console.error(`[webhook] ${event}: ${row.name}: ${message}`);
-    });
+  const dispatched: Dispatched[] = [];
+  const refused: Refused[] = [];
+
+  for (const { triggerId, taskId, name } of rows) {
+    try {
+      const { done } = await startTask(taskId, triggerId);
+      // The run is under way and the reply does not wait for it. Whatever it comes to is on the
+      // run row; this only catches a `done` that could not be written at all.
+      done.catch((error: unknown) => {
+        console.error(`[webhook] ${event}: ${name}: ${errorMessage(error)}`);
+      });
+      dispatched.push({ taskId, name });
+    } catch (error) {
+      const reason = errorMessage(error);
+      console.log(`[webhook] ${event}: ${name}: ${reason}`);
+      refused.push({ taskId, name, reason });
+    }
   }
-  return rows.map(({ taskId, name }) => ({ taskId, name }));
+
+  return { dispatched, refused };
 }

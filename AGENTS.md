@@ -116,10 +116,13 @@ rather than raise the bound.
 
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
 a task only when an enabled `event` trigger on an enabled task carries that exact id, and
-reports which ones it started in `dispatched`. There is no signature and no secret — the id is
-the whole of the address, so make it unguessable if it matters. The body is parsed and
-discarded; the route mounts its own JSON parser rather than `app.use`, because yoga and the
-MCP handler read their own bodies.
+reports the ones that actually started in `dispatched` and the ones that would not in
+`refused`, with the reason — a task already running is the routine case, and it leaves no run
+row for the sender to find. `startTask` is what makes that answerable: it settles once the run
+row exists, so the reply says what started without waiting for it. There is no signature and no
+secret — the id is the whole of the address, so make it unguessable if it matters. The body is
+parsed and discarded; the route mounts its own JSON parser rather than `app.use`, because yoga
+and the MCP handler read their own bodies.
 
 **The LLM call retries only before the model has spoken.** `server/runner/agent.ts` owns the
 retry loop, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn

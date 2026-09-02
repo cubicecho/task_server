@@ -170,16 +170,27 @@ curl -X POST http://localhost:8787/webhooks/nightly-import
 ```
 
 The route always answers `200`, whether or not anything was listening — a caller learns
-nothing about what exists here from the status code. What it started comes back in the body:
+nothing about what exists here from the status code. What it started, and what it would not,
+come back in the body:
 
 ```json
-{ "ok": true, "event": "nightly-import", "dispatched": [{ "taskId": "...", "name": "Import" }] }
+{
+  "ok": true,
+  "event": "nightly-import",
+  "dispatched": [{ "taskId": "...", "name": "Import" }],
+  "refused": [{ "taskId": "...", "name": "Sync", "reason": "task \"Sync\" is already running" }]
+}
 ```
 
 A post fires every enabled `event` trigger on an enabled task whose `event` matches exactly,
 and returns as soon as those runs are started rather than waiting for them to finish. Watch
 them on the **Runs** page like any other run. The body is parsed and thrown away; nothing is
 read from it yet.
+
+Only a task that actually started is in `dispatched`. A task already running is the refusal
+worth expecting — anything that fires faster than it runs meets it routinely — and it is named
+in `refused` with the reason, because a skipped delivery leaves no run row behind and a sender
+has no other way to tell it from a successful one.
 
 There is no signature, no secret, and no auth — the id is all there is, so pick one that is
 not worth guessing if it matters. This is deliberate: the server is meant to sit somewhere you

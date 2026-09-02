@@ -19,13 +19,15 @@ beforeAll(async () => {
   db = (await import("../server/db/client.ts")).db;
   tables = await import("../server/db/schema.ts");
 
-  // The dispatcher's job is deciding *what* to run; running it is `runTask`'s, and it would
-  // need a model. Recording the calls is the whole of what this needs from it.
+  // The dispatcher's job is deciding *what* to run; running it is `startTask`'s, and it would
+  // need a model. Recording the calls is the whole of what this needs from it — along with the
+  // two-part shape, since telling a started run from a refused one is the thing under test.
   started = [];
   vi.doMock("../server/runner/run.ts", () => ({
-    runTask: (taskId: string) => {
+    startTask: (taskId: string) => {
       started.push(taskId);
-      return Promise.resolve({ id: `run-${taskId}` });
+      const run = { id: `run-${taskId}` };
+      return Promise.resolve({ run, done: Promise.resolve(run) });
     },
   }));
 
@@ -69,7 +71,7 @@ async function task(name: string, trigger: Partial<typeof tables.triggers.$infer
 test("an id nothing is listening for is still answered", async () => {
   const { status, body } = await post("nobody-home");
   expect(status).toBe(200);
-  expect(body).toEqual({ ok: true, event: "nobody-home", dispatched: [] });
+  expect(body).toEqual({ ok: true, event: "nobody-home", dispatched: [], refused: [] });
   expect(started).toEqual([]);
 });
 
@@ -118,17 +120,43 @@ test("a disabled trigger, a disabled task and a cron trigger are all left alone"
   expect(started).toEqual([]);
 });
 
-test("a task that refuses to start does not fail the webhook", async () => {
+test("a task that refuses to start is reported as refused, not dispatched", async () => {
   const row = await task("already-running");
   const run = await import("../server/runner/run.ts");
   const refuse = vi
-    .spyOn(run, "runTask")
+    .spyOn(run, "startTask")
     .mockRejectedValueOnce(new Error('task "already-running" is already running'));
 
   const { status, body } = await post("already-running");
   expect(status).toBe(200);
   expect(refuse).toHaveBeenCalledWith(row.id, expect.any(String));
-  // The sender is told what was dispatched; whether the run then started is the run's story.
-  expect(body.dispatched).toEqual([{ taskId: row.id, name: "already-running" }]);
+
+  // Nothing started, so nothing may be reported as dispatched. A refusal leaves no run row
+  // behind, which is exactly why the sender has to be told here or not at all.
+  expect(body.dispatched).toEqual([]);
+  expect(body.refused).toEqual([
+    {
+      taskId: row.id,
+      name: "already-running",
+      reason: 'task "already-running" is already running',
+    },
+  ]);
+  refuse.mockRestore();
+});
+
+test("a refusal for one task does not stop another listening for the same id", async () => {
+  const stuck = await task("shared");
+  const [ok] = await db.insert(tables.tasks).values({ name: "ok", prompt: "yes" }).returning();
+  await db.insert(tables.triggers).values({ taskId: ok.id, kind: "event", event: "shared" });
+
+  const run = await import("../server/runner/run.ts");
+  const real = run.startTask as unknown as (id: string) => Promise<unknown>;
+  const refuse = vi.spyOn(run, "startTask").mockImplementation(((id: string) => {
+    return id === stuck.id ? Promise.reject(new Error("already running")) : real(id);
+  }) as typeof run.startTask);
+
+  const { body } = await post("shared");
+  expect(body.dispatched).toEqual([{ taskId: ok.id, name: "ok" }]);
+  expect(body.refused).toEqual([{ taskId: stuck.id, name: "shared", reason: "already running" }]);
   refuse.mockRestore();
 });
