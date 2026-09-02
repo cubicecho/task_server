@@ -48,9 +48,18 @@ const TOOLS = [
  * rename. The `include` list above is not: filtering happens before it, on the GraphQL field.
  */
 const HINTS: Record<string, string> = {
+  // Every arm that met this surface needed a task it knew only by name, and the `id` example was
+  // the only filter it had been shown. Each one guessed `name: { eq: … }` and each one was right,
+  // which is the kind of luck a description should not be relying on.
   tasks:
     "Every task on this server: its prompt, the model it runs on, and whether it is enabled. " +
-    "Filter with `where: { id: { eq: … } }` for one of them.",
+    "Any column filters the same way — `where: { id: { eq: … } }` for one you have the id of, " +
+    '`where: { name: { eq: "nightly digest" } }` for one you know by name. A text column takes ' +
+    "`eq`, `ne`, `contains`, `startsWith`, `endsWith` and their `i`-prefixed case-insensitive " +
+    "twins, `inArray`, `isNull`, and `AND`/`OR`/`NOT` for combining them.\n\n" +
+    "`enabled: false` on the task is the switch that dominates: it fires from nothing, and its " +
+    "triggers go on reading `enabled: true` while it does. `schedule` is where the effective " +
+    "answer lives.",
   runs:
     "What happened when tasks ran — `status` is `running`, `ok`, `error`, `stopped` or " +
     "`skipped`, and a finished run carries its output, its error, the tools it called and what " +
@@ -74,7 +83,9 @@ const HINTS: Record<string, string> = {
     "Filter by `runId`.",
   triggers:
     "What makes tasks fire: a `cron` trigger carries an expression read in its own timezone, " +
-    "an `event` trigger carries the id it answers to at `POST /webhooks/<event>`.",
+    "an `event` trigger carries the id it answers to at `POST /webhooks/<event>`.\n\n" +
+    "A trigger's own `enabled` is not the whole story — one on a disabled task still reads " +
+    "`enabled: true` and still never fires. Read `schedule` for what is actually armed.",
   create_task:
     "Adds a task. It will not fire on its own until it has a trigger — add one with " +
     "`create_trigger`, or call `run_task` to run it now.",
@@ -99,7 +110,10 @@ const HINTS: Record<string, string> = {
     "Read back, the same flow is flat: `parentId` and `branch` describe the tree and are not " +
     "fields you can send. A client that strips them rather than failing sends every step at " +
     "the top level, where a decision keeps its `cases` and silently loses the arms under " +
-    "them — so build the nesting yourself.",
+    "them — so build the nesting yourself.\n\n" +
+    "A `case` with no steps stores nothing, so an arm you sent empty and an arm you never " +
+    "mentioned read back the same. The arm is named either way by the decision's `cases`; " +
+    "there is nothing to check afterwards, and nothing has gone wrong.",
   create_trigger:
     "Starts a task on something: `kind: cron` with a five-field expression such as " +
     "`0 9 * * *`, and a `timezone` if it should not follow the server's; or `kind: event` " +

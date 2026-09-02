@@ -45,7 +45,9 @@ fragment RunSummary on Run {
 # here — ask `get_task` for one task to read those.
 #
 # A task with no triggers never fires on its own. A task with `enabled: false` fires from
-# nothing, trigger or not, though `run_task` will still run it by hand.
+# nothing, trigger or not, though `run_task` will still run it by hand. Its triggers go on
+# reading `enabled: true` while it does — that flag is the trigger's own switch, not the
+# effective answer, and `get_schedule` is what knows the difference.
 #
 # `lastRunThatExecuted` skips `skipped` rows, so it is not necessarily the newest run. Ask
 # `list_runs` when you need the latest firing whatever its outcome.
@@ -214,7 +216,8 @@ mutation create_task(
 # Edits one task. Only the arguments you send change; the rest are left as they were.
 #
 # `enabled: false` keeps a task and its history but stops it firing, which is the reversible
-# alternative to deleting it.
+# alternative to deleting it. The task's triggers still read `enabled: true` afterwards and
+# still never fire; `get_schedule` drops them, which is where to check that it took.
 mutation update_task(
   $id: String!
   $name: String
@@ -264,6 +267,10 @@ mutation delete_task($id: String!) {
 # Steps read back from `get_task` are flat, with `parentId` and `branch` instead of `branches`.
 # Those are not fields you can send: rebuild the nesting yourself, or a decision arrives with
 # its `cases` intact and its arms silently dropped.
+#
+# An arm with no steps stores nothing, so one you sent empty and one you never mentioned read
+# back alike. Either way the arm exists — it is named by the decision's `cases` — and the run
+# simply carries on after the decision. There is nothing to verify and nothing has gone wrong.
 mutation set_task_steps($taskId: String!, $steps: [StepInput!]!) {
   setTaskSteps(taskId: $taskId, steps: $steps) {
     id
