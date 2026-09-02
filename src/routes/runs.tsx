@@ -11,10 +11,24 @@ import { DeleteRunDocument, RunsDocument, type RunsQuery, StopTaskDocument } fro
 import { request } from "@/lib/gql";
 import { STATUS_VARIANT } from "@/lib/run-status";
 
-type RunStep = RunsQuery["runs"][number]["steps"][number];
+type Run = RunsQuery["runs"][number];
+type RunStep = Run["steps"][number];
 
 const duration = (from: string, to?: string | null) =>
   to ? `${((new Date(to).getTime() - new Date(from).getTime()) / 1000).toFixed(1)}s` : "running…";
+
+/**
+ * What started the run, in as few words as it takes.
+ *
+ * Nothing at all when there is no trigger: `triggerId` is cleared when a trigger is deleted, so
+ * a null there is either a hand-started run or one whose reason has been thrown away, and the
+ * page has no way to tell which. Saying "manual" would be a guess presented as a fact.
+ */
+function Provenance({ trigger }: { trigger: Run["trigger"] }) {
+  if (!trigger) return null;
+  const label = trigger.kind === "cron" ? trigger.cron : `/webhooks/${trigger.event}`;
+  return <span className="shrink-0 font-mono text-xs text-muted-foreground">{label}</span>;
+}
 
 /** Tool names as chips, red where the call failed. */
 function ToolChips({ calls }: { calls: unknown }) {
@@ -73,6 +87,24 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+/**
+ * The webhook body the run was given, which is half of why it did what it did.
+ *
+ * Collapsed by default — most of the page is output, and a payload is an input someone goes
+ * looking for rather than reads in passing.
+ */
+function Payload({ payload }: { payload: unknown }) {
+  if (payload === null || payload === undefined) return null;
+  return (
+    <details className="text-sm">
+      <summary className="cursor-pointer text-muted-foreground">Event payload</summary>
+      <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-xs">
+        {JSON.stringify(payload, null, 2)}
+      </pre>
+    </details>
   );
 }
 
@@ -144,7 +176,10 @@ export function RunsRoute() {
                     {new Date(run.startedAt).toLocaleString()}
                     {skipped ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
                     {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
+                    {/* Only worth saying when the row stands for more than the one firing. */}
+                    {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
                   </span>
+                  <Provenance trigger={run.trigger} />
                 </div>
                 <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                   {run.error || run.output || "(no output)"}
@@ -180,10 +215,15 @@ export function RunsRoute() {
                 {running ? <RunStream runId={run.id} /> : null}
                 {skipped ? (
                   <p className="text-sm text-muted-foreground">
-                    The trigger fired while this task was already running, so nothing was started.
-                    Its earlier run is the one above.
+                    {run.attempts > 1
+                      ? `The trigger fired ${run.attempts} times while this task was already running, so nothing was started.`
+                      : "The trigger fired while this task was already running, so nothing was started."}{" "}
+                    {/* Not "the run above": the list is newest first, so the run it collided
+                        with — which started before it — is below. Naming neither is safer. */}
+                    It collided with the run that was already under way.
                   </p>
                 ) : null}
+                <Payload payload={run.payload} />
                 {running || skipped ? null : run.steps.length ? (
                   <>
                     <RunSteps steps={run.steps} />

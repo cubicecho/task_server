@@ -101,10 +101,23 @@ export function buildTree(rows: Step[]): FlowNode[] {
   return roots;
 }
 
-/** `{{previous}}` and `{{steps.<name>}}`, the two things a prompt can ask for by hand. */
-const PLACEHOLDER = /\{\{\s*(previous|steps\.[^}]+?)\s*\}\}/gi;
+/** What a prompt can ask for by hand: `{{previous}}`, `{{steps.<name>}}` and `{{event}}`. */
+const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?)\s*\}\}/gi;
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * The webhook body as a prompt reads it.
+ *
+ * Pretty-printed rather than compact: the model is being asked to read it, and the indentation
+ * is what makes a nested body legible to one. Null covers both a run no webhook started and a
+ * delivery whose body could not be kept — neither has a payload, and the prompt only needs to
+ * know that it is not there.
+ */
+function renderPayload(payload: unknown): string {
+  if (payload === null || payload === undefined) return "(this run has no event payload)";
+  return JSON.stringify(payload, null, 2);
+}
 
 /**
  * The user message a step is sent: what came before it, then what it was asked to do.
@@ -113,17 +126,24 @@ const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
  * `context` mode allows. A prompt that names what it wants — "write an md file containing
  * {{previous}}" — gets the substitution instead and no preamble, because it has said where the
  * data belongs and repeating it above would only be a second copy for the model to reconcile.
+ *
+ * `{{event}}` is the exception to that: it is the webhook body, which is not step context at
+ * all, so placing it says nothing about where the earlier outputs go and does not suppress the
+ * preamble. A prompt can ask for both and get both.
  */
 export function renderPrompt(
   step: Pick<Step, "prompt" | "context">,
   context: ContextEntry[],
+  payload?: unknown,
 ): string {
   // One pass says both whether the prompt places its own context and what that reads as —
   // `test` on a global regex would leave `lastIndex` behind for the next call to trip over.
   let placed = false;
   const substituted = step.prompt.replace(PLACEHOLDER, (_match, token: string) => {
+    const key = token.toLowerCase();
+    if (key === "event") return renderPayload(payload);
     placed = true;
-    if (token.toLowerCase() === "previous") return context[context.length - 1]?.output ?? "";
+    if (key === "previous") return context[context.length - 1]?.output ?? "";
     const wanted = token.slice("steps.".length);
     const entry = context.find((item) => sameName(item.name, wanted));
     // Saying so beats substituting an empty string and leaving the model to invent the rest.
@@ -131,12 +151,14 @@ export function renderPrompt(
   });
   if (placed) return substituted;
 
+  // `substituted` from here down, not `step.prompt`: `{{event}}` leaves the preamble standing
+  // but has still been replaced, and putting the raw prompt back would undo it.
   const visible =
     step.context === "none" ? [] : step.context === "previous" ? context.slice(-1) : context;
-  if (visible.length === 0) return step.prompt;
+  if (visible.length === 0) return substituted;
 
   const earlier = visible.map((entry) => `### ${entry.name}\n\n${entry.output}`).join("\n\n");
-  return `## Earlier in this task\n\n${earlier}\n\n---\n\n${step.prompt}`;
+  return `## Earlier in this task\n\n${earlier}\n\n---\n\n${substituted}`;
 }
 
 /** The instruction that turns an ordinary agent run into an answer this can act on. */
@@ -203,6 +225,8 @@ export interface FlowOptions {
   task: Task;
   steps: Step[];
   config: Settings;
+  /** The body of the webhook that started this run, for `{{event}}`. See `renderPayload`. */
+  payload?: unknown;
   signal?: AbortSignal;
   onEvent?: (event: RunEventInput) => void;
 }
@@ -220,6 +244,7 @@ export async function runFlow({
   task,
   steps,
   config,
+  payload,
   signal,
   onEvent,
 }: FlowOptions): Promise<FlowResult> {
@@ -291,7 +316,7 @@ export async function runFlow({
           plan.kind === "decision"
             ? `${systemPrompt}\n\n${decisionInstruction(plan.cases)}`.trim()
             : systemPrompt,
-        prompt: renderPrompt(plan, context),
+        prompt: renderPrompt(plan, context, payload),
         signal,
         onEvent: emit,
       });

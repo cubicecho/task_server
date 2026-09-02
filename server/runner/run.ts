@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { errorMessage } from "../../shared/errors.ts";
 import { db } from "../db/client.ts";
 import { type Run, runs, steps, tasks } from "../db/schema.ts";
@@ -72,6 +72,7 @@ export async function runTask(taskId: string, triggerId?: string): Promise<Run> 
 export async function startTask(
   taskId: string,
   triggerId?: string,
+  payload?: unknown,
 ): Promise<{ run: Run; done: Promise<Run> }> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   if (!task) throw new Error(`no task with id ${taskId}`);
@@ -80,14 +81,16 @@ export async function startTask(
   // account of itself untrue.
   const flow = await db.select().from(steps).where(eq(steps.taskId, taskId));
 
+  // The payload is stored as well as passed on. The prompt the agent saw depended on it, so a
+  // run that kept its output and not its input could not be read back or reproduced.
   const [run] = await db
     .insert(runs)
-    .values({ taskId, triggerId: triggerId ?? null, status: "running" })
+    .values({ taskId, triggerId: triggerId ?? null, status: "running", payload: payload ?? null })
     .returning();
 
   const controller = new AbortController();
   inFlight.set(taskId, { runId: run.id, controller });
-  return { run, done: execute({ run, task, flow, controller }) };
+  return { run, done: execute({ run, task, flow, payload, controller }) };
 }
 
 /**
@@ -117,26 +120,88 @@ export type Fired =
  * Only the busy case becomes a row. A task that does not exist has nothing to hang a run off,
  * and a database that cannot be written to cannot be told about it either; both still throw, and
  * both callers log.
+ *
+ * One row per collision, not per firing. A webhook posted every second at a task that takes five
+ * minutes is one fact repeated three hundred times, and three hundred rows of it would bury the
+ * runs someone came to the page to read. So a second firing that meets the same trigger, the same
+ * task and the same run in the way finds its row and bumps `attempts` instead. The payload kept
+ * on it is the latest one, which is the delivery whoever is asking has just made.
  */
-export async function fireTask(taskId: string, triggerId?: string): Promise<Fired> {
+export async function fireTask(
+  taskId: string,
+  triggerId?: string,
+  payload?: unknown,
+): Promise<Fired> {
+  // Read before the throw can be handled: the entry is what the skip is *about*, and the run
+  // may finish and clear it at any moment after.
+  const blocking = inFlight.get(taskId)?.runId;
   try {
-    const { run, done } = await startTask(taskId, triggerId);
+    const { run, done } = await startTask(taskId, triggerId, payload);
     return { started: true, run, done };
   } catch (error) {
     if (!(error instanceof TaskBusyError)) throw error;
     const reason = errorMessage(error);
-    const [run] = await db
-      .insert(runs)
-      .values({
-        taskId,
-        triggerId: triggerId ?? null,
-        status: "skipped",
-        error: reason,
-        finishedAt: new Date(),
-      })
-      .returning();
+    const run = await recordSkip({ taskId, triggerId, payload, reason, blocking });
     return { started: false, run, reason };
   }
+}
+
+/**
+ * Writes the skip, or adds this firing to the one already standing for the same collision.
+ *
+ * Without a blocking run id there is nothing to collapse against — the run that refused this
+ * one finished between the refusal and here — so that case always writes its own row rather
+ * than guessing which earlier skip it belongs with.
+ *
+ * `finishedAt` moves to the latest firing while `startedAt` stays at the first, so the row spans
+ * the collisions it stands for instead of naming one arbitrary instant in the middle of them.
+ */
+async function recordSkip({
+  taskId,
+  triggerId,
+  payload,
+  reason,
+  blocking,
+}: {
+  taskId: string;
+  triggerId?: string;
+  payload?: unknown;
+  reason: string;
+  blocking?: string;
+}): Promise<Run> {
+  if (blocking) {
+    const [existing] = await db
+      .update(runs)
+      .set({
+        attempts: sql`${runs.attempts} + 1`,
+        payload: payload ?? null,
+        finishedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(runs.status, "skipped"),
+          eq(runs.taskId, taskId),
+          eq(runs.blockedBy, blocking),
+          triggerId ? eq(runs.triggerId, triggerId) : isNull(runs.triggerId),
+        ),
+      )
+      .returning();
+    if (existing) return existing;
+  }
+
+  const [run] = await db
+    .insert(runs)
+    .values({
+      taskId,
+      triggerId: triggerId ?? null,
+      status: "skipped",
+      error: reason,
+      payload: payload ?? null,
+      blockedBy: blocking ?? null,
+      finishedAt: new Date(),
+    })
+    .returning();
+  return run;
 }
 
 /** The run itself, once `startTask` has decided there is going to be one. */
@@ -144,11 +209,13 @@ async function execute({
   run,
   task,
   flow,
+  payload,
   controller,
 }: {
   run: Run;
   task: typeof tasks.$inferSelect;
   flow: (typeof steps.$inferSelect)[];
+  payload?: unknown;
   controller: AbortController;
 }): Promise<Run> {
   // Everything the run says as it goes, for anyone watching it — see `runner/events.ts`.
@@ -161,6 +228,7 @@ async function execute({
       task,
       steps: flow,
       config,
+      payload,
       signal: controller.signal,
       onEvent,
     });

@@ -163,6 +163,30 @@ export const runs = pgTable(
       .default("running"),
     startedAt: createdAt(),
     finishedAt: timestamp({ mode: "date", withTimezone: true }),
+    /**
+     * What the trigger handed the run: a webhook's parsed body, and null for everything else.
+     *
+     * A cron tick carries no information beyond having happened, and neither does the play
+     * button, so only an `event` trigger ever fills this in. It is kept because a run's account
+     * of itself is otherwise incomplete — the prompt the agent saw depended on this, and
+     * `{{event}}` is how it got in there. A body that would not parse as JSON is a delivery
+     * with no payload, not a failed one.
+     */
+    payload: jsonb().$type<unknown>(),
+    /**
+     * `skipped` only: the run that was in the way.
+     *
+     * A skip is a fact about a pair — this trigger fired while that run was going — so it is
+     * recorded against the run it collided with, and a second delivery into the same collision
+     * bumps `attempts` rather than writing another row. Without that, a webhook posted every
+     * second at a task that takes five minutes writes three hundred rows saying one thing.
+     */
+    blockedBy: text().references((): AnyPgColumn => runs.id, { onDelete: "set null" }),
+    /**
+     * How many firings this row accounts for. One for a run, which is the usual case; more for
+     * a skip that the same trigger walked into repeatedly while the same run held the task.
+     */
+    attempts: integer().notNull().default(1),
     /** The agent's final reply. */
     output: text().notNull().default(""),
     error: text().notNull().default(""),

@@ -114,6 +114,36 @@ test("a prompt that places the earlier output itself gets that and no preamble",
   );
 });
 
+test("{{event}} is the webhook body, pretty-printed", () => {
+  const payload = { ref: "refs/heads/main", commits: [{ id: "abc" }] };
+  const rendered = flow.renderPrompt({ prompt: "handle {{event}}", context: "none" }, [], payload);
+  expect(rendered).toBe(`handle ${JSON.stringify(payload, null, 2)}`);
+
+  // A run no webhook started, and a delivery whose body could not be kept, read the same: the
+  // prompt only needs to know the payload is not there.
+  const none = "(this run has no event payload)";
+  expect(flow.renderPrompt({ prompt: "{{event}}", context: "none" }, [])).toBe(none);
+  expect(flow.renderPrompt({ prompt: "{{event}}", context: "none" }, [], null)).toBe(none);
+});
+
+test("{{event}} is not step context, so it does not take the preamble with it", () => {
+  const context = [{ name: "read", output: "five emails" }];
+
+  // `{{previous}}` says where the earlier output goes and suppresses the preamble. `{{event}}`
+  // says nothing about it, so a prompt that only asks for the payload still gets both.
+  const both = flow.renderPrompt({ prompt: "on {{event}}", context: "all" }, context, { a: 1 });
+  expect(both).toContain("### read");
+  expect(both).toContain('"a": 1');
+  expect(both.endsWith('on {\n  "a": 1\n}')).toBe(true);
+
+  const placed = flow.renderPrompt(
+    { prompt: "{{event}} then {{previous}}", context: "all" },
+    context,
+    { a: 1 },
+  );
+  expect(placed).toBe('{\n  "a": 1\n} then five emails');
+});
+
 test("the arm is read off the last answer, not the first mention of a label", () => {
   const cases = ["error", "clean"];
   expect(flow.parseCase('{"case": "error"}', cases)).toBe("error");
