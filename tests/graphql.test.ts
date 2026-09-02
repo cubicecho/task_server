@@ -316,3 +316,30 @@ test("an event trigger with no webhook id is refused", async () => {
   );
   expect(triggers).toEqual([]);
 });
+
+test("a trigger's addresses are stored in the shape they are matched in", async () => {
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "padded", prompt: "p" }) { id } }`,
+  );
+
+  // Whitespace is what a pasted id arrives with, and it used to survive a guard that only
+  // checked for emptiness — leaving a row reading `enabled: true` at an address nobody can type.
+  const { createTrigger: event } = await run(
+    `mutation { createTrigger(values: { taskId: "${task.id}", kind: event, event: "  deploy " })
+       { id event } }`,
+  );
+  expect(event.event).toBe("deploy");
+
+  const { createTrigger: cron } = await run(
+    `mutation { createTrigger(values: { taskId: "${task.id}", kind: cron, cron: " 0 9 * * * " })
+       { cron } }`,
+  );
+  expect(cron.cron).toBe("0 9 * * *");
+
+  // An update goes through the same sweep as a create.
+  const { updateTriggerSingle: edited } = await run(
+    `mutation { updateTriggerSingle(where: { id: { eq: "${event.id}" } }, set: { event: " later " })
+       { event } }`,
+  );
+  expect(edited.event).toBe("later");
+});
