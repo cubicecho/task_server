@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import type { TaskFieldsFragment } from "@/gql/graphql";
 
 /**
@@ -22,6 +23,14 @@ export interface DraftTrigger {
   cron: string;
   timezone: string;
   event: string;
+  /**
+   * Whether this one trigger fires, independently of the task's own switch.
+   *
+   * The column has always been there and the dispatchers have always honoured it; nothing in
+   * the UI could set it, so every trigger the editor saved came back on. It is the switch for
+   * silencing one schedule while leaving the task and its other triggers alone.
+   */
+  enabled: boolean;
 }
 
 let counter = 0;
@@ -56,6 +65,7 @@ export const toDraftTriggers = (rows: TaskFieldsFragment["triggers"]): DraftTrig
     cron: row.cron,
     timezone: row.timezone,
     event: row.event,
+    enabled: row.enabled,
   }));
 
 const CRON_EXAMPLES = [
@@ -96,7 +106,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => add({ kind: "cron", cron: "", timezone: "", event: "" })}
+            onClick={() => add({ kind: "cron", cron: "", timezone: "", event: "", enabled: true })}
           >
             <Plus className="size-4" />
             Add
@@ -125,6 +135,10 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
               placeholder="America/Chicago"
               aria-label="Time zone"
             />
+            <TriggerSwitch
+              trigger={trigger}
+              onChange={(enabled) => patch(trigger.key, { enabled })}
+            />
             <Button variant="ghost" size="icon" title="Remove" onClick={() => drop(trigger)}>
               <Trash2 className="size-4" />
             </Button>
@@ -137,7 +151,9 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
               key={example.cron}
               type="button"
               className="rounded-md border px-2 py-1 hover:bg-accent"
-              onClick={() => add({ kind: "cron", cron: example.cron, timezone: "", event: "" })}
+              onClick={() =>
+                add({ kind: "cron", cron: example.cron, timezone: "", event: "", enabled: true })
+              }
             >
               {example.label} <span className="font-mono">{example.cron}</span>
             </button>
@@ -151,7 +167,9 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => add({ kind: "event", cron: "", timezone: "", event: newWebhookId() })}
+            onClick={() =>
+              add({ kind: "event", cron: "", timezone: "", event: newWebhookId(), enabled: true })
+            }
           >
             <Plus className="size-4" />
             Add
@@ -177,10 +195,35 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
             onChange={(event) => patch(trigger.key, { event })}
             onRemove={() => drop(trigger)}
             onRegenerate={() => patch(trigger.key, { event: newWebhookId() })}
+            onToggle={(enabled) => patch(trigger.key, { enabled })}
           />
         ))}
       </div>
     </>
+  );
+}
+
+/**
+ * On or off for this one trigger.
+ *
+ * Off is not the same as deleted, and that is the point of having both: a webhook id kept but
+ * silenced is one that can be turned back on without the sender having to be repointed at a new
+ * address, and a schedule paused for a week is not a schedule someone has to remember.
+ */
+function TriggerSwitch({
+  trigger,
+  onChange,
+}: {
+  trigger: DraftTrigger;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <Switch
+      checked={trigger.enabled}
+      onCheckedChange={onChange}
+      aria-label={trigger.enabled ? "Disable this trigger" : "Enable this trigger"}
+      title={trigger.enabled ? "Firing. Click to silence it." : "Silenced. Click to arm it."}
+    />
   );
 }
 
@@ -192,11 +235,13 @@ function WebhookRow({
   onChange,
   onRemove,
   onRegenerate,
+  onToggle,
 }: {
   trigger: DraftTrigger;
   onChange: (event: string) => void;
   onRemove: () => void;
   onRegenerate: () => void;
+  onToggle: (enabled: boolean) => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -246,6 +291,7 @@ function WebhookRow({
       >
         New id
       </Button>
+      <TriggerSwitch trigger={trigger} onChange={onToggle} />
       <Button variant="ghost" size="icon" title="Remove" onClick={onRemove}>
         <Trash2 className="size-4" />
       </Button>

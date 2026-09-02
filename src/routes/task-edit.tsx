@@ -139,7 +139,13 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         if (trigger.kind === "cron" ? !cron : !event) continue;
 
         const kind = trigger.kind === "cron" ? TriggersKindEnum.Cron : TriggersKindEnum.Event;
-        const set = { kind, cron, timezone: trigger.timezone.trim(), event };
+        const set = {
+          kind,
+          cron,
+          timezone: trigger.timezone.trim(),
+          event,
+          enabled: trigger.enabled,
+        };
         if (trigger.id) await request(UpdateTriggerDocument, { id: trigger.id, set });
         else await request(CreateTriggerDocument, { values: { taskId, ...set } });
       }
@@ -199,6 +205,14 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
           rows={5}
           placeholder="Check the build status and summarise anything that broke overnight."
         />
+        {/* Only worth saying where there is a webhook to say it about — on a task started by
+            hand or on a schedule the placeholder has nothing to put there. */}
+        {triggers.some((trigger) => trigger.kind === "event") ? (
+          <p className="text-sm text-muted-foreground">
+            Write <code>{"{{event}}"}</code> to place the body of the webhook that started the run.
+            A run started any other way renders it as a note saying there was none.
+          </p>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
