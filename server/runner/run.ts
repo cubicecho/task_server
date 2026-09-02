@@ -13,6 +13,14 @@ import { loadSettings } from "./llm.ts";
  */
 const inFlight = new Map<string, { runId: string; controller: AbortController }>();
 
+/**
+ * A task asked to start while a run of it is already going. Its own class so a trigger can
+ * tell the one refusal it expects from the ones that mean something is wrong.
+ */
+export class TaskBusyError extends Error {
+  override readonly name = "TaskBusyError";
+}
+
 /** Task ids running right now. A task cannot be deleted while it is one of them. */
 export const runningTaskIds = () => new Set(inFlight.keys());
 
@@ -67,7 +75,7 @@ export async function startTask(
 ): Promise<{ run: Run; done: Promise<Run> }> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   if (!task) throw new Error(`no task with id ${taskId}`);
-  if (inFlight.has(taskId)) throw new Error(`task "${task.name}" is already running`);
+  if (inFlight.has(taskId)) throw new TaskBusyError(`task "${task.name}" is already running`);
   // Read once, before the run starts: a flow edited halfway through would make the run's own
   // account of itself untrue.
   const flow = await db.select().from(steps).where(eq(steps.taskId, taskId));
@@ -80,6 +88,55 @@ export async function startTask(
   const controller = new AbortController();
   inFlight.set(taskId, { runId: run.id, controller });
   return { run, done: execute({ run, task, flow, controller }) };
+}
+
+/**
+ * What a trigger firing came to: a run that started, or a run row saying why one did not.
+ *
+ * `started` is the discriminant rather than the absence of `done`, because both arms carry a
+ * real run row and the caller's question is which kind it is.
+ */
+export type Fired =
+  | { started: true; run: Run; done: Promise<Run> }
+  | { started: false; run: Run; reason: string };
+
+/**
+ * Fires a task on behalf of a trigger, and records the firing either way.
+ *
+ * `startTask` refuses a task that is already running, which is right for a person or an agent
+ * asking for a run — they are told so on the spot. Nothing is watching when a cron tick or a
+ * webhook delivery meets the same refusal, and it used to leave no trace but a log line: no run
+ * row, nothing in the history, and a task that appears simply not to have fired. That is
+ * indistinguishable from a trigger that is broken, which is the thing someone opening the Runs
+ * page is usually trying to rule out.
+ *
+ * So the skip is written down as a run of its own — started and finished in the same instant,
+ * `status: "skipped"`, with the refusal in `error`. It says the trigger worked and the task did
+ * not run, which is neither a success nor a failure and is exactly what happened.
+ *
+ * Only the busy case becomes a row. A task that does not exist has nothing to hang a run off,
+ * and a database that cannot be written to cannot be told about it either; both still throw, and
+ * both callers log.
+ */
+export async function fireTask(taskId: string, triggerId?: string): Promise<Fired> {
+  try {
+    const { run, done } = await startTask(taskId, triggerId);
+    return { started: true, run, done };
+  } catch (error) {
+    if (!(error instanceof TaskBusyError)) throw error;
+    const reason = errorMessage(error);
+    const [run] = await db
+      .insert(runs)
+      .values({
+        taskId,
+        triggerId: triggerId ?? null,
+        status: "skipped",
+        error: reason,
+        finishedAt: new Date(),
+      })
+      .returning();
+    return { started: false, run, reason };
+  }
 }
 
 /** The run itself, once `startTask` has decided there is going to be one. */

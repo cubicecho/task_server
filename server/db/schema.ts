@@ -150,8 +150,15 @@ export const runs = pgTable(
       .references(() => tasks.id, { onDelete: "cascade" }),
     /** Null for a run started by hand from the UI. */
     triggerId: text().references(() => triggers.id, { onDelete: "set null" }),
-    /** `stopped` is a run called off by hand — not a failure, and not a result either. */
-    status: text({ enum: ["running", "ok", "error", "stopped"] })
+    /**
+     * `stopped` is a run called off by hand — not a failure, and not a result either.
+     *
+     * `skipped` is a trigger that fired at a task already running. Nothing executed, so there
+     * is nothing to report but the reason, which is in `error`. It is a row rather than a log
+     * line because a delivery that quietly does nothing is the one thing a webhook's sender
+     * cannot see, and the run history is where someone goes to look.
+     */
+    status: text({ enum: ["running", "ok", "error", "stopped", "skipped"] })
       .notNull()
       .default("running"),
     startedAt: createdAt(),

@@ -9,19 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DeleteRunDocument, RunsDocument, type RunsQuery, StopTaskDocument } from "@/gql/graphql";
 import { request } from "@/lib/gql";
+import { STATUS_VARIANT } from "@/lib/run-status";
 
 type RunStep = RunsQuery["runs"][number]["steps"][number];
 
 const duration = (from: string, to?: string | null) =>
   to ? `${((new Date(to).getTime() - new Date(from).getTime()) / 1000).toFixed(1)}s` : "running…";
-
-const STATUS_VARIANT = {
-  error: "destructive",
-  running: "outline",
-  stopped: "outline",
-  skipped: "outline",
-  ok: "secondary",
-} as const;
 
 /** Tool names as chips, red where the call failed. */
 function ToolChips({ calls }: { calls: unknown }) {
@@ -134,6 +127,8 @@ export function RunsRoute() {
       {runs.data?.runs.map((run) => {
         const expanded = open === run.id;
         const running = run.status === "running";
+        // A trigger that fired at a busy task: a real delivery, and nothing behind it to open.
+        const skipped = run.status === "skipped";
         return (
           <Card key={run.id} className="gap-2 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -143,21 +138,11 @@ export function RunsRoute() {
                 onClick={() => setOpen(expanded ? null : run.id)}
               >
                 <div className="flex items-center gap-2">
-                  <Badge
-                    variant={
-                      run.status === "error"
-                        ? "destructive"
-                        : run.status === "running" || run.status === "stopped"
-                          ? "outline"
-                          : "secondary"
-                    }
-                  >
-                    {run.status}
-                  </Badge>
+                  <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>{run.status}</Badge>
                   <span className="truncate font-medium">{run.task.name}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(run.startedAt).toLocaleString()} ·{" "}
-                    {duration(run.startedAt, run.finishedAt)}
+                    {new Date(run.startedAt).toLocaleString()}
+                    {skipped ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
                     {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
                   </span>
                 </div>
@@ -193,7 +178,13 @@ export function RunsRoute() {
               <div className="flex flex-col gap-2 border-t pt-3">
                 {/* A run in flight has no stored output yet — this is the run itself, live. */}
                 {running ? <RunStream runId={run.id} /> : null}
-                {running ? null : run.steps.length ? (
+                {skipped ? (
+                  <p className="text-sm text-muted-foreground">
+                    The trigger fired while this task was already running, so nothing was started.
+                    Its earlier run is the one above.
+                  </p>
+                ) : null}
+                {running || skipped ? null : run.steps.length ? (
                   <>
                     <RunSteps steps={run.steps} />
                     {/* The run failed before or between steps — nothing above says why. */}

@@ -86,6 +86,14 @@ one, takes over a lock whose holder is gone, and does nothing at all for a `post
 `reconnectMcp`, `setApiKey` on the mutation side. Give every one of them a `description` — it
 is what an agent on `/mcp` reads to decide whether to call it.
 
+**A trigger that fires at a task already running leaves a `skipped` run.** `startTask` refuses
+it — right for a person or an agent, who are told on the spot — but nothing is watching a cron
+tick or a webhook delivery, and a refusal used to leave no trace but a log line. `fireTask` in
+`server/runner/run.ts` is the entry point for both dispatchers: it starts the task, or writes a
+run of status `skipped` with the reason in `error`. A firing that did nothing has to be as
+visible as one that did, or a broken trigger and a busy one look the same. Only the busy case
+becomes a row; a missing task or an unwritable database still throws, and the caller logs.
+
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change
 either of those belongs in a hook, not in a route handler.
@@ -117,12 +125,11 @@ rather than raise the bound.
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
 a task only when an enabled `event` trigger on an enabled task carries that exact id, and
 reports the ones that actually started in `dispatched` and the ones that would not in
-`refused`, with the reason — a task already running is the routine case, and it leaves no run
-row for the sender to find. `startTask` is what makes that answerable: it settles once the run
-row exists, so the reply says what started without waiting for it. There is no signature and no
-secret — the id is the whole of the address, so make it unguessable if it matters. The body is
-parsed and discarded; the route mounts its own JSON parser rather than `app.use`, because yoga
-and the MCP handler read their own bodies.
+`refused`, with the reason and a `runId` for both. `startTask` is what makes that answerable:
+it settles once the run row exists, so the reply says what started without waiting for it. There
+is no signature and no secret — the id is the whole of the address, so make it unguessable if it
+matters. The body is parsed and discarded; the route mounts its own JSON parser rather than
+`app.use`, because yoga and the MCP handler read their own bodies.
 
 **The LLM call retries only before the model has spoken.** `server/runner/agent.ts` owns the
 retry loop, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn

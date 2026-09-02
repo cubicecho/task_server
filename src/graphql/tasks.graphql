@@ -14,7 +14,11 @@ fragment TaskFields on Task {
     event
     enabled
   }
-  runs(limit: 1, orderBy: { startedAt: { direction: desc, priority: 1 } }) {
+  runs(
+    limit: 1
+    where: { status: { ne: skipped } }
+    orderBy: { startedAt: { direction: desc, priority: 1 } }
+  ) {
     id
     status
     startedAt

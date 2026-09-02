@@ -104,6 +104,11 @@ reads the same as having watched from the start.
 It is debugging output, not the record: nothing is persisted, nothing survives a restart, and a
 finished run is forgotten a minute later. The row remains the lasting account of what happened.
 
+A run's status is `running`, then one of `ok`, `error` or `stopped` — and `skipped` for a row
+that never ran at all, which is what a trigger firing at a task that was already running leaves
+behind. Only `error` is a failure; the other three are outlined rather than coloured on the
+**Runs** page for that reason.
+
 With several servers connected, tool definitions cost more per request than the task's own
 prompt — they are mostly JSON Schema, and every one is sent on every turn. Settings offers two
 discovery modes (`runner/tool-loading.ts`):
@@ -177,8 +182,10 @@ come back in the body:
 {
   "ok": true,
   "event": "nightly-import",
-  "dispatched": [{ "taskId": "...", "name": "Import" }],
-  "refused": [{ "taskId": "...", "name": "Sync", "reason": "task \"Sync\" is already running" }]
+  "dispatched": [{ "taskId": "...", "name": "Import", "runId": "..." }],
+  "refused": [
+    { "taskId": "...", "name": "Sync", "runId": "...", "reason": "task \"Sync\" is already running" }
+  ]
 }
 ```
 
@@ -189,8 +196,14 @@ read from it yet.
 
 Only a task that actually started is in `dispatched`. A task already running is the refusal
 worth expecting — anything that fires faster than it runs meets it routinely — and it is named
-in `refused` with the reason, because a skipped delivery leaves no run row behind and a sender
-has no other way to tell it from a successful one.
+in `refused` with the reason. Both carry a `runId`, because both are written down: a delivery
+that started nothing is recorded as a run of status **skipped**, so it appears on the **Runs**
+page next to the run it collided with rather than only in the server's log. That is the whole
+point of it. A trigger that fires into a wall and a trigger that is broken look identical from
+the outside, and only one of them is worth investigating.
+
+The same is true of a cron tick that lands on a task still running from the last one: it, too,
+leaves a skipped run.
 
 There is no signature, no secret, and no auth — the id is all there is, so pick one that is
 not worth guessing if it matters. This is deliberate: the server is meant to sit somewhere you

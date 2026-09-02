@@ -3,7 +3,7 @@ import express, { type Express, type Request, type Response } from "express";
 import { errorMessage } from "../shared/errors.ts";
 import { db } from "./db/client.ts";
 import { tasks, triggers } from "./db/schema.ts";
-import { startTask } from "./runner/run.ts";
+import { fireTask } from "./runner/run.ts";
 
 /**
  * `POST /webhooks/<id>` — the inbound half of an `event` trigger.
@@ -36,27 +36,31 @@ export function mountWebhooks(app: Express) {
   });
 }
 
+type Dispatched = { taskId: string; name: string; runId: string };
+type Refused = { taskId: string; name: string; runId: string; reason: string };
+
 /**
  * Starts every enabled task with an enabled `event` trigger for this id, and answers with what
  * it started and what it would not.
  *
  * The runs are started and not waited on. A sender wants an acknowledgement, not the output of
- * an agent that may still be working several minutes from now — so `startTask` is awaited only
- * as far as the run row, and the run itself is watchable over `runEvents` and lands in the run
+ * an agent that may still be working several minutes from now — so a firing is awaited only as
+ * far as the run row, and the run itself is watchable over `runEvents` and lands in the run
  * history either way.
  *
  * A task already running is the refusal worth expecting, and it goes in the reply rather than
  * only to the log. Anything that fires faster than it runs meets it routinely, and a sender
- * cannot tell a skipped delivery from a successful one by any other means: there is no new run
- * to find, and `dispatched` used to name the task regardless. Reporting nothing at all would be
- * no better — `dispatched: []` with no reason says only that something did not happen.
+ * cannot tell a skipped delivery from a successful one by any other means: `dispatched` used to
+ * name the task regardless. Reporting nothing at all would be no better — `dispatched: []` with
+ * no reason says only that something did not happen.
+ *
+ * `fireTask` records the skip as a run of its own, so both arms carry a `runId`: what the
+ * sender is told and what the Runs page shows are the same delivery, and a sender that kept the
+ * id can go and look at it.
  *
  * Started one at a time, not in parallel: two triggers on one task are two attempts at the same
  * `inFlight` entry, and sequencing them means the second is refused rather than racing.
  */
-type Dispatched = { taskId: string; name: string };
-type Refused = { taskId: string; name: string; reason: string };
-
 async function dispatch(event: string): Promise<{ dispatched: Dispatched[]; refused: Refused[] }> {
   if (!event) return { dispatched: [], refused: [] };
 
@@ -83,17 +87,22 @@ async function dispatch(event: string): Promise<{ dispatched: Dispatched[]; refu
 
   for (const { triggerId, taskId, name } of rows) {
     try {
-      const { done } = await startTask(taskId, triggerId);
+      const fired = await fireTask(taskId, triggerId);
+      if (!fired.started) {
+        console.log(`[webhook] ${event}: ${name}: ${fired.reason}`);
+        refused.push({ taskId, name, runId: fired.run.id, reason: fired.reason });
+        continue;
+      }
       // The run is under way and the reply does not wait for it. Whatever it comes to is on the
       // run row; this only catches a `done` that could not be written at all.
-      done.catch((error: unknown) => {
+      fired.done.catch((error: unknown) => {
         console.error(`[webhook] ${event}: ${name}: ${errorMessage(error)}`);
       });
-      dispatched.push({ taskId, name });
+      dispatched.push({ taskId, name, runId: fired.run.id });
     } catch (error) {
-      const reason = errorMessage(error);
-      console.log(`[webhook] ${event}: ${name}: ${reason}`);
-      refused.push({ taskId, name, reason });
+      // Not a refusal — the task is gone, or its run row could not be written. Nothing was
+      // recorded, so the log is the only account of it.
+      console.error(`[webhook] ${event}: ${name}: ${errorMessage(error)}`);
     }
   }
 
