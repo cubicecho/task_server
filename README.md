@@ -175,7 +175,6 @@ express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `r
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
 - **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,
   which talks only GraphQL.
-
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so
 editing a trigger in the UI takes effect immediately.
 
@@ -279,7 +278,7 @@ claude mcp add --transport http tasks http://localhost:8787/mcp
 Seventeen tools, chosen in `server/mcp-endpoint.ts` rather than projected from the whole schema:
 
 - **read** — `tasks`, `steps`, `runs`, `run_steps`, `triggers`, `schedule`, `models`
-- **write** — `create_task`, `update_task_single`, `delete_task_single`, and the same three for
+- **write** — `create_task`, `update_task`, `delete_task`, and the same three for
   triggers, plus `set_task_steps` for a task's whole flow
 - **run** — `run_task`, `stop_task`, `run_events`
 
@@ -305,15 +304,40 @@ the MCP-server rows, the aggregates and group-bys, and every bulk mutation — `
 no `where` empties the table, where `deleteTaskSingle` cannot. Each tool selects one level of
 fields, so a listing of tasks does not drag every run's output along with it.
 
-The whole listing is about 419 kB, which is worth saying because it very nearly was not. The
+The whole listing is about 155 kB, which is worth saying because it very nearly was not. The
 generated filters reach through relations — a task filtered by its runs, each run filtered back by
 its task — which costs nothing in the SDL, where a type is named rather than written out. As the
 JSON Schema a tool advertises, a driver that rebuilds each type per route has to spell that
 recursion out at every level: `tasks` alone came to 2.8 MB and the seventeen together to 18 MB,
 some four and a half million tokens of tool definitions handed over before a client can call
-anything. graphql-mcp 1.0.1 builds each input type once and emits a `$ref` for the repeats, so
-the relation filters cost almost nothing and stay — `where: { triggers: { some: { event: { eq:
-"…" } } } }` is a question worth being able to ask. A test keeps it that way.
+anything. graphql-mcp 1.0.1 builds each input type once and emits a `$ref` for the repeats,
+which is what made the surface readable at all. A test keeps it that way.
+
+Two later changes took it from ~379 kB to ~155 kB, and both came out of measuring what agents on
+this surface actually send. Across a hundred logged calls the only operator any of them used was
+`eq`. drizzle-graphql 12 stopped generating the ones that cannot mean anything for the column —
+`startsWith` on a boolean, `ilike` on a timestamp, ordering on a two-member enum — which is ~94
+kB here. graphql-mcp 2.9.0's `inputField` then pruned the relation filters out of the projection,
+another ~130 kB: `where: { triggers: { some: { event: { eq: "…" } } } }` was a question worth
+being able to ask, and no agent ever asked it, so on this surface it is asked from the trigger
+end instead, where `taskId` is a column. The pruning is on the projection alone — the same schema
+object serves the web app, which still has every one of them.
+
+A nullable argument used to be advertised twice over — absent from `required`, and carrying an
+explicit `null` branch as well — and on a surface that is mostly generated filter types the
+second was about a fifth of the bytes. It is now dropped from the reads and kept on the writes.
+That split is the only version of the trade that works: on a mutation input the branch is how a
+caller clears a column, and it is also how a model says "this optional is absent" — `"cases":
+null` beside the fields it did fill in is the ordinary thing to write, and turning that into a
+validation error is a worse surface than a larger one. On a `where` or an `orderBy` an explicit
+null means nothing at all. Dropping it everywhere was tried first, and reverted.
+
+Each argument whose type is an input object also carries a literal JSON example in its
+description, as of 2.6.0 — `shape: {"id":{"eq":"string"}}` for a filter, `{"id":{"direction":
+"asc","priority":0}}` for an `orderBy`. That is aimed squarely at the failure this surface
+actually has: in the A/B runs behind the `HINTS` table, every failed call was an argument shape
+guessed from the argument's *name*, and the right answer was in the JSON Schema the whole time —
+inside 400 kB that nothing reads. The prose is what gets read, so the shape goes in the prose.
 
 Unknown fields in a tool's arguments are rejected rather than dropped, as of 1.0.2: a misspelled
 key comes back as `Unrecognized key: "order"` instead of a success with that part of the request

@@ -1,4 +1,4 @@
-import { createHttpHandler } from "@cubicecho/graphql-mcp";
+import { applyNameCase, createHttpHandler } from "@cubicecho/graphql-mcp";
 import express from "express";
 // The version a client is told it is talking to; without it the wrapper library reports its own.
 // Default import, not a named one: Node's own JSON modules only export a default, and the
@@ -55,19 +55,27 @@ const HINTS: Record<string, string> = {
     "Every task on this server: its prompt, the model it runs on, and whether it is enabled. " +
     "Any column filters the same way — `where: { id: { eq: … } }` for one you have the id of, " +
     '`where: { name: { eq: "nightly digest" } }` for one you know by name. A text column takes ' +
-    "`eq`, `ne`, `contains`, `startsWith`, `endsWith` and their `i`-prefixed case-insensitive " +
-    "twins, `inArray`, `isNull`, and `AND`/`OR`/`NOT` for combining them.\n\n" +
+    "`eq`, `ne`, `contains`, `startsWith`, `endsWith` and their case-insensitive twins " +
+    "`iContains`, `iStartsWith`, `iEndsWith` — spelled in camelCase, not `icontains` — plus " +
+    "`inArray`, `isNull`, and `AND`/`OR`/`NOT` for combining them.\n\n" +
     "`enabled: false` on the task is the switch that dominates: it fires from nothing, and its " +
     "triggers go on reading `enabled: true` while it does. `schedule` is where the effective " +
-    "answer lives.",
+    "answer lives — for a `cron` trigger. An `event` trigger never appears there, armed or " +
+    "not, so its two `enabled` flags are the whole of what can be read back about it.",
   runs:
     "What happened when tasks ran — `status` is `running`, `ok`, `error`, `stopped` or " +
     "`skipped`, and a finished run carries its output, its error, the tools it called and what " +
     "it cost. A `skipped` run never started: its trigger fired while the run named by " +
     "`blockedBy` still held the task, and `attempts` counts how many firings it stands for. " +
+    "Such a row spans its whole collision — `startedAt` is the first firing it stands for and " +
+    "`finishedAt` moves with the most recent — so its timestamps are a window rather than a " +
+    "duration, and it can outlast the run that blocked it.\n\n" +
     "Filter by `taskId` for one task's history, and order by " +
     "`{ startedAt: { direction: desc, priority: 1 } }` for the latest — every generated " +
-    "`orderBy` takes that shape, and `priority` is required rather than defaulted.",
+    "`orderBy` takes that shape, and `priority` is required rather than defaulted. Where a " +
+    "`skipped` row has `attempts` above 1, read `finishedAt` too: that row stays where its " +
+    "first firing put it while absorbing newer ones, so the top of this ordering is not always " +
+    "the newest event.",
   // Ordering is spelled out here as well as under `runs`, because a flow read in the wrong order
   // is not an error — it is a tree reassembled wrongly, and the caller has no way to notice.
   steps:
@@ -85,14 +93,15 @@ const HINTS: Record<string, string> = {
     "What makes tasks fire: a `cron` trigger carries an expression read in its own timezone, " +
     "an `event` trigger carries the id it answers to at `POST /webhooks/<event>`.\n\n" +
     "A trigger's own `enabled` is not the whole story — one on a disabled task still reads " +
-    "`enabled: true` and still never fires. Read `schedule` for what is actually armed.",
+    "`enabled: true` and still never fires. Read `schedule` for what is actually armed, " +
+    "remembering that it covers `cron` only: an `event` trigger is absent from it either way.",
   create_task:
     "Adds a task. It will not fire on its own until it has a trigger — add one with " +
     "`create_trigger`, or call `run_task` to run it now.",
-  update_task_single:
+  update_task:
     "Edits one task. `set: { enabled: false }` keeps a task but stops it firing, which is the " +
     "gentler alternative to deleting it.",
-  delete_task_single:
+  delete_task:
     "Deletes one task, its triggers and its history. Refused while the task is running: stop " +
     "it first with `stop_task`.",
   // The generated description below already says that a flow is written whole and that ids sent
@@ -118,7 +127,12 @@ const HINTS: Record<string, string> = {
     "Starts a task on something: `kind: cron` with a five-field expression such as " +
     "`0 9 * * *`, and a `timezone` if it should not follow the server's; or `kind: event` " +
     "with an `event` id, which then fires whenever a `POST` reaches `/webhooks/<that id>`.",
-  delete_trigger_single: "Unschedules a task without deleting the task itself.",
+  update_trigger:
+    "Edits one trigger — retime a `cron`, move it to another `timezone`, or repoint an " +
+    "`event` at a different webhook id. `set: { enabled: false }` disarms the trigger while " +
+    "leaving the task alone, which is the one to reach for when a task has several triggers " +
+    "and only one of them should stop.",
+  delete_trigger: "Unschedules a task without deleting the task itself.",
 };
 
 /**
@@ -137,9 +151,34 @@ const HINTS: Record<string, string> = {
 const TOOL_NAMES = new Map(
   TOOLS.map((path) => {
     const field = path.slice(path.indexOf(".") + 1);
-    return [field, field.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)];
+    return [field, toolNameFor(field)];
   }),
 );
+
+/**
+ * The tool name for a root field, and the one place that spelling is decided.
+ *
+ * drizzle-graphql calls the single-row update `updateTaskSingle`, and the qualifier is there to
+ * keep it apart from the bulk `updateTask` — which this surface does not expose at all. So the
+ * name distinguishes a tool from one an agent cannot see, and every arm that met it read it as
+ * a variant to pick between rather than as the update. `Single` comes off here.
+ *
+ * The rename belongs at this layer rather than in `buildSchema`: the web app has both forms and
+ * needs to tell them apart, so the schema keeps the qualifier and only the agent loses it. It
+ * could not be done there in any case — `suffixes.single` renames the single *insert* and is
+ * ignored by update and delete.
+ *
+ * `TOOL_NAMES` and the driver's `toolName` both come through here, so a name written in prose
+ * and the tool it names cannot drift apart.
+ */
+function toolNameFor(field: string): string {
+  const base = field.endsWith("Single") ? field.slice(0, -"Single".length) : field;
+  // The driver's own casing rather than a hand-rolled one. They agree on every name here and
+  // would keep agreeing until a field split an acronym — `parseURLFilter` is the example the
+  // package gives — and a tool the prose names by a spelling the listing does not use is the
+  // failure this whole function exists to prevent.
+  return applyNameCase(base);
+}
 
 /** Where the driver's generated footer starts — everything above it is prose. */
 const FOOTER = /\n\nGraphQL (query|mutation): /;
@@ -202,18 +241,38 @@ export const mcpHandler = createHttpHandler({
   name: "task-server",
   version: pkg.version,
   include: TOOLS,
+  // `include` names GraphQL fields and this names tools, so the two are spelled differently on
+  // purpose — `Mutation.updateTaskSingle` above becomes `update_task` here.
+  toolName: (field) => toolNameFor(field.name),
   // One level: the leaf fields of what a tool returns. Two would pull every run — output and
   // all — into a listing of tasks, which is a lot of context for a question about names.
   selectionDepth: 1,
   mutationHints: "byName",
-  // `nullBranches: "never"` is left alone deliberately. It drops the explicit `null` branch from
-  // every nullable argument and takes a fifth off the listing — ~420 kB to ~337 kB, which is
-  // real money against a surface that is almost all generated filter types. It was tried and
-  // reverted: the branch it removes is not only how a mutation says "clear this", it is how a
-  // client says "this optional is absent", and a model writing `"cases": null` beside the fields
-  // it did fill in is doing the ordinary thing. That becomes a validation error with the option
-  // on, which is a worse tool surface than a larger one. Per-argument, it would be right on
-  // `where` and wrong on the mutation inputs; the option is per-server, so it stays off.
+  // Keeps the explicit `null` branch on the write payloads and drops it everywhere else.
+  // Dropping it everywhere was tried and reverted: on a mutation input the branch is not only
+  // how a caller clears a column, it is how a model says "this optional is absent" — writing
+  // `"cases": null` beside the fields it did fill in is the ordinary thing to do, and it became
+  // a validation error. On a `where`, an `orderBy` or a `having` there is nothing an explicit
+  // null means: absent is the whole of it, and the branch is bytes an agent reads past.
+  //
+  // Still keyed on the root field's kind, and not on the type. 2.10.0 added `{ byType }` for the
+  // narrower rule this wants — a filter never legitimately takes an explicit null, wherever it
+  // appears — but it resolves at each *position's* own named type, and a filter's bytes are in
+  // its leaves: `StringFilter.eq` is a `String`, and so is `CreateTaskInput.model`. One name,
+  // two answers needed. Keyed that way the write payloads lose their null branches with the
+  // filters, which is the regression above, so the per-kind split is what is expressible here.
+  nullBranches: (_field, kind) => (kind === "query" ? "never" : "always"),
+  // Relation filters are the closure that made this listing 92% machinery: `TaskFilters` takes
+  // `triggers`/`steps`/`runs` as list-relation filters, each pulling in the other table's whole
+  // filter type, which carries its own relation fields back. Pruning the three fields — nothing
+  // else — halves the surface, and across 100 logged calls on it no agent sent one. An agent
+  // that wants a task's triggers reads `list_triggers` and looks at `taskId`, which is the
+  // question it was going to ask anyway.
+  //
+  // This prunes the *projection*: `schema` is the same object yoga serves the web app from, and
+  // it keeps every one of them. That is the whole reason the knob is here rather than in
+  // `buildSchema` — the schema is right, and it was only this surface that was over-broad.
+  inputField: (field) => !String(field.type).includes("ListRelationFilter"),
   decorate: (descriptor) => ({
     description: useToolNames(
       HINTS[descriptor.name]

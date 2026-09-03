@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
+import type { GraphQLInputObjectType } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
 
 // The endpoint serves the real schema, which is built against the live tables.
@@ -69,6 +70,7 @@ async function raw(name: string, args: Record<string, unknown> = {}) {
 interface SchemaNode {
   $ref?: string;
   anyOf?: SchemaNode[];
+  allOf?: SchemaNode[];
   properties?: Record<string, SchemaNode>;
   definitions?: Record<string, SchemaNode>;
   $defs?: Record<string, SchemaNode>;
@@ -78,8 +80,10 @@ interface SchemaNode {
  * The property names of a `where` argument, whichever shape the driver rendered it in.
  *
  * zod decides where a shared object lands and the two majors disagree: v3 writes it inline, v4
- * hoists it into `definitions` and leaves a `$ref`. Both are correct JSON Schema and neither is
- * this repo's choice, so the test follows a pointer rather than asserting a layout.
+ * hoists it into `definitions` and leaves a `$ref`. An optional `$ref` is then wrapped again —
+ * `anyOf: [it, null]` where a null branch is advertised, `allOf: [it]` where it is not, which is
+ * what a read's arguments look like under `nullBranches: "never"`. All of them are correct JSON
+ * Schema and none is this repo's choice, so the test follows a pointer rather than a layout.
  */
 function whereKeys(root: SchemaNode): string[] {
   const defs = root.definitions ?? root.$defs ?? {};
@@ -87,10 +91,12 @@ function whereKeys(root: SchemaNode): string[] {
     if (!node || depth > 8) return node;
     if (node.$ref)
       return deref(defs[node.$ref.replace(/^#\/(definitions|\$defs)\//, "")], depth + 1);
-    // A nullable argument is `anyOf: [the type, null]`; the type is the half with content.
-    if (node.anyOf)
+    // A nullable argument is `anyOf: [the type, null]`; the type is the half with content. One
+    // with no null branch is a single-element `allOf`, which has only that half.
+    const branches = node.anyOf ?? node.allOf;
+    if (branches)
       return deref(
-        node.anyOf.find((branch) => branch.$ref ?? branch.properties),
+        branches.find((branch) => branch.$ref ?? branch.properties),
         depth + 1,
       );
     return node;
@@ -107,8 +113,8 @@ test("offers the task tools, and only those", async () => {
   expect(names).toEqual([
     "create_task",
     "create_trigger",
-    "delete_task_single",
-    "delete_trigger_single",
+    "delete_task",
+    "delete_trigger",
     "models",
     "run_events",
     "run_steps",
@@ -120,13 +126,28 @@ test("offers the task tools, and only those", async () => {
     "stop_task",
     "tasks",
     "triggers",
-    "update_task_single",
-    "update_trigger_single",
+    "update_task",
+    "update_trigger",
   ]);
   // The settings row holds the API key, and a bulk delete with no `where` empties a table.
   expect(names).not.toContain("set_api_key");
   expect(names).not.toContain("settings");
-  expect(names).not.toContain("delete_task");
+
+  // `delete_task` used to be the name the bulk mutation would have arrived under, so its absence
+  // was the whole test. It is now the name the single-row one is deliberately given, and the
+  // guard has to say which field is behind it instead. The footer is the driver's own claim
+  // about the schema, which is why it still spells the GraphQL name.
+  for (const [tool, field] of [
+    ["delete_task", "deleteTaskSingle"],
+    ["delete_trigger", "deleteTriggerSingle"],
+    ["update_task", "updateTaskSingle"],
+    ["update_trigger", "updateTriggerSingle"],
+  ]) {
+    const description = tools.find((each) => each.name === tool)?.description ?? "";
+    expect(description).toContain(`GraphQL mutation: \`${field}\``);
+  }
+  // Nothing arrives carrying the qualifier that made an agent look for the tool without it.
+  expect(names.filter((name) => name.endsWith("_single"))).toEqual([]);
 });
 
 test("advertises tools small enough for a client to read", async () => {
@@ -139,18 +160,22 @@ test("advertises tools small enough for a client to read", async () => {
   // than emitting a `$ref`, which put the seventeen tools at 18 MB and `tasks` alone at 2.8 MB —
   // more than any model will read, and it lands before a single call can be made.
   //
-  // Shared, the listing is ~419 kB, the largest tool ~48 kB. The bounds sit well above that
+  // Shared, the listing is ~155 kB and the largest tool ~24 kB, down from ~379 kB and ~44 kB on
+  // 2.7.0 — drizzle-graphql 12 gave each column type only the operators it can use, and 2.9.0's
+  // `inputField` took the relation filters out of the projection. The bounds sit above that
   // because the exact figure is not ours to hold: it went to ~528 kB when zod 4 became the
-  // conversion path and back again on 2.2.0. What is being caught here is the order of
-  // magnitude — a return to per-route copies trips this by 30×.
+  // conversion path and back again on 2.2.0. What is being caught here is the order of magnitude
+  // — a return to per-route copies trips this by 30×.
   const sizes = tools.map((tool) => [tool.name, JSON.stringify(tool).length] as const);
   for (const [name, size] of sizes) {
-    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(100_000);
+    expect(size, `${name} is ${(size / 1024).toFixed(0)} kB`).toBeLessThan(40_000);
   }
-  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(650_000);
+  expect(sizes.reduce((total, [, size]) => total + size, 0)).toBeLessThan(250_000);
 
-  // Both halves of what an agent filters on: the columns, and the relations reaching the
-  // neighbouring tables. Filtering tasks by a property of their runs is a real question to ask.
+  // The columns, and no relations. `TaskFilters.triggers` reaches `TriggerFilters`, which reaches
+  // back through `RunFilters` and `StepFilters` — the closure that was most of the listing, for a
+  // question no agent on this surface asked in a hundred calls. `inputField` prunes it from the
+  // projection only: the same schema object serves the web app, which still has all three.
   const input = tools.find((tool) => tool.name === "tasks")?.inputSchema as SchemaNode;
   expect(whereKeys(input)).toEqual([
     "id",
@@ -161,13 +186,13 @@ test("advertises tools small enough for a client to read", async () => {
     "enabled",
     "createdAt",
     "updatedAt",
-    "triggers",
-    "steps",
-    "runs",
     "OR",
     "AND",
     "NOT",
   ]);
+  const { schema } = await import("../server/graphql/schema.ts");
+  const taskFilters = schema.getType("TaskFilters") as GraphQLInputObjectType;
+  expect(Object.keys(taskFilters.getFields())).toContain("triggers");
 });
 
 test("writes a task, reads it back, and deletes it", async () => {
@@ -183,7 +208,7 @@ test("writes a task, reads it back, and deletes it", async () => {
   expect(listed.tasks).toHaveLength(1);
   expect(listed.tasks[0].prompt).toBe("say hello");
 
-  await call("update_task_single", { where: { id: { eq: id } }, set: { enabled: false } });
+  await call("update_task", { where: { id: { eq: id } }, set: { enabled: false } });
   const trigger = (await call("create_trigger", {
     values: { taskId: id, kind: "cron", cron: "0 9 * * *" },
   })) as { createTrigger: { id: string } };
@@ -193,12 +218,12 @@ test("writes a task, reads it back, and deletes it", async () => {
   const runs = (await call("runs", { where: { taskId: { eq: id } } })) as { runs: unknown[] };
   expect(runs.runs).toEqual([]);
 
-  await call("delete_task_single", { where: { id: { eq: id } } });
+  await call("delete_task", { where: { id: { eq: id } } });
   const gone = (await call("tasks", { where: { id: { eq: id } } })) as { tasks: unknown[] };
   expect(gone.tasks).toEqual([]);
 });
 
-test("filters a task by a property of its triggers", async () => {
+test("a question about a task's triggers is asked from the trigger end", async () => {
   const created = (await call("create_task", {
     values: { name: "webhooked", prompt: "wait for a POST" },
   })) as { createTask: { id: string } };
@@ -207,14 +232,22 @@ test("filters a task by a property of its triggers", async () => {
     values: { taskId: id, kind: "event", event: "hook-filter-test" },
   });
 
-  // A relation filter, which is the reach the tools' `where` costs its size to keep: the answer
-  // is a task, and the question is about its triggers.
-  const found = (await call("tasks", {
-    where: { triggers: { some: { event: { eq: "hook-filter-test" } } } },
-  })) as { tasks: { id: string }[] };
-  expect(found.tasks.map((task) => task.id)).toEqual([id]);
+  // The relation filter is pruned from the projection, so the reach it bought is gone from here
+  // and the tool says so rather than ignoring the key. It was most of the listing's weight and
+  // no agent sent one in a hundred logged calls.
+  const refused = (await client.callTool({
+    name: "tasks",
+    arguments: { where: { triggers: { some: { event: { eq: "hook-filter-test" } } } } },
+  })) as CallToolResult;
+  expect(refused.isError).toBe(true);
 
-  await call("delete_task_single", { where: { id: { eq: id } } });
+  // And the question is still answerable, from the end that owns the foreign key.
+  const found = (await call("triggers", {
+    where: { event: { eq: "hook-filter-test" } },
+  })) as { triggers: { taskId: string }[] };
+  expect(found.triggers.map((trigger) => trigger.taskId)).toEqual([id]);
+
+  await call("delete_task", { where: { id: { eq: id } } });
 });
 
 test("hands a run's progress to a client that polls for it", async () => {
@@ -290,19 +323,19 @@ test("marks only the tools that actually destroy something", async () => {
   // none of those, and a client that stops to ask the operator should be spending that
   // interruption on the deletes.
   expect(flagged("destructiveHint")).toEqual([
-    "delete_task_single",
-    "delete_trigger_single",
+    "delete_task",
+    "delete_trigger",
     "set_task_steps",
     "stop_task",
-    "update_task_single",
-    "update_trigger_single",
+    "update_task",
+    "update_trigger",
   ]);
 
   // Reads are idempotent by definition; of the writes, only the deletes and a second `stop_task`
   // land the same way twice. `run_task` must not be here — running a task twice runs it twice.
   expect(flagged("idempotentHint")).toEqual([
-    "delete_task_single",
-    "delete_trigger_single",
+    "delete_task",
+    "delete_trigger",
     "models",
     "run_events",
     "run_steps",
@@ -375,5 +408,5 @@ test("a flow is written nested and read back flat, and says so", async () => {
   expect(described).toContain("branches");
   expect(described).toMatch(/silently loses the arms/);
 
-  await call("delete_task_single", { where: { id: { eq: taskId } } });
+  await call("delete_task", { where: { id: { eq: taskId } } });
 });
