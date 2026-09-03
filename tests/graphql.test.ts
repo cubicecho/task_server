@@ -203,6 +203,28 @@ test("a flow is written as a tree and comes back as the rows that run it", async
   expect(cleared).toEqual([]);
 });
 
+test("rewriting a flow counts as editing the task", async () => {
+  // Nothing on the task row changes when its steps do, so `updatedAt` would sit still through a
+  // rewrite of the whole flow — and it is what "newest edit first" orders by, which would leave
+  // an agent's own last edit missing from the top of the listing it goes looking in.
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "touched", prompt: "go" }) { id updatedAt } }`,
+  );
+
+  await run(FLOW, {
+    taskId: task.id,
+    steps: [{ name: "one", prompt: "do it" }],
+  });
+
+  const { tasks: after } = await run(
+    `query Read($id: String!) { tasks(where: { id: { eq: $id } }) { updatedAt } }`,
+    { id: task.id },
+  );
+  expect(new Date(after[0].updatedAt).getTime()).toBeGreaterThan(
+    new Date(task.updatedAt).getTime(),
+  );
+});
+
 test("a flow that cannot run is refused before any of it is written", async () => {
   const { createTask: task } = await run(
     `mutation { createTask(values: { name: "bad", prompt: "go" }) { id } }`,

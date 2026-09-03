@@ -116,6 +116,21 @@ generated description does not say enough. The driver renames after it filters, 
 list names GraphQL fields in camelCase while `HINTS` — and the client — sees the snake_case tool
 name: `Mutation.createTask` is the tool `create_task`.
 
+`toolNameFor` is that spelling, and it also drops the `Single` off the single-row writes:
+`Mutation.updateTaskSingle` is the tool `update_task`. drizzle-graphql needs the qualifier
+because it generates a bulk `updateTask` beside it; this surface excludes the bulk form
+entirely, so the qualifier only distinguished a tool from one that is not here, and agents read
+it as a variant to choose between rather than as the update. It cannot be renamed upstream —
+`suffixes.single` reaches the single *insert* and is ignored by update and delete — and it
+should not be, since the web app has both forms and needs to tell them apart. `TOOL_NAMES` runs
+through the same function, so a name written in prose and the tool it names cannot drift.
+
+Descriptions are written once and read twice, so a cross-reference between fields is respelled
+on the way out: `useToolNames` rewrites a backticked root-field name to its tool name in the
+prose, leaving the driver's generated footer — which is a claim about the GraphQL schema — as it
+found it. Write `runEvents` in a description under `server/graphql/` and an agent reads
+`run_events`. Only names that are tools here are touched, so result columns keep their spelling.
+
 **The tool listing has a size test, and it is not incidental.** The generated relation filters
 recurse between tables, and written out as JSON Schema rather than named as SDL they once made
 the listing 18 MB — more than a model will read, and it arrives before any call. graphql-mcp
@@ -123,11 +138,54 @@ the listing 18 MB — more than a model will read, and it arrives before any cal
 the relation filters intact; before that this file pruned them out by hand. It went to ~528 kB on
 zod 4 — 2.0.0 made zod a peer dependency, and v4 rendered the same schema less compactly than the
 v3 copy the package used to bundle — and back to ~419 kB on 2.2.0, which also named the shared
-types after the GraphQL types they came from rather than by position, and is unchanged on 2.3.0.
-`tests/mcp-endpoint.test.ts` holds every tool under 100 kB and the listing under 650 kB. The
-bounds sit well above the real figure on purpose: it is the driver's to move, and what the test
-is for is the order of magnitude. Anything added here that grows it needs to answer to that test
-rather than raise the bound.
+types after the GraphQL types they came from rather than by position, and was unchanged on 2.3.0.
+It went to ~379 kB on 2.7.0, where the reads gave up their explicit `null` branches — see below.
+Two changes upstream then took it to **~155 kB**: drizzle-graphql 12 gave each column type only
+the operators it can use, which is ~94 kB of `startsWith` on a boolean and `ilike` on a
+timestamp, and graphql-mcp 2.9.0's `inputField` took the relation filters out of the projection,
+which is ~130 kB more — see below. `tests/mcp-endpoint.test.ts` holds every tool under 40 kB and
+the listing under 250 kB. The bounds sit above the real figure on purpose: it is the driver's to
+move, and what the test is for is the order of magnitude. Anything added here that grows it needs
+to answer to that test rather than raise the bound.
+
+**Reads drop their null branches; writes keep theirs.** A nullable argument is advertised twice
+over — absent from `required`, *and* carrying an explicit `null` branch — and on a surface that
+is mostly generated filter types the second is about a fifth of the bytes. Dropping it everywhere
+was tried and reverted: on a mutation input the branch is how a caller clears a column, and also
+how a model says "this optional is absent", so `"cases": null` beside the fields it did fill in
+became a validation error. On a `where` or an `orderBy` there is nothing an explicit null means.
+2.6.0 made `nullBranches` a per-field decision, so `mcp-endpoint.ts` splits it by kind and gets
+both answers. If you ever flatten the tools' `$defs` into one namespace downstream, note that
+the same input type now renders two ways across the surface.
+
+2.10.0 added `{ byType }` for the rule this actually wants — a filter never takes an explicit
+null, wherever it appears — and it does not reach it. The mode resolves at each *position's* own
+named type, and a filter's bytes are in its leaves: `StringFilter.eq` is a `String`, and so is
+`CreateTaskInput.model`. Keyed that way the write payloads lose their branches along with the
+filters, which is the reverted regression above, so the per-kind split is what is expressible
+and `byType` stays unused here. Measured on a three-tool probe: `never` everywhere is −22.6%,
+the per-kind split gets −11.3%, and the `byType` example from the driver's own docs gets −5.4%.
+
+**Relation filters are pruned from the projection, not from the schema.** `TaskFilters` takes
+`triggers`/`steps`/`runs` as list-relation filters, each pulling in the neighbouring table's
+whole filter type, which carries its own relation fields back — the closure that was most of
+this listing's weight, for a question no agent asked across 100 logged calls. 2.9.0's
+`inputField` drops those three fields on the way out. It is the same `schema` object yoga serves
+the web app from, and the app keeps all of them; a question about a task's triggers is asked
+from the trigger end here, where `taskId` is a column.
+
+**The `/mcp-docs` surface is the operations in `server/mcp/tools.graphql`, not the schema.** It
+is the other half of a spike: `/mcp` projects root fields, so an agent meets `where: { id: { eq:
+… } }` to say which task it means; `/mcp-docs` projects hand-written documents, so
+the tool is the operation, its variables are flat and named, and the comment block above it is
+the description. Sixteen tools, ~25 kB against ~155 kB, and ~60% of it prose against ~9%.
+
+The documents go through the driver's own `operations` option — never a hand-rolled handler.
+That is what makes them validate at boot, naming the file and position, and what makes a tool
+answer in the same `{ data, errors }` envelope a generated one does. The temptation is to unwrap
+`data` and hand back the row; don't. Argument validation answers *above* any handler, so a tool
+with its own success shape shows an agent two shapes for the one tool, and the malformed call is
+the one an agent hits most.
 
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
 a task only when an enabled `event` trigger on an enabled task carries that exact id, and

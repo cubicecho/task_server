@@ -1,0 +1,393 @@
+# The agent-facing API, one operation per tool.
+#
+# An operation's name is the tool's name, its variables are the tool's arguments, and the
+# comment block above it is the description an agent reads to choose it. Nothing below leaks
+# into a tool listing except those three things: the selections, the filters and the GraphQL
+# itself stay on this side of the boundary.
+#
+# So the shapes here are the ones a person would ask for. `get_task` takes an id rather than a
+# filter object, `list_runs` takes a status rather than a `where`, and a name says what it does
+# to something an agent already has a word for — a task, a trigger, a run.
+
+# What a task looks like when it is listed: what it is, whether it is on, what starts it, and
+# how it last went. Its run history is not here: each operation asks for as much of it as it
+# needs, because a listing wants the last run and one task wants a page of them.
+fragment TaskSummary on Task {
+  id
+  name
+  model
+  enabled
+  updatedAt
+  triggers(orderBy: { createdAt: { direction: asc, priority: 1 } }) {
+    id
+    kind
+    cron
+    timezone
+    event
+    enabled
+  }
+}
+
+fragment RunSummary on Run {
+  id
+  taskId
+  status
+  startedAt
+  finishedAt
+  totalTokens
+  error
+  attempts
+  blockedBy
+}
+
+# Every task on this server, newest edit first: what each one is called, the model it runs on,
+# whether it is enabled, what starts it and how it last went. The prompt and the flow are not
+# here — ask `get_task` for one task to read those.
+#
+# A task with no triggers never fires on its own. A task with `enabled: false` fires from
+# nothing, trigger or not, though `run_task` will still run it by hand. Its triggers go on
+# reading `enabled: true` while it does — that flag is the trigger's own switch, not the
+# effective answer, and `get_schedule` is what knows the difference — for a `cron` trigger. An
+# `event` trigger is absent from `get_schedule` whether it is armed or not, so the two `enabled`
+# flags are the whole of what can be read back about one.
+#
+# `lastRunThatExecuted` skips `skipped` rows, so it is not necessarily the newest run. Ask
+# `list_runs` when you need the latest firing whatever its outcome.
+query list_tasks {
+  tasks(orderBy: { updatedAt: { direction: desc, priority: 1 } }) {
+    ...TaskSummary
+    # Aliased, because the filter under it is not what an unqualified `runs` would promise: a
+    # `skipped` row never executed, so it is excluded here to answer "how did this task last
+    # do?". Read as "the latest run" it is wrong whenever a skip is the newest row — which is
+    # exactly when a caller most wants to know. The alias is the whole fix: the shape of the
+    # answer now says which question it answered, and `list_runs` remains the one to ask for
+    # true chronological order.
+    lastRunThatExecuted: runs(
+      limit: 1
+      where: { status: { ne: skipped } }
+      orderBy: { startedAt: { direction: desc, priority: 1 } }
+    ) {
+      id
+      status
+      startedAt
+      finishedAt
+    }
+  }
+}
+
+# One task, whole: its prompt, its triggers, the steps of its flow and its recent runs. This is
+# the call to make before editing anything, because `set_task_steps` replaces a flow rather
+# than amending it and you need to know what is there.
+#
+# Steps come back flat, with `parentId` and `branch` describing the tree. `set_task_steps`
+# takes that tree nested instead, so a flow read here has to be rebuilt to be written back.
+query get_task($id: String!) {
+  task(where: { id: { eq: $id } }) {
+    ...TaskSummary
+    prompt
+    systemPrompt
+    steps(orderBy: { position: { direction: asc, priority: 1 } }) {
+      id
+      parentId
+      branch
+      position
+      kind
+      name
+      prompt
+      cases
+      model
+      systemPrompt
+      context
+      enabled
+    }
+    runs(limit: 10, orderBy: { startedAt: { direction: desc, priority: 1 } }) {
+      ...RunSummary
+    }
+  }
+}
+
+# What happened when tasks ran, newest `startedAt` first. `status` is `running`, `ok`, `error`,
+# `stopped` or `skipped`; a `skipped` run never started at all, because its trigger fired while
+# the run named by `blockedBy` still held the task, and `attempts` counts the firings it stands
+# for.
+#
+# One `skipped` row spans its whole collision rather than naming a moment in it: `startedAt` is
+# the first firing it stands for and `finishedAt` moves with the most recent, so its timestamps
+# are a window and not a duration, and it can outlast the run that blocked it. That is also the
+# one place this ordering misleads — a collision row absorbing new firings stays where its first
+# one put it, so the newest row here is not always the newest event. Compare `finishedAt` when
+# a `skipped` row with `attempts` above 1 is in play.
+#
+# Give `taskId` for one task's history, `status` to see only the failures. The output and the
+# tool calls are not here — they are large, and `get_run` has them.
+query list_runs($taskId: String, $status: RunsStatusEnum, $limit: Int = 20) {
+  runs(
+    limit: $limit
+    where: { taskId: { eq: $taskId }, status: { eq: $status } }
+    orderBy: { startedAt: { direction: desc, priority: 1 } }
+  ) {
+    ...RunSummary
+    task {
+      name
+    }
+    trigger {
+      kind
+      cron
+      event
+    }
+  }
+}
+
+# One run in full: what it produced, what it cost, what it called, and the payload it was
+# handed if a webhook started it. `steps` is the path it actually took — on a decision,
+# `branch` is the arm it chose, which is usually the thing you opened the run to find out.
+query get_run($id: String!) {
+  run(where: { id: { eq: $id } }) {
+    ...RunSummary
+    output
+    toolCalls
+    payload
+    trigger {
+      kind
+      cron
+      event
+    }
+    steps(orderBy: { position: { direction: asc, priority: 1 } }) {
+      position
+      depth
+      name
+      kind
+      status
+      branch
+      output
+      error
+      totalTokens
+    }
+  }
+}
+
+# What a running task has said so far, oldest first — the way to watch a run without waiting
+# for it. Pass the `seq` of the last entry you read as `afterSeq` to poll for what is new.
+#
+# These are debugging output and are not kept: a run that finished over a minute ago has none,
+# and `get_run` is where its output lives permanently.
+query get_run_events($runId: String!, $afterSeq: Int, $limit: Int) {
+  runEvents(runId: $runId, afterSeq: $afterSeq, limit: $limit) {
+    seq
+    kind
+    text
+    name
+    step
+    ok
+  }
+}
+
+# When each cron trigger fires next, as an absolute time. A trigger missing from this list is
+# either disabled, on a disabled task, or an `event` trigger, which has no next time.
+query get_schedule {
+  schedule {
+    triggerId
+    nextRun
+  }
+}
+
+# The models this server can run a task on, as the names `create_task` and `update_task` take
+# in `model`. A task with no model of its own uses the server default.
+query list_models {
+  models
+}
+
+# Adds a task. `prompt` is what the agent is asked to do; `model` and `systemPrompt` fall back
+# to the server's defaults when empty.
+#
+# A new task fires from nothing until it has a trigger — add one with `create_trigger`, or
+# call `run_task` to run it now. Give it steps with `set_task_steps` if it is more than one
+# prompt's worth of work.
+mutation create_task(
+  $name: String!
+  $prompt: String!
+  $model: String
+  $systemPrompt: String
+  $enabled: Boolean
+) {
+  createTask(
+    values: {
+      name: $name
+      prompt: $prompt
+      model: $model
+      systemPrompt: $systemPrompt
+      enabled: $enabled
+    }
+  ) {
+    ...TaskSummary
+  }
+}
+
+# Edits one task. Only the arguments you send change; the rest are left as they were.
+#
+# `enabled: false` keeps a task and its history but stops it firing, which is the reversible
+# alternative to deleting it. The task's triggers still read `enabled: true` afterwards and
+# still never fire. `get_schedule` drops a `cron` trigger when that happens, which is where to
+# check that it took; an `event` trigger was never listed there, so for a webhook-driven task the
+# task's own `enabled` is the only confirmation there is.
+mutation update_task(
+  $id: String!
+  $name: String
+  $prompt: String
+  $model: String
+  $systemPrompt: String
+  $enabled: Boolean
+) {
+  updateTaskSingle(
+    where: { id: { eq: $id } }
+    set: {
+      name: $name
+      prompt: $prompt
+      model: $model
+      systemPrompt: $systemPrompt
+      enabled: $enabled
+    }
+  ) {
+    ...TaskSummary
+  }
+}
+
+# Deletes one task, its triggers, its flow and its whole run history. Refused while the task is
+# running — stop it first with `stop_task`. Consider `update_task` with `enabled: false`
+# instead, which is the same quiet and undoes.
+mutation delete_task($id: String!) {
+  deleteTaskSingle(where: { id: { eq: $id } }) {
+    id
+    name
+  }
+}
+
+# Gives a task the steps that run after its own prompt, replacing whatever flow it had. Steps
+# run in order and each one sees what the ones before it produced.
+#
+# A step is `kind: agent` — one prompt, run as a turn — or `kind: decision`. Those two are the
+# whole of it, and `agent` is the default when you send no `kind` at all. Every step needs a
+# `prompt`, a decision included: a decision is a full agent run whose answer has to land on one
+# of its `cases`, so the prompt is the work it does to decide and `cases` is only the shape of
+# the answer.
+#
+# A step of kind `decision` picks one of its own `cases`, and what runs next is that arm's
+# entry in `branches` — `{ case: "yes", steps: [ … ] }` — nested as deep as you like. Send an
+# existing step's `id` back to edit it in place and keep the run history pointing at it; omit
+# `id` for a new one. Anything you do not send is gone.
+#
+# Steps read back from `get_task` are flat, with `parentId` and `branch` instead of `branches`.
+# Those are not fields you can send: rebuild the nesting yourself, or a decision arrives with
+# its `cases` intact and its arms silently dropped.
+#
+# An arm with no steps stores nothing, so one you sent empty and one you never mentioned read
+# back alike. Either way the arm exists — it is named by the decision's `cases` — and the run
+# simply carries on after the decision. There is nothing to verify and nothing has gone wrong.
+mutation set_task_steps($taskId: String!, $steps: [StepInput!]!) {
+  setTaskSteps(taskId: $taskId, steps: $steps) {
+    id
+    parentId
+    branch
+    position
+    kind
+    name
+  }
+}
+
+# Starts a task on something. `kind` is `cron` or `event`, and it decides which of the other
+# arguments mean anything.
+#
+# `kind: cron` takes a five-field expression such as `0 9 * * *` — minute, hour, day of month,
+# month, day of week, where day of week runs 0-6 from Sunday and 7 is Sunday again. It is read
+# in `timezone`, an IANA zone name like `UTC` or `Europe/London`, or the server's if you leave
+# it out.
+#
+# `kind: event` takes an `event` id and fires whenever a POST reaches `/webhooks/<that id>`,
+# with the request body available to the prompt as `{{event}}` — there is no secret, so make the
+# id unguessable if it matters.
+#
+# What comes back is an echo of what you sent, not proof the trigger is armed: `enabled: true`
+# here is the trigger's own switch and reads true even on a disabled task. For a `cron` trigger,
+# `get_schedule` is the confirmation — it is computed from the running scheduler, so an entry
+# there with a plausible `nextRun` is also the only check that the expression parsed and the
+# timezone was understood. An `event` trigger never appears there, so its two `enabled` flags
+# are all there is to read.
+#
+# A trigger that fires while its task is already running leaves a `skipped` run rather than a
+# second one.
+mutation create_trigger(
+  $taskId: String!
+  $kind: TriggersKindEnum!
+  $cron: String
+  $timezone: String
+  $event: String
+  $enabled: Boolean
+) {
+  createTrigger(
+    values: {
+      taskId: $taskId
+      kind: $kind
+      cron: $cron
+      timezone: $timezone
+      event: $event
+      enabled: $enabled
+    }
+  ) {
+    id
+    kind
+    cron
+    timezone
+    event
+    enabled
+  }
+}
+
+# Edits one trigger — a new schedule, a different timezone, or `enabled: false` to stop it
+# firing without losing it. Only the arguments you send change.
+mutation update_trigger(
+  $id: String!
+  $cron: String
+  $timezone: String
+  $event: String
+  $enabled: Boolean
+) {
+  updateTriggerSingle(
+    where: { id: { eq: $id } }
+    set: { cron: $cron, timezone: $timezone, event: $event, enabled: $enabled }
+  ) {
+    id
+    kind
+    cron
+    timezone
+    event
+    enabled
+  }
+}
+
+# Removes one trigger, leaving the task and its history alone. `update_trigger` with
+# `enabled: false` does the same thing reversibly.
+mutation delete_trigger($id: String!) {
+  deleteTriggerSingle(where: { id: { eq: $id } }) {
+    id
+  }
+}
+
+# Runs a task now and answers with the finished run, which means a long task is a long call.
+# Read `get_run_events` from another call to watch it, or `stop_task` to call it off.
+#
+# Finished is not the same as succeeded: a run that failed comes back the same way one that
+# worked does, and `status` separates them. An error here means the run could not be started at
+# all, and the usual reason is that the task is already running.
+mutation run_task($taskId: String!) {
+  runTask(taskId: $taskId) {
+    ...RunSummary
+    output
+  }
+}
+
+# Aborts the run in flight on a task, if there is one. It finishes as `stopped` with whatever
+# it had produced discarded — there is no resuming it. Answers `false` when nothing was
+# running, which is not an error.
+mutation stop_task($taskId: String!) {
+  stopTask(taskId: $taskId)
+}

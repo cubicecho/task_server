@@ -1200,51 +1200,6 @@ input BooleanFilter {
   """Not equal to"""
   ne: Boolean
 
-  """Less than"""
-  lt: Boolean
-
-  """Less than or equal to"""
-  lte: Boolean
-
-  """Greater than"""
-  gt: Boolean
-
-  """Greater than or equal to"""
-  gte: Boolean
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
-
   """Matches any one of these values (SQL `IN`)"""
   inArray: [Boolean!]
 
@@ -1285,39 +1240,6 @@ input DateTimeFilter {
 
   """Greater than or equal to"""
   gte: DateTime
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
 
   """Matches any one of these values (SQL `IN`)"""
   inArray: [DateTime!]
@@ -1525,51 +1447,6 @@ input TriggersKindEnumFilter {
 
   """Not equal to"""
   ne: TriggersKindEnum
-
-  """Less than"""
-  lt: TriggersKindEnum
-
-  """Less than or equal to"""
-  lte: TriggersKindEnum
-
-  """Greater than"""
-  gt: TriggersKindEnum
-
-  """Greater than or equal to"""
-  gte: TriggersKindEnum
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
 
   """Matches any one of these values (SQL `IN`)"""
   inArray: [TriggersKindEnum!]
@@ -1857,51 +1734,6 @@ input StepsKindEnumFilter {
   """Not equal to"""
   ne: StepsKindEnum
 
-  """Less than"""
-  lt: StepsKindEnum
-
-  """Less than or equal to"""
-  lte: StepsKindEnum
-
-  """Greater than"""
-  gt: StepsKindEnum
-
-  """Greater than or equal to"""
-  gte: StepsKindEnum
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
-
   """Matches any one of these values (SQL `IN`)"""
   inArray: [StepsKindEnum!]
 
@@ -1930,51 +1762,6 @@ input StepsContextEnumFilter {
 
   """Not equal to"""
   ne: StepsContextEnum
-
-  """Less than"""
-  lt: StepsContextEnum
-
-  """Less than or equal to"""
-  lte: StepsContextEnum
-
-  """Greater than"""
-  gt: StepsContextEnum
-
-  """Greater than or equal to"""
-  gte: StepsContextEnum
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
 
   """Matches any one of these values (SQL `IN`)"""
   inArray: [StepsContextEnum!]
@@ -2118,51 +1905,6 @@ input RunsStatusEnumFilter {
 
   """Not equal to"""
   ne: RunsStatusEnum
-
-  """Less than"""
-  lt: RunsStatusEnum
-
-  """Less than or equal to"""
-  lte: RunsStatusEnum
-
-  """Greater than"""
-  gt: RunsStatusEnum
-
-  """Greater than or equal to"""
-  gte: RunsStatusEnum
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
 
   """Matches any one of these values (SQL `IN`)"""
   inArray: [RunsStatusEnum!]
@@ -2333,51 +2075,6 @@ input RunStepsStatusEnumFilter {
 
   """Not equal to"""
   ne: RunStepsStatusEnum
-
-  """Less than"""
-  lt: RunStepsStatusEnum
-
-  """Less than or equal to"""
-  lte: RunStepsStatusEnum
-
-  """Greater than"""
-  gt: RunStepsStatusEnum
-
-  """Greater than or equal to"""
-  gte: RunStepsStatusEnum
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
 
   """Matches any one of these values (SQL `IN`)"""
   inArray: [RunStepsStatusEnum!]
@@ -2571,51 +2268,6 @@ input McpServersTransportEnumFilter {
   """Not equal to"""
   ne: McpServersTransportEnum
 
-  """Less than"""
-  lt: McpServersTransportEnum
-
-  """Less than or equal to"""
-  lte: McpServersTransportEnum
-
-  """Greater than"""
-  gt: McpServersTransportEnum
-
-  """Greater than or equal to"""
-  gte: McpServersTransportEnum
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
-
   """Matches any one of these values (SQL `IN`)"""
   inArray: [McpServersTransportEnum!]
 
@@ -2776,51 +2428,6 @@ input SettingsToolDiscoveryEnumFilter {
 
   """Not equal to"""
   ne: SettingsToolDiscoveryEnum
-
-  """Less than"""
-  lt: SettingsToolDiscoveryEnum
-
-  """Less than or equal to"""
-  lte: SettingsToolDiscoveryEnum
-
-  """Greater than"""
-  gt: SettingsToolDiscoveryEnum
-
-  """Greater than or equal to"""
-  gte: SettingsToolDiscoveryEnum
-  like: String
-  notLike: String
-  ilike: String
-  notIlike: String
-
-  """
-  Matches values starting with the given string. `%`, `_` and `\` are matched literally.
-  """
-  startsWith: String
-
-  """
-  Matches values ending with the given string. `%`, `_` and `\` are matched literally.
-  """
-  endsWith: String
-
-  """
-  Matches values containing the given string. `%`, `_` and `\` are matched literally.
-  """
-  contains: String
-
-  """Case-insensitive `startsWith`."""
-  iStartsWith: String
-
-  """Case-insensitive `endsWith`."""
-  iEndsWith: String
-
-  """Case-insensitive `contains`."""
-  iContains: String
-
-  """
-  When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own.
-  """
-  insensitive: Boolean
 
   """Matches any one of these values (SQL `IN`)"""
   inArray: [SettingsToolDiscoveryEnum!]
@@ -3448,6 +3055,10 @@ input StepInput {
   What this step is called, in the run history and in `{{steps.<name>}}`.
   """
   name: String
+
+  """
+  What this step is asked to do. Required on a `decision` too, and for the same reason: a decision is a full agent run — reading the mail, checking the build — that has to end on one of its `cases`. The prompt is the work it does to decide, and `cases` is only the shape of the answer, so a decision with no prompt has nothing to go on.
+  """
   prompt: String!
 
   """Decision only, and required for one: the arms it may choose between."""
