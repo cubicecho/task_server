@@ -4,7 +4,6 @@ import express from "express";
 import { createYoga } from "graphql-yoga";
 import { ensureSchema } from "./db/migrate.ts";
 import { schema } from "./graphql/schema.ts";
-import { docsMcpHandler, mountDocsMcp } from "./mcp/docs-endpoint.ts";
 import { mcpHandler, mountMcp } from "./mcp-endpoint.ts";
 import { PORT, ROOT } from "./paths.ts";
 import { mcp } from "./runner/mcp.ts";
@@ -31,8 +30,6 @@ app.use(yoga.graphqlEndpoint, yoga);
 // The same schema, offered to other clients as MCP tools, beside GraphQL rather than
 // replacing it. What it exposes and why is in `mcp-endpoint.ts`.
 mountMcp(app);
-// The document-driven surface, live beside the generated one while the two are compared.
-mountDocsMcp(app);
 
 // The inbound end of an `event` trigger. POST only, so it cannot collide with the client's
 // routes below however the sender spells the id.
@@ -42,9 +39,7 @@ mountWebhooks(app);
 const dist = path.join(ROOT, "dist");
 if (fs.existsSync(dist)) {
   app.use(express.static(dist));
-  app.get(/^(?!\/(graphql|mcp|mcp-docs)$).*/, (_req, res) =>
-    res.sendFile(path.join(dist, "index.html")),
-  );
+  app.get(/^(?!\/(graphql|mcp)$).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 
 app.use(
@@ -67,7 +62,6 @@ const shutdown = async () => {
   cron.stop();
   cleanup.stop();
   await mcpHandler.close();
-  await docsMcpHandler.close();
   await mcp.shutdown();
   server.close();
   process.exit(0);

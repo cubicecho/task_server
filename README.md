@@ -175,8 +175,6 @@ express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `r
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
 - **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,
   which talks only GraphQL.
-- **`/mcp-docs`** — the same server again, as hand-written operations instead of projected
-  fields. The other half of a comparison, not a replacement; also below.
 
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so
 editing a trigger in the UI takes effect immediately.
@@ -361,30 +359,25 @@ Express's 404 page.
 No CORS headers, deliberately: this server has no authentication, so anyone who can reach the
 port can drive it, and there is no reason to also let a web page from another origin do so.
 
-### `/mcp-docs`, the other surface
+### The surface that was measured against this one
 
-`/mcp` projects root fields, so an agent meets the shapes the schema generator emitted: `where:
-{ id: { eq: … } }` to fetch one task, and the transitive closure of the filter types behind it —
-155 kB of them before it can call anything.
+A spike put a second endpoint beside this one, `/mcp-docs`, built from hand-written GraphQL
+operations rather than projected root fields: the tool was the operation, its arguments were the
+operation's flat named variables, and its description was the comment block above it. Sixteen
+tools in ~25 kB, against seventeen in ~155 kB here, and ~60% of those bytes prose an agent reads
+rather than schema it skims, against ~9% on this one.
 
-`/mcp-docs` is the same server behind sixteen hand-written operations in
-`server/mcp/tools.graphql`. The tool is the operation: its name is the operation's name, its
-arguments are the operation's variables — flat, named, `get_task(id)` rather than a filter — and
-its description is the comment block above it. The whole listing is ~25 kB, and ~60% of that is
-prose an agent reads rather than schema it skims, against ~9% on `/mcp`.
+Fifteen isolated agents — five errands across three surfaces, each with its own fixture server
+and database, writes verified against the tables rather than taken on the agent's word — got
+5/5 errands right on every surface, with no failed calls on any of them. So the smaller listing
+bought no accuracy that this one did not already have, and it cost a curated API: a new column
+is unreachable until somebody writes a document asking for it, and every document is a file to
+keep in step with the schema. The generated surface is what stayed.
 
-The trade is a real one and the two are mounted side by side rather than one replacing the
-other. A curated surface is a bet that you know the questions: it wins decisively where the bet
-holds, and a new column is not reachable at all until a document asks for it. A generated
-surface answers what nobody anticipated.
-
-The documents go through the driver's `operations` option rather than a hand-rolled handler,
-which is what makes them validate at boot — a mistyped field is a startup error naming the file
-and line, not a tool that fails the first time it is called — and what makes them answer in the
-same `{ data, errors }` envelope the generated tools use. That last part is worth resisting the
-urge to improve: unwrapping `data` and handing back the row reads better right up until an
-argument fails validation, which happens above any handler and answers in the envelope anyway.
-One tool with two result shapes is worse than one shape with a wrapper.
+What the spike did leave behind is here rather than there. The listing went from ~379 kB to
+~155 kB on two upstream changes filed off those runs, both above, and the reads gave up their
+null branches. Across a hundred logged calls the only filter operator any agent sent was `eq`,
+which is the finding both of those act on.
 
 ## Docker
 
