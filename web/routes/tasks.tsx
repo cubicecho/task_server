@@ -35,7 +35,6 @@ export function TasksRoute() {
     mutationFn: (task: TaskFieldsFragment) =>
       request(UpdateTaskDocument, { id: task.id, set: { enabled: !task.enabled } }),
     onSuccess: refresh,
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const remove = useMutation({
@@ -44,7 +43,6 @@ export function TasksRoute() {
       toast.success("Task deleted");
       refresh();
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const stop = useMutation({
@@ -56,7 +54,6 @@ export function TasksRoute() {
       refresh();
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const run = useMutation({
@@ -68,7 +65,6 @@ export function TasksRoute() {
       else toast.success("Run finished — see Runs for the output");
       refresh();
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   // The scheduler is the authority on when a trigger next fires; the trigger row only holds

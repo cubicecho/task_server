@@ -128,7 +128,6 @@ export function RunsRoute() {
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteRunDocument, { id }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runs"] }),
-    onError: (error: Error) => toast.error(error.message),
   });
 
   // A run is stopped through the task that owns it: the runner keys what is in flight by task.
@@ -140,7 +139,6 @@ export function RunsRoute() {
       queryClient.invalidateQueries({ queryKey: ["runs"] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   return (

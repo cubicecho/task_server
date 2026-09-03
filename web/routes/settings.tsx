@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
   SetApiKeyDocument,
   SettingsDocument,
+  type SettingsQuery,
   SettingsToolDiscoveryEnum,
   UpdateSettingsDocument,
 } from "@/__generated__/graphql/graphql";
 import { Page } from "@/components/app-shell";
+import { Field, NumberField } from "@/components/field";
 import { ModelSelect } from "@/components/model-select";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { request } from "@/lib/gql";
+import { useCopy } from "@/lib/use-copy";
 
 /**
  * Where an agent reaches this server.
@@ -48,40 +51,16 @@ const MCP_JSON = `{
 
 const CLAUDE_CLI = `claude mcp add --transport http tasks ${ENDPOINT}`;
 
-/**
- * The old way to copy, for the pages that cannot use the new one: `navigator.clipboard` exists
- * only in a secure context, and this app is as often as not served over plain http on a LAN.
- */
-function copyTheOldWay(text: string) {
-  const area = document.createElement("textarea");
-  area.value = text;
-  area.style.position = "fixed";
-  area.style.opacity = "0";
-  document.body.append(area);
-  area.select();
-  document.execCommand("copy");
-  area.remove();
-}
+const DESCRIPTION = "The model every task runs on, unless it overrides it.";
 
 function Snippet({ label, text }: { label: string; text: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      if (navigator.clipboard) await navigator.clipboard.writeText(text);
-      else copyTheOldWay(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error("Could not copy. Select the text and copy it by hand.");
-    }
-  };
+  const { copied, copy } = useCopy();
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <Label>{label}</Label>
-        <Button variant="ghost" size="xs" onClick={copy}>
+        <Button variant="ghost" size="xs" onClick={() => void copy(text)}>
           {copied ? <Check /> : <Copy />}
           {copied ? "Copied" : "Copy"}
         </Button>
@@ -93,6 +72,9 @@ function Snippet({ label, text }: { label: string; text: string }) {
   );
 }
 
+type SettingsRow = SettingsQuery["settings"][number];
+
+/** The editable half of the row. `id` is deliberately not in here — it is not a field. */
 interface Form {
   baseUrl: string;
   model: string;
@@ -107,48 +89,56 @@ interface Form {
   runRetentionDays: number;
 }
 
+const toForm = (row: SettingsRow): Form => ({
+  baseUrl: row.baseUrl,
+  model: row.model,
+  systemPrompt: row.systemPrompt,
+  maxTokens: row.maxTokens,
+  temperature: row.temperature,
+  maxToolIterations: row.maxToolIterations,
+  toolDiscovery: row.toolDiscovery,
+  toolSelectModel: row.toolSelectModel,
+  requestTimeoutSeconds: row.requestTimeoutSeconds,
+  maxRetries: row.maxRetries,
+  runRetentionDays: row.runRetentionDays,
+});
+
 export function SettingsRoute() {
-  const queryClient = useQueryClient();
-  const [form, setForm] = useState<Form | null>(null);
-  const [apiKey, setApiKey] = useState("");
-
   const settings = useQuery({ queryKey: ["settings"], queryFn: () => request(SettingsDocument) });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["settings"] });
+  const row = settings.data?.settings[0];
 
-  // The row is the source of truth; the form is a copy taken once it has loaded.
-  const loaded = settings.data?.settings[0];
-  useEffect(() => {
-    if (loaded && !form) {
-      const { baseUrl, model, systemPrompt, maxTokens, temperature, maxToolIterations } = loaded;
-      setForm({
-        baseUrl,
-        model,
-        systemPrompt,
-        maxTokens,
-        temperature,
-        maxToolIterations,
-        toolDiscovery: loaded.toolDiscovery,
-        toolSelectModel: loaded.toolSelectModel,
-        requestTimeoutSeconds: loaded.requestTimeoutSeconds,
-        maxRetries: loaded.maxRetries,
-        runRetentionDays: loaded.runRetentionDays,
-      });
-    }
-  }, [loaded, form]);
+  if (!row) {
+    return (
+      <Page title="Settings" description={DESCRIPTION}>
+        {settings.error ? (
+          <p className="text-sm text-destructive">{(settings.error as Error).message}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        )}
+      </Page>
+    );
+  }
+
+  // The form is built from a row that has already arrived rather than started empty and patched
+  // into shape once the query lands, which is what the rest of the app does — see `TaskForm`.
+  // Keyed on the row so a background refetch of the same row leaves edits in progress alone.
+  return <SettingsForm key={row.id} settings={row} />;
+}
+
+function SettingsForm({ settings }: { settings: SettingsRow }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<Form>(() => toForm(settings));
+  const [apiKey, setApiKey] = useState("");
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!form) return;
-      // An emptied number input parses to NaN, which would go over the wire as null.
-      for (const key of [
-        "maxTokens",
-        "temperature",
-        "maxToolIterations",
-        "requestTimeoutSeconds",
-        "maxRetries",
-        "runRetentionDays",
-      ] as const) {
-        if (!Number.isFinite(form[key])) throw new Error(`${key} must be a number.`);
+      // An emptied number input parses to NaN, which would go over the wire as null. Asking the
+      // values what they are, rather than keeping a list of which fields are numbers, is what
+      // stops a field added below from quietly falling outside the check.
+      for (const [key, value] of Object.entries(form)) {
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          throw new Error(`${key} must be a number.`);
+        }
       }
       await request(UpdateSettingsDocument, { set: form });
       // The key travels on its own mutation because it is write-only — it is excluded from
@@ -158,192 +148,170 @@ export function SettingsRoute() {
     },
     onSuccess: () => {
       toast.success("Settings saved");
-      refresh();
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
-  const field = <K extends keyof Form>(key: K, value: Form[K]) =>
-    setForm((current) => (current ? { ...current, [key]: value } : current));
+  const set = <K extends keyof Form>(key: K, value: Form[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   return (
     <Page
       title="Settings"
-      description="The model every task runs on, unless it overrides it."
+      description={DESCRIPTION}
       actions={
-        <Button onClick={() => save.mutate()} disabled={!form || save.isPending}>
+        <Button onClick={() => save.mutate()} disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save"}
         </Button>
       }
     >
       <Card className="gap-4 p-4">
         <h2 className="font-medium">Model</h2>
-        {form ? (
-          <>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="baseUrl">Base URL</Label>
-              <Input
-                id="baseUrl"
-                value={form.baseUrl}
-                onChange={(event) => field("baseUrl", event.target.value)}
-                placeholder="http://localhost:11434/v1"
-              />
-              <p className="text-xs text-muted-foreground">
-                Any OpenAI-compatible server: Ollama <code>:11434/v1</code>, LM Studio{" "}
-                <code>:1234/v1</code>, OpenAI, OpenRouter.
-              </p>
-            </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="apiKey">API key</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                placeholder="unchanged — leave blank to keep the stored key"
-              />
-            </div>
+        <Field
+          label="Base URL"
+          htmlFor="baseUrl"
+          hint={
+            <>
+              Any OpenAI-compatible server: Ollama <code>:11434/v1</code>, LM Studio{" "}
+              <code>:1234/v1</code>, OpenAI, OpenRouter.
+            </>
+          }
+        >
+          <Input
+            id="baseUrl"
+            value={form.baseUrl}
+            onChange={(event) => set("baseUrl", event.target.value)}
+            placeholder="http://localhost:11434/v1"
+          />
+        </Field>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="model">Model</Label>
-              <ModelSelect
-                id="model"
-                value={form.model}
-                onChange={(model) => field("model", model)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Opening the list asks the server above for its models, so save a new base URL first.
-              </p>
-            </div>
+        <Field label="API key" htmlFor="apiKey">
+          <Input
+            id="apiKey"
+            type="password"
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
+            placeholder="unchanged — leave blank to keep the stored key"
+          />
+        </Field>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="systemPrompt">Default system prompt</Label>
-              <Textarea
-                id="systemPrompt"
-                rows={3}
-                value={form.systemPrompt}
-                onChange={(event) => field("systemPrompt", event.target.value)}
-              />
-            </div>
+        <Field
+          label="Model"
+          htmlFor="model"
+          hint={
+            <>
+              Opening the list asks the server above for its models, so save a new base URL first.
+            </>
+          }
+        >
+          <ModelSelect id="model" value={form.model} onChange={(model) => set("model", model)} />
+        </Field>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="maxTokens">Max tokens</Label>
-                <Input
-                  id="maxTokens"
-                  type="number"
-                  value={form.maxTokens}
-                  onChange={(event) => field("maxTokens", Number(event.target.value))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="temperature">Temperature</Label>
-                <Input
-                  id="temperature"
-                  type="number"
-                  step="0.1"
-                  value={form.temperature}
-                  onChange={(event) => field("temperature", Number(event.target.value))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="iterations">Max tool steps</Label>
-                <Input
-                  id="iterations"
-                  type="number"
-                  value={form.maxToolIterations}
-                  onChange={(event) => field("maxToolIterations", Number(event.target.value))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="requestTimeoutSeconds">Silence before giving up (s)</Label>
-                <Input
-                  id="requestTimeoutSeconds"
-                  type="number"
-                  value={form.requestTimeoutSeconds}
-                  onChange={(event) => field("requestTimeoutSeconds", Number(event.target.value))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Resets on every token, so a long answer is never cut off. 0 waits forever.
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="maxRetries">Retries</Label>
-                <Input
-                  id="maxRetries"
-                  type="number"
-                  value={form.maxRetries}
-                  onChange={(event) => field("maxRetries", Number(event.target.value))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  For a request that failed before the model said anything.
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="runRetentionDays">Keep runs for (days)</Label>
-                <Input
-                  id="runRetentionDays"
-                  type="number"
-                  value={form.runRetentionDays}
-                  onChange={(event) => field("runRetentionDays", Number(event.target.value))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Older runs are deleted hourly. 0 keeps every run forever.
-                </p>
-              </div>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        )}
+        <Field label="Default system prompt" htmlFor="systemPrompt">
+          <Textarea
+            id="systemPrompt"
+            rows={3}
+            value={form.systemPrompt}
+            onChange={(event) => set("systemPrompt", event.target.value)}
+          />
+        </Field>
+
+        <div className="grid grid-cols-3 gap-4">
+          <NumberField
+            id="maxTokens"
+            label="Max tokens"
+            value={form.maxTokens}
+            onChange={(value) => set("maxTokens", value)}
+          />
+          <NumberField
+            id="temperature"
+            label="Temperature"
+            step="0.1"
+            value={form.temperature}
+            onChange={(value) => set("temperature", value)}
+          />
+          <NumberField
+            id="iterations"
+            label="Max tool steps"
+            value={form.maxToolIterations}
+            onChange={(value) => set("maxToolIterations", value)}
+          />
+          <NumberField
+            id="requestTimeoutSeconds"
+            label="Silence before giving up (s)"
+            hint="Resets on every token, so a long answer is never cut off. 0 waits forever."
+            value={form.requestTimeoutSeconds}
+            onChange={(value) => set("requestTimeoutSeconds", value)}
+          />
+          <NumberField
+            id="maxRetries"
+            label="Retries"
+            hint="For a request that failed before the model said anything."
+            value={form.maxRetries}
+            onChange={(value) => set("maxRetries", value)}
+          />
+          <NumberField
+            id="runRetentionDays"
+            label="Keep runs for (days)"
+            hint="Older runs are deleted hourly. 0 keeps every run forever."
+            value={form.runRetentionDays}
+            onChange={(value) => set("runRetentionDays", value)}
+          />
+        </div>
       </Card>
 
-      {form ? (
-        <Card className="gap-4 p-4">
-          <h2 className="font-medium">MCP tools</h2>
+      <Card className="gap-4 p-4">
+        <h2 className="font-medium">MCP tools</h2>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="toolDiscovery">Discovery</Label>
-            <Select
-              value={form.toolDiscovery}
-              onValueChange={(value) => field("toolDiscovery", value as SettingsToolDiscoveryEnum)}
-            >
-              <SelectTrigger id="toolDiscovery" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SettingsToolDiscoveryEnum.Eager}>
-                  Eager — send every definition every time
-                </SelectItem>
-                <SelectItem value={SettingsToolDiscoveryEnum.Ondemand}>
-                  On demand — load definitions as needed
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
+        <Field
+          label="Discovery"
+          htmlFor="toolDiscovery"
+          hint={
+            <>
               On demand puts a name-only catalogue in the system prompt and lets the model pull in
               the schemas it needs mid-run. Much cheaper with many tools; costs one extra round trip
               on the runs that use them.
-            </p>
-          </div>
+            </>
+          }
+        >
+          <Select
+            value={form.toolDiscovery}
+            onValueChange={(value) => set("toolDiscovery", value as SettingsToolDiscoveryEnum)}
+          >
+            <SelectTrigger id="toolDiscovery" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SettingsToolDiscoveryEnum.Eager}>
+                Eager — send every definition every time
+              </SelectItem>
+              <SelectItem value={SettingsToolDiscoveryEnum.Ondemand}>
+                On demand — load definitions as needed
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="toolSelectModel">Tool-picking model</Label>
-            <ModelSelect
-              id="toolSelectModel"
-              value={form.toolSelectModel}
-              onChange={(model) => field("toolSelectModel", model)}
-              defaultLabel="Same model as the task"
-            />
-            <p className="text-xs text-muted-foreground">
+        <Field
+          label="Tool-picking model"
+          htmlFor="toolSelectModel"
+          hint={
+            <>
               Guesses which tools a task needs before it starts, so on-demand loading usually costs
               no round trip at all. A small fast model is enough. Unused unless discovery is on
               demand.
-            </p>
-          </div>
-        </Card>
-      ) : null}
+            </>
+          }
+        >
+          <ModelSelect
+            id="toolSelectModel"
+            value={form.toolSelectModel}
+            onChange={(model) => set("toolSelectModel", model)}
+            defaultLabel="Same model as the task"
+          />
+        </Field>
+      </Card>
 
       <Card className="gap-4 p-4">
         <div>

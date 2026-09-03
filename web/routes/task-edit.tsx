@@ -15,12 +15,12 @@ import {
   UpdateTriggerDocument,
 } from "@/__generated__/graphql/graphql";
 import { Page } from "@/components/app-shell";
+import { Field } from "@/components/field";
 import { ModelSelect } from "@/components/model-select";
 import { StepList } from "@/components/step-editor";
 import { type DraftTrigger, TriggerEditor, toDraftTriggers } from "@/components/trigger-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
@@ -136,7 +136,6 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       setRemoved([]);
       if (!task) navigate({ to: "/tasks/$taskId", params: { taskId } });
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   return (
@@ -157,18 +156,16 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     >
       <Back />
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="name">Name</Label>
+      <Field label="Name" htmlFor="name">
         <Input
           id="name"
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="Morning brief"
         />
-      </div>
+      </Field>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="prompt">Prompt</Label>
+      <Field label="Prompt" htmlFor="prompt">
         <Textarea
           id="prompt"
           value={prompt}
@@ -184,27 +181,25 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
             A run started any other way renders it as a note saying there was none.
           </p>
         ) : null}
-      </div>
+      </Field>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="model">Model</Label>
+        <Field label="Model" htmlFor="model">
           <ModelSelect
             id="model"
             value={model}
             onChange={setModel}
             defaultLabel="Default from Settings"
           />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="system">System prompt</Label>
+        </Field>
+        <Field label="System prompt" htmlFor="system">
           <Input
             id="system"
             value={systemPrompt}
             onChange={(event) => setSystemPrompt(event.target.value)}
             placeholder="(default from Settings)"
           />
-        </div>
+        </Field>
       </div>
 
       <TriggerEditor
@@ -213,15 +208,14 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         onRemoveSaved={(id) => setRemoved((current) => [...current, id])}
       />
 
-      <div className="flex flex-col gap-3">
-        <Label>Flow</Label>
+      <Field label="Flow" className="gap-3">
         <p className="text-sm text-muted-foreground">
           Each step is shown what came before it. Write <code>{"{{previous}}"}</code> or{" "}
           <code>{"{{steps.<name>}}"}</code> in a prompt to place that output yourself. A decision
           runs like any other step — tools included — and then picks which of its cases runs next.
         </p>
         <StepList steps={steps} onChange={setSteps} />
-      </div>
+      </Field>
     </Page>
   );
 }

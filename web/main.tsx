@@ -1,12 +1,20 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { router } from "@/router";
 import "./index.css";
 
 const queryClient = new QueryClient({
+  // Every mutation in the app answers a failure the same way — say what went wrong, and leave
+  // the form as the user left it — and each one used to say so itself, in the same line written
+  // fourteen times. A mutation that ever wants a different answer adds its own `onError`, which
+  // runs after this one rather than instead of it.
+  mutationCache: new MutationCache({
+    onError: (error) => toast.error(error.message),
+  }),
   defaultOptions: {
     queries: {
       retry: false,
