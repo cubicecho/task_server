@@ -1,5 +1,5 @@
-import type { McpConnectionInput, McpServersQuery } from "@/gql/graphql";
-import { McpServersTransportEnum } from "@/gql/graphql";
+import type { McpConnectionInput, McpServersQuery } from "@/__generated__/graphql/graphql";
+import { McpServersTransportEnum } from "@/__generated__/graphql/graphql";
 
 /** What a pasted config can fill in: the connection fields, and a slug if the paste named one. */
 export interface PastedConfig {

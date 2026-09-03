@@ -1,10 +1,10 @@
 import { Check, Copy, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { TaskFieldsFragment } from "@/gql/graphql";
 
 /**
  * The two things that can start a task: a schedule, and a webhook.

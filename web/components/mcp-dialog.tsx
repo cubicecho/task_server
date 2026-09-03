@@ -2,6 +2,14 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, ClipboardPaste, PlugZap, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  CreateMcpServerDocument,
+  type McpProbe,
+  type McpServersQuery,
+  McpServersTransportEnum,
+  TestMcpServerDocument,
+  UpdateMcpServerDocument,
+} from "@/__generated__/graphql/graphql";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,14 +30,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  CreateMcpServerDocument,
-  type McpProbe,
-  type McpServersQuery,
-  McpServersTransportEnum,
-  TestMcpServerDocument,
-  UpdateMcpServerDocument,
-} from "@/gql/graphql";
 import { request } from "@/lib/gql";
 import { parseJson, parseMcpJson } from "@/lib/mcp-config";
 

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { parseMcpJson } from "../src/lib/mcp-config.ts";
+import { parseMcpJson } from "../web/lib/mcp-config.ts";
 
 const stdio = { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"] };
 

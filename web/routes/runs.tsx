@@ -2,12 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  DeleteRunDocument,
+  RunsDocument,
+  type RunsQuery,
+  StopTaskDocument,
+} from "@/__generated__/graphql/graphql";
 import { Page } from "@/components/app-shell";
 import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DeleteRunDocument, RunsDocument, type RunsQuery, StopTaskDocument } from "@/gql/graphql";
 import { request } from "@/lib/gql";
 import { STATUS_VARIANT } from "@/lib/run-status";
 

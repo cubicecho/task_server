@@ -18,12 +18,12 @@
     "allowImportingTsExtensions": true,
     "types": ["node"],
     "paths": {
-      "@/*": ["./src/*"],
+      "@/*": ["./web/*"],
       "@server/*": ["./server/*"]
     }
   },
   "include": [
-    "src",
+    "web",
     "server",
     "tests",
     "scripts",

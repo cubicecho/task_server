@@ -2,6 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import {
+  SetApiKeyDocument,
+  SettingsDocument,
+  SettingsToolDiscoveryEnum,
+  UpdateSettingsDocument,
+} from "@/__generated__/graphql/graphql";
 import { Page } from "@/components/app-shell";
 import { ModelSelect } from "@/components/model-select";
 import { Button } from "@/components/ui/button";
@@ -16,12 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  SetApiKeyDocument,
-  SettingsDocument,
-  SettingsToolDiscoveryEnum,
-  UpdateSettingsDocument,
-} from "@/gql/graphql";
 import { request } from "@/lib/gql";
 
 /**

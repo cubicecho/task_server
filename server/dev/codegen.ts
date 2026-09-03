@@ -3,14 +3,16 @@ import path from "node:path";
 import { writeSchemaFile } from "../graphql/write-schema.ts";
 import { ROOT } from "../paths.ts";
 
-const TYPES_FILE = path.join(ROOT, "src/gql/graphql.ts");
+const TYPES_FILE = path.join(ROOT, "web/__generated__/graphql/graphql.ts");
 
 /**
  * Regenerates `schema.graphql` and the typed documents when the schema has moved.
  *
  * The schema is generated from the Drizzle tables, so adding a column changes the API without
- * anyone editing the GraphQL — and the committed artefacts go stale silently. Booting the dev
- * server is the moment that is always true after such an edit, so it is where the check goes.
+ * anyone editing the GraphQL — and `schema.graphql`, which is committed, would go stale
+ * silently. Booting the dev server is the moment that is always true after such an edit, so it
+ * is where the check goes. The typed documents are not committed at all — this is what keeps
+ * them caught up with a schema or a `.graphql` document either one changed underneath them.
  *
  * Only for `npm run dev`. `@graphql-codegen/cli` is a devDependency and is not in the image;
  * production serves a `dist/` that was built with the types it was typechecked against, so
@@ -29,5 +31,7 @@ export async function runCodegen(): Promise<void> {
   const { default: config } = await import("../../codegen.ts");
 
   await generate({ ...config, silent: true }, true);
-  console.log("[task-server] codegen: schema.graphql and src/gql/graphql.ts are up to date");
+  console.log(
+    "[task-server] codegen: schema.graphql and web/__generated__/graphql/graphql.ts are up to date",
+  );
 }

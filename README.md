@@ -159,8 +159,9 @@ server/
                cleanup.ts prunes old runs hourly
   webhooks.ts  POST /webhooks/:id, which fires matching event triggers
   index.ts     express + yoga + the MCP endpoint + the webhook route + the built SPA
-src/           vite + react + tanstack router/query + shadcn
+web/           vite + react + tanstack router/query + shadcn
                (tasks, runs, mcp servers, settings)
+  __generated__/  codegen output, gitignored — see GraphQL below
 tests/         vitest
 ```
 
@@ -422,26 +423,30 @@ with a version typed in, which publishes the images without tagging a release.
 The schema is built at runtime from the tables, so codegen needs it written out first:
 
 ```sh
-npm run codegen    # prints schema.graphql, then generates src/gql/
+npm run codegen    # prints schema.graphql, then generates web/__generated__/
 ```
 
-That produces `src/gql/graphql.ts`: a typed document node per operation, so a query whose
-shape changes breaks compilation rather than at runtime.
+That produces `web/__generated__/graphql/graphql.ts`: a typed document node per operation, so a
+query whose shape changes breaks compilation rather than at runtime. It is gitignored rather
+than committed — nothing reads it but the typechecker and the bundler, and both regenerate it
+themselves, so a stale copy checked in could only go stale silently instead of being caught.
 
-In development you rarely run it by hand, because both halves of `npm run dev` keep it current
-from the side they can see:
+You rarely run it by hand: `npm run typecheck` and `npm run build` both regenerate it first, and
+in development both halves of `npm run dev` keep it current from the side they can see:
 
 - the **server** rewrites `schema.graphql` on boot, and regenerates the types with it — that is
   the moment after a table changes, and it only does the work when the SDL actually moved
-- **vite** watches `schema.graphql` and `src/graphql/**/*.graphql` through
+- **vite** watches `schema.graphql` and `web/graphql/**/*.graphql` through
   `vite-plugin-graphql-codegen`, so editing a document regenerates its typed node and hot-reloads
 
 Both are dev-only. The production image has no codegen in it and nothing to regenerate: it
-serves a `dist/` that was built against the types it was typechecked with.
+serves a `dist/` that was built against the types it was typechecked with, and `npm start` never
+calls `runCodegen`.
 
-`npm run build` runs codegen before the typecheck, so a stale `src/gql/graphql.ts` cannot reach
-a build. CI additionally regenerates and diffs against what is committed — the artefacts are
-generated *and* checked in, and that step is what stops the two from drifting apart.
+`schema.graphql` itself is the one artefact still committed, because it is the schema the API
+actually serves and worth reading without running anything. CI regenerates it and diffs against
+what is committed, so a table changed without a `npm run schema` is caught as drift rather than
+a puzzling type error two steps later.
 
 ## Postgres
 
@@ -483,7 +488,7 @@ the other is your own `pg_dump`-shaped problem.
 | `npm run dev` | server and web together |
 | `npm run build` | typecheck, then build the SPA into `dist/` |
 | `npm start` | production: express serves `dist/` and the API on one port |
-| `npm run codegen` | print `schema.graphql` and regenerate `src/gql/` |
+| `npm run codegen` | print `schema.graphql` and regenerate `web/__generated__/` |
 | `npm test` | vitest |
 | `npm run lint` / `format` | biome |
 | `npm run db:generate` | write a migration into `drizzle/` after a schema change |

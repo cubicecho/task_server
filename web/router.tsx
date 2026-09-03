@@ -11,9 +11,9 @@ import { AppShell } from "@/components/app-shell";
  * Each page is its own chunk, fetched when it is first needed.
  *
  * Statically imported, every route was in the one bundle the browser waits for before it can
- * draw anything — and most of a page's weight is the editor, the YAML parser or the markdown
- * it alone uses. `defaultPreload: "intent"` below starts the fetch on hover, so a chunk is
- * usually already there by the time the click lands and the split costs no perceived delay.
+ * draw anything — and most of a page's weight is the editor or the markdown it alone uses.
+ * `defaultPreload: "intent"` below starts the fetch on hover, so a chunk is usually already
+ * there by the time the click lands and the split costs no perceived delay.
  *
  * `AppShell` is not lazy: it is the frame every route renders inside.
  */

@@ -11,12 +11,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Page } from "@/components/app-shell";
-import { McpDialog } from "@/components/mcp-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import {
   DeleteMcpServerDocument,
   type McpProbe,
@@ -25,7 +19,13 @@ import {
   ReconnectMcpDocument,
   TestMcpServerDocument,
   UpdateMcpServerDocument,
-} from "@/gql/graphql";
+} from "@/__generated__/graphql/graphql";
+import { Page } from "@/components/app-shell";
+import { McpDialog } from "@/components/mcp-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { request } from "@/lib/gql";
 import { toConnection } from "@/lib/mcp-config";
 

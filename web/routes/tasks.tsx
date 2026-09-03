@@ -2,11 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Page } from "@/components/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import {
   DeleteTaskDocument,
   RunTaskDocument,
@@ -14,7 +9,12 @@ import {
   type TaskFieldsFragment,
   TasksDocument,
   UpdateTaskDocument,
-} from "@/gql/graphql";
+} from "@/__generated__/graphql/graphql";
+import { Page } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { request } from "@/lib/gql";
 import { STATUS_VARIANT } from "@/lib/run-status";
 
