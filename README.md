@@ -175,6 +175,9 @@ express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `r
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
 - **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,
   which talks only GraphQL.
+- **`/mcp-docs`** — the same server again, as hand-written operations instead of projected
+  fields. The other half of a comparison, not a replacement; also below.
+
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so
 editing a trigger in the UI takes effect immediately.
 
@@ -357,6 +360,31 @@ Express's 404 page.
 
 No CORS headers, deliberately: this server has no authentication, so anyone who can reach the
 port can drive it, and there is no reason to also let a web page from another origin do so.
+
+### `/mcp-docs`, the other surface
+
+`/mcp` projects root fields, so an agent meets the shapes the schema generator emitted: `where:
+{ id: { eq: … } }` to fetch one task, and the transitive closure of the filter types behind it —
+155 kB of them before it can call anything.
+
+`/mcp-docs` is the same server behind sixteen hand-written operations in
+`server/mcp/tools.graphql`. The tool is the operation: its name is the operation's name, its
+arguments are the operation's variables — flat, named, `get_task(id)` rather than a filter — and
+its description is the comment block above it. The whole listing is ~25 kB, and ~60% of that is
+prose an agent reads rather than schema it skims, against ~9% on `/mcp`.
+
+The trade is a real one and the two are mounted side by side rather than one replacing the
+other. A curated surface is a bet that you know the questions: it wins decisively where the bet
+holds, and a new column is not reachable at all until a document asks for it. A generated
+surface answers what nobody anticipated.
+
+The documents go through the driver's `operations` option rather than a hand-rolled handler,
+which is what makes them validate at boot — a mistyped field is a startup error naming the file
+and line, not a tool that fails the first time it is called — and what makes them answer in the
+same `{ data, errors }` envelope the generated tools use. That last part is worth resisting the
+urge to improve: unwrapping `data` and handing back the row reads better right up until an
+argument fails validation, which happens above any handler and answers in the envelope anyway.
+One tool with two result shapes is worse than one shape with a wrapper.
 
 ## Docker
 

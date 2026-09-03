@@ -47,7 +47,9 @@ fragment RunSummary on Run {
 # A task with no triggers never fires on its own. A task with `enabled: false` fires from
 # nothing, trigger or not, though `run_task` will still run it by hand. Its triggers go on
 # reading `enabled: true` while it does — that flag is the trigger's own switch, not the
-# effective answer, and `get_schedule` is what knows the difference.
+# effective answer, and `get_schedule` is what knows the difference — for a `cron` trigger. An
+# `event` trigger is absent from `get_schedule` whether it is armed or not, so the two `enabled`
+# flags are the whole of what can be read back about one.
 #
 # `lastRunThatExecuted` skips `skipped` rows, so it is not necessarily the newest run. Ask
 # `list_runs` when you need the latest firing whatever its outcome.
@@ -104,9 +106,17 @@ query get_task($id: String!) {
   }
 }
 
-# What happened when tasks ran, latest first. `status` is `running`, `ok`, `error`, `stopped`
-# or `skipped`; a `skipped` run never started at all, because its trigger fired while the run
-# named by `blockedBy` still held the task, and `attempts` counts the firings it stands for.
+# What happened when tasks ran, newest `startedAt` first. `status` is `running`, `ok`, `error`,
+# `stopped` or `skipped`; a `skipped` run never started at all, because its trigger fired while
+# the run named by `blockedBy` still held the task, and `attempts` counts the firings it stands
+# for.
+#
+# One `skipped` row spans its whole collision rather than naming a moment in it: `startedAt` is
+# the first firing it stands for and `finishedAt` moves with the most recent, so its timestamps
+# are a window and not a duration, and it can outlast the run that blocked it. That is also the
+# one place this ordering misleads — a collision row absorbing new firings stays where its first
+# one put it, so the newest row here is not always the newest event. Compare `finishedAt` when
+# a `skipped` row with `attempts` above 1 is in play.
 #
 # Give `taskId` for one task's history, `status` to see only the failures. The output and the
 # tool calls are not here — they are large, and `get_run` has them.
@@ -217,7 +227,9 @@ mutation create_task(
 #
 # `enabled: false` keeps a task and its history but stops it firing, which is the reversible
 # alternative to deleting it. The task's triggers still read `enabled: true` afterwards and
-# still never fire; `get_schedule` drops them, which is where to check that it took.
+# still never fire. `get_schedule` drops a `cron` trigger when that happens, which is where to
+# check that it took; an `event` trigger was never listed there, so for a webhook-driven task the
+# task's own `enabled` is the only confirmation there is.
 mutation update_task(
   $id: String!
   $name: String
@@ -282,10 +294,24 @@ mutation set_task_steps($taskId: String!, $steps: [StepInput!]!) {
   }
 }
 
-# Starts a task on something. `kind: cron` takes a five-field expression such as `0 9 * * *`,
-# read in `timezone` or the server's if you leave it out. `kind: event` takes an `event` id and
-# fires whenever a POST reaches `/webhooks/<that id>`, with the request body available to the
-# prompt as `{{event}}` — there is no secret, so make the id unguessable if it matters.
+# Starts a task on something. `kind` is `cron` or `event`, and it decides which of the other
+# arguments mean anything.
+#
+# `kind: cron` takes a five-field expression such as `0 9 * * *` — minute, hour, day of month,
+# month, day of week, where day of week runs 0-6 from Sunday and 7 is Sunday again. It is read
+# in `timezone`, an IANA zone name like `UTC` or `Europe/London`, or the server's if you leave
+# it out.
+#
+# `kind: event` takes an `event` id and fires whenever a POST reaches `/webhooks/<that id>`,
+# with the request body available to the prompt as `{{event}}` — there is no secret, so make the
+# id unguessable if it matters.
+#
+# What comes back is an echo of what you sent, not proof the trigger is armed: `enabled: true`
+# here is the trigger's own switch and reads true even on a disabled task. For a `cron` trigger,
+# `get_schedule` is the confirmation — it is computed from the running scheduler, so an entry
+# there with a plausible `nextRun` is also the only check that the expression parsed and the
+# timezone was understood. An `event` trigger never appears there, so its two `enabled` flags
+# are all there is to read.
 #
 # A trigger that fires while its task is already running leaves a `skipped` run rather than a
 # second one.

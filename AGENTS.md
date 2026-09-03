@@ -174,6 +174,17 @@ this listing's weight, for a question no agent asked across 100 logged calls. 2.
 the web app from, and the app keeps all of them; a question about a task's triggers is asked
 from the trigger end here, where `taskId` is a column.
 
+**The `/mcp-docs` surface is the operations in `server/mcp/tools.graphql`, not the schema.** It
+is the other half of a spike: `/mcp` projects root fields, so an agent meets `where: { id: { eq:
+… } }` to say which task it means; `/mcp-docs` projects hand-written documents, so
+the tool is the operation, its variables are flat and named, and the comment block above it is
+the description. Sixteen tools, ~25 kB against ~155 kB, and ~60% of it prose against ~9%.
+
+The documents go through the driver's own `operations` option — never a hand-rolled handler.
+That is what makes them validate at boot, naming the file and position, and what makes a tool
+answer in the same `{ data, errors }` envelope a generated one does. The temptation is to unwrap
+`data` and hand back the row; don't. Argument validation answers *above* any handler, so a tool
+with its own success shape shows an agent two shapes for the one tool, and the malformed call is
 the one an agent hits most.
 
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
