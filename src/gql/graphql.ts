@@ -36,44 +36,18 @@ export type BooleanFilter = {
   NOT?: InputMaybe<BooleanFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<BooleanFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Greater than */
-  gt?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Greater than or equal to */
-  gte?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<Scalars['Boolean']['input']>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
-  /** Less than */
-  lt?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Less than or equal to */
-  lte?: InputMaybe<Scalars['Boolean']['input']>;
   /** Not equal to */
   ne?: InputMaybe<Scalars['Boolean']['input']>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<Scalars['Boolean']['input']>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type CreateMcpServerInput = {
@@ -136,44 +110,26 @@ export type DateTimeFilter = {
   NOT?: InputMaybe<DateTimeFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<DateTimeFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<Scalars['DateTime']['input']>;
   /** Greater than */
   gt?: InputMaybe<Scalars['DateTime']['input']>;
   /** Greater than or equal to */
   gte?: InputMaybe<Scalars['DateTime']['input']>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<Scalars['DateTime']['input']>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
   /** Less than */
   lt?: InputMaybe<Scalars['DateTime']['input']>;
   /** Less than or equal to */
   lte?: InputMaybe<Scalars['DateTime']['input']>;
   /** Not equal to */
   ne?: InputMaybe<Scalars['DateTime']['input']>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<Scalars['DateTime']['input']>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type FloatFilter = {
@@ -519,44 +475,18 @@ export type McpServersTransportEnumFilter = {
   NOT?: InputMaybe<McpServersTransportEnumFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<McpServersTransportEnumFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<McpServersTransportEnum>;
-  /** Greater than */
-  gt?: InputMaybe<McpServersTransportEnum>;
-  /** Greater than or equal to */
-  gte?: InputMaybe<McpServersTransportEnum>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<McpServersTransportEnum>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
-  /** Less than */
-  lt?: InputMaybe<McpServersTransportEnum>;
-  /** Less than or equal to */
-  lte?: InputMaybe<McpServersTransportEnum>;
   /** Not equal to */
   ne?: InputMaybe<McpServersTransportEnum>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<McpServersTransportEnum>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type McpTool = {
@@ -1803,44 +1733,18 @@ export type RunStepsStatusEnumFilter = {
   NOT?: InputMaybe<RunStepsStatusEnumFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<RunStepsStatusEnumFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<RunStepsStatusEnum>;
-  /** Greater than */
-  gt?: InputMaybe<RunStepsStatusEnum>;
-  /** Greater than or equal to */
-  gte?: InputMaybe<RunStepsStatusEnum>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<RunStepsStatusEnum>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
-  /** Less than */
-  lt?: InputMaybe<RunStepsStatusEnum>;
-  /** Less than or equal to */
-  lte?: InputMaybe<RunStepsStatusEnum>;
   /** Not equal to */
   ne?: InputMaybe<RunStepsStatusEnum>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<RunStepsStatusEnum>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type RunSumAggregate = {
@@ -1877,44 +1781,18 @@ export type RunsStatusEnumFilter = {
   NOT?: InputMaybe<RunsStatusEnumFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<RunsStatusEnumFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<RunsStatusEnum>;
-  /** Greater than */
-  gt?: InputMaybe<RunsStatusEnum>;
-  /** Greater than or equal to */
-  gte?: InputMaybe<RunsStatusEnum>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<RunsStatusEnum>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
-  /** Less than */
-  lt?: InputMaybe<RunsStatusEnum>;
-  /** Less than or equal to */
-  lte?: InputMaybe<RunsStatusEnum>;
   /** Not equal to */
   ne?: InputMaybe<RunsStatusEnum>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<RunsStatusEnum>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 /** A cron trigger that is currently armed, and when it next fires. */
@@ -2217,44 +2095,18 @@ export type SettingsToolDiscoveryEnumFilter = {
   NOT?: InputMaybe<SettingsToolDiscoveryEnumFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<SettingsToolDiscoveryEnumFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<SettingsToolDiscoveryEnum>;
-  /** Greater than */
-  gt?: InputMaybe<SettingsToolDiscoveryEnum>;
-  /** Greater than or equal to */
-  gte?: InputMaybe<SettingsToolDiscoveryEnum>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<SettingsToolDiscoveryEnum>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
-  /** Less than */
-  lt?: InputMaybe<SettingsToolDiscoveryEnum>;
-  /** Less than or equal to */
-  lte?: InputMaybe<SettingsToolDiscoveryEnum>;
   /** Not equal to */
   ne?: InputMaybe<SettingsToolDiscoveryEnum>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<SettingsToolDiscoveryEnum>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type Step = {
@@ -2488,6 +2340,7 @@ export type StepInput = {
   model?: InputMaybe<Scalars['String']['input']>;
   /** What this step is called, in the run history and in `{{steps.<name>}}`. */
   name?: InputMaybe<Scalars['String']['input']>;
+  /** What this step is asked to do. Required on a `decision` too, and for the same reason: a decision is a full agent run — reading the mail, checking the build — that has to end on one of its `cases`. The prompt is the work it does to decide, and `cases` is only the shape of the answer, so a decision with no prompt has nothing to go on. */
   prompt: Scalars['String']['input'];
   systemPrompt?: InputMaybe<Scalars['String']['input']>;
 };
@@ -2582,44 +2435,18 @@ export type StepsContextEnumFilter = {
   NOT?: InputMaybe<StepsContextEnumFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<StepsContextEnumFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<StepsContextEnum>;
-  /** Greater than */
-  gt?: InputMaybe<StepsContextEnum>;
-  /** Greater than or equal to */
-  gte?: InputMaybe<StepsContextEnum>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<StepsContextEnum>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
-  /** Less than */
-  lt?: InputMaybe<StepsContextEnum>;
-  /** Less than or equal to */
-  lte?: InputMaybe<StepsContextEnum>;
   /** Not equal to */
   ne?: InputMaybe<StepsContextEnum>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<StepsContextEnum>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export enum StepsKindEnum {
@@ -2636,44 +2463,18 @@ export type StepsKindEnumFilter = {
   NOT?: InputMaybe<StepsKindEnumFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<StepsKindEnumFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<StepsKindEnum>;
-  /** Greater than */
-  gt?: InputMaybe<StepsKindEnum>;
-  /** Greater than or equal to */
-  gte?: InputMaybe<StepsKindEnum>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<StepsKindEnum>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
-  /** Less than */
-  lt?: InputMaybe<StepsKindEnum>;
-  /** Less than or equal to */
-  lte?: InputMaybe<StepsKindEnum>;
   /** Not equal to */
   ne?: InputMaybe<StepsKindEnum>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<StepsKindEnum>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type StringFilter = {
@@ -3172,44 +2973,18 @@ export type TriggersKindEnumFilter = {
   NOT?: InputMaybe<TriggersKindEnumFilter>;
   /** At least one branch matches; ANDed with any sibling operators */
   OR?: InputMaybe<Array<TriggersKindEnumFilter>>;
-  /** Matches values containing the given string. `%`, `_` and `\` are matched literally. */
-  contains?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values ending with the given string. `%`, `_` and `\` are matched literally. */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
   /** Equal to */
   eq?: InputMaybe<TriggersKindEnum>;
-  /** Greater than */
-  gt?: InputMaybe<TriggersKindEnum>;
-  /** Greater than or equal to */
-  gte?: InputMaybe<TriggersKindEnum>;
-  /** Case-insensitive `contains`. */
-  iContains?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `endsWith`. */
-  iEndsWith?: InputMaybe<Scalars['String']['input']>;
-  /** Case-insensitive `startsWith`. */
-  iStartsWith?: InputMaybe<Scalars['String']['input']>;
-  ilike?: InputMaybe<Scalars['String']['input']>;
   /** Matches any one of these values (SQL `IN`) */
   inArray?: InputMaybe<Array<TriggersKindEnum>>;
-  /** When true, every comparison operator in this object matches case-insensitively — `eq`, `ne`, the ordering operators, `inArray`/`notInArray` and the pattern operators all compare `lower(column)` against `lower(operand)`. Applies only to the operators beside it; a nested `AND`/`OR`/`NOT` branch sets its own. */
-  insensitive?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is not NULL */
   isNotNull?: InputMaybe<Scalars['Boolean']['input']>;
   /** When true, matches rows where the column is NULL */
   isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  like?: InputMaybe<Scalars['String']['input']>;
-  /** Less than */
-  lt?: InputMaybe<TriggersKindEnum>;
-  /** Less than or equal to */
-  lte?: InputMaybe<TriggersKindEnum>;
   /** Not equal to */
   ne?: InputMaybe<TriggersKindEnum>;
-  notIlike?: InputMaybe<Scalars['String']['input']>;
   /** Matches none of these values (SQL `NOT IN`) */
   notInArray?: InputMaybe<Array<TriggersKindEnum>>;
-  notLike?: InputMaybe<Scalars['String']['input']>;
-  /** Matches values starting with the given string. `%`, `_` and `\` are matched literally. */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateMcpServerInput = {
