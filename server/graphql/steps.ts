@@ -3,7 +3,7 @@ import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { GraphQLError } from "graphql";
 import { CONTEXTS, DEFAULT_BRANCH, KINDS, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
-import { steps } from "../db/schema.ts";
+import { steps, tasks } from "../db/schema.ts";
 
 /**
  * Writing a task's flow: one call that replaces the whole tree.
@@ -151,6 +151,11 @@ const OVERWRITE = Object.fromEntries(
  * Surviving rows are updated in place rather than deleted and recreated, so a step that lives
  * through an edit keeps its id — and with it the `run_steps` rows of every past run that point
  * at it.
+ *
+ * The task's own `updatedAt` moves with the flow, in the same transaction. Nothing about the
+ * task row changes here, so it would otherwise sit still through a rewrite of the whole flow —
+ * and `updatedAt` is what "newest edit first" orders by, so an edit that only touched steps
+ * would be invisible to the listing an agent uses to find its own recent work.
  */
 export async function writeTaskSteps(taskId: string, rows: NewStep[]): Promise<void> {
   const keep = rows.map((row) => row.id);
@@ -170,6 +175,8 @@ export async function writeTaskSteps(taskId: string, rows: NewStep[]): Promise<v
     if (rows.length) {
       await tx.insert(steps).values(rows).onConflictDoUpdate({ target: steps.id, set: OVERWRITE });
     }
+
+    await tx.update(tasks).set({ updatedAt: new Date() }).where(eq(tasks.id, taskId));
   });
 }
 
