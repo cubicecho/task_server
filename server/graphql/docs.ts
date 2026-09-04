@@ -61,7 +61,6 @@ export const COLUMN_DOCS: ColumnDocs = {
     event:
       'The webhook id, for `kind: "event"`: `POST /webhooks/<this>` runs the task. It is the ' +
       "whole of the address — there is no secret — so pick something unguessable.",
-    config: "Free-form JSON for the event's matching rules. Opaque to the server for now.",
     enabled: "A disabled trigger stays on the task and never fires.",
   },
 

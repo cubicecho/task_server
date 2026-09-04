@@ -28,8 +28,8 @@ import {
  * Triggers are deliberately a separate table rather than a `cron` column on the task. Cron is
  * the only kind that fires today, but the point of the split is that "when a new email arrives"
  * is a second row against the same task, not a second column on every task that will never use
- * it. `kind` discriminates; `cron`/`timezone` belong to cron rows and `event`/`config` to event
- * rows, which is why both sets are nullable.
+ * it. `kind` discriminates; `cron`/`timezone` belong to cron rows and `event` to event rows,
+ * which is why both sets are nullable.
  *
  * Column names stay camelCase. Postgres folds unquoted identifiers to lower case, so the
  * generated migrations under `drizzle/` quote every one of them. This file is the only
@@ -78,7 +78,6 @@ export const triggers = pgTable(
      * dropped — so an unanswered delivery and a wrong id look the same from outside.
      */
     event: text().notNull().default(""),
-    config: jsonb().$type<Record<string, unknown>>(),
     enabled: boolean().notNull().default(true),
     createdAt: createdAt(),
   },
