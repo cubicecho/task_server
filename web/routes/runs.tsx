@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Square, Trash2, X } from "lucide-react";
+import { Play, RefreshCw, Square, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -10,9 +10,11 @@ import {
   RunsDocument,
   type RunsQuery,
   RunsStatusEnum,
+  RunTaskDocument,
   StopTaskDocument,
 } from "@/__generated__/graphql/graphql";
 import { Page } from "@/components/app-shell";
+import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -136,7 +138,15 @@ function Payload({ payload }: { payload: unknown }) {
  * a `skipped` row, which stands for a firing that produced nothing. The payload is worth showing
  * in both of those cases, which is why it is not behind the same flag.
  */
-function RunDetail({ run, withResult }: { run: Run; withResult: boolean }) {
+function RunDetail({
+  run,
+  withResult,
+  onReplay,
+}: {
+  run: Run;
+  withResult: boolean;
+  onReplay: (payload: unknown) => void;
+}) {
   const detail = useQuery({
     // Keyed on the status as well as the id, so a run that finishes while it is open refetches
     // instead of showing the steps as they stood when it was still running.
@@ -153,9 +163,21 @@ function RunDetail({ run, withResult }: { run: Run; withResult: boolean }) {
     );
   }
 
+  const payload = found.payload;
+
   return (
     <>
-      <Payload payload={found.payload} />
+      <Payload payload={payload} />
+      {payload === null || payload === undefined ? null : (
+        <div>
+          {/* The body is the half of a failed delivery that could not be got at: the sender is
+              not going to send it again, and it has been sitting on the row all along. */}
+          <Button variant="outline" size="sm" onClick={() => onReplay(payload)}>
+            <Play className="size-4" />
+            Run again with this body
+          </Button>
+        </div>
+      )}
       {!withResult ? null : found.steps.length ? (
         <>
           <RunSteps steps={found.steps} />
@@ -271,6 +293,8 @@ export function RunsRoute() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  // The run whose body is being replayed, and the body as it stood when the dialog opened.
+  const [replay, setReplay] = useState<{ run: Run; payload: unknown } | null>(null);
   const [limit, setLimit] = useState(PAGE);
 
   // The typed-in term, a beat behind what is on screen. Without it every keystroke is a query,
@@ -315,6 +339,21 @@ export function RunsRoute() {
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteRunDocument, { id }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runs"] }),
+  });
+
+  const start = useMutation({
+    mutationFn: (variables: { taskId: string; payload: unknown }) =>
+      request(RunTaskDocument, variables),
+    onSuccess: (data) => {
+      // `runTask` answers only when the run is over, so by the time this fires there is
+      // something to go and read.
+      const { status, error } = data.runTask;
+      if (status === "error") toast.error(error || "Run failed");
+      else if (status === "stopped") toast.success("Run stopped");
+      else toast.success("Run finished");
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    },
+    onError: (error) => toast.error((error as Error).message),
   });
 
   // A run is stopped through the task that owns it: the runner keys what is in flight by task.
@@ -419,7 +458,11 @@ export function RunsRoute() {
                     It collided with the run that was already under way.
                   </p>
                 ) : null}
-                <RunDetail run={run} withResult={!running && !skipped} />
+                <RunDetail
+                  run={run}
+                  withResult={!running && !skipped}
+                  onReplay={(payload) => setReplay({ run, payload })}
+                />
               </div>
             ) : null}
           </Card>
@@ -430,6 +473,16 @@ export function RunsRoute() {
         <Button variant="outline" onClick={() => setLimit(limit + PAGE)} disabled={runs.isFetching}>
           Load {PAGE} more
         </Button>
+      ) : null}
+
+      {replay ? (
+        <RunDialog
+          taskId={replay.run.taskId}
+          taskName={replay.run.task.name}
+          body={replay.payload}
+          onClose={() => setReplay(null)}
+          onRun={(payload) => start.mutate({ taskId: replay.run.taskId, payload })}
+        />
       ) : null}
     </Page>
   );

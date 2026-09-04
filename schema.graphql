@@ -4081,9 +4081,11 @@ type Mutation {
   """
   Runs a task immediately and resolves with the finished run — which means it does not answer until the run is over, and a long task is a long call. Read `runEvents` meanwhile to watch it, or `stopTask` to call it off.
   
-  Finished is not the same as succeeded. A run that failed comes back the same way a run that worked does, and `status` is what separates them — `ok`, `error` with the reason in `error`, or `stopped` if it was called off. Only a task that could not be started at all is an error here, and the usual reason is that it is already running.
+  Finished is not the same as succeeded. A run that failed comes back the same way a run that worked does, and `status` is what separates them — `ok`, `error` with the reason in `error`, or `stopped` if it was called off. Only a task that could not be started at all is an error here, and the usual reason is that it is already running — or that as many runs are already going as the server allows.
+  
+  `payload` is a webhook body handed over by hand: it is stored on the run and rendered as `{{event}}` in the prompt, exactly as a real delivery would be. Pass the payload of an earlier run to replay it, or one you have made up to try an `{{event}}` prompt before any sender exists. The run is still a hand-started one and names no trigger.
   """
-  runTask(taskId: String!): Run!
+  runTask(taskId: String!, payload: JSON): Run!
 
   """
   Calls off a running task. False means it was not running — a stale button, not a failure. The run is recorded as `stopped`.

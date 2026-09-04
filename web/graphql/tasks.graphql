@@ -112,10 +112,26 @@ mutation StopTask($taskId: String!) {
   stopTask(taskId: $taskId)
 }
 
-mutation RunTask($taskId: String!) {
-  runTask(taskId: $taskId) {
+# `payload` is a webhook body handed over by hand — a replay of one that failed, or a made-up
+# one to try an `{{event}}` prompt. Left out, the run has none, which is every other run.
+mutation RunTask($taskId: String!, $payload: JSON) {
+  runTask(taskId: $taskId, payload: $payload) {
     id
     status
     error
+  }
+}
+
+# What to put in the body box before anyone types in it: the last body this task actually saw.
+# Read when the box opens rather than with the task list — one payload is wanted at a time, and
+# the list is polled.
+query LastPayload($taskId: String!) {
+  runs(
+    limit: 1
+    where: { taskId: { eq: $taskId }, payload: { isNotNull: true } }
+    orderBy: { startedAt: { direction: desc, priority: 1 } }
+  ) {
+    id
+    payload
   }
 }

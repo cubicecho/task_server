@@ -315,6 +315,24 @@ server would test a body against before firing. It was dropped rather than finis
 contradicts the line above: rules are the payload being a condition. While it existed an agent
 could read its description, set rules on a trigger, and get no error and no effect.
 
+### Running one by hand
+
+A body is not only a sender's to provide. **Run again with this body** on an expanded run
+replays the payload it was given, and pressing play on a task that has a webhook asks for one
+first, prefilled with the last body that task saw. Both open the same box, and what is in it is
+what the prompt reads as `{{event}}`.
+
+The two things that fixes were the same thing from either end. A delivery that failed left its
+body on the run row and nothing that could hand it back, so the only way to try a fix was to ask
+the sender to send again — and a sender that fires on a merge does not oblige. A prompt with
+`{{event}}` in it could not be tried at all before a sender existed: the first honest test of the
+template was in production, or it was `curl` and a trigger id copied by hand.
+
+A run started this way names no trigger. It is a hand-started run that happens to have a body,
+and one that claimed the webhook it was copied from would put a delivery in the history that
+nobody sent. Over GraphQL and `/mcp` it is the same argument — `runTask(taskId:, payload:)` —
+so an agent can replay a failed delivery as well as read about it.
+
 Only a task that actually started is in `dispatched`. A task already running is the refusal
 worth expecting — anything that fires faster than it runs meets it routinely — and it is named
 in `refused` with the reason, as is one that arrived at a server already running as many tasks

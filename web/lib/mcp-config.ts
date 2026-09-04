@@ -1,5 +1,6 @@
 import type { McpConnectionInput, McpServersQuery } from "@/__generated__/graphql/graphql";
 import { McpServersTransportEnum } from "@/__generated__/graphql/graphql";
+import { parseJson } from "@/lib/json";
 
 /** What a pasted config can fill in: the connection fields, and a slug if the paste named one. */
 export interface PastedConfig {
@@ -10,16 +11,6 @@ export interface PastedConfig {
   env: string;
   url: string;
   headers: string;
-}
-
-/** Parses a JSON field from the form, naming the field when it will not parse. */
-export function parseJson<T>(text: string, field: string, fallback: T): T {
-  if (!text.trim()) return fallback;
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    throw new Error(`${field} is not valid JSON.`);
-  }
 }
 
 /**

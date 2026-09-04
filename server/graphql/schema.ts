@@ -12,6 +12,7 @@ import {
   GraphQLSchema,
   GraphQLString,
 } from "graphql";
+import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
 import { settings, steps, tasks } from "../db/schema.ts";
 import { fold, history, type RunEvent, watch } from "../runner/events.ts";
@@ -278,9 +279,19 @@ const baseSchema = new GraphQLSchema({
           "Finished is not the same as succeeded. A run that failed comes back the same way a " +
           "run that worked does, and `status` is what separates them — `ok`, `error` with the " +
           "reason in `error`, or `stopped` if it was called off. Only a task that could not be " +
-          "started at all is an error here, and the usual reason is that it is already running.",
-        args: { taskId: { type: new GraphQLNonNull(GraphQLString) } },
-        resolve: (_source, args: { taskId: string }) => runTask(args.taskId),
+          "started at all is an error here, and the usual reason is that it is already running " +
+          "— or that as many runs are already going as the server allows.\n\n" +
+          "`payload` is a webhook body handed over by hand: it is stored on the run and " +
+          "rendered as `{{event}}` in the prompt, exactly as a real delivery would be. Pass " +
+          "the payload of an earlier run to replay it, or one you have made up to try an " +
+          "`{{event}}` prompt before any sender exists. The run is still a hand-started one " +
+          "and names no trigger.",
+        args: {
+          taskId: { type: new GraphQLNonNull(GraphQLString) },
+          payload: { type: GraphQLJSON },
+        },
+        resolve: (_source, args: { taskId: string; payload?: unknown }) =>
+          runTask(args.taskId, undefined, args.payload ?? undefined),
       },
       stopTask: {
         type: new GraphQLNonNull(GraphQLBoolean),

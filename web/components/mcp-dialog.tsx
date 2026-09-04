@@ -33,7 +33,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
-import { parseJson, parseMcpJson } from "@/lib/mcp-config";
+import { parseJson } from "@/lib/json";
+import { parseMcpJson } from "@/lib/mcp-config";
 
 type McpServer = McpServersQuery["mcpServers"][number];
 
