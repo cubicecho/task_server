@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 import { parseJson, parseMcpJson } from "@/lib/mcp-config";
 
@@ -48,6 +49,9 @@ interface Draft {
   url: string;
   headers: string;
 }
+
+/** The notes under this form's fields are the columns' own descriptions. */
+const doc = describeFor("McpServer");
 
 const json = (value: unknown, fallback: string) =>
   value === null || value === undefined ? fallback : JSON.stringify(value);
@@ -167,7 +171,7 @@ export function McpDialog({
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Slug" htmlFor="slug">
+            <Field label="Slug" htmlFor="slug" hint={doc("slug")}>
               <Input
                 id="slug"
                 className="font-mono"
@@ -186,7 +190,7 @@ export function McpDialog({
             </Field>
           </div>
 
-          <Field label="Transport" htmlFor="transport">
+          <Field label="Transport" htmlFor="transport" hint={doc("transport")}>
             <Select
               value={draft.transport}
               onValueChange={(value) => set({ transport: value as McpServersTransportEnum })}
@@ -207,7 +211,7 @@ export function McpDialog({
 
           {stdio ? (
             <>
-              <Field label="Command" htmlFor="command">
+              <Field label="Command" htmlFor="command" hint={doc("command")}>
                 <Input
                   id="command"
                   className="font-mono"
@@ -216,7 +220,7 @@ export function McpDialog({
                   placeholder="npx"
                 />
               </Field>
-              <Field label="Args" htmlFor="args">
+              <Field label="Args" htmlFor="args" hint={doc("args")}>
                 <Input
                   id="args"
                   className="font-mono text-xs"
@@ -225,11 +229,7 @@ export function McpDialog({
                   placeholder='["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]'
                 />
               </Field>
-              <Field
-                label="Env"
-                htmlFor="env"
-                hint="Merged over the server's own environment, so the child still inherits PATH."
-              >
+              <Field label="Env" htmlFor="env" hint={doc("env")}>
                 <Input
                   id="env"
                   className="font-mono text-xs"
@@ -241,7 +241,7 @@ export function McpDialog({
             </>
           ) : (
             <>
-              <Field label="URL" htmlFor="url">
+              <Field label="URL" htmlFor="url" hint={doc("url")}>
                 <Input
                   id="url"
                   className="font-mono"
@@ -250,7 +250,7 @@ export function McpDialog({
                   placeholder="https://example.com/mcp"
                 />
               </Field>
-              <Field label="Headers" htmlFor="headers">
+              <Field label="Headers" htmlFor="headers" hint={doc("headers")}>
                 <Input
                   id="headers"
                   className="font-mono text-xs"

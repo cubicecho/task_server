@@ -153,7 +153,9 @@ for to make it stop.
 ```
 server/
   db/          drizzle schema and client; migrate.ts applies drizzle/ on boot
-  graphql/     the schema: drizzle-graphql entities plus a few hand-written fields
+  graphql/     the schema: drizzle-graphql entities plus a few hand-written fields;
+               permissions.ts says who may call what, applied to the schema itself;
+               docs.ts is the one copy of what every column means
   runner/      llm client, MCP pool, tool loading + schema compat, agent loop, flow, recorder
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write;
                cleanup.ts prunes old runs hourly
@@ -176,6 +178,8 @@ express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `r
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
 - **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,
   which talks only GraphQL.
+
+One schema, two doors, and one set of rules over both — see **Permissions**.
 
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so
 editing a trigger in the UI takes effect immediately.
@@ -380,6 +384,52 @@ What the spike did leave behind is here rather than there. The listing went from
 null branches. Across a hundred logged calls the only filter operator any agent sent was `eq`,
 which is the finding both of those act on.
 
+## Permissions
+
+`TOOLS` above is a listing, not a lock. The seventeen tools are what a visiting agent is *told
+about* — the settings row, the MCP server rows and every bulk write were left out of it on
+purpose — but both endpoints are one schema in one process, so nothing about that list decided
+what an agent could *reach*. `server/graphql/permissions.ts` is that decision, written once with
+[`@vantreeseba/graphql-casl`](https://github.com/cubicecho/graphql-casl) and applied to the
+schema itself rather than to either endpoint, which is what makes it true of both.
+
+There are no accounts and there is no token. What there is instead is two doors used by two
+different kinds of thing: `/mcp` is where agents call in and `/graphql` is where the web app
+does, and each says which it is when it builds the context. A request with no context at all —
+a test calling `graphql()`, this server executing its own schema in process — is the operator.
+
+The operator may do anything; the web app is the whole of the API. An agent writes and runs
+tasks: it makes them, edits their flows with `setTaskSteps`, schedules them, starts and stops
+them, and reads what happened. Three things it may not touch:
+
+- **The settings row.** The operator's account of their own server — endpoint, model, key.
+  `setApiKey` writes a credential, and an agent that could repoint `baseUrl` would have
+  redirected every future run to a server of its choosing. Guarded in all four of the ways a
+  generated schema offers a table, because `settingsGroupBy(groupBy: [baseUrl])` answers with the
+  same values under a different heading.
+- **The MCP server rows.** `env` and `headers` on one of those are credentials in all but name,
+  and `testMcpServer` spawns whatever stdio command it is handed, so it is arbitrary execution on
+  this host for anyone who reaches it.
+- **The run history.** An agent tidying away the run that recorded what it did is the one edit
+  nobody can audit afterwards.
+
+Mutations are a whitelist — `"*": deny` at the head of the map — so a write added by a new table
+ships shut rather than open, and so does every bulk form. That last part holds for the operator
+too: `deleteTask` with no `where` empties the table where `deleteTaskSingle` cannot, and every
+document under `web/graphql/` already uses a single-row form, so shutting them costs no caller
+anything.
+
+Two tests keep it honest. `tests/permissions.test.ts` asks the schema as each caller and checks
+what comes back, and it also runs every rule named in `TOOLS` as an agent: a field added to the
+listing that the map denies would otherwise be a tool that is advertised, called, and refuses
+every time, which an agent cannot tell from a broken server.
+
+What this does *not* buy, today: `/graphql` has no authentication, so it is the operator's door
+by definition, and anyone who can reach the port is the operator. The split earns its keep on
+`/mcp`, where it is defence in depth under a surface that already offers only seventeen tools,
+and it is what a shared token would switch on — a `Bearer` header on `/graphql` would then be an
+agent that found the query endpoint, held to an agent's rules there as it is here.
+
 ## Docker
 
 ```sh
@@ -426,8 +476,10 @@ The schema is built at runtime from the tables, so codegen needs it written out 
 npm run codegen    # prints schema.graphql, then generates web/__generated__/
 ```
 
-That produces `web/__generated__/graphql/graphql.ts`: a typed document node per operation, so a
-query whose shape changes breaks compilation rather than at runtime. It is gitignored rather
+That produces two files. `web/__generated__/graphql/graphql.ts` is a typed document node per
+operation, so a query whose shape changes breaks compilation rather than at runtime;
+`descriptions.ts` is the schema's field descriptions as a runtime map — see **Field
+descriptions** below. It is gitignored rather
 than committed — nothing reads it but the typechecker and the bundler, and both regenerate it
 themselves, so a stale copy checked in could only go stale silently instead of being caught.
 
@@ -447,6 +499,43 @@ calls `runCodegen`.
 actually serves and worth reading without running anything. CI regenerates it and diffs against
 what is committed, so a table changed without a `npm run schema` is caught as drift rather than
 a puzzling type error two steps later.
+
+## Field descriptions
+
+Every column's description is written once, in `server/graphql/docs.ts`, and read three ways.
+
+It used to be written twice and reach nobody twice over. The prose was JSDoc on the column in
+`server/db/schema.ts` — compile-time only, so it became JSDoc on a generated type and vanished,
+and an agent reading a tool schema on `/mcp` never saw a word of it. And it was a `hint` string
+typed out again in the form that renders the column, which no agent sees either. Two copies,
+each invisible to the other's reader, and by the time this was noticed they had drifted: the
+note under **Retries** in settings and the comment on `maxRetries` were different sentences.
+
+So the prose moved to one place, and the schema carries it:
+
+- `drizzle-graphql`'s `describeColumn` hook puts it on the generated schema, which reaches every
+  position the column generates — the row type, the create and update inputs, the filter, the
+  aggregates
+- from there it is in `schema.graphql`, and in the JSON Schema of every `/mcp` tool that touches
+  the column, so an agent filling in `create_task` reads what `prompt` is for
+- `@cubicecho/graphql-codegen-field-descriptions` reads the same schema and emits
+  `web/__generated__/graphql/descriptions.ts`, a runtime map, which `web/lib/docs.ts` wraps as
+  `describe("Setting", "maxRetries")` — the note under the field in the web app
+
+The web helper is typed against the generated map, so renaming a column and regenerating turns
+a stale reference in a form into a typecheck error rather than a note that quietly disappears.
+`tests/docs.test.ts` holds the three readings against each other, because each can break on its
+own — a hook dropped from `buildSchema`, a plugin dropped from `codegen.ts` — and nothing else
+would fail: descriptions would just stop arriving.
+
+Write these for both readers, which is usually the same sentence: what the value does, what an
+empty one falls back to, and what it is not. Keep them short. A description is repeated at every
+position its column generates, which is what took the `/mcp` listing from ~155 kB to ~167 kB
+against the 250 kB the size test allows.
+
+What stays in `server/db/schema.ts` is the other kind of comment: why a column exists at all,
+why it is shaped the way it is, what would go wrong without it. That has no room in a field
+description and no business in a form.
 
 ## Postgres
 

@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 import { useCopy } from "@/lib/use-copy";
 
@@ -103,6 +104,9 @@ const toForm = (row: SettingsRow): Form => ({
   runRetentionDays: row.runRetentionDays,
 });
 
+/** Every note under a field on this page is the column's own description. */
+const doc = describeFor("Setting");
+
 export function SettingsRoute() {
   const settings = useQuery({ queryKey: ["settings"], queryFn: () => request(SettingsDocument) });
   const row = settings.data?.settings[0];
@@ -168,16 +172,7 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
       <Card className="gap-4 p-4">
         <h2 className="font-medium">Model</h2>
 
-        <Field
-          label="Base URL"
-          htmlFor="baseUrl"
-          hint={
-            <>
-              Any OpenAI-compatible server: Ollama <code>:11434/v1</code>, LM Studio{" "}
-              <code>:1234/v1</code>, OpenAI, OpenRouter.
-            </>
-          }
-        >
+        <Field label="Base URL" htmlFor="baseUrl" hint={doc("baseUrl")}>
           <Input
             id="baseUrl"
             value={form.baseUrl}
@@ -208,7 +203,7 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
           <ModelSelect id="model" value={form.model} onChange={(model) => set("model", model)} />
         </Field>
 
-        <Field label="Default system prompt" htmlFor="systemPrompt">
+        <Field label="Default system prompt" htmlFor="systemPrompt" hint={doc("systemPrompt")}>
           <Textarea
             id="systemPrompt"
             rows={3}
@@ -221,6 +216,7 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
           <NumberField
             id="maxTokens"
             label="Max tokens"
+            hint={doc("maxTokens")}
             value={form.maxTokens}
             onChange={(value) => set("maxTokens", value)}
           />
@@ -234,27 +230,28 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
           <NumberField
             id="iterations"
             label="Max tool steps"
+            hint={doc("maxToolIterations")}
             value={form.maxToolIterations}
             onChange={(value) => set("maxToolIterations", value)}
           />
           <NumberField
             id="requestTimeoutSeconds"
             label="Silence before giving up (s)"
-            hint="Resets on every token, so a long answer is never cut off. 0 waits forever."
+            hint={doc("requestTimeoutSeconds")}
             value={form.requestTimeoutSeconds}
             onChange={(value) => set("requestTimeoutSeconds", value)}
           />
           <NumberField
             id="maxRetries"
             label="Retries"
-            hint="For a request that failed before the model said anything."
+            hint={doc("maxRetries")}
             value={form.maxRetries}
             onChange={(value) => set("maxRetries", value)}
           />
           <NumberField
             id="runRetentionDays"
             label="Keep runs for (days)"
-            hint="Older runs are deleted hourly. 0 keeps every run forever."
+            hint={doc("runRetentionDays")}
             value={form.runRetentionDays}
             onChange={(value) => set("runRetentionDays", value)}
           />
@@ -264,17 +261,7 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
       <Card className="gap-4 p-4">
         <h2 className="font-medium">MCP tools</h2>
 
-        <Field
-          label="Discovery"
-          htmlFor="toolDiscovery"
-          hint={
-            <>
-              On demand puts a name-only catalogue in the system prompt and lets the model pull in
-              the schemas it needs mid-run. Much cheaper with many tools; costs one extra round trip
-              on the runs that use them.
-            </>
-          }
-        >
+        <Field label="Discovery" htmlFor="toolDiscovery" hint={doc("toolDiscovery")}>
           <Select
             value={form.toolDiscovery}
             onValueChange={(value) => set("toolDiscovery", value as SettingsToolDiscoveryEnum)}
@@ -293,17 +280,7 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
           </Select>
         </Field>
 
-        <Field
-          label="Tool-picking model"
-          htmlFor="toolSelectModel"
-          hint={
-            <>
-              Guesses which tools a task needs before it starts, so on-demand loading usually costs
-              no round trip at all. A small fast model is enough. Unused unless discovery is on
-              demand.
-            </>
-          }
-        >
+        <Field label="Tool-picking model" htmlFor="toolSelectModel" hint={doc("toolSelectModel")}>
           <ModelSelect
             id="toolSelectModel"
             value={form.toolSelectModel}

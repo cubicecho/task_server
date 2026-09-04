@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import type { McpHttpHandler } from "@cubicecho/graphql-mcp";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -18,12 +19,16 @@ let events: typeof import("../server/runner/events.ts");
 let server: Server;
 let endpoint: URL;
 let client: Client;
+let probe: Client;
+let probeHandler: McpHttpHandler;
+let COLUMN_DOCS: typeof import("../server/graphql/docs.ts").COLUMN_DOCS;
 
 beforeAll(async () => {
   const { ensureSchema } = await import("../server/db/migrate.ts");
   await ensureSchema();
   events = await import("../server/runner/events.ts");
   const { mountMcp } = await import("../server/mcp-endpoint.ts");
+  COLUMN_DOCS = (await import("../server/graphql/docs.ts")).COLUMN_DOCS;
 
   // The same mount the server uses, so what a client meets here is what it meets in production.
   const app = express();
@@ -34,9 +39,32 @@ beforeAll(async () => {
 
   client = new Client({ name: "test-client", version: "0.0.0" });
   await client.connect(new StreamableHTTPClientTransport(endpoint));
+
+  // The same door, opened one field wider. Every tool the real surface offers is one an agent
+  // may reach, so nothing on it can show that the context `/mcp` builds arrives at the rules at
+  // all — and if it stopped arriving, every call here would run as the operator and no test in
+  // this file would notice. `Query.settings` is a field the map denies an agent, so a handler
+  // wired the way `mcp-endpoint.ts` wires its own makes that visible.
+  const { createHttpHandler } = await import("@cubicecho/graphql-mcp");
+  const { schema } = await import("../server/graphql/schema.ts");
+  probeHandler = createHttpHandler({
+    schema,
+    name: "probe",
+    version: "0.0.0",
+    include: ["Query.settings"],
+    contextFromRequest: () => ({ caller: "agent" }),
+  });
+  app.all("/mcp-probe", express.json(), probeHandler);
+
+  probe = new Client({ name: "probe-client", version: "0.0.0" });
+  await probe.connect(
+    new StreamableHTTPClientTransport(new URL(endpoint.href.replace("/mcp", "/mcp-probe"))),
+  );
 });
 
 afterAll(async () => {
+  await probe.close();
+  await probeHandler.close();
   await client.close();
   await new Promise((resolve) => server.close(resolve));
   fs.rmSync(dir, { recursive: true, force: true });
@@ -160,9 +188,11 @@ test("advertises tools small enough for a client to read", async () => {
   // than emitting a `$ref`, which put the seventeen tools at 18 MB and `tasks` alone at 2.8 MB —
   // more than any model will read, and it lands before a single call can be made.
   //
-  // Shared, the listing is ~155 kB and the largest tool ~24 kB, down from ~379 kB and ~44 kB on
+  // Shared, the listing is ~167 kB and the largest tool ~27 kB, down from ~379 kB and ~44 kB on
   // 2.7.0 — drizzle-graphql 12 gave each column type only the operators it can use, and 2.9.0's
-  // `inputField` took the relation filters out of the projection. The bounds sit above that
+  // `inputField` took the relation filters out of the projection. The ~12 kB back on top of that
+  // is the column descriptions from `server/graphql/docs.ts`, which is what they cost: a column
+  // is described once and the text lands at every position it generates. The bounds sit above that
   // because the exact figure is not ours to hold: it went to ~528 kB when zod 4 became the
   // conversion path and back again on 2.2.0. What is being caught here is the order of magnitude
   // — a return to per-route copies trips this by 30×.
@@ -193,6 +223,22 @@ test("advertises tools small enough for a client to read", async () => {
   const { schema } = await import("../server/graphql/schema.ts");
   const taskFilters = schema.getType("TaskFilters") as GraphQLInputObjectType;
   expect(Object.keys(taskFilters.getFields())).toContain("triggers");
+});
+
+/**
+ * The prose an agent reads here is the same string the web app puts under its form field.
+ *
+ * `server/graphql/docs.ts` is the one copy and `tests/docs.test.ts` holds it against the schema
+ * and the generated map. What is left to check is the last hop: that the projection carries a
+ * field's description into the tool's JSON Schema rather than dropping it on the way, which is
+ * the difference between an agent that knows what `prompt` is for and one that guesses.
+ */
+test("a tool tells an agent what its arguments mean", async () => {
+  const { tools } = await client.listTools();
+  const create = tools.find((tool) => tool.name === "create_task");
+  const values = JSON.stringify(create?.inputSchema ?? {});
+  expect(values).toContain(COLUMN_DOCS.tasks?.prompt);
+  expect(values).toContain(COLUMN_DOCS.tasks?.model);
 });
 
 test("writes a task, reads it back, and deletes it", async () => {
@@ -409,4 +455,11 @@ test("a flow is written nested and read back flat, and says so", async () => {
   expect(described).toMatch(/silently loses the arms/);
 
   await call("delete_task", { where: { id: { eq: taskId } } });
+});
+
+test("a call arriving here is an agent, whatever it asks for", async () => {
+  const result = (await probe.callTool({ name: "settings" })) as CallToolResult;
+  const [content] = result.content;
+  if (content?.type !== "text") throw new Error("no text in the result of settings");
+  expect(content.text).toContain("FORBIDDEN");
 });

@@ -12,6 +12,12 @@ const config: CodegenConfig = {
   documents: "./web/graphql/**/*.graphql",
   ignoreNoDocuments: true,
   generates: {
+    // The field descriptions authored in `server/graphql/docs.ts`, as a runtime map. SDL
+    // descriptions are otherwise compile-time only — they become JSDoc and vanish — so the app
+    // would have to retype what an agent on `/mcp` already reads. See `web/lib/docs.ts`.
+    "./web/__generated__/graphql/descriptions.ts": {
+      plugins: ["@cubicecho/graphql-codegen-field-descriptions"],
+    },
     "./web/__generated__/graphql/graphql.ts": {
       plugins: ["typescript", "typescript-operations", "typed-document-node"],
       config: { scalars, useTypeImports: true, skipTypename: true },

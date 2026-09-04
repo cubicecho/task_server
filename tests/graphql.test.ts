@@ -58,8 +58,10 @@ test("a task with a cron trigger lands on the schedule", async () => {
 
 test("disabling the task takes its triggers off the schedule with it", async () => {
   const { tasks } = await run(`{ tasks { id } }`);
+  // The single-row form, which is the only one there is: `permissions.ts` shuts every bulk
+  // write, and `updateTask` with no `where` rewrites the table.
   await run(
-    `mutation Off($id: String!) { updateTask(set: { enabled: false }, where: { id: { eq: $id } }) { id } }`,
+    `mutation Off($id: String!) { updateTaskSingle(set: { enabled: false }, where: { id: { eq: $id } }) { id } }`,
     {
       id: tasks[0].id,
     },

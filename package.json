@@ -24,14 +24,17 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@casl/ability": "^7.0.1",
     "@cubicecho/graphql-mcp": "^2.10.0",
     "@electric-sql/pglite": "^0.5.8",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/pg": "^8.23.1",
     "@vantreeseba/drizzle-graphql": "^12.0.1",
+    "@vantreeseba/graphql-casl": "^1.10.0",
     "drizzle-orm": "1.0.0-rc.4",
     "express": "^5.2.1",
     "graphql": "^16.11.0",
+    "graphql-middleware": "^6.1.35",
     "graphql-scalars": "^2.0.0",
     "graphql-yoga": "^5.22.0",
     "node-cron": "^4.6.0",
@@ -41,6 +44,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
+    "@cubicecho/graphql-codegen-field-descriptions": "^1.0.0",
     "@fontsource-variable/geist": "^5.3.0",
     "@graphql-codegen/cli": "^6.3.1",
     "@graphql-codegen/typed-document-node": "^6.1.8",

@@ -1,9 +1,24 @@
+"""
+A prompt to run, on a schedule or on a webhook. The unit everything else hangs off.
+"""
 type Task {
   id: String!
+
+  """What this task is called, in the task list and the run history."""
   name: String!
+
+  """What the agent is asked to do, each time this task fires."""
   prompt: String!
+
+  """Empty falls back to the default model in settings."""
   model: String!
+
+  """Empty falls back to the default system prompt in settings."""
   systemPrompt: String!
+
+  """
+  A disabled task is never started by a trigger, and can still be run by hand.
+  """
   enabled: Boolean!
   createdAt: DateTime!
   updatedAt: DateTime!
@@ -118,9 +133,17 @@ type TaskAggregate {
 
 type TaskMinAggregate {
   id: String
+
+  """What this task is called, in the task list and the run history."""
   name: String
+
+  """What the agent is asked to do, each time this task fires."""
   prompt: String
+
+  """Empty falls back to the default model in settings."""
   model: String
+
+  """Empty falls back to the default system prompt in settings."""
   systemPrompt: String
   createdAt: DateTime
   updatedAt: DateTime
@@ -128,9 +151,17 @@ type TaskMinAggregate {
 
 type TaskMaxAggregate {
   id: String
+
+  """What this task is called, in the task list and the run history."""
   name: String
+
+  """What the agent is asked to do, each time this task fires."""
   prompt: String
+
+  """Empty falls back to the default model in settings."""
   model: String
+
+  """Empty falls back to the default system prompt in settings."""
   systemPrompt: String
   createdAt: DateTime
   updatedAt: DateTime
@@ -171,23 +202,58 @@ The grouped column values of one Task group. A column the query did not group by
 """
 type TaskGroupKeys {
   id: String
+
+  """What this task is called, in the task list and the run history."""
   name: String
+
+  """What the agent is asked to do, each time this task fires."""
   prompt: String
+
+  """Empty falls back to the default model in settings."""
   model: String
+
+  """Empty falls back to the default system prompt in settings."""
   systemPrompt: String
   createdAt: DateTime
   updatedAt: DateTime
+
+  """
+  A disabled task is never started by a trigger, and can still be run by hand.
+  """
   enabled: Boolean
 }
 
+"""What starts a task: a cron expression, or a webhook id."""
 type Trigger {
   id: String!
+
+  """The task this starts."""
   taskId: String!
+
+  """
+  `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives.
+  """
   kind: TriggersKindEnum!
+
+  """Cron expression, for `kind: "cron"`."""
   cron: String!
+
+  """
+  IANA zone the expression is read in. Empty means the server's own zone.
+  """
   timezone: String!
+
+  """
+  The webhook id, for `kind: "event"`: `POST /webhooks/<this>` runs the task. It is the whole of the address — there is no secret — so pick something unguessable.
+  """
   event: String!
+
+  """
+  Free-form JSON for the event's matching rules. Opaque to the server for now.
+  """
   config: JSON
+
+  """A disabled trigger stays on the task and never fires."""
   enabled: Boolean!
   createdAt: DateTime!
 
@@ -234,20 +300,52 @@ type TriggerAggregate {
 
 type TriggerMinAggregate {
   id: String
+
+  """The task this starts."""
   taskId: String
+
+  """
+  `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives.
+  """
   kind: TriggersKindEnum
+
+  """Cron expression, for `kind: "cron"`."""
   cron: String
+
+  """
+  IANA zone the expression is read in. Empty means the server's own zone.
+  """
   timezone: String
+
+  """
+  The webhook id, for `kind: "event"`: `POST /webhooks/<this>` runs the task. It is the whole of the address — there is no secret — so pick something unguessable.
+  """
   event: String
   createdAt: DateTime
 }
 
 type TriggerMaxAggregate {
   id: String
+
+  """The task this starts."""
   taskId: String
+
+  """
+  `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives.
+  """
   kind: TriggersKindEnum
+
+  """Cron expression, for `kind: "cron"`."""
   cron: String
+
+  """
+  IANA zone the expression is read in. Empty means the server's own zone.
+  """
   timezone: String
+
+  """
+  The webhook id, for `kind: "event"`: `POST /webhooks/<this>` runs the task. It is the whole of the address — there is no secret — so pick something unguessable.
+  """
   event: String
   createdAt: DateTime
 }
@@ -288,28 +386,83 @@ The grouped column values of one Trigger group. A column the query did not group
 """
 type TriggerGroupKeys {
   id: String
+
+  """The task this starts."""
   taskId: String
+
+  """
+  `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives.
+  """
   kind: TriggersKindEnum
+
+  """Cron expression, for `kind: "cron"`."""
   cron: String
+
+  """
+  IANA zone the expression is read in. Empty means the server's own zone.
+  """
   timezone: String
+
+  """
+  The webhook id, for `kind: "event"`: `POST /webhooks/<this>` runs the task. It is the whole of the address — there is no secret — so pick something unguessable.
+  """
   event: String
   createdAt: DateTime
+
+  """A disabled trigger stays on the task and never fires."""
   enabled: Boolean
 }
 
+"""
+What runs after the task's own prompt. A tree rather than a list, because a `decision` step picks which of its arms runs next.
+"""
 type Step {
   id: String!
+
+  """The task whose flow this step belongs to."""
   taskId: String!
+
+  """
+  The decision this step hangs off. Null means the task's own top-level sequence.
+  """
   parentId: String
+
+  """Which arm of the parent decision this sits in. Empty at the top level."""
   branch: String!
+
+  """Where in its sequence this step runs, from 0."""
   position: Int!
+
+  """
+  `agent` does the work. `decision` does the work *and* picks the arm to run next.
+  """
   kind: StepsKindEnum!
+
+  """
+  What this step is called, in the run history and in `{{steps.<name>}}`.
+  """
   name: String!
+
+  """
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  """
   prompt: String!
+
+  """
+  Decision only: the arms it may choose between. `default` is always available.
+  """
   cases: JSON
+
+  """Empty falls back to the task's model, then to settings."""
   model: String!
+
+  """Empty falls back to the task's system prompt, then to settings."""
   systemPrompt: String!
+
+  """How much of the run so far this step is shown before its own prompt."""
   context: StepsContextEnum!
+
+  """A disabled step is passed over, and leaves a `skipped` row in the run."""
   enabled: Boolean!
   createdAt: DateTime!
 
@@ -359,30 +512,86 @@ type StepSumAggregate {
 
 type StepMinAggregate {
   id: String
+
+  """The task whose flow this step belongs to."""
   taskId: String
+
+  """
+  The decision this step hangs off. Null means the task's own top-level sequence.
+  """
   parentId: String
+
+  """Which arm of the parent decision this sits in. Empty at the top level."""
   branch: String
+
+  """Where in its sequence this step runs, from 0."""
   position: Int
+
+  """
+  `agent` does the work. `decision` does the work *and* picks the arm to run next.
+  """
   kind: StepsKindEnum
+
+  """
+  What this step is called, in the run history and in `{{steps.<name>}}`.
+  """
   name: String
+
+  """
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  """
   prompt: String
+
+  """Empty falls back to the task's model, then to settings."""
   model: String
+
+  """Empty falls back to the task's system prompt, then to settings."""
   systemPrompt: String
+
+  """How much of the run so far this step is shown before its own prompt."""
   context: StepsContextEnum
   createdAt: DateTime
 }
 
 type StepMaxAggregate {
   id: String
+
+  """The task whose flow this step belongs to."""
   taskId: String
+
+  """
+  The decision this step hangs off. Null means the task's own top-level sequence.
+  """
   parentId: String
+
+  """Which arm of the parent decision this sits in. Empty at the top level."""
   branch: String
+
+  """Where in its sequence this step runs, from 0."""
   position: Int
+
+  """
+  `agent` does the work. `decision` does the work *and* picks the arm to run next.
+  """
   kind: StepsKindEnum
+
+  """
+  What this step is called, in the run history and in `{{steps.<name>}}`.
+  """
   name: String
+
+  """
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  """
   prompt: String
+
+  """Empty falls back to the task's model, then to settings."""
   model: String
+
+  """Empty falls back to the task's system prompt, then to settings."""
   systemPrompt: String
+
+  """How much of the run so far this step is shown before its own prompt."""
   context: StepsContextEnum
   createdAt: DateTime
 }
@@ -435,32 +644,87 @@ The grouped column values of one Step group. A column the query did not group by
 """
 type StepGroupKeys {
   id: String
+
+  """The task whose flow this step belongs to."""
   taskId: String
+
+  """
+  The decision this step hangs off. Null means the task's own top-level sequence.
+  """
   parentId: String
+
+  """Which arm of the parent decision this sits in. Empty at the top level."""
   branch: String
+
+  """Where in its sequence this step runs, from 0."""
   position: Int
+
+  """
+  `agent` does the work. `decision` does the work *and* picks the arm to run next.
+  """
   kind: StepsKindEnum
+
+  """
+  What this step is called, in the run history and in `{{steps.<name>}}`.
+  """
   name: String
+
+  """
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  """
   prompt: String
+
+  """Empty falls back to the task's model, then to settings."""
   model: String
+
+  """Empty falls back to the task's system prompt, then to settings."""
   systemPrompt: String
+
+  """How much of the run so far this step is shown before its own prompt."""
   context: StepsContextEnum
   createdAt: DateTime
+
+  """A disabled step is passed over, and leaves a `skipped` row in the run."""
   enabled: Boolean
 }
 
+"""One execution of a task, with what it produced and what it cost."""
 type Run {
   id: String!
+
+  """The task that was run."""
   taskId: String!
+
+  """The trigger that started it. Null for a run started by hand."""
   triggerId: String
+
+  """
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  """
   status: RunsStatusEnum!
   startedAt: DateTime!
   finishedAt: DateTime
+
+  """
+  What the trigger handed the run: a webhook's parsed body, and null for everything else. It is what `{{event}}` interpolated into the prompt.
+  """
   payload: JSON
+
+  """`skipped` only: the run that was in the way."""
   blockedBy: String
+
+  """
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  """
   attempts: Int!
+
+  """The agent's final reply."""
   output: String!
+
+  """Why it failed, or — on a `skipped` run — why it never started."""
   error: String!
+
+  """Every tool the run called, in order, as JSON."""
   toolCalls: JSON
   promptTokens: Int!
   completionTokens: Int!
@@ -551,14 +815,32 @@ type RunSumAggregate {
 
 type RunMinAggregate {
   id: String
+
+  """The task that was run."""
   taskId: String
+
+  """The trigger that started it. Null for a run started by hand."""
   triggerId: String
+
+  """
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  """
   status: RunsStatusEnum
   startedAt: DateTime
   finishedAt: DateTime
+
+  """`skipped` only: the run that was in the way."""
   blockedBy: String
+
+  """
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  """
   attempts: Int
+
+  """The agent's final reply."""
   output: String
+
+  """Why it failed, or — on a `skipped` run — why it never started."""
   error: String
   promptTokens: Int
   completionTokens: Int
@@ -567,14 +849,32 @@ type RunMinAggregate {
 
 type RunMaxAggregate {
   id: String
+
+  """The task that was run."""
   taskId: String
+
+  """The trigger that started it. Null for a run started by hand."""
   triggerId: String
+
+  """
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  """
   status: RunsStatusEnum
   startedAt: DateTime
   finishedAt: DateTime
+
+  """`skipped` only: the run that was in the way."""
   blockedBy: String
+
+  """
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  """
   attempts: Int
+
+  """The agent's final reply."""
   output: String
+
+  """Why it failed, or — on a `skipped` run — why it never started."""
   error: String
   promptTokens: Int
   completionTokens: Int
@@ -631,34 +931,83 @@ The grouped column values of one Run group. A column the query did not group by 
 """
 type RunGroupKeys {
   id: String
+
+  """The task that was run."""
   taskId: String
+
+  """The trigger that started it. Null for a run started by hand."""
   triggerId: String
+
+  """
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  """
   status: RunsStatusEnum
   startedAt: DateTime
   finishedAt: DateTime
+
+  """`skipped` only: the run that was in the way."""
   blockedBy: String
+
+  """
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  """
   attempts: Int
+
+  """The agent's final reply."""
   output: String
+
+  """Why it failed, or — on a `skipped` run — why it never started."""
   error: String
   promptTokens: Int
   completionTokens: Int
   totalTokens: Int
 }
 
+"""
+One step of one run: the path a run actually took through the task's tree.
+"""
 type RunStep {
   id: String!
+
+  """The run this step belongs to."""
   runId: String!
+
+  """
+  Null once the step it came from has been edited away; the run's account stands.
+  """
   stepId: String
+
+  """Execution order within the run, from 0."""
   position: Int!
+
+  """
+  How deep in the tree this ran, so the history can be indented the way the task is.
+  """
   depth: Int!
+
+  """
+  The step's name when it ran; the step itself may since have been renamed or deleted.
+  """
   name: String!
   kind: String!
+
+  """
+  `skipped` is a disabled step, which is neither a success nor a failure.
+  """
   status: RunStepsStatusEnum!
+
+  """Decision only: the arm it took."""
   branch: String!
   startedAt: DateTime!
   finishedAt: DateTime
+
+  """What this step produced, and what later steps interpolate."""
   output: String!
+
+  """Why this step failed."""
   error: String!
+
+  """Every tool this step called, in order, as JSON."""
   toolCalls: JSON
   promptTokens: Int!
   completionTokens: Int!
@@ -716,17 +1065,43 @@ type RunStepSumAggregate {
 
 type RunStepMinAggregate {
   id: String
+
+  """The run this step belongs to."""
   runId: String
+
+  """
+  Null once the step it came from has been edited away; the run's account stands.
+  """
   stepId: String
+
+  """Execution order within the run, from 0."""
   position: Int
+
+  """
+  How deep in the tree this ran, so the history can be indented the way the task is.
+  """
   depth: Int
+
+  """
+  The step's name when it ran; the step itself may since have been renamed or deleted.
+  """
   name: String
   kind: String
+
+  """
+  `skipped` is a disabled step, which is neither a success nor a failure.
+  """
   status: RunStepsStatusEnum
+
+  """Decision only: the arm it took."""
   branch: String
   startedAt: DateTime
   finishedAt: DateTime
+
+  """What this step produced, and what later steps interpolate."""
   output: String
+
+  """Why this step failed."""
   error: String
   promptTokens: Int
   completionTokens: Int
@@ -735,17 +1110,43 @@ type RunStepMinAggregate {
 
 type RunStepMaxAggregate {
   id: String
+
+  """The run this step belongs to."""
   runId: String
+
+  """
+  Null once the step it came from has been edited away; the run's account stands.
+  """
   stepId: String
+
+  """Execution order within the run, from 0."""
   position: Int
+
+  """
+  How deep in the tree this ran, so the history can be indented the way the task is.
+  """
   depth: Int
+
+  """
+  The step's name when it ran; the step itself may since have been renamed or deleted.
+  """
   name: String
   kind: String
+
+  """
+  `skipped` is a disabled step, which is neither a success nor a failure.
+  """
   status: RunStepsStatusEnum
+
+  """Decision only: the arm it took."""
   branch: String
   startedAt: DateTime
   finishedAt: DateTime
+
+  """What this step produced, and what later steps interpolate."""
   output: String
+
+  """Why this step failed."""
   error: String
   promptTokens: Int
   completionTokens: Int
@@ -807,33 +1208,84 @@ The grouped column values of one RunStep group. A column the query did not group
 """
 type RunStepGroupKeys {
   id: String
+
+  """The run this step belongs to."""
   runId: String
+
+  """
+  Null once the step it came from has been edited away; the run's account stands.
+  """
   stepId: String
+
+  """Execution order within the run, from 0."""
   position: Int
+
+  """
+  How deep in the tree this ran, so the history can be indented the way the task is.
+  """
   depth: Int
+
+  """
+  The step's name when it ran; the step itself may since have been renamed or deleted.
+  """
   name: String
   kind: String
+
+  """
+  `skipped` is a disabled step, which is neither a success nor a failure.
+  """
   status: RunStepsStatusEnum
+
+  """Decision only: the arm it took."""
   branch: String
   startedAt: DateTime
   finishedAt: DateTime
+
+  """What this step produced, and what later steps interpolate."""
   output: String
+
+  """Why this step failed."""
   error: String
   promptTokens: Int
   completionTokens: Int
   totalTokens: Int
 }
 
+"""An MCP server this one dials, and the tools it lends to every run."""
 type McpServer {
   id: String!
+
+  """
+  Namespace for this server's tools: the agent sees `<slug>__<tool name>`.
+  """
   slug: String!
+
+  """Shown in the UI instead of the slug. Empty falls back to the slug."""
   label: String!
+
+  """A disabled server is not dialled, and lends no tools to a run."""
   enabled: Boolean!
+
+  """`stdio` spawns a local command. `http` dials a URL."""
   transport: McpServersTransportEnum!
+
+  """The command to spawn, for `stdio`."""
   command: String!
+
+  """Arguments for the command, as a JSON array of strings."""
   args: JSON
+
+  """
+  Environment for the spawned command, as a JSON object. Merged over this server's own environment, so the child still inherits `PATH`. Credentials live here.
+  """
   env: JSON
+
+  """The endpoint to dial, for `http`."""
   url: String!
+
+  """
+  Headers sent with every request, as a JSON object. Credentials live here.
+  """
   headers: JSON
 
   """
@@ -860,19 +1312,43 @@ type McpServerAggregate {
 
 type McpServerMinAggregate {
   id: String
+
+  """
+  Namespace for this server's tools: the agent sees `<slug>__<tool name>`.
+  """
   slug: String
+
+  """Shown in the UI instead of the slug. Empty falls back to the slug."""
   label: String
+
+  """`stdio` spawns a local command. `http` dials a URL."""
   transport: McpServersTransportEnum
+
+  """The command to spawn, for `stdio`."""
   command: String
+
+  """The endpoint to dial, for `http`."""
   url: String
 }
 
 type McpServerMaxAggregate {
   id: String
+
+  """
+  Namespace for this server's tools: the agent sees `<slug>__<tool name>`.
+  """
   slug: String
+
+  """Shown in the UI instead of the slug. Empty falls back to the slug."""
   label: String
+
+  """`stdio` spawns a local command. `http` dials a URL."""
   transport: McpServersTransportEnum
+
+  """The command to spawn, for `stdio`."""
   command: String
+
+  """The endpoint to dial, for `http`."""
   url: String
 }
 
@@ -912,26 +1388,81 @@ The grouped column values of one McpServer group. A column the query did not gro
 """
 type McpServerGroupKeys {
   id: String
+
+  """
+  Namespace for this server's tools: the agent sees `<slug>__<tool name>`.
+  """
   slug: String
+
+  """Shown in the UI instead of the slug. Empty falls back to the slug."""
   label: String
+
+  """`stdio` spawns a local command. `http` dials a URL."""
   transport: McpServersTransportEnum
+
+  """The command to spawn, for `stdio`."""
   command: String
+
+  """The endpoint to dial, for `http`."""
   url: String
+
+  """A disabled server is not dialled, and lends no tools to a run."""
   enabled: Boolean
 }
 
+"""
+The one row of server-wide defaults. Every task falls back to what is here.
+"""
 type Setting {
   id: String!
+
+  """
+  Any OpenAI-compatible endpoint: Ollama `:11434/v1`, LM Studio `:1234/v1`, OpenAI, OpenRouter, vLLM.
+  """
   baseUrl: String!
+
+  """The model a task uses unless it names one of its own."""
   model: String!
+
+  """
+  What every run is told before its prompt, unless the task overrides it.
+  """
   systemPrompt: String!
+
+  """Ceiling on one reply."""
   maxTokens: Int!
+
+  """Sampling temperature passed to the model."""
   temperature: Float!
+
+  """
+  Ceiling on tool round-trips in one run, so a stuck task cannot loop forever.
+  """
   maxToolIterations: Int!
+
+  """
+  `eager` sends every MCP tool definition on every request. `ondemand` sends a name-only catalogue and lets the model load the schemas it needs — far cheaper with many tools, at the cost of a round trip on the runs that use them.
+  """
   toolDiscovery: SettingsToolDiscoveryEnum!
+
+  """
+  Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
+  """
   toolSelectModel: String!
+
+  """
+  How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
+  """
   runRetentionDays: Int!
+
+  """
+  Seconds of *silence* from the endpoint before a request is given up on. The clock resets on every chunk, so a long answer is never cut off. Zero waits forever.
+  """
   requestTimeoutSeconds: Int!
+
+  """
+  How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
+  """
   maxRetries: Int!
 
   """
@@ -978,31 +1509,107 @@ type SettingSumAggregate {
 
 type SettingMinAggregate {
   id: String
+
+  """
+  Any OpenAI-compatible endpoint: Ollama `:11434/v1`, LM Studio `:1234/v1`, OpenAI, OpenRouter, vLLM.
+  """
   baseUrl: String
+
+  """The model a task uses unless it names one of its own."""
   model: String
+
+  """
+  What every run is told before its prompt, unless the task overrides it.
+  """
   systemPrompt: String
+
+  """Ceiling on one reply."""
   maxTokens: Int
+
+  """Sampling temperature passed to the model."""
   temperature: Float
+
+  """
+  Ceiling on tool round-trips in one run, so a stuck task cannot loop forever.
+  """
   maxToolIterations: Int
+
+  """
+  `eager` sends every MCP tool definition on every request. `ondemand` sends a name-only catalogue and lets the model load the schemas it needs — far cheaper with many tools, at the cost of a round trip on the runs that use them.
+  """
   toolDiscovery: SettingsToolDiscoveryEnum
+
+  """
+  Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
+  """
   toolSelectModel: String
+
+  """
+  How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
+  """
   runRetentionDays: Int
+
+  """
+  Seconds of *silence* from the endpoint before a request is given up on. The clock resets on every chunk, so a long answer is never cut off. Zero waits forever.
+  """
   requestTimeoutSeconds: Int
+
+  """
+  How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
+  """
   maxRetries: Int
 }
 
 type SettingMaxAggregate {
   id: String
+
+  """
+  Any OpenAI-compatible endpoint: Ollama `:11434/v1`, LM Studio `:1234/v1`, OpenAI, OpenRouter, vLLM.
+  """
   baseUrl: String
+
+  """The model a task uses unless it names one of its own."""
   model: String
+
+  """
+  What every run is told before its prompt, unless the task overrides it.
+  """
   systemPrompt: String
+
+  """Ceiling on one reply."""
   maxTokens: Int
+
+  """Sampling temperature passed to the model."""
   temperature: Float
+
+  """
+  Ceiling on tool round-trips in one run, so a stuck task cannot loop forever.
+  """
   maxToolIterations: Int
+
+  """
+  `eager` sends every MCP tool definition on every request. `ondemand` sends a name-only catalogue and lets the model load the schemas it needs — far cheaper with many tools, at the cost of a round trip on the runs that use them.
+  """
   toolDiscovery: SettingsToolDiscoveryEnum
+
+  """
+  Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
+  """
   toolSelectModel: String
+
+  """
+  How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
+  """
   runRetentionDays: Int
+
+  """
+  Seconds of *silence* from the endpoint before a request is given up on. The clock resets on every chunk, so a long answer is never cut off. Zero waits forever.
+  """
   requestTimeoutSeconds: Int
+
+  """
+  How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
+  """
   maxRetries: Int
 }
 
@@ -1052,25 +1659,75 @@ The grouped column values of one Setting group. A column the query did not group
 """
 type SettingGroupKeys {
   id: String
+
+  """
+  Any OpenAI-compatible endpoint: Ollama `:11434/v1`, LM Studio `:1234/v1`, OpenAI, OpenRouter, vLLM.
+  """
   baseUrl: String
+
+  """The model a task uses unless it names one of its own."""
   model: String
+
+  """
+  What every run is told before its prompt, unless the task overrides it.
+  """
   systemPrompt: String
+
+  """Ceiling on one reply."""
   maxTokens: Int
+
+  """Sampling temperature passed to the model."""
   temperature: Float
+
+  """
+  Ceiling on tool round-trips in one run, so a stuck task cannot loop forever.
+  """
   maxToolIterations: Int
+
+  """
+  `eager` sends every MCP tool definition on every request. `ondemand` sends a name-only catalogue and lets the model load the schemas it needs — far cheaper with many tools, at the cost of a round trip on the runs that use them.
+  """
   toolDiscovery: SettingsToolDiscoveryEnum
+
+  """
+  Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
+  """
   toolSelectModel: String
+
+  """
+  How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
+  """
   runRetentionDays: Int
+
+  """
+  Seconds of *silence* from the endpoint before a request is given up on. The clock resets on every chunk, so a long answer is never cut off. Zero waits forever.
+  """
   requestTimeoutSeconds: Int
+
+  """
+  How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
+  """
   maxRetries: Int
 }
 
 input CreateTaskInput {
   id: String
+
+  """What this task is called, in the task list and the run history."""
   name: String!
+
+  """What the agent is asked to do, each time this task fires."""
   prompt: String!
+
+  """Empty falls back to the default model in settings."""
   model: String
+
+  """Empty falls back to the default system prompt in settings."""
   systemPrompt: String
+
+  """
+  A disabled task is never started by a trigger, and can still be run by hand.
+  """
   enabled: Boolean
   createdAt: DateTime
   updatedAt: DateTime
@@ -1078,10 +1735,22 @@ input CreateTaskInput {
 
 input UpdateTaskInput {
   id: String
+
+  """What this task is called, in the task list and the run history."""
   name: String
+
+  """What the agent is asked to do, each time this task fires."""
   prompt: String
+
+  """Empty falls back to the default model in settings."""
   model: String
+
+  """Empty falls back to the default system prompt in settings."""
   systemPrompt: String
+
+  """
+  A disabled task is never started by a trigger, and can still be run by hand.
+  """
   enabled: Boolean
   createdAt: DateTime
   updatedAt: DateTime
@@ -1098,10 +1767,22 @@ input UpdateTaskManyInput {
 
 input TaskFilters {
   id: StringFilter
+
+  """What this task is called, in the task list and the run history."""
   name: StringFilter
+
+  """What the agent is asked to do, each time this task fires."""
   prompt: StringFilter
+
+  """Empty falls back to the default model in settings."""
   model: StringFilter
+
+  """Empty falls back to the default system prompt in settings."""
   systemPrompt: StringFilter
+
+  """
+  A disabled task is never started by a trigger, and can still be run by hand.
+  """
   enabled: BooleanFilter
   createdAt: DateTimeFilter
   updatedAt: DateTimeFilter
@@ -1385,24 +2066,68 @@ input TaskCountDistinctHaving {
 
 input CreateTriggerInput {
   id: String
+
+  """The task this starts."""
   taskId: String!
+
+  """
+  `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives.
+  """
   kind: TriggersKindEnum
+
+  """Cron expression, for `kind: "cron"`."""
   cron: String
+
+  """
+  IANA zone the expression is read in. Empty means the server's own zone.
+  """
   timezone: String
+
+  """
+  The webhook id, for `kind: "event"`: `POST /webhooks/<this>` runs the task. It is the whole of the address — there is no secret — so pick something unguessable.
+  """
   event: String
+
+  """
+  Free-form JSON for the event's matching rules. Opaque to the server for now.
+  """
   config: JSON
+
+  """A disabled trigger stays on the task and never fires."""
   enabled: Boolean
   createdAt: DateTime
 }
 
 input UpdateTriggerInput {
   id: String
+
+  """The task this starts."""
   taskId: String
+
+  """
+  `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives.
+  """
   kind: TriggersKindEnum
+
+  """Cron expression, for `kind: "cron"`."""
   cron: String
+
+  """
+  IANA zone the expression is read in. Empty means the server's own zone.
+  """
   timezone: String
+
+  """
+  The webhook id, for `kind: "event"`: `POST /webhooks/<this>` runs the task. It is the whole of the address — there is no secret — so pick something unguessable.
+  """
   event: String
+
+  """
+  Free-form JSON for the event's matching rules. Opaque to the server for now.
+  """
   config: JSON
+
+  """A disabled trigger stays on the task and never fires."""
   enabled: Boolean
   createdAt: DateTime
 }
@@ -1418,12 +2143,34 @@ input UpdateTriggerManyInput {
 
 input TriggerFilters {
   id: StringFilter
+
+  """The task this starts."""
   taskId: StringFilter
+
+  """
+  `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives.
+  """
   kind: TriggersKindEnumFilter
+
+  """Cron expression, for `kind: "cron"`."""
   cron: StringFilter
+
+  """
+  IANA zone the expression is read in. Empty means the server's own zone.
+  """
   timezone: StringFilter
+
+  """
+  The webhook id, for `kind: "event"`: `POST /webhooks/<this>` runs the task. It is the whole of the address — there is no secret — so pick something unguessable.
+  """
   event: StringFilter
+
+  """
+  Free-form JSON for the event's matching rules. Opaque to the server for now.
+  """
   config: JSONFilter
+
+  """A disabled trigger stays on the task and never fires."""
   enabled: BooleanFilter
   createdAt: DateTimeFilter
 
@@ -1616,34 +2363,102 @@ input TriggerCountDistinctHaving {
 
 input CreateStepInput {
   id: String
+
+  """The task whose flow this step belongs to."""
   taskId: String!
+
+  """
+  The decision this step hangs off. Null means the task's own top-level sequence.
+  """
   parentId: String
+
+  """Which arm of the parent decision this sits in. Empty at the top level."""
   branch: String
+
+  """Where in its sequence this step runs, from 0."""
   position: Int
+
+  """
+  `agent` does the work. `decision` does the work *and* picks the arm to run next.
+  """
   kind: StepsKindEnum
+
+  """
+  What this step is called, in the run history and in `{{steps.<name>}}`.
+  """
   name: String
+
+  """
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  """
   prompt: String
+
+  """
+  Decision only: the arms it may choose between. `default` is always available.
+  """
   cases: JSON
+
+  """Empty falls back to the task's model, then to settings."""
   model: String
+
+  """Empty falls back to the task's system prompt, then to settings."""
   systemPrompt: String
+
+  """How much of the run so far this step is shown before its own prompt."""
   context: StepsContextEnum
+
+  """A disabled step is passed over, and leaves a `skipped` row in the run."""
   enabled: Boolean
   createdAt: DateTime
 }
 
 input UpdateStepInput {
   id: String
+
+  """The task whose flow this step belongs to."""
   taskId: String
+
+  """
+  The decision this step hangs off. Null means the task's own top-level sequence.
+  """
   parentId: String
+
+  """Which arm of the parent decision this sits in. Empty at the top level."""
   branch: String
+
+  """Where in its sequence this step runs, from 0."""
   position: Int
+
+  """
+  `agent` does the work. `decision` does the work *and* picks the arm to run next.
+  """
   kind: StepsKindEnum
+
+  """
+  What this step is called, in the run history and in `{{steps.<name>}}`.
+  """
   name: String
+
+  """
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  """
   prompt: String
+
+  """
+  Decision only: the arms it may choose between. `default` is always available.
+  """
   cases: JSON
+
+  """Empty falls back to the task's model, then to settings."""
   model: String
+
+  """Empty falls back to the task's system prompt, then to settings."""
   systemPrompt: String
+
+  """How much of the run so far this step is shown before its own prompt."""
   context: StepsContextEnum
+
+  """A disabled step is passed over, and leaves a `skipped` row in the run."""
   enabled: Boolean
   createdAt: DateTime
 }
@@ -1659,17 +2474,51 @@ input UpdateStepManyInput {
 
 input StepFilters {
   id: StringFilter
+
+  """The task whose flow this step belongs to."""
   taskId: StringFilter
+
+  """
+  The decision this step hangs off. Null means the task's own top-level sequence.
+  """
   parentId: StringFilter
+
+  """Which arm of the parent decision this sits in. Empty at the top level."""
   branch: StringFilter
+
+  """Where in its sequence this step runs, from 0."""
   position: IntFilter
+
+  """
+  `agent` does the work. `decision` does the work *and* picks the arm to run next.
+  """
   kind: StepsKindEnumFilter
+
+  """
+  What this step is called, in the run history and in `{{steps.<name>}}`.
+  """
   name: StringFilter
+
+  """
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  """
   prompt: StringFilter
+
+  """
+  Decision only: the arms it may choose between. `default` is always available.
+  """
   cases: JSONFilter
+
+  """Empty falls back to the task's model, then to settings."""
   model: StringFilter
+
+  """Empty falls back to the task's system prompt, then to settings."""
   systemPrompt: StringFilter
+
+  """How much of the run so far this step is shown before its own prompt."""
   context: StepsContextEnumFilter
+
+  """A disabled step is passed over, and leaves a `skipped` row in the run."""
   enabled: BooleanFilter
   createdAt: DateTimeFilter
 
@@ -1867,16 +2716,40 @@ input StepCountDistinctHaving {
 
 input RunFilters {
   id: StringFilter
+
+  """The task that was run."""
   taskId: StringFilter
+
+  """The trigger that started it. Null for a run started by hand."""
   triggerId: StringFilter
+
+  """
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  """
   status: RunsStatusEnumFilter
   startedAt: DateTimeFilter
   finishedAt: DateTimeFilter
+
+  """
+  What the trigger handed the run: a webhook's parsed body, and null for everything else. It is what `{{event}}` interpolated into the prompt.
+  """
   payload: JSONFilter
+
+  """`skipped` only: the run that was in the way."""
   blockedBy: StringFilter
+
+  """
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  """
   attempts: IntFilter
+
+  """The agent's final reply."""
   output: StringFilter
+
+  """Why it failed, or — on a `skipped` run — why it never started."""
   error: StringFilter
+
+  """Every tool the run called, in order, as JSON."""
   toolCalls: JSONFilter
   promptTokens: IntFilter
   completionTokens: IntFilter
@@ -2039,18 +2912,46 @@ input RunCountDistinctHaving {
 
 input RunStepFilters {
   id: StringFilter
+
+  """The run this step belongs to."""
   runId: StringFilter
+
+  """
+  Null once the step it came from has been edited away; the run's account stands.
+  """
   stepId: StringFilter
+
+  """Execution order within the run, from 0."""
   position: IntFilter
+
+  """
+  How deep in the tree this ran, so the history can be indented the way the task is.
+  """
   depth: IntFilter
+
+  """
+  The step's name when it ran; the step itself may since have been renamed or deleted.
+  """
   name: StringFilter
   kind: StringFilter
+
+  """
+  `skipped` is a disabled step, which is neither a success nor a failure.
+  """
   status: RunStepsStatusEnumFilter
+
+  """Decision only: the arm it took."""
   branch: StringFilter
   startedAt: DateTimeFilter
   finishedAt: DateTimeFilter
+
+  """What this step produced, and what later steps interpolate."""
   output: StringFilter
+
+  """Why this step failed."""
   error: StringFilter
+
+  """Every tool this step called, in order, as JSON."""
   toolCalls: JSONFilter
   promptTokens: IntFilter
   completionTokens: IntFilter
@@ -2206,27 +3107,75 @@ input RunStepCountDistinctHaving {
 
 input CreateMcpServerInput {
   id: String
+
+  """
+  Namespace for this server's tools: the agent sees `<slug>__<tool name>`.
+  """
   slug: String!
+
+  """Shown in the UI instead of the slug. Empty falls back to the slug."""
   label: String
+
+  """A disabled server is not dialled, and lends no tools to a run."""
   enabled: Boolean
+
+  """`stdio` spawns a local command. `http` dials a URL."""
   transport: McpServersTransportEnum
+
+  """The command to spawn, for `stdio`."""
   command: String
+
+  """Arguments for the command, as a JSON array of strings."""
   args: JSON
+
+  """
+  Environment for the spawned command, as a JSON object. Merged over this server's own environment, so the child still inherits `PATH`. Credentials live here.
+  """
   env: JSON
+
+  """The endpoint to dial, for `http`."""
   url: String
+
+  """
+  Headers sent with every request, as a JSON object. Credentials live here.
+  """
   headers: JSON
 }
 
 input UpdateMcpServerInput {
   id: String
+
+  """
+  Namespace for this server's tools: the agent sees `<slug>__<tool name>`.
+  """
   slug: String
+
+  """Shown in the UI instead of the slug. Empty falls back to the slug."""
   label: String
+
+  """A disabled server is not dialled, and lends no tools to a run."""
   enabled: Boolean
+
+  """`stdio` spawns a local command. `http` dials a URL."""
   transport: McpServersTransportEnum
+
+  """The command to spawn, for `stdio`."""
   command: String
+
+  """Arguments for the command, as a JSON array of strings."""
   args: JSON
+
+  """
+  Environment for the spawned command, as a JSON object. Merged over this server's own environment, so the child still inherits `PATH`. Credentials live here.
+  """
   env: JSON
+
+  """The endpoint to dial, for `http`."""
   url: String
+
+  """
+  Headers sent with every request, as a JSON object. Credentials live here.
+  """
   headers: JSON
 }
 
@@ -2241,14 +3190,38 @@ input UpdateMcpServerManyInput {
 
 input McpServerFilters {
   id: StringFilter
+
+  """
+  Namespace for this server's tools: the agent sees `<slug>__<tool name>`.
+  """
   slug: StringFilter
+
+  """Shown in the UI instead of the slug. Empty falls back to the slug."""
   label: StringFilter
+
+  """A disabled server is not dialled, and lends no tools to a run."""
   enabled: BooleanFilter
+
+  """`stdio` spawns a local command. `http` dials a URL."""
   transport: McpServersTransportEnumFilter
+
+  """The command to spawn, for `stdio`."""
   command: StringFilter
+
+  """Arguments for the command, as a JSON array of strings."""
   args: JSONFilter
+
+  """
+  Environment for the spawned command, as a JSON object. Merged over this server's own environment, so the child still inherits `PATH`. Credentials live here.
+  """
   env: JSONFilter
+
+  """The endpoint to dial, for `http`."""
   url: StringFilter
+
+  """
+  Headers sent with every request, as a JSON object. Credentials live here.
+  """
   headers: JSONFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
@@ -2335,16 +3308,54 @@ input McpServerCountDistinctHaving {
 
 input UpdateSettingInput {
   id: String
+
+  """
+  Any OpenAI-compatible endpoint: Ollama `:11434/v1`, LM Studio `:1234/v1`, OpenAI, OpenRouter, vLLM.
+  """
   baseUrl: String
+
+  """The model a task uses unless it names one of its own."""
   model: String
+
+  """
+  What every run is told before its prompt, unless the task overrides it.
+  """
   systemPrompt: String
+
+  """Ceiling on one reply."""
   maxTokens: Int
+
+  """Sampling temperature passed to the model."""
   temperature: Float
+
+  """
+  Ceiling on tool round-trips in one run, so a stuck task cannot loop forever.
+  """
   maxToolIterations: Int
+
+  """
+  `eager` sends every MCP tool definition on every request. `ondemand` sends a name-only catalogue and lets the model load the schemas it needs — far cheaper with many tools, at the cost of a round trip on the runs that use them.
+  """
   toolDiscovery: SettingsToolDiscoveryEnum
+
+  """
+  Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
+  """
   toolSelectModel: String
+
+  """
+  How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
+  """
   runRetentionDays: Int
+
+  """
+  Seconds of *silence* from the endpoint before a request is given up on. The clock resets on every chunk, so a long answer is never cut off. Zero waits forever.
+  """
   requestTimeoutSeconds: Int
+
+  """
+  How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
+  """
   maxRetries: Int
 }
 
@@ -2359,16 +3370,54 @@ input UpdateSettingManyInput {
 
 input SettingFilters {
   id: StringFilter
+
+  """
+  Any OpenAI-compatible endpoint: Ollama `:11434/v1`, LM Studio `:1234/v1`, OpenAI, OpenRouter, vLLM.
+  """
   baseUrl: StringFilter
+
+  """The model a task uses unless it names one of its own."""
   model: StringFilter
+
+  """
+  What every run is told before its prompt, unless the task overrides it.
+  """
   systemPrompt: StringFilter
+
+  """Ceiling on one reply."""
   maxTokens: IntFilter
+
+  """Sampling temperature passed to the model."""
   temperature: FloatFilter
+
+  """
+  Ceiling on tool round-trips in one run, so a stuck task cannot loop forever.
+  """
   maxToolIterations: IntFilter
+
+  """
+  `eager` sends every MCP tool definition on every request. `ondemand` sends a name-only catalogue and lets the model load the schemas it needs — far cheaper with many tools, at the cost of a round trip on the runs that use them.
+  """
   toolDiscovery: SettingsToolDiscoveryEnumFilter
+
+  """
+  Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
+  """
   toolSelectModel: StringFilter
+
+  """
+  How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
+  """
   runRetentionDays: IntFilter
+
+  """
+  Seconds of *silence* from the endpoint before a request is given up on. The clock resets on every chunk, so a long answer is never cut off. Zero waits forever.
+  """
   requestTimeoutSeconds: IntFilter
+
+  """
+  How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
+  """
   maxRetries: IntFilter
 
   """At least one branch matches; ANDed with any sibling fields"""

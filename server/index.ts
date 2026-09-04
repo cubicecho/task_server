@@ -3,6 +3,7 @@ import path from "node:path";
 import express from "express";
 import { createYoga } from "graphql-yoga";
 import { ensureSchema } from "./db/migrate.ts";
+import type { GraphContext } from "./graphql/permissions.ts";
 import { schema } from "./graphql/schema.ts";
 import { mcpHandler, mountMcp } from "./mcp-endpoint.ts";
 import { PORT, ROOT } from "./paths.ts";
@@ -24,7 +25,14 @@ if (process.env.NODE_ENV !== "production") {
 
 const app = express();
 
-const yoga = createYoga({ schema, graphqlEndpoint: "/graphql" });
+// The web app's door, and the operator's. There is no authentication on this server, so the
+// door is the whole of the identity: `/graphql` is the page the operator has open, `/mcp` is
+// where agents call in, and `permissions.ts` is what that distinction buys.
+const yoga = createYoga({
+  schema,
+  graphqlEndpoint: "/graphql",
+  context: { caller: "operator" } satisfies GraphContext,
+});
 app.use(yoga.graphqlEndpoint, yoga);
 
 // The same schema, offered to other clients as MCP tools, beside GraphQL rather than

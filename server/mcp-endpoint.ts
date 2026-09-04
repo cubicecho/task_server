@@ -4,6 +4,7 @@ import express from "express";
 // Default import, not a named one: Node's own JSON modules only export a default, and the
 // container runs this file through Node rather than tsx.
 import pkg from "../package.json" with { type: "json" };
+import type { GraphContext } from "./graphql/permissions.ts";
 import { schema } from "./graphql/schema.ts";
 
 /**
@@ -19,7 +20,7 @@ import { schema } from "./graphql/schema.ts";
  * business, not a visiting agent's), the MCP-server rows (same), and every bulk mutation — a
  * `deleteTask` with no `where` empties the table, and `deleteTaskSingle` cannot.
  */
-const TOOLS = [
+export const TOOLS = [
   "Query.tasks",
   "Query.steps",
   "Query.runs",
@@ -238,6 +239,11 @@ const WRITE_HINTS: Record<string, { destructiveHint?: boolean; idempotentHint?: 
  */
 export const mcpHandler = createHttpHandler({
   schema,
+  // Everything arriving here is an agent, whatever it asks for. `TOOLS` below says what one is
+  // offered; `permissions.ts` says what one may reach, and this is what tells it apart from the
+  // web app — the settings row, the MCP server rows and every bulk write are shut on this door
+  // and open on the other.
+  contextFromRequest: (): GraphContext => ({ caller: "agent" }),
   name: "task-server",
   version: pkg.version,
   include: TOOLS,

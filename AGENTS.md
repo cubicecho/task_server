@@ -8,6 +8,8 @@ served three ways from one process: GraphQL at `/graphql`, MCP tools at `/mcp`, 
 React app on everything else, with `POST /webhooks/:id` alongside them.
 
 Read [`README.md`](README.md) first — it holds the design decisions this file only summarises.
+When the question is what to build or adopt *next* rather than how this works today, read
+[`future-libs-architecture.md`](future-libs-architecture.md) — see [Future work](#future-work).
 
 Single package, no workspaces: `server/` (Express 5 + graphql-yoga + Drizzle), `web/` (Vite +
 React 19 + TanStack Router/Query + shadcn), `tests/` (Vitest).
@@ -46,6 +48,8 @@ docker compose up --build
 | **Postgres + Drizzle** | One dialect everywhere. With no `DATABASE_URL` the server runs PGlite — postgres as WebAssembly, in-process, against `data/` — so a clone and the tests need no database of their own; set the variable and it is a `pg` pool instead. Same SQL, same types, either way |
 | **`@vantreeseba/drizzle-graphql`** | The API is generated from the tables — a new column is queryable as soon as it exists. Hand-written fields fill what CRUD cannot say |
 | **graphql-yoga** | Serves the query API and the `runEvents` subscription as SSE, which the browser reads with a plain `EventSource` |
+| **`@vantreeseba/graphql-casl`** | Who may call what, as CASL rules over the schema rather than over an endpoint. `applyPermissions` wraps the schema `server/graphql/schema.ts` exports, so `/graphql` and `/mcp` are held to one map — see below |
+| **`@cubicecho/graphql-codegen-field-descriptions`** | The SDL descriptions authored in `server/graphql/docs.ts` reach the browser as data, not as JSDoc that erases. One string is the note under a form field and the tool-schema description an agent reads |
 | **`@cubicecho/graphql-mcp`** | Projects the same schema as MCP tools. `server/mcp-endpoint.ts` curates which ones — see below |
 | **Node type stripping** | The container runs `node server/index.ts`; `tsx` is a devDependency and is not in the image. Nothing under `server/` may use syntax that survives erasure — no enums, no parameter properties |
 | **Biome** | One formatter and linter. `noExplicitAny` and `noNonNullAssertion` are errors here, not warnings |
@@ -114,6 +118,32 @@ either of those belongs in a hook, not in a route handler.
 **`features.nestedWrites` is off.** Nothing in the driver stops it; it is simply not earned —
 a task and its triggers save as separate mutations, and a flow is written whole by
 `setTaskSteps` rather than a row at a time.
+
+**Permissions go on the schema, never on an endpoint.** `server/graphql/permissions.ts` is the
+one place that says who may call what, and `applyPermissions` puts it on the schema that both
+doors serve. `TOOLS` in `mcp-endpoint.ts` is a listing — what an agent's context is spent on —
+and never a lock: both endpoints are one schema in one process, so a rule bolted onto `/mcp`
+says nothing about the same field reached over `/graphql`.
+
+The identity is the door. There are no accounts and no token: `/graphql` sets `caller:
+"operator"`, `/mcp` sets `caller: "agent"` through `contextFromRequest`, and a request with no
+context at all — a test calling `graphql()`, the server executing its own schema — is the
+operator. An agent writes and runs tasks; it may not read or write the settings row (the
+operator's endpoint, model and key), the MCP server rows (`env` and `headers` are credentials,
+and `testMcpServer` spawns a stdio command), or delete run history. `/graphql` has no
+authentication, so today the split is defence in depth over `/mcp`; a shared token is what would
+make a `Bearer` on `/graphql` an agent too.
+
+Mutations are a whitelist — `"*": deny` heads the map — so a write a new table generates ships
+shut. Every bulk form is shut for *everyone*, the operator included: `deleteTask` with no
+`where` empties the table where `deleteTaskSingle` cannot, and every document under
+`web/graphql/` uses a single-row form already. Reads are the other way round, `"*": accept` with
+the two guarded tables named, each in all four generated spellings (`x`, `xs`, `xsAggregate`,
+`xsGroupBy`) — guarding the plural alone guards the front door of a room with two.
+
+`tests/permissions.test.ts` asks the schema as each caller, and runs every rule named in `TOOLS`
+as an agent: a field added to the listing that the map denies is a tool that is advertised,
+called, and refuses every time, which an agent cannot tell from a broken server.
 
 **The `/mcp` surface is curated, not the whole schema.** `server/mcp-endpoint.ts` lists the
 seventeen tools an outside client gets. Nothing that empties a table in one call, and nothing
@@ -188,6 +218,25 @@ file per question that has to be kept in step with the schema. What the runs wer
 the two size sections above, which act on the finding behind them: across a hundred logged calls
 the only filter operator any agent sent was `eq`. Adding a document surface again needs a reason
 the measurement did not already answer.
+
+**A column is described once, in `server/graphql/docs.ts`.** That file is the only copy of what
+a generated field means. `describeColumn` puts it on the schema, so it lands in `schema.graphql`,
+in the JSON Schema of every `/mcp` tool that touches the column, and — through the codegen plugin,
+as `web/__generated__/graphql/descriptions.ts` — under the field in the web app, where
+`web/lib/docs.ts` reads it as `describe("Setting", "maxRetries")`.
+
+It was written twice before and reached nobody twice: JSDoc on the column, which is compile-time
+only and so never reached an agent, and a `hint` literal in the form, which never reached one
+either. The two had already drifted. Never reintroduce the second copy — a form that needs a
+note names the column instead, and the helper is typed against the generated map, so a renamed
+column is a typecheck error rather than a note that silently disappears.
+
+Write for both readers at once: what the value does, what an empty one falls back to, what it is
+not. Keep it short — a description repeats at every position its column generates (row type,
+create and update inputs, filter, aggregates), and the `/mcp` listing has a size test. The
+comment that explains *why* a column exists stays in `server/db/schema.ts`, where it has room.
+`tests/docs.test.ts` holds the schema, the generated map and the authored copy against each
+other, since any one of the three can break silently.
 
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
 a task only when an enabled `event` trigger on an enabled task carries that exact id, and
@@ -266,6 +315,15 @@ query keys it affected.
   skipped rather than failing the release. Note that an organisation secret on the free
   plan reaches public repositories only. A `workflow_dispatch` with a version publishes
   the images without cutting a release
+
+## Future work
+
+Before proposing a library, a search feature, an audit log, or client-side form validation,
+read [`future-libs-architecture.md`](future-libs-architecture.md). It is the standing answer to
+"would this help here?" for the libraries next door — what each would buy this server, what
+blocks it, and what would have to be true first. Five were looked at and ruled out with
+reasons, so a proposal that reopens one of those needs to answer the reason rather than restate
+the idea. Findings age: correct the file when one stops being true.
 
 ## Finding code
 
