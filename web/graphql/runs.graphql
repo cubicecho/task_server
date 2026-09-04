@@ -1,3 +1,6 @@
+# The list, and only what a collapsed card draws. This is polled every five seconds for a
+# hundred rows, and a run's steps, tool calls and webhook payload are read once — when someone
+# opens it. `RunDetail` below fetches those, for the one run that is open.
 query Runs($taskId: String) {
   runs(
     limit: 100
@@ -9,13 +12,11 @@ query Runs($taskId: String) {
     status
     startedAt
     finishedAt
+    # Drawn in the card as a two-line summary, so the poll pays for these.
     output
     error
-    toolCalls
     totalTokens
-    payload
     attempts
-    blockedBy
     task {
       name
     }
@@ -27,6 +28,15 @@ query Runs($taskId: String) {
       cron
       event
     }
+  }
+}
+
+# One opened run, in full. There is no singular root field for a run, so this is the list of one.
+query RunDetail($id: String!) {
+  runs(limit: 1, where: { id: { eq: $id } }) {
+    id
+    toolCalls
+    payload
     steps(orderBy: { position: { direction: asc, priority: 1 } }) {
       id
       position

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   DeleteRunDocument,
+  RunDetailDocument,
+  type RunDetailQuery,
   RunsDocument,
   type RunsQuery,
   StopTaskDocument,
@@ -17,7 +19,7 @@ import { request } from "@/lib/gql";
 import { STATUS_VARIANT } from "@/lib/run-status";
 
 type Run = RunsQuery["runs"][number];
-type RunStep = Run["steps"][number];
+type RunStep = RunDetailQuery["runs"][number]["steps"][number];
 
 const duration = (from: string, to?: string | null) =>
   to ? `${((new Date(to).getTime() - new Date(from).getTime()) / 1000).toFixed(1)}s` : "running…";
@@ -113,6 +115,54 @@ function Payload({ payload }: { payload: unknown }) {
   );
 }
 
+/**
+ * Everything the collapsed card left out, fetched only once the card is opened.
+ *
+ * These fields are not in the list query on purpose: the steps, tool calls and webhook payload
+ * of a hundred runs crossed the wire every five seconds so that one of them could be read.
+ *
+ * `withResult` is false while the run is still going — `RunStream` is showing it live — and for
+ * a `skipped` row, which stands for a firing that produced nothing. The payload is worth showing
+ * in both of those cases, which is why it is not behind the same flag.
+ */
+function RunDetail({ run, withResult }: { run: Run; withResult: boolean }) {
+  const detail = useQuery({
+    // Keyed on the status as well as the id, so a run that finishes while it is open refetches
+    // instead of showing the steps as they stood when it was still running.
+    queryKey: ["run", run.id, run.status],
+    queryFn: () => request(RunDetailDocument, { id: run.id }),
+  });
+  const found = detail.data?.runs[0];
+
+  if (!found) {
+    return detail.error ? (
+      <p className="text-sm text-destructive">{(detail.error as Error).message}</p>
+    ) : (
+      <p className="text-sm text-muted-foreground">Loading…</p>
+    );
+  }
+
+  return (
+    <>
+      <Payload payload={found.payload} />
+      {!withResult ? null : found.steps.length ? (
+        <>
+          <RunSteps steps={found.steps} />
+          {/* The run failed before or between steps — nothing above says why. */}
+          {run.error ? <p className="text-sm text-destructive">{run.error}</p> : null}
+        </>
+      ) : (
+        <>
+          <ToolChips calls={found.toolCalls} />
+          <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
+            {run.error || run.output || "(no output)"}
+          </pre>
+        </>
+      )}
+    </>
+  );
+}
+
 export function RunsRoute() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<string | null>(null);
@@ -194,7 +244,9 @@ export function RunsRoute() {
                     variant="ghost"
                     size="icon"
                     title="Stop this run"
-                    disabled={stop.isPending}
+                    // Only this row's button: `isPending` alone disabled every other running
+                    // run's Stop while one of them was being stopped.
+                    disabled={stop.isPending && stop.variables === run.taskId}
                     onClick={() => stop.mutate(run.taskId)}
                   >
                     <Square className="size-4" />
@@ -226,21 +278,7 @@ export function RunsRoute() {
                     It collided with the run that was already under way.
                   </p>
                 ) : null}
-                <Payload payload={run.payload} />
-                {running || skipped ? null : run.steps.length ? (
-                  <>
-                    <RunSteps steps={run.steps} />
-                    {/* The run failed before or between steps — nothing above says why. */}
-                    {run.error ? <p className="text-sm text-destructive">{run.error}</p> : null}
-                  </>
-                ) : (
-                  <>
-                    <ToolChips calls={run.toolCalls} />
-                    <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-                      {run.error || run.output || "(no output)"}
-                    </pre>
-                  </>
-                )}
+                <RunDetail run={run} withResult={!running && !skipped} />
               </div>
             ) : null}
           </Card>
