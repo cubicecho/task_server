@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
   DeleteTaskDocument,
@@ -11,6 +12,7 @@ import {
   UpdateTaskDocument,
 } from "@/__generated__/graphql/graphql";
 import { Page } from "@/components/app-shell";
+import { RunDialog } from "@/components/run-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -56,8 +58,14 @@ export function TasksRoute() {
     },
   });
 
+  // The task a body is being typed for, if any. A task with a webhook is asked for one rather
+  // than started outright: its prompt most likely has `{{event}}` in it, and a run with nothing
+  // there is a test of half of it.
+  const [askFor, setAskFor] = useState<TaskFieldsFragment | null>(null);
+
   const run = useMutation({
-    mutationFn: (taskId: string) => request(RunTaskDocument, { taskId }),
+    mutationFn: ({ taskId, payload }: { taskId: string; payload?: unknown }) =>
+      request(RunTaskDocument, { taskId, payload }),
     onSuccess: (data) => {
       const { status, error } = data.runTask;
       if (status === "error") toast.error(error || "Run failed");
@@ -70,6 +78,11 @@ export function TasksRoute() {
   // The scheduler is the authority on when a trigger next fires; the trigger row only holds
   // the expression it was built from.
   const nextRuns = new Map(tasks.data?.schedule.map((entry) => [entry.triggerId, entry.nextRun]));
+
+  const press = (task: TaskFieldsFragment) => {
+    if (task.triggers.some((trigger) => trigger.kind === "event")) setAskFor(task);
+    else run.mutate({ taskId: task.id });
+  };
 
   return (
     <Page
@@ -103,7 +116,7 @@ export function TasksRoute() {
         // `runTask` resolves only when the run finishes, so the mutation being in flight is a
         // run in flight too — before the poll has had a chance to see the row.
         const running =
-          lastRun?.status === "running" || (run.isPending && run.variables === task.id);
+          lastRun?.status === "running" || (run.isPending && run.variables?.taskId === task.id);
         return (
           <Card key={task.id} className="gap-3 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -142,8 +155,8 @@ export function TasksRoute() {
                     variant="ghost"
                     size="icon"
                     title="Run now"
-                    disabled={run.isPending && run.variables === task.id}
-                    onClick={() => run.mutate(task.id)}
+                    disabled={run.isPending && run.variables?.taskId === task.id}
+                    onClick={() => press(task)}
                   >
                     <Play className="size-4" />
                   </Button>
@@ -198,6 +211,15 @@ export function TasksRoute() {
           </Card>
         );
       })}
+
+      {askFor ? (
+        <RunDialog
+          taskId={askFor.id}
+          taskName={askFor.name}
+          onClose={() => setAskFor(null)}
+          onRun={(payload) => run.mutate({ taskId: askFor.id, payload })}
+        />
+      ) : null}
     </Page>
   );
 }

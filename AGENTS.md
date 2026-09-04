@@ -279,6 +279,13 @@ webhook body says nothing about that — so a prompt can place the payload and s
 preamble. The server never looks inside a payload; whole-body `{{event}}` is the whole of the
 feature, and there is no `{{event.field}}` path access.
 
+A webhook is not the only entrance. `runTask(taskId:, payload:)` takes the same body from a
+person or an agent — `RunDialog` in the web app, the `run_task` tool over `/mcp` — and passes
+it to `startTask` with **no** `triggerId`. That is deliberate: a replay of a failed delivery is
+a hand-started run, and one that named the trigger it was copied from would write a delivery
+into the history that nobody sent. Everything downstream is unchanged, which is the point —
+there is one path a payload travels, and the argument only decides where it entered.
+
 **The LLM call retries only before the model has spoken.** `server/runner/agent.ts` owns the
 retry loop, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn
 is unrepeatable, so a failure after that propagates. `requestTimeoutSeconds` is a silence

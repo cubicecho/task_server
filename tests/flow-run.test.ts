@@ -235,3 +235,33 @@ test("stopping mid-flow ends the run and the step it was in as stopped", async (
   expect(rows[1].error).toBe("");
   expect(rows[1].finishedAt).not.toBeNull();
 });
+
+test("a run started by hand can carry a payload, and it reaches the prompt and the row", async () => {
+  const { id: taskId } = await task("replay", "the delivery said {{event}}");
+  replies = ["read it"];
+
+  // Through the schema rather than the runner directly: the argument is the point of the
+  // feature — a failed webhook run is replayed by handing its stored body back — and the
+  // wiring from that argument to the prompt is what would break silently.
+  const { schema } = await import("../server/graphql/schema.ts");
+  const { graphql } = await import("graphql");
+  const result = await graphql({
+    schema,
+    source: `mutation Run($taskId: String!, $payload: JSON) {
+       runTask(taskId: $taskId, payload: $payload) { id status triggerId }
+     }`,
+    variableValues: { taskId, payload: { pushed: ["a", "b"] } },
+  });
+  expect(result.errors).toBeUndefined();
+  const run = (result.data as { runTask: { id: string; status: string; triggerId: null } }).runTask;
+  expect(run.status).toBe("ok");
+  // No trigger fired. A replay that claimed the webhook it was copied from would put a delivery
+  // in the history that nobody sent.
+  expect(run.triggerId).toBeNull();
+
+  expect(prompts[0]).toContain(`"pushed"`);
+
+  const { eq } = await import("drizzle-orm");
+  const [row] = await client.db.select().from(tables.runs).where(eq(tables.runs.id, run.id));
+  expect(row.payload).toEqual({ pushed: ["a", "b"] });
+});

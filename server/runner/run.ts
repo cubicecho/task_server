@@ -65,9 +65,15 @@ export function stopTask(taskId: string): boolean {
  *
  * What actually runs is the task's flow: its prompt, then whatever steps hang off it. A task
  * with no steps is one step, which is the whole of what this used to do.
+ *
+ * A `payload` here is a body handed over by the caller rather than delivered by a webhook, and
+ * is the same thing to everything downstream: stored on the run, rendered as `{{event}}`. It is
+ * how a failed delivery is replayed and how an `{{event}}` prompt is tried before a sender
+ * exists. `triggerId` stays empty for those, because no trigger fired — the run was started by
+ * hand, and a run that claimed a webhook nobody posted to would misread the history.
  */
-export async function runTask(taskId: string, triggerId?: string): Promise<Run> {
-  const { done } = await startTask(taskId, triggerId);
+export async function runTask(taskId: string, triggerId?: string, payload?: unknown): Promise<Run> {
+  const { done } = await startTask(taskId, triggerId, payload);
   return await done;
 }
 
