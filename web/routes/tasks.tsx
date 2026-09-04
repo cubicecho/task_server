@@ -129,7 +129,10 @@ export function TasksRoute() {
                     variant="ghost"
                     size="icon"
                     title="Stop this run"
-                    disabled={stop.isPending}
+                    // Only this card's button. `isPending` alone is true for the whole list
+                    // while any one task is being started or stopped, which greyed out every
+                    // other row's control along with the one that was clicked.
+                    disabled={stop.isPending && stop.variables === task.id}
                     onClick={() => stop.mutate(task.id)}
                   >
                     <Square className="size-4" />
@@ -139,7 +142,7 @@ export function TasksRoute() {
                     variant="ghost"
                     size="icon"
                     title="Run now"
-                    disabled={run.isPending}
+                    disabled={run.isPending && run.variables === task.id}
                     onClick={() => run.mutate(task.id)}
                   >
                     <Play className="size-4" />
