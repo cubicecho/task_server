@@ -104,12 +104,16 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       // `server/graphql/schema.ts`). The flow is not: `setTaskSteps` writes the tree in one
       // transaction, so a flow either lands whole or not at all.
       for (const id of removed) await request(DeleteTriggerDocument, { id });
+      const saved: DraftTrigger[] = [];
       for (const trigger of triggers) {
         // A row left blank is one that was added and never filled in, which is not an edit to
         // save. A webhook with no id would be worse than nothing: no address reaches it.
         const cron = trigger.cron.trim();
         const event = trigger.event.trim();
-        if (trigger.kind === "cron" ? !cron : !event) continue;
+        if (trigger.kind === "cron" ? !cron : !event) {
+          saved.push(trigger);
+          continue;
+        }
 
         const kind = trigger.kind === "cron" ? TriggersKindEnum.Cron : TriggersKindEnum.Event;
         const set = {
@@ -119,19 +123,30 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
           event,
           enabled: trigger.enabled,
         };
-        if (trigger.id) await request(UpdateTriggerDocument, { id: trigger.id, set });
-        else await request(CreateTriggerDocument, { values: { taskId, ...set } });
+        let id = trigger.id;
+        if (id) {
+          await request(UpdateTriggerDocument, { id, set });
+        } else {
+          id = (await request(CreateTriggerDocument, { values: { taskId, ...set } })).createTrigger
+            .id;
+        }
+        // The trimmed values go back too, so the row reads as what was actually stored.
+        saved.push({ ...trigger, id, cron, event, timezone: set.timezone });
       }
 
       const written = await request(SetTaskStepsDocument, { taskId, steps: toInput(steps) });
-      return { taskId, steps: written.setTaskSteps };
+      return { taskId, triggers: saved, steps: written.setTaskSteps };
     },
-    onSuccess: ({ taskId, steps: written }) => {
+    onSuccess: ({ taskId, triggers: savedTriggers, steps: written }) => {
       toast.success(task ? "Task saved" : "Task created");
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["task", taskId] });
       // The ids the server assigned come back, so a second save edits the same rows rather
-      // than replacing them and orphaning their run history.
+      // than replacing them and orphaning their run history. The form is keyed on the task, so
+      // the refetch behind these invalidations does not rebuild it — without this a second save
+      // created every trigger a second time, and deleting one it had just created deleted
+      // nothing, because the draft still had no id to delete by.
+      setTriggers(savedTriggers);
       setSteps(toDraft(written));
       setRemoved([]);
       if (!task) navigate({ to: "/tasks/$taskId", params: { taskId } });
