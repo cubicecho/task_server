@@ -94,6 +94,8 @@ export function RunStream({ runId }: { runId: string }) {
 
     // A reconnect replays the run from the start, so the sequence is what says where we were.
     let seen = 0;
+    /** Whether the message on screen is about a connection that has since come back. */
+    let failed = false;
     let pending: RunEvent[] = [];
     const flush = () => {
       if (pending.length === 0) return;
@@ -114,9 +116,20 @@ export function RunStream({ runId }: { runId: string }) {
         next: ({ runEvents: event }) => {
           if (event.seq <= seen) return;
           seen = event.seq;
+          // The transport resubscribes on its own, so a dropped connection is usually followed
+          // by events again — and "lost the connection to the server" stayed on screen for the
+          // rest of a run that had already recovered. Guarded by the flag rather than cleared
+          // per event: this runs once per token.
+          if (failed) {
+            failed = false;
+            setError("");
+          }
           pending.push(event);
         },
-        error: (failure) => setError(failure.message),
+        error: (failure) => {
+          failed = true;
+          setError(failure.message);
+        },
         complete: () => {
           flush();
           setEnded(true);
