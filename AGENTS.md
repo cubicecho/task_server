@@ -96,7 +96,7 @@ one, takes over a lock whose holder is gone, and does nothing at all for a `post
 `reconnectMcp`, `setApiKey` on the mutation side. Give every one of them a `description` — it
 is what an agent on `/mcp` reads to decide whether to call it.
 
-**A trigger that fires at a task already running leaves a `skipped` run.** `startTask` refuses
+**A trigger that fires at a task that cannot start leaves a `skipped` run.** `startTask` refuses
 it — right for a person or an agent, who are told on the spot — but nothing is watching a cron
 tick or a webhook delivery, and a refusal used to leave no trace but a log line. `fireTask` in
 `server/runner/run.ts` is the entry point for both dispatchers: it starts the task, or writes a
@@ -110,6 +110,22 @@ row and increments `attempts` rather than adding another — otherwise a sender 
 than the task runs buries the history it is meant to be visible in. The row keeps the most
 recent payload of the firings it stands for, and `finishedAt` moves with them while `startedAt`
 stays at the first, so it spans the collision instead of naming a moment in the middle of it.
+
+There are two refusals and one shape. `TaskBusyError` is the task's own run in the way;
+`AtCapacityError` is `settings.maxConcurrentRuns` runs already in flight across every task
+(four by default, zero for no ceiling). Both extend `RunRefusedError`, which is what `fireTask`
+catches, so a new reason to turn a firing away becomes a `skipped` row by subclassing rather
+than by editing the dispatchers. A capacity skip points `blockedBy` at the *oldest* run in
+flight, which is arbitrary but stable — the collapsing above keys on it, and a stable choice is
+what keeps a webhook posted every second at a full server to one row rather than one a second.
+
+`startTask` claims the slot before it writes anything, with no `await` between the check and the
+`inFlight.set`, and deletes the entry if the inserts then throw. Node is single-threaded but not
+uninterruptible: `loadSettings` and the run insert both yield, and two firings that arrive in
+the same tick would otherwise both read `size < limit` and both start.
+`tests/concurrency.test.ts` races two `Promise.all`'d firings for the last slot, and it fails if
+the claim moves back down. `runningRunIds()` filters empty ids out for the same reason — a
+claimed entry has no run id for the width of the insert.
 
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change
@@ -284,6 +300,12 @@ database. The shape typechecks either way; whether an escaped `%`, an enum `eq` 
 across a relation mean what the controls above the list say they mean is a question about SQL,
 and the `@` alias is in `vitest.config.ts` so a server test can ask it. A filter built inside a
 `.tsx` is a filter nothing can test.
+
+The same goes for a rule a page draws conclusions from. `task-health.ts` decides which of six
+heaps a task is in for the status page, and `tests/status.test.ts` seeds a task per answer and
+asks that function what the browser asks it. Whether a skipped row older than the last run means
+the task is still falling behind is a question with a right answer, and it is not one a
+screenshot settles.
 
 ## Code style
 

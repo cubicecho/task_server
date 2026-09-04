@@ -87,6 +87,7 @@ interface Form {
   toolSelectModel: string;
   requestTimeoutSeconds: number;
   maxRetries: number;
+  maxConcurrentRuns: number;
   runRetentionDays: number;
 }
 
@@ -101,6 +102,7 @@ const toForm = (row: SettingsRow): Form => ({
   toolSelectModel: row.toolSelectModel,
   requestTimeoutSeconds: row.requestTimeoutSeconds,
   maxRetries: row.maxRetries,
+  maxConcurrentRuns: row.maxConcurrentRuns,
   runRetentionDays: row.runRetentionDays,
 });
 
@@ -247,6 +249,13 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
             hint={doc("maxRetries")}
             value={form.maxRetries}
             onChange={(value) => set("maxRetries", value)}
+          />
+          <NumberField
+            id="maxConcurrentRuns"
+            label="Runs at once"
+            hint={doc("maxConcurrentRuns")}
+            value={form.maxConcurrentRuns}
+            onChange={(value) => set("maxConcurrentRuns", value)}
           />
           <NumberField
             id="runRetentionDays"

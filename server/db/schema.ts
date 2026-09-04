@@ -256,6 +256,19 @@ export const settings = pgTable("settings", {
   requestTimeoutSeconds: integer().notNull().default(120),
   /** Only a failure before the first chunk is safe to retry — see `runner/agent.ts`. */
   maxRetries: integer().notNull().default(2),
+  /**
+   * How many runs may be in flight at once, across every task.
+   *
+   * A task is already serialised against itself; this is the other pile-up, the one where a
+   * dozen unrelated triggers share a midnight and the endpoint gets a dozen concurrent streams
+   * with every MCP server's tools attached to each. Four is a number that survives that without
+   * getting in the way of a handful of tasks, and it is meant to be changed. Zero lifts the
+   * limit entirely, which is what this did before the column existed.
+   *
+   * A firing that arrives with no slot free is turned away exactly as one that meets its own
+   * task already running is — a `skipped` run saying so, not a silence. See `runner/run.ts`.
+   */
+  maxConcurrentRuns: integer().notNull().default(4),
 });
 
 export const schema = { tasks, triggers, steps, runs, runSteps, mcpServers, settings };

@@ -14,18 +14,33 @@ import { loadSettings } from "./llm.ts";
 const inFlight = new Map<string, { runId: string; controller: AbortController }>();
 
 /**
- * A task asked to start while a run of it is already going. Its own class so a trigger can
- * tell the one refusal it expects from the ones that mean something is wrong.
+ * A start that was refused because something was already running — not because anything is
+ * wrong. Its own class so a trigger can tell the refusals it expects from the faults it does
+ * not, and two of them because the two answers are different: one is about this task, the
+ * other about the server, and the person reading the skipped run needs to know which.
  */
-export class TaskBusyError extends Error {
+export class RunRefusedError extends Error {}
+
+export class TaskBusyError extends RunRefusedError {
   override readonly name = "TaskBusyError";
+}
+
+export class AtCapacityError extends RunRefusedError {
+  override readonly name = "AtCapacityError";
 }
 
 /** Task ids running right now. A task cannot be deleted while it is one of them. */
 export const runningTaskIds = () => new Set(inFlight.keys());
 
-/** Run ids in flight. Deleting one would leave `finish` with no row to write the outcome to. */
-export const runningRunIds = () => new Set([...inFlight.values()].map((entry) => entry.runId));
+/**
+ * Run ids in flight. Deleting one would leave `finish` with no row to write the outcome to.
+ *
+ * A slot claimed a moment before its run row exists carries an empty id, and that is dropped
+ * rather than returned: there is no such run to protect yet, and an empty string in a set of
+ * ids is a value some caller will eventually compare against by accident.
+ */
+export const runningRunIds = () =>
+  new Set([...inFlight.values()].map((entry) => entry.runId).filter(Boolean));
 
 /**
  * Calls off a running task. Returns false if it was not running — which is the honest answer
@@ -76,21 +91,44 @@ export async function startTask(
 ): Promise<{ run: Run; done: Promise<Run> }> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   if (!task) throw new Error(`no task with id ${taskId}`);
+  // Re-read every time rather than cached, so a limit changed in the UI applies to the next
+  // run and not to the next restart.
+  const limit = (await loadSettings()).maxConcurrentRuns;
+
+  // The slot is taken here, before the two writes below and with no `await` between the check
+  // and the claim, because a check that is separated from its claim by an await is not a limit:
+  // two firings in the same tick both pass it and both start. `runId` is filled in a moment
+  // later — what the entry has to carry from this instant is the fact that the slot is spoken
+  // for, and the controller that can call the run off.
   if (inFlight.has(taskId)) throw new TaskBusyError(`task "${task.name}" is already running`);
-  // Read once, before the run starts: a flow edited halfway through would make the run's own
-  // account of itself untrue.
-  const flow = await db.select().from(steps).where(eq(steps.taskId, taskId));
-
-  // The payload is stored as well as passed on. The prompt the agent saw depended on it, so a
-  // run that kept its output and not its input could not be read back or reproduced.
-  const [run] = await db
-    .insert(runs)
-    .values({ taskId, triggerId: triggerId ?? null, status: "running", payload: payload ?? null })
-    .returning();
-
+  if (limit > 0 && inFlight.size >= limit) {
+    throw new AtCapacityError(`${inFlight.size} runs already going, and the limit is ${limit}`);
+  }
   const controller = new AbortController();
-  inFlight.set(taskId, { runId: run.id, controller });
-  return { run, done: execute({ run, task, flow, payload, controller }) };
+  const entry = { runId: "", controller };
+  inFlight.set(taskId, entry);
+
+  try {
+    // Read once, before the run starts: a flow edited halfway through would make the run's own
+    // account of itself untrue.
+    const flow = await db.select().from(steps).where(eq(steps.taskId, taskId));
+
+    // The payload is stored as well as passed on. The prompt the agent saw depended on it, so a
+    // run that kept its output and not its input could not be read back or reproduced.
+    const [run] = await db
+      .insert(runs)
+      .values({ taskId, triggerId: triggerId ?? null, status: "running", payload: payload ?? null })
+      .returning();
+
+    entry.runId = run.id;
+    return { run, done: execute({ run, task, flow, payload, controller }) };
+  } catch (error) {
+    // The slot was claimed before there was a run to hang it on, so a failure between the two
+    // has to give it back — otherwise a database that hiccups once leaks a slot for the life of
+    // the process, and the limit ratchets down to nothing.
+    inFlight.delete(taskId);
+    throw error;
+  }
 }
 
 /**
@@ -134,12 +172,18 @@ export async function fireTask(
 ): Promise<Fired> {
   // Read before the throw can be handled: the entry is what the skip is *about*, and the run
   // may finish and clear it at any moment after.
-  const blocking = inFlight.get(taskId)?.runId;
+  //
+  // For a task meeting itself that is its own run. For one meeting a full server there is no
+  // single run in the way, so it is the oldest — the map is in insertion order, and the oldest
+  // is the run whose finishing is most likely to free the slot. Either way the skip has a run
+  // to collapse against, which is what stops a webhook posted every second at a busy server
+  // writing a row a second.
+  const blocking = inFlight.get(taskId)?.runId ?? [...inFlight.values()][0]?.runId;
   try {
     const { run, done } = await startTask(taskId, triggerId, payload);
     return { started: true, run, done };
   } catch (error) {
-    if (!(error instanceof TaskBusyError)) throw error;
+    if (!(error instanceof RunRefusedError)) throw error;
     const reason = errorMessage(error);
     const run = await recordSkip({ taskId, triggerId, payload, reason, blocking });
     return { started: false, run, reason };
