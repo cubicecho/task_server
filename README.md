@@ -254,6 +254,11 @@ payload, not a failed delivery, and still answers `200` and still fires the task
 keeps the payload too — a delivery that started nothing would otherwise leave no trace of what
 was in it.
 
+A `config` column on the trigger once held matching rules for exactly this — free-form JSON the
+server would test a body against before firing. It was dropped rather than finished, because it
+contradicts the line above: rules are the payload being a condition. While it existed an agent
+could read its description, set rules on a trigger, and get no error and no effect.
+
 Only a task that actually started is in `dispatched`. A task already running is the refusal
 worth expecting — anything that fires faster than it runs meets it routinely — and it is named
 in `refused` with the reason. Both carry a `runId`, because both are written down: a delivery

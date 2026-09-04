@@ -188,11 +188,14 @@ test("advertises tools small enough for a client to read", async () => {
   // than emitting a `$ref`, which put the seventeen tools at 18 MB and `tasks` alone at 2.8 MB —
   // more than any model will read, and it lands before a single call can be made.
   //
-  // Shared, the listing is ~167 kB and the largest tool ~27 kB, down from ~379 kB and ~44 kB on
+  // Shared, the listing is ~151 kB and the largest tool ~26 kB, down from ~379 kB and ~44 kB on
   // 2.7.0 — drizzle-graphql 12 gave each column type only the operators it can use, and 2.9.0's
   // `inputField` took the relation filters out of the projection. The ~12 kB back on top of that
   // is the column descriptions from `server/graphql/docs.ts`, which is what they cost: a column
-  // is described once and the text lands at every position it generates. The bounds sit above that
+  // is described once and the text lands at every position it generates. Dropping the unread
+  // `triggers.config` took ~16 kB off, which is the same arithmetic run backwards: one jsonb
+  // column is a field, a `JSONFilter`, an aggregate and an order across every tool that reaches
+  // a trigger, and its description rides along at each. The bounds sit above that
   // because the exact figure is not ours to hold: it went to ~528 kB when zod 4 became the
   // conversion path and back again on 2.2.0. What is being caught here is the order of magnitude
   // — a return to per-route copies trips this by 30×.
