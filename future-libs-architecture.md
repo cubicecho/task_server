@@ -112,3 +112,9 @@ that loop is the thing to extract into a package, and neither is that package to
 the one with an architectural bearing: it is a gateway, so pointing this server's pool at one
 router instead of at five stdio children would move tool-budget management — the whole reason
 `toolDiscovery` and `toolSelectModel` exist — out of this server and behind one connection.
+
+Per-task tool scope is the same answer. A task that summarises an inbox has no business holding
+a shell, and the fix is a router endpoint that does not offer one rather than a join table here:
+scoping written twice is scoping that disagrees, and the copy here would only ever cover the
+servers this pool spawns itself. Decided against on
+[#21](https://github.com/cubicecho/task_server/issues/21).
