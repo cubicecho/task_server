@@ -14,9 +14,11 @@ fragment TaskFields on Task {
     event
     enabled
   }
+  # The last run that is a run: a refusal and a firing still waiting for a slot both have a
+  # `startedAt` and neither is the task doing anything, so either would hide the run before it.
   runs(
     limit: 1
-    where: { status: { ne: skipped } }
+    where: { status: { notInArray: [skipped, queued] } }
     orderBy: { startedAt: { direction: desc, priority: 1 } }
   ) {
     id

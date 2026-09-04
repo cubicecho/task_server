@@ -91,6 +91,22 @@ beforeAll(async () => {
   const manual = await seed("manual");
   await armed(manual, false);
 
+  // A clean last run and a firing that found the server full. Nothing failed and nothing is
+  // lost, and the task is still a delivery behind — which is the case a rule reading only the
+  // last run calls fine.
+  const waiting = await seed("waiting");
+  await armed(waiting);
+  await db.insert(tables.runs).values([
+    { taskId: waiting, status: "ok", startedAt: minutesAgo(12), finishedAt: minutesAgo(11) },
+    {
+      taskId: waiting,
+      status: "queued",
+      error: "4 runs already going, and the limit is 4",
+      attempts: 3,
+      startedAt: minutesAgo(2),
+    },
+  ]);
+
   const fine = await seed("fine");
   await armed(fine);
   await db.insert(tables.runs).values({ taskId: fine, status: "ok", startedAt: minutesAgo(15) });
@@ -113,6 +129,7 @@ test("each task lands in the heap its rows say it is in", async () => {
     recovered: "fine",
     broken: "broken",
     running: "running",
+    waiting: "waiting",
     off: "off",
     manual: "manual",
     fine: "fine",
@@ -125,6 +142,7 @@ test("the tiles count what the list shows", async () => {
     refused: 1,
     broken: 1,
     running: 1,
+    waiting: 1,
     off: 1,
     manual: 1,
     fine: 2,
@@ -137,6 +155,15 @@ test("the skipped row carries how many firings it stands for", async () => {
   expect(task?.collision[0]?.attempts).toBe(4);
   // `last` excludes skipped rows, so the newest thing that actually ran is what it reports —
   // not the refusal that happened after it.
+  expect(task?.last[0]?.status).toBe("ok");
+});
+
+test("a firing waiting for a slot is not the task's last run", async () => {
+  const data = await ask();
+  const task = data.tasks.find((row) => row.name === "waiting");
+  expect(task?.waiting[0]?.attempts).toBe(3);
+  // The queued row is the newer of the two and is still excluded: it has not run, so reporting
+  // it as the last run would say the task is doing something it has not started.
   expect(task?.last[0]?.status).toBe("ok");
 });
 

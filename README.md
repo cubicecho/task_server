@@ -110,9 +110,10 @@ reads the same as having watched from the start.
 It is debugging output, not the record: nothing is persisted, nothing survives a restart, and a
 finished run is forgotten a minute later. The row remains the lasting account of what happened.
 
-A run's status is `running`, then one of `ok`, `error` or `stopped` — and `skipped` for a row
-that never ran at all, which is what a trigger firing at a task that could not start it leaves
-behind. Only `error` is a failure; the other three are outlined rather than coloured on the
+A run's status is `running`, then one of `ok`, `error` or `stopped`. Two more are rows that have
+not run: `queued` is a firing waiting for a free slot, which becomes `running` in that same row
+when one comes back, and `skipped` never ran at all — a trigger that fired at a task that could
+not start. Only `error` is a failure; the other four are outlined rather than coloured on the
 **Runs** page for that reason.
 
 A skipped row names the run that was in the way in `blockedBy`, and counts the firings it stands
@@ -129,13 +130,27 @@ server's tools attached, and a dozen tasks whose crons share a minute will happi
 of those at once — into one API key's rate limit, one machine's memory, and whatever the stdio
 servers spawn. Zero lifts it, for a server where something else is doing the limiting.
 
-A firing that arrives with no slot free is turned away exactly as one that meets its own task
-running is: a `skipped` run saying which, with the oldest run in flight as its `blockedBy`.
-Nothing queues. A run that could not start is a run that did not happen, and the row says so on
-the **Runs** page and gathers the task under **Turned away** on **Status** — which is the
-signal that the ceiling is too low, or that a task is too slow for the schedule pointing at it.
-Raising the number is one field; a queue that quietly runs everything an hour late is not
-something you would notice was happening.
+A firing that arrives with no slot free waits: it is written down as a `queued` run, which starts
+by itself in that same row the moment a slot comes back. Nothing about it has failed — every
+slot is spoken for this minute and will not be the next — and the difference between a task that
+ran late and a task that did not run is the whole of why the queue is there. One row per waiting
+trigger, not per firing, so a sender posting every second at a full server does not build a queue
+that takes an hour to drain; `attempts` counts the deliveries it stands for, and it runs once,
+with the newest of their bodies. Deleting the row is how you call it off, and a task disabled
+while its firing waited does not run — "stop firing this" honoured minutes late is not honouring
+it.
+
+A firing that meets *its own task* still running is a different fact, and is still turned away:
+a `skipped` run saying so, with the run in the way as its `blockedBy`. The work is already in
+flight, and queueing a second copy behind it is how a five-minute task ends up running twelve
+times over an hour it was never meant to. So is a person or an agent pressing **Run now** at a
+full server — they are asking for a run now and are told on the spot, rather than handed a row
+that starts at some point they are not watching.
+
+Both show on the **Runs** page, and **Status** keeps them apart: a refusal gathers the task under
+**Turned away**, a firing still queued under **Waiting**. Waiting is not a fault — it says the
+ceiling is low for what is pointed at this server, or that a task is slower than its schedule —
+and it is worth seeing before the queue is where the work lives.
 
 Each run also shows what started it — the cron expression, or the webhook path — where it still
 has a trigger to point at. Nothing is shown when it does not, because deleting a trigger clears
@@ -188,18 +203,21 @@ for to make it stop.
 
 ## Is anything wrong
 
-The **Status** page answers that and nothing else. It is six tiles counting tasks, and a list of
-the ones something is wrong with.
+The **Status** page answers that and nothing else. It is seven tiles counting tasks, and a list
+of the ones something is wrong with.
 
 The words on the tiles are deliberately not the run statuses. `ok`, `error` and `stopped`
 describe one run; what a person opening this page wants is what is true of the *task* now, and
-two of the answers worth having are not run statuses at all:
+three of the answers worth having are not run statuses at all:
 
-- **Falling behind** — a trigger fired while the task was still running, and nothing has run
-  since. The firings in between were turned away and left `skipped` rows, which is exactly what
-  those rows are for. The tile counts the tasks; the row says how many deliveries the collision
-  stands for. A webhook posted faster than its task runs looks perfectly healthy on the Tasks
-  page, because its last run finished fine.
+- **Turned away** — a trigger fired while the task was still running, and nothing has run since.
+  The firings in between were refused and left `skipped` rows, which is exactly what those rows
+  are for. The tile counts the tasks; the row says how many deliveries the collision stands for.
+  A webhook posted faster than its task runs looks perfectly healthy on the Tasks page, because
+  its last run finished fine.
+- **Waiting** — a firing found the server at its limit and is queued. Nothing has failed and
+  nothing is lost, and the task is still behind by a delivery it has not run yet; the last run
+  finished cleanly and says nothing about the one it owes.
 - **Manual only** — enabled, and nothing arms it. It runs when you press play and not otherwise.
   This never fails and never appears in the run history, and on the Tasks page it is
   indistinguishable from a task that is working.
@@ -208,7 +226,9 @@ The other four are **Broken** (the last run errored), **Running**, **Off** (disa
 **Fine**. A task is in exactly one heap: collisions outrank everything, because a task that is
 falling behind is nearly always also running, and ranking `running` first would hide every one
 of them behind the fact that it is busy. `broken` outranks `off` for a related reason — turning
-a task off is not the same as having fixed it.
+a task off is not the same as having fixed it. Only **Turned away** and **Broken** are listed
+when no tile is picked, because only those two are something to fix; **Waiting** is the server
+doing what it was told, reported so that a ceiling set too low does not go unnoticed.
 
 Two things below the list are not about tasks at all. **Servers that did not connect** reads
 `mcpStatus`, because an enabled MCP server that failed to connect means every run since went out
@@ -281,6 +301,9 @@ come back in the body:
   "ok": true,
   "event": "nightly-import",
   "dispatched": [{ "taskId": "...", "name": "Import", "runId": "..." }],
+  "queued": [
+    { "taskId": "...", "name": "Digest", "runId": "...", "reason": "4 runs already going, and the limit is 4" }
+  ],
   "refused": [
     { "taskId": "...", "name": "Sync", "runId": "...", "reason": "task \"Sync\" is already running" }
   ]
@@ -288,8 +311,8 @@ come back in the body:
 ```
 
 A post fires every enabled `event` trigger on an enabled task whose `event` matches exactly,
-and returns as soon as those runs are started rather than waiting for them to finish. Watch
-them on the **Runs** page like any other run.
+and returns as soon as those runs are started — or written down as waiting — rather than
+waiting for them to finish. Watch them on the **Runs** page like any other run.
 
 A JSON body is the event's payload. It is handed to every task the post fires, kept on the run
 row, shown under **Event payload** when you expand the run, and written into the prompt wherever
@@ -306,9 +329,10 @@ Summarise what changed on {{event}} and write it to ~/notes/deploys.md
 
 The server never looks inside it. A body is an argument to the event and never a condition of
 it: one that is not JSON, is not declared as JSON, or is larger than 1 MB is a delivery with no
-payload, not a failed delivery, and still answers `200` and still fires the task. A skipped run
-keeps the payload too — a delivery that started nothing would otherwise leave no trace of what
-was in it.
+payload, not a failed delivery, and still answers `200` and still fires the task. A skipped or
+queued run keeps the payload too — one is a delivery that started nothing and would otherwise
+leave no trace of what was in it, the other is the body the run will be given when its turn
+comes.
 
 A `config` column on the trigger once held matching rules for exactly this — free-form JSON the
 server would test a body against before firing. It was dropped rather than finished, because it
@@ -333,17 +357,22 @@ and one that claimed the webhook it was copied from would put a delivery in the 
 nobody sent. Over GraphQL and `/mcp` it is the same argument — `runTask(taskId:, payload:)` —
 so an agent can replay a failed delivery as well as read about it.
 
-Only a task that actually started is in `dispatched`. A task already running is the refusal
-worth expecting — anything that fires faster than it runs meets it routinely — and it is named
-in `refused` with the reason, as is one that arrived at a server already running as many tasks
-as it is allowed to. Both carry a `runId`, because both are written down: a delivery
-that started nothing is recorded as a run of status **skipped**, so it appears on the **Runs**
-page next to the run it collided with rather than only in the server's log. That is the whole
-point of it. A trigger that fires into a wall and a trigger that is broken look identical from
-the outside, and only one of them is worth investigating.
+Only a task that actually started is in `dispatched`. The other two arrays are the deliveries
+that arrived perfectly well and did not become a run there and then. A task already running is
+the refusal worth expecting — anything that fires faster than it runs meets it routinely — and
+it is named in `refused` with the reason. One that found the server at its limit is in `queued`
+instead, and the distinction is not cosmetic: that one is going to run, in the row named here,
+as soon as a slot comes back.
+
+All three carry a `runId`, because all three are written down: a delivery that started nothing
+now is recorded as a run of status **skipped** or **queued**, so it appears on the **Runs** page
+next to the run it collided with rather than only in the server's log. That is the whole point
+of it. A trigger that fires into a wall and a trigger that is broken look identical from the
+outside, and only one of them is worth investigating.
 
 The same is true of a cron tick that lands on a task still running from the last one, or on a
-server with no slot free: it, too, leaves a skipped run.
+server with no slot free: it leaves a skipped run for the first and a queued one for the
+second.
 
 There is no signature, no secret, and no auth — the id is all there is, so pick one that is
 not worth guessing if it matters. This is deliberate: the server is meant to sit somewhere you

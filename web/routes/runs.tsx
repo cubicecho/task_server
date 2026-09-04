@@ -135,8 +135,9 @@ function Payload({ payload }: { payload: unknown }) {
  * of a hundred runs crossed the wire every five seconds so that one of them could be read.
  *
  * `withResult` is false while the run is still going — `RunStream` is showing it live — and for
- * a `skipped` row, which stands for a firing that produced nothing. The payload is worth showing
- * in both of those cases, which is why it is not behind the same flag.
+ * a `skipped` or `queued` row, neither of which has produced anything: one never will, the other
+ * has not yet. The payload is worth showing in all three cases, which is why it is not behind
+ * the same flag — it is the body the run will be given when its turn comes.
  */
 function RunDetail({
   run,
@@ -394,6 +395,9 @@ export function RunsRoute() {
         const running = run.status === "running";
         // A trigger that fired at a busy task: a real delivery, and nothing behind it to open.
         const skipped = run.status === "skipped";
+        // A firing waiting for a slot. Nothing has happened yet, and deleting the row is how
+        // you call it off.
+        const queued = run.status === "queued";
         return (
           <Card key={run.id} className="gap-2 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -407,7 +411,7 @@ export function RunsRoute() {
                   <span className="truncate font-medium">{run.task.name}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {new Date(run.startedAt).toLocaleString()}
-                    {skipped ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
+                    {skipped || queued ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
                     {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
                     {/* Only worth saying when the row stands for more than the one firing. */}
                     {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
@@ -458,9 +462,18 @@ export function RunsRoute() {
                     It collided with the run that was already under way.
                   </p>
                 ) : null}
+                {queued ? (
+                  <p className="text-sm text-muted-foreground">
+                    {run.attempts > 1
+                      ? `The trigger fired ${run.attempts} times while the server was at its limit, and this row stands for all of them.`
+                      : "The trigger fired while the server was at its limit."}{" "}
+                    It starts on its own when a slot comes back, in this same row — or delete it to
+                    call it off. {run.error}
+                  </p>
+                ) : null}
                 <RunDetail
                   run={run}
-                  withResult={!running && !skipped}
+                  withResult={!running && !skipped && !queued}
                   onReplay={(payload) => setReplay({ run, payload })}
                 />
               </div>

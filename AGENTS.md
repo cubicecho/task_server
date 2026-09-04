@@ -96,13 +96,14 @@ one, takes over a lock whose holder is gone, and does nothing at all for a `post
 `reconnectMcp`, `setApiKey` on the mutation side. Give every one of them a `description` — it
 is what an agent on `/mcp` reads to decide whether to call it.
 
-**A trigger that fires at a task that cannot start leaves a `skipped` run.** `startTask` refuses
+**A trigger that fires at a task that cannot start leaves a row either way.** `startTask` refuses
 it — right for a person or an agent, who are told on the spot — but nothing is watching a cron
 tick or a webhook delivery, and a refusal used to leave no trace but a log line. `fireTask` in
-`server/runner/run.ts` is the entry point for both dispatchers: it starts the task, or writes a
-run of status `skipped` with the reason in `error`. A firing that did nothing has to be as
-visible as one that did, or a broken trigger and a busy one look the same. Only the busy case
-becomes a row; a missing task or an unwritable database still throws, and the caller logs.
+`server/runner/run.ts` is the entry point for both dispatchers: it starts the task, writes a run
+of status `skipped` with the reason in `error`, or writes a `queued` one that runs when a slot
+comes back — see the two paragraphs below for which. A firing that did nothing has to be as
+visible as one that did, or a broken trigger and a busy one look the same. Only a refusal becomes
+a row; a missing task or an unwritable database still throws, and the caller logs.
 
 One row per collision, not per firing. A skip records the run that was in the way in
 `blockedBy`, and a second firing that meets the same trigger, task and blocking run finds that
@@ -111,20 +112,43 @@ than the task runs buries the history it is meant to be visible in. The row keep
 recent payload of the firings it stands for, and `finishedAt` moves with them while `startedAt`
 stays at the first, so it spans the collision instead of naming a moment in the middle of it.
 
-There are two refusals and one shape. `TaskBusyError` is the task's own run in the way;
-`AtCapacityError` is `settings.maxConcurrentRuns` runs already in flight across every task
-(four by default, zero for no ceiling). Both extend `RunRefusedError`, which is what `fireTask`
-catches, so a new reason to turn a firing away becomes a `skipped` row by subclassing rather
-than by editing the dispatchers. A capacity skip points `blockedBy` at the *oldest* run in
-flight, which is arbitrary but stable — the collapsing above keys on it, and a stable choice is
-what keeps a webhook posted every second at a full server to one row rather than one a second.
+There are two refusals and they come to different rows. `TaskBusyError` is the task's own run in
+the way and stays a skip: the work is in flight, and queueing a second copy behind it runs a
+five-minute task twelve times over an hour it was never meant to. `AtCapacityError` is
+`settings.maxConcurrentRuns` runs already in flight across every task (four by default, zero for
+no ceiling), and that firing waits — `enqueue` writes a `queued` run, and the difference between
+a task that ran late and a task that did not run is the whole of why. Both extend
+`RunRefusedError`, which is what `fireTask` catches, so a new reason to turn a firing away is a
+subclass and a branch there rather than an edit to either dispatcher. `startTask` itself is
+unchanged and still throws for both, because a person or an agent asking for a run now is owed
+an answer now, not a row that starts while they are not looking.
+
+**The queue is the run table.** A `queued` row *is* the run, before it has run: `startQueued`
+updates it in place to `running`, so the id a webhook was told when the delivery arrived is the
+id that ends up holding the output. It survives a restart for free (`server/index.ts` drains
+once on boot), and the wait is visible on the Runs page rather than only in this process's
+memory. `startedAt` is reset when it starts, or the duration would include the waiting.
+
+One row per waiting trigger, for the reason skips collapse: `enqueue` finds an existing `queued`
+row for the same task and trigger, bumps `attempts` and takes the newest payload. A sender
+posting every second at a full server would otherwise write a queue that takes an hour to drain,
+of three hundred copies of one delivery.
+
+Draining is chained, never concurrent — `drainQueue` appends to a promise, and two runs finishing
+in the same tick would otherwise both pick the same waiting row. It runs from `execute`'s
+`finally`, from boot, and from the settings `onWrite` hook, that last one through `drainSoon`'s
+50 ms debounce because a hook runs inside the mutation's transaction and would read the limit as
+it stood before the write that raised it. `drainOnce` steps over tasks already in flight rather
+than waiting for them, takes the oldest waiting row, and stops the moment one cannot start. A
+task disabled while its firing waited finishes the row as `skipped` instead: "stop firing this"
+honoured minutes late is not honouring it.
 
 `startTask` claims the slot before it writes anything, with no `await` between the check and the
 `inFlight.set`, and deletes the entry if the inserts then throw. Node is single-threaded but not
 uninterruptible: `loadSettings` and the run insert both yield, and two firings that arrive in
 the same tick would otherwise both read `size < limit` and both start.
-`tests/concurrency.test.ts` races two `Promise.all`'d firings for the last slot, and it fails if
-the claim moves back down. `runningRunIds()` filters empty ids out for the same reason — a
+`tests/concurrency.test.ts` races two `Promise.all`'d firings for the last slot — one starts and
+one queues — and it fails if the claim moves back down. `runningRunIds()` filters empty ids out for the same reason — a
 claimed entry has no run id for the width of the insert.
 
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
@@ -308,7 +332,7 @@ across a relation mean what the controls above the list say they mean is a quest
 and the `@` alias is in `vitest.config.ts` so a server test can ask it. A filter built inside a
 `.tsx` is a filter nothing can test.
 
-The same goes for a rule a page draws conclusions from. `task-health.ts` decides which of six
+The same goes for a rule a page draws conclusions from. `task-health.ts` decides which of seven
 heaps a task is in for the status page, and `tests/status.test.ts` seeds a task per answer and
 asks that function what the browser asks it. Whether a skipped row older than the last run means
 the task is still falling behind is a question with a right answer, and it is not one a

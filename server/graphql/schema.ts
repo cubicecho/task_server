@@ -18,7 +18,7 @@ import { settings, steps, tasks } from "../db/schema.ts";
 import { fold, history, type RunEvent, watch } from "../runner/events.ts";
 import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
-import { runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
+import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
 import { describeColumn, describeTable } from "./docs.ts";
 import { permissions } from "./permissions.ts";
@@ -97,6 +97,10 @@ const { entities } = buildSchema(db, {
     // Debounced past the commit, like the schedule above: this hook runs inside the mutation's
     // transaction, so reconnecting from here read the table as it was before the write.
     mcpServers: () => mcp.syncSoon(),
+    // Raising `maxConcurrentRuns` is the one edit that can start work on its own — whatever is
+    // queued for a slot can have one now. Debounced for the same reason: a drain from inside the
+    // transaction would read the limit as it stood before the write that raised it.
+    settings: () => drainSoon(),
   },
 });
 

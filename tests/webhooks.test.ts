@@ -85,7 +85,7 @@ async function task(name: string, trigger: Partial<typeof tables.triggers.$infer
 test("an id nothing is listening for is still answered", async () => {
   const { status, body } = await post("nobody-home");
   expect(status).toBe(200);
-  expect(body).toEqual({ ok: true, event: "nobody-home", dispatched: [], refused: [] });
+  expect(body).toEqual({ ok: true, event: "nobody-home", dispatched: [], queued: [], refused: [] });
   expect(started).toEqual([]);
 });
 
@@ -138,9 +138,12 @@ test("a task that was already running is reported as refused, not dispatched", a
   const row = await task("already-running");
   const run = await import("../server/runner/run.ts");
   const reason = 'task "already-running" is already running';
-  const refuse = vi
-    .spyOn(run, "fireTask")
-    .mockResolvedValueOnce({ started: false, run: { id: "run-skipped" } as never, reason });
+  const refuse = vi.spyOn(run, "fireTask").mockResolvedValueOnce({
+    started: false,
+    queued: false,
+    run: { id: "run-skipped" } as never,
+    reason,
+  });
 
   const { status, body } = await post("already-running");
   expect(status).toBe(200);
@@ -155,6 +158,28 @@ test("a task that was already running is reported as refused, not dispatched", a
   refuse.mockRestore();
 });
 
+test("a delivery that met a full server is reported as queued, not refused", async () => {
+  const row = await task("full-house");
+  const run = await import("../server/runner/run.ts");
+  const reason = "4 runs already going, and the limit is 4";
+  const held = vi.spyOn(run, "fireTask").mockResolvedValueOnce({
+    started: false,
+    queued: true,
+    run: { id: "run-queued" } as never,
+    reason,
+  });
+
+  const { body } = await post("full-house");
+  // The two are not the same news. A refusal is a delivery that will not run; this one will,
+  // in the row named here, as soon as a slot comes back.
+  expect(body.dispatched).toEqual([]);
+  expect(body.refused).toEqual([]);
+  expect(body.queued).toEqual([
+    { taskId: row.id, name: "full-house", runId: "run-queued", reason },
+  ]);
+  held.mockRestore();
+});
+
 test("a refusal for one task does not stop another listening for the same id", async () => {
   const stuck = await task("shared");
   const [ok] = await db.insert(tables.tasks).values({ name: "ok", prompt: "yes" }).returning();
@@ -164,7 +189,12 @@ test("a refusal for one task does not stop another listening for the same id", a
   const real = run.fireTask;
   const refuse = vi.spyOn(run, "fireTask").mockImplementation(((...args: unknown[]) => {
     return args[0] === stuck.id
-      ? Promise.resolve({ started: false, run: { id: "run-skipped" }, reason: "already running" })
+      ? Promise.resolve({
+          started: false,
+          queued: false,
+          run: { id: "run-skipped" },
+          reason: "already running",
+        })
       : (real as (...rest: unknown[]) => unknown)(...args);
   }) as unknown as typeof run.fireTask);
 
@@ -186,7 +216,7 @@ test("a task that has gone missing is logged, and named in neither list", async 
   const { status, body } = await post("vanished");
   expect(status).toBe(200);
   // Nothing ran and nothing was written down, so there is nothing honest to report either way.
-  expect(body).toEqual({ ok: true, event: "vanished", dispatched: [], refused: [] });
+  expect(body).toEqual({ ok: true, event: "vanished", dispatched: [], queued: [], refused: [] });
   expect(gone).toHaveBeenCalled();
   gone.mockRestore();
 });

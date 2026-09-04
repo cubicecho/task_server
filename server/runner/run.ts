@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { errorMessage } from "../../shared/errors.ts";
 import { db } from "../db/client.ts";
 import { type Run, runs, steps, tasks } from "../db/schema.ts";
@@ -78,6 +78,30 @@ export async function runTask(taskId: string, triggerId?: string, payload?: unkn
 }
 
 /**
+ * Re-read every time rather than cached, so a limit changed in the UI applies to the next run
+ * and not to the next restart.
+ */
+const capacity = async () => (await loadSettings()).maxConcurrentRuns;
+
+/**
+ * Takes the slot a run needs, or refuses.
+ *
+ * Synchronous on purpose, and it must stay that way: a check separated from its claim by an
+ * `await` is not a limit, because two firings that arrive in the same tick both pass it and both
+ * start. `runId` is filled in a moment later — what the entry has to carry from this instant is
+ * that the slot is spoken for, and the controller that can call the run off.
+ */
+function claim(taskId: string, name: string, limit: number) {
+  if (inFlight.has(taskId)) throw new TaskBusyError(`task "${name}" is already running`);
+  if (limit > 0 && inFlight.size >= limit) {
+    throw new AtCapacityError(`${inFlight.size} runs already going, and the limit is ${limit}`);
+  }
+  const entry = { runId: "", controller: new AbortController() };
+  inFlight.set(taskId, entry);
+  return entry;
+}
+
+/**
  * Starts a task and hands back the run it created, without waiting for it to finish.
  *
  * The split is where the two honest answers are. Everything up to the run row is the refusal —
@@ -97,22 +121,7 @@ export async function startTask(
 ): Promise<{ run: Run; done: Promise<Run> }> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   if (!task) throw new Error(`no task with id ${taskId}`);
-  // Re-read every time rather than cached, so a limit changed in the UI applies to the next
-  // run and not to the next restart.
-  const limit = (await loadSettings()).maxConcurrentRuns;
-
-  // The slot is taken here, before the two writes below and with no `await` between the check
-  // and the claim, because a check that is separated from its claim by an await is not a limit:
-  // two firings in the same tick both pass it and both start. `runId` is filled in a moment
-  // later — what the entry has to carry from this instant is the fact that the slot is spoken
-  // for, and the controller that can call the run off.
-  if (inFlight.has(taskId)) throw new TaskBusyError(`task "${task.name}" is already running`);
-  if (limit > 0 && inFlight.size >= limit) {
-    throw new AtCapacityError(`${inFlight.size} runs already going, and the limit is ${limit}`);
-  }
-  const controller = new AbortController();
-  const entry = { runId: "", controller };
-  inFlight.set(taskId, entry);
+  const entry = claim(task.id, task.name, await capacity());
 
   try {
     // Read once, before the run starts: a flow edited halfway through would make the run's own
@@ -127,7 +136,7 @@ export async function startTask(
       .returning();
 
     entry.runId = run.id;
-    return { run, done: execute({ run, task, flow, payload, controller }) };
+    return { run, done: execute({ run, task, flow, payload, controller: entry.controller }) };
   } catch (error) {
     // The slot was claimed before there was a run to hang it on, so a failure between the two
     // has to give it back — otherwise a database that hiccups once leaks a slot for the life of
@@ -145,7 +154,7 @@ export async function startTask(
  */
 export type Fired =
   | { started: true; run: Run; done: Promise<Run> }
-  | { started: false; run: Run; reason: string };
+  | { started: false; queued: boolean; run: Run; reason: string };
 
 /**
  * Fires a task on behalf of a trigger, and records the firing either way.
@@ -191,9 +200,75 @@ export async function fireTask(
   } catch (error) {
     if (!(error instanceof RunRefusedError)) throw error;
     const reason = errorMessage(error);
+    // A full server is a wait; a task meeting itself is a collision. Only the first is worth
+    // holding on to — see `enqueue`.
+    if (error instanceof AtCapacityError) {
+      const run = await enqueue({ taskId, triggerId, payload, reason });
+      return { started: false, queued: true, run, reason };
+    }
     const run = await recordSkip({ taskId, triggerId, payload, reason, blocking });
-    return { started: false, run, reason };
+    return { started: false, queued: false, run, reason };
   }
+}
+
+/**
+ * Writes the firing down as work still to do, or folds it into the one already waiting.
+ *
+ * A firing that meets a full server is not a firing that should be lost. Nothing is wrong with
+ * it: every slot is spoken for this minute and will not be the next, and the difference between
+ * a task that ran late and a task that did not run is the whole of what the queue is for.
+ *
+ * A task meeting *itself* is a different fact and stays a skip. There the work is already in
+ * flight, and queueing a second copy of it behind the first is a way to run a five-minute task
+ * twelve times over an hour it was never meant to.
+ *
+ * The queue is the run table — a `queued` row is the run before it has run, and it becomes
+ * `running` in place, so the id a webhook was told is the id that ends up holding the output.
+ * That also makes it survive a restart, and makes the wait visible on the Runs page rather than
+ * only in this process's memory.
+ *
+ * One row per waiting trigger, not per firing, for the same reason a skip collapses: a sender
+ * posting every second at a busy server would otherwise write a queue it takes an hour to drain,
+ * of three hundred copies of one delivery. The row keeps the newest payload, which is the
+ * delivery whoever is asking has just made, and `attempts` counts the ones it stands for.
+ */
+async function enqueue({
+  taskId,
+  triggerId,
+  payload,
+  reason,
+}: {
+  taskId: string;
+  triggerId?: string;
+  payload?: unknown;
+  reason: string;
+}): Promise<Run> {
+  const [waiting] = await db
+    .update(runs)
+    .set({ attempts: sql`${runs.attempts} + 1`, payload: payload ?? null, error: reason })
+    .where(
+      and(
+        eq(runs.status, "queued"),
+        eq(runs.taskId, taskId),
+        triggerId ? eq(runs.triggerId, triggerId) : isNull(runs.triggerId),
+      ),
+    )
+    .returning();
+  if (waiting) return waiting;
+
+  const [run] = await db
+    .insert(runs)
+    .values({
+      taskId,
+      triggerId: triggerId ?? null,
+      status: "queued",
+      // Why it is waiting, in the same column a skip says why it did not run. Cleared when the
+      // run starts: by then it is not true of the row any more.
+      error: reason,
+      payload: payload ?? null,
+    })
+    .returning();
+  return run;
 }
 
 /**
@@ -254,6 +329,130 @@ async function recordSkip({
   return run;
 }
 
+/**
+ * Starts whatever the server now has room for, oldest firing first.
+ *
+ * One drain at a time, chained rather than concurrent: two runs finishing in the same tick would
+ * otherwise both read the same waiting row and both try to start it, and the second would find
+ * its slot taken. The chain is also why this never rejects — a link that threw would take every
+ * later drain with it, and a queue that stops draining is worse than a firing that went nowhere.
+ *
+ * A task already in flight is stepped over rather than waited for: its own run is the reason it
+ * cannot start, and the run behind it can go now. A drain that cannot start what it picked stops
+ * there and leaves the rest for the next one, which is the next run to finish.
+ */
+export function drainQueue(): Promise<void> {
+  draining = draining.then(drainOnce);
+  return draining;
+}
+
+let draining: Promise<void> = Promise.resolve();
+
+/**
+ * A drain after the write that made it possible has landed.
+ *
+ * The 50ms is the same debounce the scheduler uses and for the same reason: `onWrite` hooks run
+ * inside the mutation's transaction, so a drain called from one reads the settings row as it
+ * stood before the write that raised the limit.
+ */
+export function drainSoon() {
+  clearTimeout(pendingDrain);
+  pendingDrain = setTimeout(() => void drainQueue(), 50);
+}
+
+let pendingDrain: ReturnType<typeof setTimeout>;
+
+async function drainOnce(): Promise<void> {
+  try {
+    for (;;) {
+      const limit = await capacity();
+      if (limit > 0 && inFlight.size >= limit) return;
+
+      const busy = [...inFlight.keys()];
+      const [next] = await db
+        .select()
+        .from(runs)
+        .where(
+          busy.length
+            ? and(eq(runs.status, "queued"), notInArray(runs.taskId, busy))
+            : eq(runs.status, "queued"),
+        )
+        // Oldest first: the queue is a queue. `startedAt` on a waiting row is when it was
+        // written down, and is reset to the real start when it runs.
+        .orderBy(asc(runs.startedAt))
+        .limit(1);
+
+      if (!next || !(await startQueued(next))) return;
+    }
+  } catch (error) {
+    console.error(`[queue] ${errorMessage(error)}`);
+  }
+}
+
+/**
+ * Turns one waiting row into a running one, in place.
+ *
+ * The row is updated rather than replaced, so the run id a webhook was told when the delivery
+ * arrived is the id that ends up carrying the output. `startedAt` moves to the real start: the
+ * wait is not kept, and a duration that included it would misreport how long the task takes.
+ *
+ * A task disabled while its run waited does not run. The firing happened at a task that was
+ * enabled and the row records that it was accepted, but "stop firing this" is what disabling
+ * means, and honouring it minutes late is what the queue would otherwise do.
+ *
+ * False means the slot went to something else between the pick and here, which ends the drain.
+ */
+async function startQueued(waiting: Run): Promise<boolean> {
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, waiting.taskId)).limit(1);
+  if (!task) return false;
+  if (!task.enabled) {
+    await finish(waiting.id, {
+      status: "skipped",
+      error: "the task was disabled while this was waiting",
+    });
+    return true;
+  }
+
+  let entry: { runId: string; controller: AbortController };
+  try {
+    entry = claim(task.id, task.name, await capacity());
+  } catch (error) {
+    if (error instanceof RunRefusedError) return false;
+    throw error;
+  }
+
+  try {
+    const flow = await db.select().from(steps).where(eq(steps.taskId, task.id));
+    const [run] = await db
+      .update(runs)
+      // The reason it was waiting stops being true of the row the moment it is not.
+      .set({ status: "running", error: "", startedAt: new Date() })
+      .where(and(eq(runs.id, waiting.id), eq(runs.status, "queued")))
+      .returning();
+    // Deleted, or drained by someone else, between the pick and the update. The slot goes back
+    // and the drain carries on with whatever is behind it.
+    if (!run) {
+      inFlight.delete(task.id);
+      return true;
+    }
+
+    entry.runId = run.id;
+    // Nobody is waiting on this one: the caller was a webhook that answered minutes ago, or a
+    // cron tick that answered nobody. What it comes to is on the run row either way.
+    void execute({
+      run,
+      task,
+      flow,
+      payload: run.payload,
+      controller: entry.controller,
+    }).catch((error: unknown) => console.error(`[queue] ${task.name}: ${errorMessage(error)}`));
+    return true;
+  } catch (error) {
+    inFlight.delete(task.id);
+    throw error;
+  }
+}
+
 /** The run itself, once `startTask` has decided there is going to be one. */
 async function execute({
   run,
@@ -304,6 +503,8 @@ async function execute({
     return await finish(run.id, { status: "error", error: message });
   } finally {
     inFlight.delete(task.id);
+    // The slot is free, so whatever was waiting for one can have it.
+    drainSoon();
   }
 }
 
