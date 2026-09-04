@@ -2,7 +2,7 @@
 
 Libraries from the same workshop as the ones this server already runs on, weighed against what
 this server actually needs. Written down because the answer to "would this help here?" is worth
-keeping once it has been worked out, and because two of the answers are *no* for reasons that
+keeping once it has been worked out, and because several of the answers are *no* for reasons that
 would otherwise be rediscovered.
 
 Nothing here is a plan. It is what was found when each was looked at, and what would have to be
@@ -12,62 +12,6 @@ being true — a `no` here is a measurement, not a policy.
 Already in: `@vantreeseba/drizzle-graphql`, `@vantreeseba/graphql-casl`,
 `@cubicecho/graphql-mcp`, `@cubicecho/graphql-codegen-field-descriptions`. Those are argued in
 [`README.md`](README.md) and [`AGENTS.md`](AGENTS.md); this file is only the ones that are not.
-
-## `@vantreeseba/graphql-zod` — wanted, blocked upstream
-
-**What it is.** A codegen plugin that emits a Zod schema per named operation —
-`{Name}{Type}VariablesSchema` and `{Name}{Type}ResultSchema` — from the typed documents under
-`web/graphql/`, plus a small runtime package the generated code imports.
-
-**Why here.** The forms in this app validate nothing on the client. A required column comes back
-as a server error after a round trip, or — worse for `settings.tsx`, which writes a row of
-numbers — as a silently accepted `NaN`. The schemas are generated from the documents, so they
-say what the mutation actually requires rather than what someone remembered it requires, which
-is the same argument as [Field descriptions](README.md#field-descriptions): one source, no drift.
-
-It does that well. Run against `CreateTask` on this schema it produces exactly what a form
-wants — the non-null columns get `.min(1)` with a message, the nullable ones `.nullish()`:
-
-```ts
-export const CreateTaskMutationVariablesSchema = z.object({
-  values: z.object({
-    name: z.string().min(1, { message: 'Name is required' }),
-    prompt: z.string().min(1, { message: 'Prompt is required' }),
-    model: z.string().nullish(),
-    enabled: z.boolean().nullish(),
-    // ...
-  }),
-});
-```
-
-**What blocks it.** Three things, found by running the built plugin against this repo's real
-schema and documents:
-
-1. **Neither package is published.** `@vantreeseba/graphql-zod` and
-   `@vantreeseba/graphql-zod-codegen` are 404 on npm, and the repo has no release workflow —
-   so this is a decision about that repo before it is a change to this one. A `file:` dependency
-   is not a way round it: the Docker build runs `npm ci` and would not resolve one.
-2. **It stack-overflows on `SetTaskSteps`.** `StepInput` and `StepBranchInput` are mutually
-   recursive, because a flow is written whole and nested — a decision's branches hold steps
-   which hold branches. The plugin walks input types without a seen-set, so it recurses until
-   the stack goes: `Generate [FAILED: Maximum call stack size exceeded]`. The other three
-   document files generate fine; `tasks.graphql` is the one that fails, and it fails the whole
-   run. The generated relation filters (`TaskFilters` → `TriggerFilters` → `TaskFilters`) are
-   the same cycle, and would hit it too if a document ever took a filter as a variable. The fix
-   is `z.lazy()` behind a set of types already being emitted.
-3. **Enums become `z.any()`.** Deferred in the library's own TODO, and it lands exactly where
-   it hurts: `McpServersTransportEnum` and `SettingsToolDiscoveryEnum` are the enum fields in
-   the two forms most worth validating.
-
-Custom scalars are not a blocker. Left alone `DateTime`, `JSON`, `UUID` and `BigInt` warn and
-fall back to `z.any()`, and a `scalars` map fixes all four — a second map beside the one
-`codegen.ts` already keeps, holding zod expressions (`DateTime: "z.string()"`) rather than the
-TypeScript names the other plugins take.
-
-**Before it goes in:** the cycle guard and enum support land upstream, both packages publish,
-and then the plugin is a second entry in `codegen.ts` beside the descriptions one — with the
-forms reading the generated schemas rather than growing hand-written ones, which would be the
-drift this was meant to avoid.
 
 ## `@vantreeseba/graphql-audit-middleware` — the best fit, unpublished
 
@@ -141,6 +85,16 @@ runtime, and `schema.graphql` is an *output* that CI diffs for drift. The map in
 generated resolver types. This repo emits none: codegen here is client documents only, and
 adding `typescript-resolvers` over the whole generated surface to derive a union of seven names
 is a build for nothing. The reasoning is in `permissions.ts` beside the hand-written union.
+
+**`@vantreeseba/graphql-zod`** — generates a Zod schema per operation from the typed documents,
+which is the right shape for the client-side form validation this app does not have. Unpublished,
+with no release pipeline on its own repo, so there is nothing to depend on. Two things would also
+have to be fixed before it could run here, both found by building it and pointing it at this
+schema: it stack-overflows on `tasks.graphql`, where `StepInput` and `StepBranchInput` are
+mutually recursive and it walks input types with no seen-set (`z.lazy()` is the fix, and the
+generated relation filters are the same cycle); and it renders enums as `z.any()`, which lands on
+`transport` and `toolDiscovery`, the two enum fields most worth validating. Custom scalars are
+not among the problems — a `scalars` map of zod expressions covers all four.
 
 **`graphql-mocks`** — `AGENTS.md` forbids mocking the database; the tests run real PGlite and a
 real stdio MCP fixture, which is why they catch what they catch.

@@ -321,7 +321,7 @@ query keys it affected.
 Before proposing a library, a search feature, an audit log, or client-side form validation,
 read [`future-libs-architecture.md`](future-libs-architecture.md). It is the standing answer to
 "would this help here?" for the libraries next door — what each would buy this server, what
-blocks it, and what would have to be true first. Four were looked at and ruled out with
+blocks it, and what would have to be true first. Five were looked at and ruled out with
 reasons, so a proposal that reopens one of those needs to answer the reason rather than restate
 the idea. Findings age: correct the file when one stops being true.
 
