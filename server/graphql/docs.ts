@@ -151,6 +151,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     maxRetries:
       "How many times a request that failed *before producing anything* is tried again. Only " +
       "that case is safe to retry. Zero turns retries off.",
+    maxConcurrentRuns:
+      "How many runs may be in flight at once, across every task. A firing that arrives with " +
+      "no slot free leaves a `skipped` run saying so. Zero lifts the limit.",
   },
 };
 

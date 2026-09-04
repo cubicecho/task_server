@@ -1459,6 +1459,11 @@ type Setting {
   maxRetries: Int!
 
   """
+  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  """
+  maxConcurrentRuns: Int!
+
+  """
   Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
   """
   cursor: String
@@ -1489,6 +1494,7 @@ type SettingAvgAggregate {
   runRetentionDays: Float
   requestTimeoutSeconds: Float
   maxRetries: Float
+  maxConcurrentRuns: Float
 }
 
 type SettingSumAggregate {
@@ -1498,6 +1504,7 @@ type SettingSumAggregate {
   runRetentionDays: Float
   requestTimeoutSeconds: Float
   maxRetries: Float
+  maxConcurrentRuns: Float
 }
 
 type SettingMinAggregate {
@@ -1551,6 +1558,11 @@ type SettingMinAggregate {
   How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
   """
   maxRetries: Int
+
+  """
+  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  """
+  maxConcurrentRuns: Int
 }
 
 type SettingMaxAggregate {
@@ -1604,6 +1616,11 @@ type SettingMaxAggregate {
   How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
   """
   maxRetries: Int
+
+  """
+  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  """
+  maxConcurrentRuns: Int
 }
 
 type SettingCountNonNullAggregate {
@@ -1619,6 +1636,7 @@ type SettingCountNonNullAggregate {
   runRetentionDays: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
+  maxConcurrentRuns: Int!
 }
 
 type SettingCountDistinctAggregate {
@@ -1634,6 +1652,7 @@ type SettingCountDistinctAggregate {
   runRetentionDays: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
+  maxConcurrentRuns: Int!
 }
 
 type SettingGroupBy {
@@ -1701,6 +1720,11 @@ type SettingGroupKeys {
   How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
   """
   maxRetries: Int
+
+  """
+  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  """
+  maxConcurrentRuns: Int
 }
 
 input CreateTaskInput {
@@ -3333,6 +3357,11 @@ input UpdateSettingInput {
   How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
   """
   maxRetries: Int
+
+  """
+  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  """
+  maxConcurrentRuns: Int
 }
 
 """
@@ -3395,6 +3424,11 @@ input SettingFilters {
   How many times a request that failed *before producing anything* is tried again. Only that case is safe to retry. Zero turns retries off.
   """
   maxRetries: IntFilter
+
+  """
+  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  """
+  maxConcurrentRuns: IntFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [SettingFilters!]
@@ -3489,6 +3523,7 @@ input SettingOrderBy {
   runRetentionDays: InnerOrder
   requestTimeoutSeconds: InnerOrder
   maxRetries: InnerOrder
+  maxConcurrentRuns: InnerOrder
 }
 
 """Filters Setting groups by their aggregated values"""
@@ -3510,6 +3545,7 @@ input SettingAvgHaving {
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
+  maxConcurrentRuns: AggregateNumberFilter
 }
 
 input SettingSumHaving {
@@ -3519,6 +3555,7 @@ input SettingSumHaving {
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
+  maxConcurrentRuns: AggregateNumberFilter
 }
 
 input SettingMinHaving {
@@ -3528,6 +3565,7 @@ input SettingMinHaving {
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
+  maxConcurrentRuns: AggregateNumberFilter
 }
 
 input SettingMaxHaving {
@@ -3537,6 +3575,7 @@ input SettingMaxHaving {
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
+  maxConcurrentRuns: AggregateNumberFilter
 }
 
 input SettingCountNonNullHaving {
@@ -3552,6 +3591,7 @@ input SettingCountNonNullHaving {
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
+  maxConcurrentRuns: AggregateNumberFilter
 }
 
 input SettingCountDistinctHaving {
@@ -3567,6 +3607,7 @@ input SettingCountDistinctHaving {
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
+  maxConcurrentRuns: AggregateNumberFilter
 }
 
 type Query {
@@ -3909,6 +3950,7 @@ enum SettingDistinctColumn {
   runRetentionDays
   requestTimeoutSeconds
   maxRetries
+  maxConcurrentRuns
 }
 
 """Columns of Setting that a query can group by"""
@@ -3925,6 +3967,7 @@ enum SettingGroupByColumn {
   runRetentionDays
   requestTimeoutSeconds
   maxRetries
+  maxConcurrentRuns
 }
 
 """

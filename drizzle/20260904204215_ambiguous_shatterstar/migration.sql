@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "maxConcurrentRuns" integer DEFAULT 4 NOT NULL;
