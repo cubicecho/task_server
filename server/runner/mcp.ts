@@ -115,7 +115,63 @@ class McpPool {
   /** Qualified name -> the client that answers it. Only ever holds callable tools. */
   private index = new Map<string, { client: Client; tool: PooledTool }>();
 
-  async sync(configs?: McpServerRow[]) {
+  /**
+   * Whatever the pool is already doing. Reconciling is a sequence of awaits over a map, and two
+   * callers interleaving in it both see the same unchanged entry, both spawn a child for it, and
+   * the second overwrites the first — whose process is still running with nothing left holding a
+   * handle to close it. Chaining is enough: a sync is rare and never on a run's hot path.
+   */
+  private running: Promise<void> = Promise.resolve();
+  private pending?: NodeJS.Timeout;
+  /** A write has landed that the pool has not been reconciled for yet. */
+  private owed = false;
+
+  /** Runs `work` after whatever is already queued. See `running`. */
+  private queue(work: () => Promise<void>): Promise<void> {
+    const next = this.running.then(work);
+    // The chain has to outlive a failure, or every later reconcile inherits its rejection. The
+    // caller still gets the error; this copy exists only to keep the queue moving.
+    this.running = next.catch(() => {});
+    return next;
+  }
+
+  sync(configs?: McpServerRow[]): Promise<void> {
+    return this.queue(() => this.reconcile(configs));
+  }
+
+  /**
+   * Reconciles shortly after a write, rather than during it.
+   *
+   * The same reason `cron.syncSoon` exists: a write hook runs inside the mutation's transaction,
+   * so reading `mcp_servers` from there sees the table as it stood before the write being
+   * reacted to. Waiting past the commit also folds a batch of edits into one reconnect, which
+   * for a stdio server is a child process not spawned twice.
+   */
+  syncSoon() {
+    this.owed = true;
+    clearTimeout(this.pending);
+    this.pending = setTimeout(() => void this.settle(), 50);
+  }
+
+  private async settle() {
+    this.owed = false;
+    await this.sync().catch((error) => console.error("[mcp] sync failed:", error));
+  }
+
+  /**
+   * Pays off a debounced reconnect now, for a reader that would otherwise be shown the pool as
+   * it stood before its own write.
+   *
+   * `create_mcp_server` then `mcp_status` is how an agent on `/mcp` confirms that a server it
+   * just added actually connected, and those two calls arrive milliseconds apart. The debounce
+   * is left standing rather than disarmed, for the reason `cron.flush` leaves it: the timer may
+   * belong to someone else's write whose transaction has not committed yet.
+   */
+  async flush() {
+    if (this.owed) await this.settle();
+  }
+
+  private async reconcile(configs?: McpServerRow[]) {
     const wanted = configs ?? (await db.select().from(mcpServers));
     for (const [id, entry] of this.entries) {
       if (!wanted.some((config) => config.id === id)) {
@@ -263,9 +319,15 @@ class McpPool {
   }
 
   async shutdown() {
-    await Promise.all([...this.entries.values()].map((entry) => this.close(entry)));
-    this.entries.clear();
-    this.index.clear();
+    clearTimeout(this.pending);
+    this.owed = false;
+    // Queued like a sync, so a reconnect already under way finishes before its children are
+    // closed — otherwise shutdown closes entries the sync is in the middle of replacing.
+    await this.queue(async () => {
+      await Promise.all([...this.entries.values()].map((entry) => this.close(entry)));
+      this.entries.clear();
+      this.index.clear();
+    });
   }
 }
 

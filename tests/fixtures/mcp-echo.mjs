@@ -1,6 +1,12 @@
+import { appendFileSync } from "node:fs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+// One line per process started. The pool is supposed to keep one child per configured server,
+// and nothing it exposes can tell one child from two — so the children say so themselves.
+if (process.env.MCP_ECHO_SPAWN_LOG)
+  appendFileSync(process.env.MCP_ECHO_SPAWN_LOG, `${process.pid}\n`);
 
 /** A stdio MCP server with three trivial tools, for the runner tests to connect to. */
 const tools = [
