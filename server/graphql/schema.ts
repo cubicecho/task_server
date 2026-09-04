@@ -85,9 +85,9 @@ const { entities } = buildSchema(db, {
       before: ({ operation, args }) => vetTrigger(operation, args),
       after: () => syncSoon(),
     },
-    mcpServers: () => {
-      void mcp.sync().catch((error) => console.error("[mcp] sync failed:", error));
-    },
+    // Debounced past the commit, like the schedule above: this hook runs inside the mutation's
+    // transaction, so reconnecting from here read the table as it was before the write.
+    mcpServers: () => mcp.syncSoon(),
   },
 });
 
@@ -206,7 +206,12 @@ export const schema = new GraphQLSchema({
           "Which of the configured MCP servers this one actually reached, and the tools it " +
           "found on each. A server that is enabled but absent here failed to connect, and its " +
           "tools are not offered to any run.",
-        resolve: () => mcp.state(),
+        // A reconnect owed from a write that just landed is paid off here, so that reading this
+        // straight after `create_mcp_server` answers about the server you just wrote.
+        resolve: async () => {
+          await mcp.flush();
+          return mcp.state();
+        },
       },
       schedule: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(ScheduleEntryType))),

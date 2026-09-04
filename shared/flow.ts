@@ -20,6 +20,15 @@ export const CONTEXTS = ["all", "previous", "none"] as const;
 /** The arm a decision falls to when nothing it declared applies. */
 export const DEFAULT_BRANCH = "default";
 
+/**
+ * Whether two case labels name the same case.
+ *
+ * The server resolves a decision's arms with this comparison, so the editor has to use it too:
+ * keyed any more strictly, `Error` and `error` are two arms on screen and one branch in the
+ * table, and whichever was written second silently took the other's steps.
+ */
+export const sameCase = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
 /** How deep the arms may nest, and how many steps one run may execute. */
 export const MAX_DEPTH = 8;
 export const MAX_STEPS = 64;

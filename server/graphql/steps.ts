@@ -1,7 +1,14 @@
 import { and, eq, getTableColumns, inArray, notInArray, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { GraphQLError } from "graphql";
-import { CONTEXTS, DEFAULT_BRANCH, KINDS, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
+import {
+  CONTEXTS,
+  DEFAULT_BRANCH,
+  KINDS,
+  MAX_DEPTH,
+  MAX_STEPS,
+  sameCase,
+} from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { steps, tasks } from "../db/schema.ts";
 
@@ -43,8 +50,6 @@ const reject = (message: string): never => {
   throw new GraphQLError(message, { extensions: { code: "BAD_STEPS" } });
 };
 
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-
 /**
  * Flattens the nested input into rows, assigning `parentId`, `branch` and `position`.
  *
@@ -84,7 +89,7 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
       if (kind !== "decision" && (item.branches?.length ?? 0) > 0) {
         reject(`${label} is not a decision, so it cannot have branches.`);
       }
-      if (cases.some((option, at) => cases.some((other, i) => i < at && same(option, other)))) {
+      if (cases.some((option, at) => cases.some((other, i) => i < at && sameCase(option, other)))) {
         reject(`${label} declares the same case twice.`);
       }
 
@@ -108,8 +113,9 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
       for (const arm of item.branches ?? []) {
         // The stored `branch` has to be the exact string the decision will answer with, or the
         // runner will look up an arm that is not there.
-        const declared = cases.find((option) => same(option, arm.case));
-        const resolved = declared ?? (same(arm.case, DEFAULT_BRANCH) ? DEFAULT_BRANCH : undefined);
+        const declared = cases.find((option) => sameCase(option, arm.case));
+        const resolved =
+          declared ?? (sameCase(arm.case, DEFAULT_BRANCH) ? DEFAULT_BRANCH : undefined);
         if (!resolved) {
           reject(
             `${label} has a branch for "${arm.case}", which is not one of its cases ` +

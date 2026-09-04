@@ -6,6 +6,7 @@ import {
   MAX_DEPTH,
   type StepContext,
   type StepKind,
+  sameCase,
 } from "../../shared/flow.ts";
 
 /**
@@ -19,7 +20,7 @@ import {
 export type { StepContext, StepKind };
 // Shared with the server rather than mirrored: the editor stops offering what the server would
 // refuse, and that only holds while there is one copy of the numbers.
-export { CONTEXTS, DEFAULT_BRANCH, KINDS, MAX_DEPTH };
+export { CONTEXTS, DEFAULT_BRANCH, KINDS, MAX_DEPTH, sameCase };
 
 export interface DraftBranch {
   case: string;

@@ -389,24 +389,35 @@ export async function runAgent({
       }
     }
 
+    /**
+     * Sends the step, re-sending it each time the answer is this endpoint refusing something we
+     * can do without.
+     *
+     * A loop rather than one retry: a server that has heard of neither `stream_options` nor a
+     * grammar keyword complains about them one at a time, and answering only the first left the
+     * second to fail the request — so the first run against such an endpoint was spent
+     * discovering what the second one starts knowing. It terminates in at most one pass per
+     * capability, since each pass either latches one off for good or rethrows.
+     */
     async function negotiate(produced: { any: boolean }): Promise<Step> {
-      try {
-        return await streamStep(client, request(), { signal, onEvent, produced, idleMs });
-      } catch (error) {
-        const detail = errorMessage(error);
-        if (produced.any) throw error;
-        if (supports.strictSchemas && isGrammarError(detail)) {
-          const notice = "server could not build a grammar; retrying without pattern/format";
-          console.warn(`[agent] ${notice}`);
-          onEvent?.({ kind: "notice", text: notice });
-          supports.strictSchemas = false;
-        } else if (supports.usageInStream && /stream_options/i.test(detail)) {
-          console.warn("[agent] server rejected stream_options; token counts will be unavailable");
-          supports.usageInStream = false;
-        } else {
-          throw error;
+      for (;;) {
+        try {
+          return await streamStep(client, request(), { signal, onEvent, produced, idleMs });
+        } catch (error) {
+          const detail = errorMessage(error);
+          if (produced.any) throw error;
+          if (supports.strictSchemas && isGrammarError(detail)) {
+            const notice = "server could not build a grammar; retrying without pattern/format";
+            console.warn(`[agent] ${notice}`);
+            onEvent?.({ kind: "notice", text: notice });
+            supports.strictSchemas = false;
+          } else if (supports.usageInStream && /stream_options/i.test(detail)) {
+            console.warn("[agent] server rejected stream_options; token counts unavailable");
+            supports.usageInStream = false;
+          } else {
+            throw error;
+          }
         }
-        return await streamStep(client, request(), { signal, onEvent, produced, idleMs });
       }
     }
 

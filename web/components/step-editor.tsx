@@ -20,6 +20,7 @@ import {
   emptyStep,
   MAX_DEPTH,
   type StepContext,
+  sameCase,
 } from "@/lib/flow";
 
 const CONTEXT_LABELS: Record<StepContext, string> = {
@@ -115,36 +116,59 @@ function StepCard({
   const decision = step.kind === "decision";
 
   // Every declared case gets an arm, and `default` is always on offer — the runner falls back
-  // to it when the model answers with something that is not a case at all.
-  const arms: DraftBranch[] = [...step.cases, DEFAULT_BRANCH].map((label) => ({
-    case: label,
-    steps: step.branches.find((branch) => branch.case === label)?.steps ?? [],
-  }));
+  // to it when the model answers with something that is not a case at all. One arm per *distinct*
+  // case, compared the way the server compares them: two inputs spelling the same case are one
+  // branch there, so two editors for it here let whichever was written second discard the
+  // other's steps.
+  const arms: DraftBranch[] = [...step.cases, DEFAULT_BRANCH]
+    .filter((label, at, all) => all.findIndex((other) => sameCase(other, label)) === at)
+    .map((label) => ({
+      case: label,
+      steps: step.branches.find((branch) => sameCase(branch.case, label))?.steps ?? [],
+    }));
+
+  /** Whether an earlier case already spells this one — the state the server refuses. */
+  const duplicate = (index: number) => {
+    const label = step.cases[index];
+    return (
+      Boolean(label.trim()) && step.cases.some((other, at) => at < index && sameCase(other, label))
+    );
+  };
 
   const setArm = (label: string, steps: DraftStep[]) =>
     patch({
       branches: [
-        ...step.branches.filter((branch) => branch.case !== label),
+        ...step.branches.filter((branch) => !sameCase(branch.case, label)),
         { case: label, steps },
       ],
     });
 
   const setCase = (index: number, label: string) => {
     const was = step.cases[index];
+    const cases = step.cases.map((current, at) => (at === index ? label : current));
+    // The arm belongs to the case, not to its spelling: renaming carries its steps along —
+    // unless another case is still spelled the old way, in which case the arm is still theirs.
+    const stillClaimed = cases.some((other, at) => at !== index && sameCase(other, was));
     patch({
-      cases: step.cases.map((current, at) => (at === index ? label : current)),
-      // The arm belongs to the case, not to its spelling: renaming carries its steps along.
-      branches: step.branches.map((branch) =>
-        branch.case === was ? { ...branch, case: label } : branch,
-      ),
+      cases,
+      branches: stillClaimed
+        ? step.branches
+        : step.branches.map((branch) =>
+            sameCase(branch.case, was) ? { ...branch, case: label } : branch,
+          ),
     });
   };
 
   const dropCase = (index: number) => {
     const label = step.cases[index];
+    const cases = step.cases.filter((_, at) => at !== index);
     patch({
-      cases: step.cases.filter((_, at) => at !== index),
-      branches: step.branches.filter((branch) => branch.case !== label),
+      cases,
+      // Only orphan the arm when nothing left claims it: removing one of two inputs spelling the
+      // same case used to take the steps under it with them.
+      branches: cases.some((other) => sameCase(other, label))
+        ? step.branches
+        : step.branches.filter((branch) => !sameCase(branch.case, label)),
     });
   };
 
@@ -220,10 +244,11 @@ function StepCard({
                 // biome-ignore lint/suspicious/noArrayIndexKey: no id, and the list is positional
                 <div key={index} className="flex items-center gap-1">
                   <Input
-                    className="h-8 w-40 font-mono"
+                    className={`h-8 w-40 font-mono ${duplicate(index) ? "border-destructive" : ""}`}
                     value={label}
                     onChange={(event) => setCase(index, event.target.value)}
                     placeholder="error"
+                    aria-invalid={duplicate(index)}
                   />
                   <Button
                     variant="ghost"
@@ -236,6 +261,13 @@ function StepCard({
                 </div>
               ))}
             </div>
+            {/* Said here rather than at save time: the server refuses the whole flow over it,
+                and by then it is a message about a step you have scrolled away from. */}
+            {step.cases.some((_, index) => duplicate(index)) ? (
+              <p className="text-xs text-destructive">
+                Two cases spelling the same thing are one case. Rename or remove one.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
