@@ -278,7 +278,13 @@ export const mcpHandler = createHttpHandler({
   // This prunes the *projection*: `schema` is the same object yoga serves the web app from, and
   // it keeps every one of them. That is the whole reason the knob is here rather than in
   // `buildSchema` — the schema is right, and it was only this surface that was over-broad.
-  inputField: (field) => !String(field.type).includes("ListRelationFilter"),
+  //
+  // `Task.agent` is the same pruning for a one-relation rather than a list one: filtering tasks
+  // by the profile they run on would drag the whole `AgentFilters` type — endpoint, ceilings and
+  // all — into every task tool, for a table this surface deliberately does not offer at all.
+  inputField: (field) =>
+    !String(field.type).includes("ListRelationFilter") &&
+    !String(field.type).includes("AgentFilters"),
   decorate: (descriptor) => ({
     description: useToolNames(
       HINTS[descriptor.name]

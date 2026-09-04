@@ -97,6 +97,41 @@ test("how this server is wired is the operator's too", async () => {
   }
 });
 
+// A profile is the settings row per task: an endpoint, a key of its own, and which MCP servers
+// a task on it may reach. An agent that could write one could point a task at a model of its
+// choosing and hand it every tool this server has.
+test("agent profiles are the settings row again, and just as shut", async () => {
+  for (const source of [
+    `{ agents { baseUrl } }`,
+    `{ agent(where: { id: { eq: "x" } }) { baseUrl } }`,
+    `{ agentsAggregate { max { baseUrl } } }`,
+    `{ agentsGroupBy(groupBy: [baseUrl]) { group { baseUrl } } }`,
+    `mutation { createAgent(values: { name: "mine" }) { id } }`,
+    `mutation { updateAgentSingle(set: { baseUrl: "https://elsewhere" }, where: { id: { eq: "x" } }) { id } }`,
+    `mutation { deleteAgentSingle(where: { id: { eq: "x" } }) { id } }`,
+    `mutation { setAgentApiKey(agentId: "x", apiKey: "sk-agent") }`,
+  ]) {
+    expect(await refused(source, "agent"), source).toEqual(["FORBIDDEN"]);
+  }
+});
+
+// The rule is on the type, not on the query, so the relation lands on the same refusal the
+// entry point does — a task an agent may read is not a way round the profile it runs on.
+test("a task's profile is not readable through the task", async () => {
+  await allowed(
+    `mutation { createAgent(values: { name: "local", baseUrl: "http://x/v1" }) { id } }`,
+  );
+  const { data } = await ask(`{ agents { id } }`);
+  const [agent] = (data as { agents: { id: string }[] }).agents;
+  await allowed(
+    `mutation { createTask(values: { name: "on a profile", prompt: "go", agentId: "${agent.id}" }) { id } }`,
+  );
+
+  expect(await refused(`{ tasks { id agent { baseUrl } } }`, "agent")).toEqual(["FORBIDDEN"]);
+  // The id itself stays: a visiting agent can see that a task runs on a profile.
+  await allowed(`{ tasks { id agentId } }`, "agent");
+});
+
 // The history is this server's account of what it did, and an agent tidying away the run that
 // recorded what it did is the one edit nobody can audit afterwards.
 test("an agent does not delete the history", async () => {

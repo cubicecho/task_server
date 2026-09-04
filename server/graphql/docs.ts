@@ -33,6 +33,10 @@ type ColumnDocs = {
 };
 
 export const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
+  agents:
+    "A named set of overrides for the settings row — endpoint, model, ceilings, which MCP " +
+    "servers to attach — that a task can point at. Empty on every column means the server " +
+    "default, so a server with no agents runs exactly as one that never had the table.",
   tasks: "A prompt to run, on a schedule or on a webhook. The unit everything else hangs off.",
   triggers: "What starts a task: a cron expression, or a webhook id.",
   steps:
@@ -45,8 +49,34 @@ export const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
 };
 
 export const COLUMN_DOCS: ColumnDocs = {
+  agents: {
+    name: "What this profile is called, in the picker on a task.",
+    description: "What it is for, in a sentence. Shown beside the name; never sent to a model.",
+    baseUrl:
+      "OpenAI-compatible endpoint for tasks on this profile. Empty uses the server's own. A " +
+      "profile with an endpoint of its own never inherits the server's API key.",
+    model: "Empty falls back to the server's default model.",
+    systemPrompt: "Empty falls back to the server's default system prompt.",
+    maxTokens: "Ceiling on one reply. `-1` inherits the server default; `0` is not a ceiling.",
+    temperature: "Sampling temperature. `-1` inherits the server default.",
+    maxToolIterations: "Ceiling on tool round-trips in a run. `-1` inherits the server default.",
+    toolDiscovery: "`inherit` uses the server default; otherwise `eager` or `ondemand`.",
+    toolSelectModel: "Empty inherits the server default. Unused unless discovery is on demand.",
+    requestTimeoutSeconds:
+      "Seconds of silence before a request is given up on. `-1` inherits the server default; " +
+      "`0` waits forever.",
+    maxRetries: "Retries of a request that failed before answering. `-1` inherits; `0` is none.",
+    mcpServerIds:
+      "Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty " +
+      "or absent is every enabled server. Tools outside the list cannot be called, not just " +
+      "not offered.",
+  },
+
   tasks: {
     name: "What this task is called, in the task list and the run history.",
+    agentId:
+      "The agent profile this task runs on. Null runs it on the server's own settings, which " +
+      "is the default and what every task did before profiles existed.",
     prompt: "What the agent is asked to do, each time this task fires.",
     model: "Empty falls back to the default model in settings.",
     systemPrompt: "Empty falls back to the default system prompt in settings.",

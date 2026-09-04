@@ -47,10 +47,68 @@ const createdAt = () =>
     .notNull()
     .$defaultFn(() => new Date());
 
+/**
+ * A named bundle of everything a run needs from a model, so that "the cheap local one, terse,
+ * with only the calendar attached" is said once and pointed at, rather than retyped into every
+ * task that wants it.
+ *
+ * Every column here is an *override* of the settings row, and the empty value means "ask
+ * settings" — `""` for a string, `-1` for a number, the word `inherit` for the enum, which is a
+ * word rather than an empty string because the enum reaches the API and a nameless member reads
+ * as a bug there. Negative rather than zero because zero is a real answer to three of these:
+ * zero retries is no retrying, zero seconds is no watchdog, and a profile has to be able to say
+ * so. A server with no agents at all behaves exactly as it did before this table existed.
+ *
+ * The name is `agents` because that is what the thing is called everywhere else — not to be
+ * confused with `runner/agent.ts`, which is the loop that talks to the model. This is the
+ * configuration that loop is handed.
+ *
+ * `apiKey` is deliberately not inherited when `baseUrl` is: see `runner/profile.ts`. A key
+ * issued for the operator's endpoint has no business being posted to a different one.
+ */
+export const agents = pgTable("agents", {
+  id: id(),
+  name: text().notNull(),
+  description: text().notNull().default(""),
+  baseUrl: text().notNull().default(""),
+  apiKey: text().notNull().default(""),
+  model: text().notNull().default(""),
+  systemPrompt: text().notNull().default(""),
+  maxTokens: integer().notNull().default(-1),
+  temperature: real().notNull().default(-1),
+  maxToolIterations: integer().notNull().default(-1),
+  toolDiscovery: text({ enum: ["inherit", "eager", "ondemand"] })
+    .notNull()
+    .default("inherit"),
+  toolSelectModel: text().notNull().default(""),
+  requestTimeoutSeconds: integer().notNull().default(-1),
+  maxRetries: integer().notNull().default(-1),
+  /**
+   * Which MCP servers a run on this profile may reach, by id. Null or empty is every enabled
+   * server, which is what every run got before this column existed.
+   *
+   * A list of ids rather than a join table because there is nothing to say *about* the pairing
+   * — no columns of its own, and it is written whole with the row it belongs to. An id whose
+   * server has since been deleted is ignored rather than repaired; ids are uuids, so it can
+   * never come to mean a different server.
+   *
+   * This is coarse on purpose. Which *tools* an agent may reach is a question for the server it
+   * dials — point this at an `mcp-router` endpoint that offers exactly the tools you meant, and
+   * the same scope is reusable by everything else that dials it. See `future-libs-architecture.md`.
+   */
+  mcpServerIds: jsonb().$type<string[]>(),
+  createdAt: createdAt(),
+  updatedAt: timestamp({ mode: "date", withTimezone: true })
+    .notNull()
+    .$defaultFn(() => new Date())
+    .$onUpdateFn(() => new Date()),
+});
+
 export const tasks = pgTable("tasks", {
   id: id(),
   name: text().notNull(),
   prompt: text().notNull(),
+  agentId: text().references(() => agents.id, { onDelete: "set null" }),
   model: text().notNull().default(""),
   systemPrompt: text().notNull().default(""),
   enabled: boolean().notNull().default(true),
@@ -275,10 +333,14 @@ export const settings = pgTable("settings", {
   maxConcurrentRuns: integer().notNull().default(4),
 });
 
-export const schema = { tasks, triggers, steps, runs, runSteps, mcpServers, settings };
+export const schema = { agents, tasks, triggers, steps, runs, runSteps, mcpServers, settings };
 
 export const relations = defineRelations(schema, (r) => ({
+  agents: {
+    tasks: r.many.tasks({ from: r.agents.id, to: r.tasks.agentId }),
+  },
   tasks: {
+    agent: r.one.agents({ from: r.tasks.agentId, to: r.agents.id }),
     triggers: r.many.triggers({ from: r.tasks.id, to: r.triggers.taskId }),
     steps: r.many.steps({ from: r.tasks.id, to: r.steps.taskId }),
     runs: r.many.runs({ from: r.tasks.id, to: r.runs.taskId }),
@@ -301,6 +363,7 @@ export const relations = defineRelations(schema, (r) => ({
   },
 }));
 
+export type Agent = typeof agents.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type Trigger = typeof triggers.$inferSelect;
 export type Step = typeof steps.$inferSelect;

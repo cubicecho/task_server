@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -52,7 +53,8 @@ const MCP_JSON = `{
 
 const CLAUDE_CLI = `claude mcp add --transport http tasks ${ENDPOINT}`;
 
-const DESCRIPTION = "The model every task runs on, unless it overrides it.";
+const DESCRIPTION =
+  "The model every task runs on, unless the task — or the agent profile it is on — overrides it.";
 
 function Snippet({ label, text }: { label: string; text: string }) {
   const { copied, copy } = useCopy();
@@ -172,7 +174,17 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
       }
     >
       <Card className="gap-4 p-4">
-        <h2 className="font-medium">Model</h2>
+        <div>
+          <h2 className="font-medium">Model</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            An{" "}
+            <Link to="/agents" className="underline">
+              agent profile
+            </Link>{" "}
+            overrides any of this for the tasks pointed at it. Everything a profile leaves blank
+            comes from here.
+          </p>
+        </div>
 
         <Field label="Base URL" htmlFor="baseUrl" hint={doc("baseUrl")}>
           <Input

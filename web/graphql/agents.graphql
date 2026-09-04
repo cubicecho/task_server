@@ -1,0 +1,69 @@
+# The whole profile. Small enough that the list page asks for all of it — the form is the page,
+# and a second round trip to open one would only be a spinner over a hundred bytes.
+fragment AgentFields on Agent {
+  id
+  name
+  description
+  baseUrl
+  model
+  systemPrompt
+  maxTokens
+  temperature
+  maxToolIterations
+  toolDiscovery
+  toolSelectModel
+  requestTimeoutSeconds
+  maxRetries
+  mcpServerIds
+  # Which tasks run on this profile, so deleting one says what it is about to unset.
+  tasks(orderBy: { name: { direction: asc, priority: 1 } }) {
+    id
+    name
+  }
+}
+
+query Agents {
+  agents(orderBy: { name: { direction: asc, priority: 1 } }) {
+    ...AgentFields
+  }
+  # The servers a profile can be narrowed to. Names only: this page does not dial anything.
+  mcpServers(orderBy: { slug: { direction: asc, priority: 1 } }) {
+    id
+    slug
+    label
+    enabled
+  }
+}
+
+# What the picker on a task needs, which is not the endpoint or the ceilings.
+query AgentOptions {
+  agents(orderBy: { name: { direction: asc, priority: 1 } }) {
+    id
+    name
+    description
+  }
+}
+
+mutation CreateAgent($values: CreateAgentInput!) {
+  createAgent(values: $values) {
+    id
+  }
+}
+
+mutation UpdateAgent($id: String!, $set: UpdateAgentInput!) {
+  updateAgentSingle(where: { id: { eq: $id } }, set: $set) {
+    id
+  }
+}
+
+mutation DeleteAgent($id: String!) {
+  deleteAgentSingle(where: { id: { eq: $id } }) {
+    id
+  }
+}
+
+# Write-only, exactly as the server's own key is: it is excluded from the Agent type, so it
+# cannot be read back out of the API.
+mutation SetAgentApiKey($agentId: String!, $apiKey: String!) {
+  setAgentApiKey(agentId: $agentId, apiKey: $apiKey)
+}

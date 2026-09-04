@@ -69,6 +69,11 @@ export interface AgentOptions {
   model: string;
   systemPrompt: string;
   prompt: string;
+  /**
+   * Which MCP servers this run may reach, by id, from its task's agent profile. Undefined —
+   * which is every task on a server with no profiles — is every connected server, as before.
+   */
+  servers?: ReadonlySet<string>;
   signal?: AbortSignal;
   /** Called as the run happens, for whoever is watching it. See `runner/events.ts`. */
   onEvent?: (event: RunEventInput) => void;
@@ -281,6 +286,7 @@ export async function runAgent({
   model,
   systemPrompt,
   prompt,
+  servers,
   signal,
   onEvent,
 }: AgentOptions): Promise<AgentResult> {
@@ -295,7 +301,7 @@ export async function runAgent({
 
   // In on-demand mode the model sees a name-only catalogue up front and pulls in the schemas
   // it needs as the run goes; `loaded` grows between iterations.
-  const catalog = mcp.catalog();
+  const catalog = mcp.catalog(servers);
   const onDemand = config.toolDiscovery === "ondemand" && catalog.length > 0;
   const loaded = new Set<string>();
 
@@ -341,10 +347,10 @@ export async function runAgent({
     // Normalising them here is cheap and cloud providers accept the result unchanged.
     const declared = sanitizeTools(
       routed
-        ? mcp.tools(preselected)
+        ? mcp.tools(preselected, servers)
         : onDemand
-          ? [LOAD_TOOLS_DEFINITION, ...mcp.tools([...loaded])]
-          : mcp.tools(),
+          ? [LOAD_TOOLS_DEFINITION, ...mcp.tools([...loaded], servers)]
+          : mcp.tools(undefined, servers),
     );
 
     const request = (): OpenAI.ChatCompletionCreateParamsStreaming => {
@@ -456,7 +462,7 @@ export async function runAgent({
           // A model that skips `load_tools` and calls a catalogued tool straight from its name
           // is right about what it wants; load it and run it rather than erroring.
           if (onDemand && !loaded.has(name) && inCatalog(catalog, name)) loaded.add(name);
-          content = await mcp.call(name, args);
+          content = await mcp.call(name, args, servers);
         }
       } catch (error) {
         content = errorMessage(error);

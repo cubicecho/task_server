@@ -5,6 +5,7 @@ import { type Run, runs, steps, tasks } from "../db/schema.ts";
 import { emit } from "./events.ts";
 import { runFlow } from "./flow.ts";
 import { loadSettings } from "./llm.ts";
+import { configForTask } from "./profile.ts";
 
 /**
  * Tasks in flight, so a slow task cannot be started on top of itself — and so a run can be
@@ -471,12 +472,15 @@ async function execute({
   const onEvent = (event: Parameters<typeof emit>[1]) => emit(run.id, event);
   onEvent({ kind: "notice", text: `${task.name} started` });
   try {
-    const config = await loadSettings();
+    // The settings row, with the task's agent profile laid over it — endpoint, model and every
+    // ceiling. A task with no profile gets the row itself, which is what every run used to get.
+    const { config, servers } = await configForTask(task);
     const result = await runFlow({
       runId: run.id,
       task,
       steps: flow,
       config,
+      servers,
       payload,
       signal: controller.signal,
       onEvent,

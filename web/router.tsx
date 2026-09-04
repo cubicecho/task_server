@@ -67,6 +67,12 @@ const mcpRoute = createRoute({
   component: lazyRouteComponent(() => import("@/routes/mcp"), "McpRoute"),
 });
 
+const agentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agents",
+  component: lazyRouteComponent(() => import("@/routes/agents"), "AgentsRoute"),
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -82,6 +88,7 @@ export const router = createRouter({
     taskEditRoute,
     runsRoute,
     mcpRoute,
+    agentsRoute,
     settingsRoute,
   ]),
   defaultPreload: "intent",

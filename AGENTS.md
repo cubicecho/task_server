@@ -93,8 +93,8 @@ one, takes over a lock whose holder is gone, and does nothing at all for a `post
 
 **Hand-written GraphQL fields go in `server/graphql/`**, beside the generated entities:
 `models`, `mcpStatus`, `schedule`, `runEvents` on the query side; `runTask`, `stopTask`,
-`reconnectMcp`, `setApiKey` on the mutation side. Give every one of them a `description` — it
-is what an agent on `/mcp` reads to decide whether to call it.
+`reconnectMcp`, `setApiKey`, `setAgentApiKey` on the mutation side. Give every one of them a
+`description` — it is what an agent on `/mcp` reads to decide whether to call it.
 
 **A trigger that fires at a task that cannot start leaves a row either way.** `startTask` refuses
 it — right for a person or an agent, who are told on the spot — but nothing is watching a cron
@@ -169,8 +169,9 @@ The identity is the door. There are no accounts and no token: `/graphql` sets `c
 "operator"`, `/mcp` sets `caller: "agent"` through `contextFromRequest`, and a request with no
 context at all — a test calling `graphql()`, the server executing its own schema — is the
 operator. An agent writes and runs tasks; it may not read or write the settings row (the
-operator's endpoint, model and key), the MCP server rows (`env` and `headers` are credentials,
-and `testMcpServer` spawns a stdio command), or delete run history. `/graphql` has no
+operator's endpoint, model and key), the agent profiles (the same three per task, plus the
+server scope), the MCP server rows (`env` and `headers` are credentials, and `testMcpServer`
+spawns a stdio command), or delete run history. `/graphql` has no
 authentication, so today the split is defence in depth over `/mcp`; a shared token is what would
 make a `Bearer` on `/graphql` an agent too.
 
@@ -178,8 +179,10 @@ Mutations are a whitelist — `"*": deny` heads the map — so a write a new tab
 shut. Every bulk form is shut for *everyone*, the operator included: `deleteTask` with no
 `where` empties the table where `deleteTaskSingle` cannot, and every document under
 `web/graphql/` uses a single-row form already. Reads are the other way round, `"*": accept` with
-the two guarded tables named, each in all four generated spellings (`x`, `xs`, `xsAggregate`,
-`xsGroupBy`) — guarding the plural alone guards the front door of a room with two.
+the three guarded tables named, each in all four generated spellings (`x`, `xs`, `xsAggregate`,
+`xsGroupBy`) — guarding the plural alone guards the front door of a room with two. A rule on the
+type goes with them, since `Task.agent` is a relation an agent may walk to from a task it may
+read, and a rule on `Query.agents` is not there to meet it.
 
 `tests/permissions.test.ts` asks the schema as each caller, and runs every rule named in `TOOLS`
 as an agent: a field added to the listing that the map denies is a tool that is advertised,
@@ -246,7 +249,9 @@ the per-kind split gets −11.3%, and the `byType` example from the driver's own
 `triggers`/`steps`/`runs` as list-relation filters, each pulling in the neighbouring table's
 whole filter type, which carries its own relation fields back — the closure that was most of
 this listing's weight, for a question no agent asked across 100 logged calls. 2.9.0's
-`inputField` drops those three fields on the way out. It is the same `schema` object yoga serves
+`inputField` drops those three fields on the way out, and `agent` with them: a one-relation
+costs a whole `AgentFilters` for a table this surface does not offer at all. The scalar
+`agentId` stays, since a column costs one `StringFilter`. It is the same `schema` object yoga serves
 the web app from, and the app keeps all of them; a question about a task's triggers is asked
 from the trigger end here, where `taskId` is a column.
 
@@ -309,6 +314,35 @@ it to `startTask` with **no** `triggerId`. That is deliberate: a replay of a fai
 a hand-started run, and one that named the trigger it was copied from would write a delivery
 into the history that nobody sent. Everything downstream is unchanged, which is the point —
 there is one path a payload travels, and the argument only decides where it entered.
+
+**An agent profile is a settings row, not a second config.** A task may name one
+(`tasks.agentId`, null for the settings row, which is every task until somebody makes a profile),
+and `server/runner/profile.ts` lays the profile over the settings row and hands the run the
+result. Nothing downstream branches: `agent.ts`, `flow.ts` and `llm.ts` read one `Settings`
+exactly as they always did, which is why per-task endpoints cost the agent loop nothing. Blank
+is inherit, and the sentinel differs by column because zero is a real answer for most of them —
+`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`.
+
+The key is the one column that is not a plain override. A profile naming a `baseUrl` of its own
+never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`, the
+constant `llm.ts` exports for "there is no key here, do not fall through to the environment".
+A credential issued for one endpoint has no business being posted to another. A profile on the
+*same* endpoint inherits it like anything else. `llm.ts` caches a client per endpoint for the
+same reason: two profiles on two servers would otherwise evict each other's connection pool on
+every request.
+
+`mcpServerIds` is a jsonb array rather than a join table — there is nothing to say about the
+pairing, it is written whole with its row, and a table would generate CRUD, permissions and
+tools for it. Empty or absent is every enabled server. The scope is enforced in `mcp.call` as
+well as in `tools()` and `catalog()`, and an out-of-scope tool is refused with the same words as
+one that does not exist: a model that remembers a name from a wider run must not be taught to ask
+again. Which *tools* of a server a task may use is deliberately not here — that belongs to a
+router endpoint in front of them, where every app in the ecosystem gets the same answer, and
+scope written twice is scope that disagrees.
+
+Profiles are the operator's on both sides: they carry an endpoint, a key and the tool scope,
+which is the settings row's own argument. `agentId` on a task stays readable, so an agent on
+`/mcp` can see that a task runs on a profile without being able to read or choose one.
 
 **The LLM call retries only before the model has spoken.** `server/runner/agent.ts` owns the
 retry loop, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn

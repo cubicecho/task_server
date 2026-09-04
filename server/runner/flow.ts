@@ -224,7 +224,10 @@ export interface FlowOptions {
   runId: string;
   task: Task;
   steps: Step[];
+  /** The settings row with the task's agent profile laid over it. See `runner/profile.ts`. */
   config: Settings;
+  /** The profile's MCP scope, passed to every step's turn. Undefined is every server. */
+  servers?: ReadonlySet<string>;
   /** The body of the webhook that started this run, for `{{event}}`. See `renderPayload`. */
   payload?: unknown;
   signal?: AbortSignal;
@@ -244,6 +247,7 @@ export async function runFlow({
   task,
   steps,
   config,
+  servers,
   payload,
   signal,
   onEvent,
@@ -317,6 +321,7 @@ export async function runFlow({
             ? `${systemPrompt}\n\n${decisionInstruction(plan.cases)}`.trim()
             : systemPrompt,
         prompt: renderPrompt(plan, context, payload),
+        servers,
         signal,
         onEvent: emit,
       });
