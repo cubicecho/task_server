@@ -1,0 +1,69 @@
+# One question — is anything wrong — asked in one round trip.
+#
+# Per task, the last run that actually ran and the last one that was refused for a collision.
+# They are two selections of the same relation under two aliases because they are two different
+# questions about the same rows, and each alias's arguments resolve on their own. `skipped` is
+# excluded from `last` for the same reason those rows exist at all: a refusal records a firing,
+# not the task doing anything, so a busy hour would otherwise hide the run before it.
+query Status {
+  tasks(orderBy: { name: { direction: asc, priority: 1 } }) {
+    id
+    name
+    enabled
+    triggers {
+      id
+      kind
+      enabled
+    }
+    last: runs(
+      limit: 1
+      where: { status: { ne: skipped } }
+      orderBy: { startedAt: { direction: desc, priority: 1 } }
+    ) {
+      id
+      status
+      error
+      startedAt
+      finishedAt
+    }
+    # One row per collision rather than per firing, so `attempts` is how many deliveries it
+    # stands for and `finishedAt` moves with the most recent of them.
+    collision: runs(
+      limit: 1
+      where: { status: { eq: skipped } }
+      orderBy: { startedAt: { direction: desc, priority: 1 } }
+    ) {
+      id
+      error
+      attempts
+      startedAt
+      finishedAt
+    }
+  }
+
+  # Failures the tiles above will not account for, because the task has run since and now looks
+  # well. A run that broke is worth seeing once even after something has papered over it.
+  failures: runs(
+    limit: 10
+    where: { status: { eq: error } }
+    orderBy: { startedAt: { direction: desc, priority: 1 } }
+  ) {
+    id
+    error
+    startedAt
+    task {
+      id
+      name
+    }
+  }
+
+  # A server that is enabled and did not connect is every run since going out with fewer tools
+  # than the task was written for, and nothing else says so without opening the servers page.
+  mcpStatus {
+    id
+    slug
+    label
+    status
+    error
+  }
+}
