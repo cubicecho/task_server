@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Square, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { RefreshCw, Square, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   DeleteRunDocument,
   RunDetailDocument,
   type RunDetailQuery,
+  RunFilterTasksDocument,
   RunsDocument,
   type RunsQuery,
+  RunsStatusEnum,
   StopTaskDocument,
 } from "@/__generated__/graphql/graphql";
 import { Page } from "@/components/app-shell";
@@ -15,7 +17,16 @@ import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { request } from "@/lib/gql";
+import { ANY, buildWhere, type Filters, isFiltered, NO_FILTERS, WINDOWS } from "@/lib/run-filters";
 import { STATUS_VARIANT } from "@/lib/run-status";
 
 type Run = RunsQuery["runs"][number];
@@ -163,17 +174,143 @@ function RunDetail({ run, withResult }: { run: Run; withResult: boolean }) {
   );
 }
 
+const PAGE = 50;
+
+/**
+ * The bar above the list: what to look for, and how far to look.
+ *
+ * Every control goes through one `onChange`, because each of them also has to put the list back
+ * on its first page — a `limit` grown by Load more is about the rows that were on screen, and
+ * means nothing once the question changes.
+ */
+function FilterBar({
+  filters,
+  onChange,
+  tasks,
+}: {
+  filters: Filters;
+  onChange: (patch: Partial<Filters>) => void;
+  tasks: { id: string; name: string }[];
+}) {
+  const dirty = isFiltered(filters);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Input
+        value={filters.search}
+        onChange={(event) => onChange({ search: event.target.value })}
+        placeholder="Search output, errors and task names…"
+        className="min-w-56 flex-1"
+      />
+
+      <Select value={filters.status} onValueChange={(status) => onChange({ status })}>
+        <SelectTrigger className="w-36">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ANY}>Any status</SelectItem>
+          {Object.values(RunsStatusEnum).map((status) => (
+            <SelectItem key={status} value={status}>
+              {status}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={filters.taskId} onValueChange={(taskId) => onChange({ taskId })}>
+        <SelectTrigger className="w-44">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ANY}>Any task</SelectItem>
+          {tasks.map((task) => (
+            <SelectItem key={task.id} value={task.id}>
+              {task.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={filters.window}
+        onValueChange={(value) => {
+          const chosen = WINDOWS.find((option) => option.value === value);
+          onChange({
+            window: value,
+            from: chosen?.ms ? new Date(Date.now() - chosen.ms).toISOString() : null,
+          });
+        }}
+      >
+        <SelectTrigger className="w-40">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {WINDOWS.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {dirty ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Clear filters"
+          onClick={() => onChange(NO_FILTERS)}
+        >
+          <X className="size-4" />
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function RunsRoute() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [limit, setLimit] = useState(PAGE);
+
+  // The typed-in term, a beat behind what is on screen. Without it every keystroke is a query,
+  // and the query it is a keystroke of scans the output column of every run ever kept.
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(filters.search), 300);
+    return () => clearTimeout(timer);
+  }, [filters.search]);
+
+  const where = useMemo(() => buildWhere(filters, search), [filters, search]);
+  const filtered = where !== undefined;
+
+  // Names for the task dropdown. Rarely changes, and this page is not where tasks are edited.
+  const tasks = useQuery({
+    queryKey: ["run-filter-tasks"],
+    queryFn: () => request(RunFilterTasksDocument),
+    staleTime: 60_000,
+  });
 
   const runs = useQuery({
-    queryKey: ["runs"],
-    queryFn: () => request(RunsDocument, { taskId: null }),
+    queryKey: ["runs", where, limit],
+    queryFn: () => request(RunsDocument, { where, limit }),
     // A run started elsewhere — by cron, or by an agent over MCP — should show up without a
-    // reload, and this page is cheap enough to poll.
-    refetchInterval: 5000,
+    // reload, and the newest page unfiltered is cheap enough to poll for it. Neither half of
+    // that holds once you are digging: a poll behind a search re-scans every run that was ever
+    // kept, and rows arriving at the top of a list you have paged through move what you are
+    // reading. Refresh is the way back to live.
+    refetchInterval: filtered || limit > PAGE ? false : 5000,
   });
+
+  const rows = runs.data?.runs ?? [];
+  // A short page is the end of the list. A full one may or may not be, and offering to look is
+  // cheaper than counting the table to find out.
+  const more = rows.length >= limit;
+
+  const update = (patch: Partial<Filters>) => {
+    setFilters((current) => ({ ...current, ...patch }));
+    setLimit(PAGE);
+  };
 
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteRunDocument, { id }),
@@ -205,11 +342,15 @@ export function RunsRoute() {
         </Button>
       }
     >
-      {runs.data?.runs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing has run yet.</p>
+      <FilterBar filters={filters} onChange={update} tasks={tasks.data?.tasks ?? []} />
+
+      {rows.length === 0 && !runs.isPending ? (
+        <p className="text-sm text-muted-foreground">
+          {filtered ? "No runs match these filters." : "Nothing has run yet."}
+        </p>
       ) : null}
 
-      {runs.data?.runs.map((run) => {
+      {rows.map((run) => {
         const expanded = open === run.id;
         const running = run.status === "running";
         // A trigger that fired at a busy task: a real delivery, and nothing behind it to open.
@@ -284,6 +425,12 @@ export function RunsRoute() {
           </Card>
         );
       })}
+
+      {more ? (
+        <Button variant="outline" onClick={() => setLimit(limit + PAGE)} disabled={runs.isFetching}>
+          Load {PAGE} more
+        </Button>
+      ) : null}
     </Page>
   );
 }

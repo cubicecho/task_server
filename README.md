@@ -125,6 +125,27 @@ has a trigger to point at. Nothing is shown when it does not, because deleting a
 the reference and a run started by hand is then indistinguishable from one whose reason has been
 thrown away.
 
+### Finding one again
+
+Retention defaults to keeping every run forever, so the history outgrows a page of it quickly.
+The **Runs** page filters by status, by task and by how far back to look, and searches the
+output, the error and the task's name at once — the three places the thing you half remember
+could have been written. It is `ilike` through the generated `where`, not an index: no column
+was added and no library is involved, and the same filters were already there for anything else
+that asks this schema a question.
+
+The list grows a page at a time rather than paging by offset, because rows arrive at the top
+while you read and an offset over a list being prepended to shows one run twice and skips
+another. For the same reason the five-second poll runs only on the newest page unfiltered:
+once you are searching or have loaded more, new rows would move what you are reading, and a
+poll behind a search re-scans every run that was ever kept. **Refresh** is the way back to live.
+
+The controls are the page's, but the question is the server's, so `web/lib/run-filters.ts`
+holds the builder on its own and `tests/run-history.test.ts` puts what it builds — and the
+document the browser sends, printed rather than retyped — against a real database. Whether an
+escaped `%`, an enum `eq` and an `OR` across a relation mean what the controls say they mean is
+a question about SQL, and nothing in the browser can answer it.
+
 With several servers connected, tool definitions cost more per request than the task's own
 prompt — they are mostly JSON Schema, and every one is sent on every turn. Settings offers two
 discovery modes (`runner/tool-loading.ts`):

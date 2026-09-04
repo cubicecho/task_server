@@ -1,12 +1,13 @@
-# The list, and only what a collapsed card draws. This is polled every five seconds for a
-# hundred rows, and a run's steps, tool calls and webhook payload are read once — when someone
-# opens it. `RunDetail` below fetches those, for the one run that is open.
-query Runs($taskId: String) {
-  runs(
-    limit: 100
-    where: { taskId: { eq: $taskId } }
-    orderBy: { startedAt: { direction: desc, priority: 1 } }
-  ) {
+# The list, and only what a collapsed card draws. This is polled every five seconds while it is
+# showing the newest page unfiltered, and a run's steps, tool calls and webhook payload are read
+# once — when someone opens it. `RunDetail` below fetches those, for the one run that is open.
+#
+# The filter is built by the page rather than named a field at a time here, because the search box
+# is an OR across three columns and every other control ANDs with it. `limit` grows a page at a
+# time instead of an `offset`: rows arrive while you read, and paging by offset over a list that
+# is being prepended to shows the same run twice and skips another.
+query Runs($where: RunFilters, $limit: Int!) {
+  runs(limit: $limit, where: $where, orderBy: { startedAt: { direction: desc, priority: 1 } }) {
     id
     taskId
     status
@@ -67,5 +68,14 @@ subscription RunEvents($runId: String!) {
     name
     step
     ok
+  }
+}
+
+# Names for the task filter, and nothing else. The `Tasks` query on the tasks page carries every
+# prompt, every trigger and a last run apiece, which is a lot of wire for a dropdown.
+query RunFilterTasks {
+  tasks(orderBy: { name: { direction: asc, priority: 1 } }) {
+    id
+    name
   }
 }
