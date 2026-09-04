@@ -277,6 +277,14 @@ minute after the run ends. Anything worth keeping goes in the run row.
 with a typed document — no raw `fetch` in a component — and every mutation invalidates the
 query keys it affected.
 
+**A `where` a person assembles goes in `web/lib/`, not in the route.** `run-filters.ts` builds
+the runs page's filter, and `tests/run-history.test.ts` runs what it builds — with the printed
+`RunsDocument`, so the test cannot drift from the query the browser sends — against a real
+database. The shape typechecks either way; whether an escaped `%`, an enum `eq` and an `OR`
+across a relation mean what the controls above the list say they mean is a question about SQL,
+and the `@` alias is in `vitest.config.ts` so a server test can ask it. A filter built inside a
+`.tsx` is a filter nothing can test.
+
 ## Code style
 
 - Biome-enforced: double quotes, semicolons, trailing commas, 2-space indent, 100 line width,
