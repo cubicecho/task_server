@@ -8,6 +8,7 @@ import { schema } from "./graphql/schema.ts";
 import { mcpHandler, mountMcp } from "./mcp-endpoint.ts";
 import { PORT, ROOT } from "./paths.ts";
 import { mcp } from "./runner/mcp.ts";
+import { drainQueue } from "./runner/run.ts";
 import * as cleanup from "./scheduler/cleanup.ts";
 import * as cron from "./scheduler/cron.ts";
 import { mountWebhooks } from "./webhooks.ts";
@@ -65,6 +66,10 @@ const server = app.listen(PORT, () => {
 await mcp.sync();
 await cron.sync();
 cleanup.start();
+
+// Runs that were waiting for a slot when this process last stopped are still waiting: the queue
+// is rows in the run table, not memory, so a restart picks up where it left off.
+await drainQueue();
 
 const shutdown = async () => {
   cron.stop();

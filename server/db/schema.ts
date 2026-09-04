@@ -140,8 +140,12 @@ export const runs = pgTable(
      * A `skipped` firing is a row rather than a log line because a delivery that quietly does
      * nothing is the one thing a webhook's sender cannot see, and the run history is where
      * someone goes to look.
+     *
+     * `queued` is the same row before it has run: a trigger fired at a server with no slot free,
+     * and the work is waiting rather than lost. It becomes `running` when a slot comes back — the
+     * same row, so the id a webhook was told is the id that eventually holds the output.
      */
-    status: text({ enum: ["running", "ok", "error", "stopped", "skipped"] })
+    status: text({ enum: ["queued", "running", "ok", "error", "stopped", "skipped"] })
       .notNull()
       .default("running"),
     startedAt: createdAt(),

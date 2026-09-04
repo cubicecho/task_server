@@ -692,7 +692,7 @@ type Run {
   triggerId: String
 
   """
-  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`. `queued` is a firing waiting for a free slot — it has not run yet and will, in this same row.
   """
   status: RunsStatusEnum!
   startedAt: DateTime!
@@ -707,7 +707,7 @@ type Run {
   blockedBy: String
 
   """
-  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task, or for a queued run that stands for several firings and will run once, with the newest payload.
   """
   attempts: Int!
 
@@ -745,6 +745,9 @@ type Run {
 }
 
 enum RunsStatusEnum {
+  """Value: queued"""
+  queued
+
   """Value: running"""
   running
 
@@ -816,7 +819,7 @@ type RunMinAggregate {
   triggerId: String
 
   """
-  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`. `queued` is a firing waiting for a free slot — it has not run yet and will, in this same row.
   """
   status: RunsStatusEnum
   startedAt: DateTime
@@ -826,7 +829,7 @@ type RunMinAggregate {
   blockedBy: String
 
   """
-  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task, or for a queued run that stands for several firings and will run once, with the newest payload.
   """
   attempts: Int
 
@@ -850,7 +853,7 @@ type RunMaxAggregate {
   triggerId: String
 
   """
-  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`. `queued` is a firing waiting for a free slot — it has not run yet and will, in this same row.
   """
   status: RunsStatusEnum
   startedAt: DateTime
@@ -860,7 +863,7 @@ type RunMaxAggregate {
   blockedBy: String
 
   """
-  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task, or for a queued run that stands for several firings and will run once, with the newest payload.
   """
   attempts: Int
 
@@ -932,7 +935,7 @@ type RunGroupKeys {
   triggerId: String
 
   """
-  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`. `queued` is a firing waiting for a free slot — it has not run yet and will, in this same row.
   """
   status: RunsStatusEnum
   startedAt: DateTime
@@ -942,7 +945,7 @@ type RunGroupKeys {
   blockedBy: String
 
   """
-  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task, or for a queued run that stands for several firings and will run once, with the newest payload.
   """
   attempts: Int
 
@@ -1459,7 +1462,7 @@ type Setting {
   maxRetries: Int!
 
   """
-  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: Int!
 
@@ -1560,7 +1563,7 @@ type SettingMinAggregate {
   maxRetries: Int
 
   """
-  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: Int
 }
@@ -1618,7 +1621,7 @@ type SettingMaxAggregate {
   maxRetries: Int
 
   """
-  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: Int
 }
@@ -1722,7 +1725,7 @@ type SettingGroupKeys {
   maxRetries: Int
 
   """
-  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: Int
 }
@@ -2724,7 +2727,7 @@ input RunFilters {
   triggerId: StringFilter
 
   """
-  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`.
+  `stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a trigger that fired at a task already running: nothing executed, and the reason is in `error`. `queued` is a firing waiting for a free slot — it has not run yet and will, in this same row.
   """
   status: RunsStatusEnumFilter
   startedAt: DateTimeFilter
@@ -2739,7 +2742,7 @@ input RunFilters {
   blockedBy: StringFilter
 
   """
-  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task.
+  How many firings this row accounts for. One for a run; more for a skip that the same trigger walked into repeatedly while the same run held the task, or for a queued run that stands for several firings and will run once, with the newest payload.
   """
   attempts: IntFilter
 
@@ -3359,7 +3362,7 @@ input UpdateSettingInput {
   maxRetries: Int
 
   """
-  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: Int
 }
@@ -3426,7 +3429,7 @@ input SettingFilters {
   maxRetries: IntFilter
 
   """
-  How many runs may be in flight at once, across every task. A firing that arrives with no slot free leaves a `skipped` run saying so. Zero lifts the limit.
+  How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: IntFilter
 

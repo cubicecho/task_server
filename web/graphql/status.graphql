@@ -1,10 +1,11 @@
 # One question — is anything wrong — asked in one round trip.
 #
-# Per task, the last run that actually ran and the last one that was refused for a collision.
-# They are two selections of the same relation under two aliases because they are two different
-# questions about the same rows, and each alias's arguments resolve on their own. `skipped` is
-# excluded from `last` for the same reason those rows exist at all: a refusal records a firing,
-# not the task doing anything, so a busy hour would otherwise hide the run before it.
+# Per task, the last run that actually ran, the last one refused for a collision, and whether a
+# firing is sitting in the queue. They are three selections of the same relation under three
+# aliases because they are three different questions about the same rows, and each alias's
+# arguments resolve on their own. `skipped` and `queued` are both excluded from `last` for the
+# same reason those rows exist at all: they record a firing, not the task doing anything, so a
+# busy hour would otherwise hide the run before it.
 query Status {
   tasks(orderBy: { name: { direction: asc, priority: 1 } }) {
     id
@@ -17,7 +18,7 @@ query Status {
     }
     last: runs(
       limit: 1
-      where: { status: { ne: skipped } }
+      where: { status: { notInArray: [skipped, queued] } }
       orderBy: { startedAt: { direction: desc, priority: 1 } }
     ) {
       id
@@ -25,6 +26,18 @@ query Status {
       error
       startedAt
       finishedAt
+    }
+    # A firing that found the server full and is waiting for a slot. It has not failed and
+    # nothing is lost, but the task is behind its schedule, which the last run cannot say.
+    waiting: runs(
+      limit: 1
+      where: { status: { eq: queued } }
+      orderBy: { startedAt: { direction: asc, priority: 1 } }
+    ) {
+      id
+      error
+      attempts
+      startedAt
     }
     # One row per collision rather than per firing, so `attempts` is how many deliveries it
     # stands for and `finishedAt` moves with the most recent of them.

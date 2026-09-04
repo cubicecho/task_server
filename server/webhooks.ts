@@ -30,7 +30,7 @@ export function mountWebhooks(app: Express) {
         // sender has delivered the event and has nothing useful to do with that, so it is
         // reported here and acknowledged there.
         console.error(`[webhook] ${event}:`, error);
-        res.json({ ok: true, event, dispatched: [], refused: [] });
+        res.json({ ok: true, event, dispatched: [], queued: [], refused: [] });
       });
   });
 }
@@ -60,6 +60,8 @@ function readBody(req: Request, res: Response, next: NextFunction) {
 
 type Dispatched = { taskId: string; name: string; runId: string };
 type Refused = { taskId: string; name: string; runId: string; reason: string };
+/** Accepted, waiting for a slot. The same shape as a refusal, because it is not one. */
+type Queued = Refused;
 
 /**
  * Starts every enabled task with an enabled `event` trigger for this id, and answers with what
@@ -76,9 +78,14 @@ type Refused = { taskId: string; name: string; runId: string; reason: string };
  * name the task regardless. Reporting nothing at all would be no better — `dispatched: []` with
  * no reason says only that something did not happen.
  *
- * `fireTask` records the skip as a run of its own, so both arms carry a `runId`: what the
+ * `fireTask` records the skip as a run of its own, so every arm carries a `runId`: what the
  * sender is told and what the Runs page shows are the same delivery, and a sender that kept the
  * id can go and look at it.
+ *
+ * `queued` is neither of the other two and gets its own list. The delivery was accepted and the
+ * task will run — it is waiting for a slot, not turned away — and a sender told `refused` would
+ * reasonably send again, which is the opposite of what the queue is for. The run id is the row
+ * it is waiting in, and is the id it keeps once it runs.
  *
  * Started one at a time, not in parallel: two triggers on one task are two attempts at the same
  * `inFlight` entry, and sequencing them means the second is refused rather than racing.
@@ -89,8 +96,8 @@ type Refused = { taskId: string; name: string; runId: string; reason: string };
 async function dispatch(
   event: string,
   payload: unknown,
-): Promise<{ dispatched: Dispatched[]; refused: Refused[] }> {
-  if (!event) return { dispatched: [], refused: [] };
+): Promise<{ dispatched: Dispatched[]; queued: Queued[]; refused: Refused[] }> {
+  if (!event) return { dispatched: [], queued: [], refused: [] };
 
   const rows = await db
     .select({ triggerId: triggers.id, taskId: triggers.taskId, name: tasks.name })
@@ -107,10 +114,11 @@ async function dispatch(
 
   if (!rows.length) {
     console.log(`[webhook] ${event}: nothing is listening`);
-    return { dispatched: [], refused: [] };
+    return { dispatched: [], queued: [], refused: [] };
   }
 
   const dispatched: Dispatched[] = [];
+  const queued: Queued[] = [];
   const refused: Refused[] = [];
 
   for (const { triggerId, taskId, name } of rows) {
@@ -118,7 +126,8 @@ async function dispatch(
       const fired = await fireTask(taskId, triggerId, payload);
       if (!fired.started) {
         console.log(`[webhook] ${event}: ${name}: ${fired.reason}`);
-        refused.push({ taskId, name, runId: fired.run.id, reason: fired.reason });
+        const entry = { taskId, name, runId: fired.run.id, reason: fired.reason };
+        (fired.queued ? queued : refused).push(entry);
         continue;
       }
       // The run is under way and the reply does not wait for it. Whatever it comes to is on the
@@ -134,5 +143,5 @@ async function dispatch(
     }
   }
 
-  return { dispatched, refused };
+  return { dispatched, queued, refused };
 }

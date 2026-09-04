@@ -85,14 +85,16 @@ export const COLUMN_DOCS: ColumnDocs = {
     status:
       "`stopped` is a run called off by hand — not a failure, and not a result. `skipped` is a " +
       "trigger that fired at a task already running: nothing executed, and the reason is in " +
-      "`error`.",
+      "`error`. `queued` is a firing waiting for a free slot — it has not run yet and will, in " +
+      "this same row.",
     payload:
       "What the trigger handed the run: a webhook's parsed body, and null for everything else. " +
       "It is what `{{event}}` interpolated into the prompt.",
     blockedBy: "`skipped` only: the run that was in the way.",
     attempts:
       "How many firings this row accounts for. One for a run; more for a skip that the same " +
-      "trigger walked into repeatedly while the same run held the task.",
+      "trigger walked into repeatedly while the same run held the task, or for a queued run " +
+      "that stands for several firings and will run once, with the newest payload.",
     output: "The agent's final reply.",
     error: "Why it failed, or — on a `skipped` run — why it never started.",
     toolCalls: "Every tool the run called, in order, as JSON.",
@@ -152,8 +154,9 @@ export const COLUMN_DOCS: ColumnDocs = {
       "How many times a request that failed *before producing anything* is tried again. Only " +
       "that case is safe to retry. Zero turns retries off.",
     maxConcurrentRuns:
-      "How many runs may be in flight at once, across every task. A firing that arrives with " +
-      "no slot free leaves a `skipped` run saying so. Zero lifts the limit.",
+      "How many runs may be in flight at once, across every task. A trigger that fires with no " +
+      "slot free leaves a `queued` run, which starts when one comes back; a person or an agent " +
+      "asking for a run is refused on the spot instead. Zero lifts the limit.",
   },
 };
 

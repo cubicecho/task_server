@@ -82,8 +82,9 @@ export async function sync() {
       row.cron,
       () => {
         // Nothing is waiting on a tick, so everything it comes to has to be written down where
-        // it can be found later: the run row for a run, a `skipped` row for a task that was
-        // still busy, and the log for the failures that leave no row at all.
+        // it can be found later: the run row for a run, a `queued` row for one waiting on a
+        // slot, a `skipped` row for a task that was still busy, and the log for the failures
+        // that leave no row at all.
         void fireTask(row.taskId, row.id).catch((error: unknown) => {
           console.error(`[cron] trigger ${row.id}: ${errorMessage(error)}`);
         });

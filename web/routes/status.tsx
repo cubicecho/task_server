@@ -28,8 +28,8 @@ const LABELS: Record<Health, { label: string; blurb: string; tone: string }> = {
   refused: {
     label: "Turned away",
     blurb:
-      "A firing was refused and nothing has run since — the task was already going, or the " +
-      "server was at its limit. The row says which.",
+      "A firing was refused and nothing has run since: the task was already running, and a " +
+      "second copy of work in flight is not something to queue.",
     tone: "text-destructive",
   },
   broken: {
@@ -38,6 +38,13 @@ const LABELS: Record<Health, { label: string; blurb: string; tone: string }> = {
     tone: "text-destructive",
   },
   running: { label: "Running", blurb: "In flight right now.", tone: "" },
+  waiting: {
+    label: "Waiting",
+    blurb:
+      "A firing found the server at its limit and is queued. Nothing is lost — it starts when " +
+      "a slot comes back — but the task is behind.",
+    tone: "",
+  },
   off: { label: "Off", blurb: "Disabled. Nothing fires it and nothing will.", tone: "" },
   manual: {
     label: "Manual only",
@@ -70,6 +77,15 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
   }
   if (health === "running" && last) {
     return <p className="text-sm text-muted-foreground">Started {when(last.startedAt)}.</p>;
+  }
+  if (health === "waiting" && task.waiting[0]) {
+    const queued = task.waiting[0];
+    const firings = queued.attempts === 1 ? "A firing" : `${queued.attempts} firings`;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {firings} waiting since {when(queued.startedAt)}. {queued.error}
+      </p>
+    );
   }
   return (
     <p className="text-sm text-muted-foreground">
@@ -225,7 +241,7 @@ export function StatusRoute() {
         <p className="text-sm text-destructive">{(status.error as Error).message}</p>
       ) : null}
 
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
         {HEALTH.map((health) => (
           <Tile
             key={health}
