@@ -153,7 +153,8 @@ for to make it stop.
 ```
 server/
   db/          drizzle schema and client; migrate.ts applies drizzle/ on boot
-  graphql/     the schema: drizzle-graphql entities plus a few hand-written fields
+  graphql/     the schema: drizzle-graphql entities plus a few hand-written fields;
+               permissions.ts says who may call what, applied to the schema itself
   runner/      llm client, MCP pool, tool loading + schema compat, agent loop, flow, recorder
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write;
                cleanup.ts prunes old runs hourly
@@ -176,6 +177,8 @@ express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `r
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
 - **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,
   which talks only GraphQL.
+
+One schema, two doors, and one set of rules over both — see **Permissions**.
 
 Writes go through `onWrite` hooks that rebuild the cron schedule and reconcile the MCP pool, so
 editing a trigger in the UI takes effect immediately.
@@ -379,6 +382,52 @@ What the spike did leave behind is here rather than there. The listing went from
 ~155 kB on two upstream changes filed off those runs, both above, and the reads gave up their
 null branches. Across a hundred logged calls the only filter operator any agent sent was `eq`,
 which is the finding both of those act on.
+
+## Permissions
+
+`TOOLS` above is a listing, not a lock. The seventeen tools are what a visiting agent is *told
+about* — the settings row, the MCP server rows and every bulk write were left out of it on
+purpose — but both endpoints are one schema in one process, so nothing about that list decided
+what an agent could *reach*. `server/graphql/permissions.ts` is that decision, written once with
+[`@vantreeseba/graphql-casl`](https://github.com/cubicecho/graphql-casl) and applied to the
+schema itself rather than to either endpoint, which is what makes it true of both.
+
+There are no accounts and there is no token. What there is instead is two doors used by two
+different kinds of thing: `/mcp` is where agents call in and `/graphql` is where the web app
+does, and each says which it is when it builds the context. A request with no context at all —
+a test calling `graphql()`, this server executing its own schema in process — is the operator.
+
+The operator may do anything; the web app is the whole of the API. An agent writes and runs
+tasks: it makes them, edits their flows with `setTaskSteps`, schedules them, starts and stops
+them, and reads what happened. Three things it may not touch:
+
+- **The settings row.** The operator's account of their own server — endpoint, model, key.
+  `setApiKey` writes a credential, and an agent that could repoint `baseUrl` would have
+  redirected every future run to a server of its choosing. Guarded in all four of the ways a
+  generated schema offers a table, because `settingsGroupBy(groupBy: [baseUrl])` answers with the
+  same values under a different heading.
+- **The MCP server rows.** `env` and `headers` on one of those are credentials in all but name,
+  and `testMcpServer` spawns whatever stdio command it is handed, so it is arbitrary execution on
+  this host for anyone who reaches it.
+- **The run history.** An agent tidying away the run that recorded what it did is the one edit
+  nobody can audit afterwards.
+
+Mutations are a whitelist — `"*": deny` at the head of the map — so a write added by a new table
+ships shut rather than open, and so does every bulk form. That last part holds for the operator
+too: `deleteTask` with no `where` empties the table where `deleteTaskSingle` cannot, and every
+document under `web/graphql/` already uses a single-row form, so shutting them costs no caller
+anything.
+
+Two tests keep it honest. `tests/permissions.test.ts` asks the schema as each caller and checks
+what comes back, and it also runs every rule named in `TOOLS` as an agent: a field added to the
+listing that the map denies would otherwise be a tool that is advertised, called, and refuses
+every time, which an agent cannot tell from a broken server.
+
+What this does *not* buy, today: `/graphql` has no authentication, so it is the operator's door
+by definition, and anyone who can reach the port is the operator. The split earns its keep on
+`/mcp`, where it is defence in depth under a surface that already offers only seventeen tools,
+and it is what a shared token would switch on — a `Bearer` header on `/graphql` would then be an
+agent that found the query endpoint, held to an agent's rules there as it is here.
 
 ## Docker
 

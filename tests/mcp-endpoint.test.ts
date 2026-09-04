@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import type { McpHttpHandler } from "@cubicecho/graphql-mcp";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -18,6 +19,8 @@ let events: typeof import("../server/runner/events.ts");
 let server: Server;
 let endpoint: URL;
 let client: Client;
+let probe: Client;
+let probeHandler: McpHttpHandler;
 
 beforeAll(async () => {
   const { ensureSchema } = await import("../server/db/migrate.ts");
@@ -34,9 +37,32 @@ beforeAll(async () => {
 
   client = new Client({ name: "test-client", version: "0.0.0" });
   await client.connect(new StreamableHTTPClientTransport(endpoint));
+
+  // The same door, opened one field wider. Every tool the real surface offers is one an agent
+  // may reach, so nothing on it can show that the context `/mcp` builds arrives at the rules at
+  // all — and if it stopped arriving, every call here would run as the operator and no test in
+  // this file would notice. `Query.settings` is a field the map denies an agent, so a handler
+  // wired the way `mcp-endpoint.ts` wires its own makes that visible.
+  const { createHttpHandler } = await import("@cubicecho/graphql-mcp");
+  const { schema } = await import("../server/graphql/schema.ts");
+  probeHandler = createHttpHandler({
+    schema,
+    name: "probe",
+    version: "0.0.0",
+    include: ["Query.settings"],
+    contextFromRequest: () => ({ caller: "agent" }),
+  });
+  app.all("/mcp-probe", express.json(), probeHandler);
+
+  probe = new Client({ name: "probe-client", version: "0.0.0" });
+  await probe.connect(
+    new StreamableHTTPClientTransport(new URL(endpoint.href.replace("/mcp", "/mcp-probe"))),
+  );
 });
 
 afterAll(async () => {
+  await probe.close();
+  await probeHandler.close();
   await client.close();
   await new Promise((resolve) => server.close(resolve));
   fs.rmSync(dir, { recursive: true, force: true });
@@ -409,4 +435,11 @@ test("a flow is written nested and read back flat, and says so", async () => {
   expect(described).toMatch(/silently loses the arms/);
 
   await call("delete_task", { where: { id: { eq: taskId } } });
+});
+
+test("a call arriving here is an agent, whatever it asks for", async () => {
+  const result = (await probe.callTool({ name: "settings" })) as CallToolResult;
+  const [content] = result.content;
+  if (content?.type !== "text") throw new Error("no text in the result of settings");
+  expect(content.text).toContain("FORBIDDEN");
 });

@@ -46,6 +46,7 @@ docker compose up --build
 | **Postgres + Drizzle** | One dialect everywhere. With no `DATABASE_URL` the server runs PGlite — postgres as WebAssembly, in-process, against `data/` — so a clone and the tests need no database of their own; set the variable and it is a `pg` pool instead. Same SQL, same types, either way |
 | **`@vantreeseba/drizzle-graphql`** | The API is generated from the tables — a new column is queryable as soon as it exists. Hand-written fields fill what CRUD cannot say |
 | **graphql-yoga** | Serves the query API and the `runEvents` subscription as SSE, which the browser reads with a plain `EventSource` |
+| **`@vantreeseba/graphql-casl`** | Who may call what, as CASL rules over the schema rather than over an endpoint. `applyPermissions` wraps the schema `server/graphql/schema.ts` exports, so `/graphql` and `/mcp` are held to one map — see below |
 | **`@cubicecho/graphql-mcp`** | Projects the same schema as MCP tools. `server/mcp-endpoint.ts` curates which ones — see below |
 | **Node type stripping** | The container runs `node server/index.ts`; `tsx` is a devDependency and is not in the image. Nothing under `server/` may use syntax that survives erasure — no enums, no parameter properties |
 | **Biome** | One formatter and linter. `noExplicitAny` and `noNonNullAssertion` are errors here, not warnings |
@@ -114,6 +115,32 @@ either of those belongs in a hook, not in a route handler.
 **`features.nestedWrites` is off.** Nothing in the driver stops it; it is simply not earned —
 a task and its triggers save as separate mutations, and a flow is written whole by
 `setTaskSteps` rather than a row at a time.
+
+**Permissions go on the schema, never on an endpoint.** `server/graphql/permissions.ts` is the
+one place that says who may call what, and `applyPermissions` puts it on the schema that both
+doors serve. `TOOLS` in `mcp-endpoint.ts` is a listing — what an agent's context is spent on —
+and never a lock: both endpoints are one schema in one process, so a rule bolted onto `/mcp`
+says nothing about the same field reached over `/graphql`.
+
+The identity is the door. There are no accounts and no token: `/graphql` sets `caller:
+"operator"`, `/mcp` sets `caller: "agent"` through `contextFromRequest`, and a request with no
+context at all — a test calling `graphql()`, the server executing its own schema — is the
+operator. An agent writes and runs tasks; it may not read or write the settings row (the
+operator's endpoint, model and key), the MCP server rows (`env` and `headers` are credentials,
+and `testMcpServer` spawns a stdio command), or delete run history. `/graphql` has no
+authentication, so today the split is defence in depth over `/mcp`; a shared token is what would
+make a `Bearer` on `/graphql` an agent too.
+
+Mutations are a whitelist — `"*": deny` heads the map — so a write a new table generates ships
+shut. Every bulk form is shut for *everyone*, the operator included: `deleteTask` with no
+`where` empties the table where `deleteTaskSingle` cannot, and every document under
+`web/graphql/` uses a single-row form already. Reads are the other way round, `"*": accept` with
+the two guarded tables named, each in all four generated spellings (`x`, `xs`, `xsAggregate`,
+`xsGroupBy`) — guarding the plural alone guards the front door of a room with two.
+
+`tests/permissions.test.ts` asks the schema as each caller, and runs every rule named in `TOOLS`
+as an agent: a field added to the listing that the map denies is a tool that is advertised,
+called, and refuses every time, which an agent cannot tell from a broken server.
 
 **The `/mcp` surface is curated, not the whole schema.** `server/mcp-endpoint.ts` lists the
 seventeen tools an outside client gets. Nothing that empties a table in one call, and nothing

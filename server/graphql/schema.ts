@@ -1,4 +1,5 @@
 import { buildSchema, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
+import { applyPermissions } from "@vantreeseba/graphql-casl";
 import { eq } from "drizzle-orm";
 import {
   GraphQLBoolean,
@@ -18,6 +19,7 @@ import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
+import { permissions } from "./permissions.ts";
 import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
 import {
   McpConnectionInput,
@@ -190,7 +192,7 @@ function generatedType(name: string): GraphQLOutputType {
   return type as GraphQLOutputType;
 }
 
-export const schema = new GraphQLSchema({
+const baseSchema = new GraphQLSchema({
   query: new GraphQLObjectType({
     name: "Query",
     fields: {
@@ -379,4 +381,24 @@ export const schema = new GraphQLSchema({
     },
   }),
   types: [...Object.values(entities.types), ...Object.values(entities.inputs)],
+});
+
+/**
+ * The schema every caller gets, rules and all.
+ *
+ * Wrapped here rather than at either endpoint, because there is one schema and two doors: a
+ * rule bolted onto `/mcp` says nothing about the same field reached over `/graphql`, and the
+ * MCP endpoint projects its tools from this very object. Wrapping the export is what makes
+ * there be no unguarded path — `permissions.ts` says who may call what, and this is the only
+ * place it is put on.
+ *
+ * `allowExternalErrors` stays at its default: a refusal that came from a resolver — the cron
+ * expression `vetTrigger` will not store, the delete `refuseWhileRunning` holds off — is the
+ * whole of what the caller needs told, and replacing it with `Forbidden` would lose it.
+ */
+export const schema = applyPermissions(baseSchema, permissions, {
+  fallbackError: (_original, _parent, _args, _context, info) =>
+    new GraphQLError(`Not authorized to call ${info.parentType.name}.${info.fieldName}.`, {
+      extensions: { code: "FORBIDDEN" },
+    }),
 });
