@@ -32,7 +32,7 @@ writes go through Drizzle, and `caller` is in the context for the middleware to 
 actor. The changeset is per mutation across every table it touched, which is what
 `setTaskSteps` needs — it rewrites a whole flow, and a per-row log of that is unreadable.
 
-**What blocks it.** `0.0.0-development` and unpublished. Nothing else.
+**What blocks it.** `0.0.0-development` and unpublished. Nothing else — [#17](https://github.com/cubicecho/task_server/issues/17) is the reminder to finalise the approach once it does.
 
 **Before it goes in:** decide where a changeset is *stored* — a table here means a migration and
 a retention story of its own, and run rows already have one (`runRetentionDays`). The obvious
