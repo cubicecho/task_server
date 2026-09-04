@@ -1,7 +1,31 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+
+/**
+ * A hint that came from the schema, with its backticks rendered.
+ *
+ * The notes under these fields are now the column descriptions from `server/graphql/docs.ts`,
+ * written once and read by an agent as well as by a person, so they are marked up the only way
+ * both readers understand: a model reads `` `ondemand` `` as markdown, and this turns it into a
+ * `<code>` for everyone else. A hint passed as JSX is left exactly as it was given.
+ */
+function Hint({ text }: { text: string }) {
+  return (
+    <>
+      {text.split("`").map((part, index) =>
+        index % 2 === 1 ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the split of a fixed string is the order
+          <code key={index}>{part}</code>
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: same
+          <Fragment key={index}>{part}</Fragment>
+        ),
+      )}
+    </>
+  );
+}
 
 /**
  * A labelled control, with an optional note under it.
@@ -31,7 +55,11 @@ export function Field({
     <div className={cn("flex flex-col gap-2", className)}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className="text-xs text-muted-foreground">
+          {typeof hint === "string" ? <Hint text={hint} /> : hint}
+        </p>
+      ) : null}
     </div>
   );
 }

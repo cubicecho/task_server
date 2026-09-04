@@ -19,6 +19,7 @@ import { listModels } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
+import { describeColumn, describeTable } from "./docs.ts";
 import { permissions } from "./permissions.ts";
 import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
 import {
@@ -42,6 +43,11 @@ const { entities } = buildSchema(db, {
   // Built-in detection leaves a timestamp column as `JSON`. It is a date to everyone who
   // reads it, and `DateTime` transports ISO-8601.
   mapColumnType: (column) => (column.columnType === "PgTimestamp" ? GraphQLDateTime : undefined),
+  // What each column means, from `docs.ts` — the one copy of that prose. It lands on the SDL,
+  // and from there on the `/mcp` tool schemas and, through codegen, the notes under the fields
+  // in the web app.
+  describeColumn,
+  describeTable,
   // The run history — the run and the steps it took — is written by the runner, never by a
   // client: a hand-made row would claim something happened that did not.
   features: {

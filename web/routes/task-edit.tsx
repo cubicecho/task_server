@@ -22,6 +22,7 @@ import { type DraftTrigger, TriggerEditor, toDraftTriggers } from "@/components/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { describeFor } from "@/lib/docs";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
 
@@ -31,6 +32,9 @@ import { request } from "@/lib/gql";
  * An existing task is fetched whole — triggers and flow included — before the form is built,
  * so the form is initialised once from real data rather than patched into shape afterwards.
  */
+/** The notes under this form's fields are the columns' own descriptions. */
+const doc = describeFor("Task");
+
 export function TaskEditRoute() {
   const { taskId } = useParams({ strict: false });
 
@@ -180,7 +184,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         />
       </Field>
 
-      <Field label="Prompt" htmlFor="prompt">
+      <Field label="Prompt" htmlFor="prompt" hint={doc("prompt")}>
         <Textarea
           id="prompt"
           value={prompt}
@@ -199,7 +203,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       </Field>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Model" htmlFor="model">
+        <Field label="Model" htmlFor="model" hint={doc("model")}>
           <ModelSelect
             id="model"
             value={model}
@@ -207,7 +211,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
             defaultLabel="Default from Settings"
           />
         </Field>
-        <Field label="System prompt" htmlFor="system">
+        <Field label="System prompt" htmlFor="system" hint={doc("systemPrompt")}>
           <Input
             id="system"
             value={systemPrompt}

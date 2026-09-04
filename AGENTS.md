@@ -47,6 +47,7 @@ docker compose up --build
 | **`@vantreeseba/drizzle-graphql`** | The API is generated from the tables — a new column is queryable as soon as it exists. Hand-written fields fill what CRUD cannot say |
 | **graphql-yoga** | Serves the query API and the `runEvents` subscription as SSE, which the browser reads with a plain `EventSource` |
 | **`@vantreeseba/graphql-casl`** | Who may call what, as CASL rules over the schema rather than over an endpoint. `applyPermissions` wraps the schema `server/graphql/schema.ts` exports, so `/graphql` and `/mcp` are held to one map — see below |
+| **`@cubicecho/graphql-codegen-field-descriptions`** | The SDL descriptions authored in `server/graphql/docs.ts` reach the browser as data, not as JSDoc that erases. One string is the note under a form field and the tool-schema description an agent reads |
 | **`@cubicecho/graphql-mcp`** | Projects the same schema as MCP tools. `server/mcp-endpoint.ts` curates which ones — see below |
 | **Node type stripping** | The container runs `node server/index.ts`; `tsx` is a devDependency and is not in the image. Nothing under `server/` may use syntax that survives erasure — no enums, no parameter properties |
 | **Biome** | One formatter and linter. `noExplicitAny` and `noNonNullAssertion` are errors here, not warnings |
@@ -215,6 +216,25 @@ file per question that has to be kept in step with the schema. What the runs wer
 the two size sections above, which act on the finding behind them: across a hundred logged calls
 the only filter operator any agent sent was `eq`. Adding a document surface again needs a reason
 the measurement did not already answer.
+
+**A column is described once, in `server/graphql/docs.ts`.** That file is the only copy of what
+a generated field means. `describeColumn` puts it on the schema, so it lands in `schema.graphql`,
+in the JSON Schema of every `/mcp` tool that touches the column, and — through the codegen plugin,
+as `web/__generated__/graphql/descriptions.ts` — under the field in the web app, where
+`web/lib/docs.ts` reads it as `describe("Setting", "maxRetries")`.
+
+It was written twice before and reached nobody twice: JSDoc on the column, which is compile-time
+only and so never reached an agent, and a `hint` literal in the form, which never reached one
+either. The two had already drifted. Never reintroduce the second copy — a form that needs a
+note names the column instead, and the helper is typed against the generated map, so a renamed
+column is a typecheck error rather than a note that silently disappears.
+
+Write for both readers at once: what the value does, what an empty one falls back to, what it is
+not. Keep it short — a description repeats at every position its column generates (row type,
+create and update inputs, filter, aggregates), and the `/mcp` listing has a size test. The
+comment that explains *why* a column exists stays in `server/db/schema.ts`, where it has room.
+`tests/docs.test.ts` holds the schema, the generated map and the authored copy against each
+other, since any one of the three can break silently.
 
 **A webhook is an id and nothing else.** `POST /webhooks/<id>` always answers 200; it starts
 a task only when an enabled `event` trigger on an enabled task carries that exact id, and

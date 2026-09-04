@@ -154,7 +154,8 @@ for to make it stop.
 server/
   db/          drizzle schema and client; migrate.ts applies drizzle/ on boot
   graphql/     the schema: drizzle-graphql entities plus a few hand-written fields;
-               permissions.ts says who may call what, applied to the schema itself
+               permissions.ts says who may call what, applied to the schema itself;
+               docs.ts is the one copy of what every column means
   runner/      llm client, MCP pool, tool loading + schema compat, agent loop, flow, recorder
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write;
                cleanup.ts prunes old runs hourly
@@ -475,8 +476,10 @@ The schema is built at runtime from the tables, so codegen needs it written out 
 npm run codegen    # prints schema.graphql, then generates web/__generated__/
 ```
 
-That produces `web/__generated__/graphql/graphql.ts`: a typed document node per operation, so a
-query whose shape changes breaks compilation rather than at runtime. It is gitignored rather
+That produces two files. `web/__generated__/graphql/graphql.ts` is a typed document node per
+operation, so a query whose shape changes breaks compilation rather than at runtime;
+`descriptions.ts` is the schema's field descriptions as a runtime map — see **Field
+descriptions** below. It is gitignored rather
 than committed — nothing reads it but the typechecker and the bundler, and both regenerate it
 themselves, so a stale copy checked in could only go stale silently instead of being caught.
 
@@ -496,6 +499,43 @@ calls `runCodegen`.
 actually serves and worth reading without running anything. CI regenerates it and diffs against
 what is committed, so a table changed without a `npm run schema` is caught as drift rather than
 a puzzling type error two steps later.
+
+## Field descriptions
+
+Every column's description is written once, in `server/graphql/docs.ts`, and read three ways.
+
+It used to be written twice and reach nobody twice over. The prose was JSDoc on the column in
+`server/db/schema.ts` — compile-time only, so it became JSDoc on a generated type and vanished,
+and an agent reading a tool schema on `/mcp` never saw a word of it. And it was a `hint` string
+typed out again in the form that renders the column, which no agent sees either. Two copies,
+each invisible to the other's reader, and by the time this was noticed they had drifted: the
+note under **Retries** in settings and the comment on `maxRetries` were different sentences.
+
+So the prose moved to one place, and the schema carries it:
+
+- `drizzle-graphql`'s `describeColumn` hook puts it on the generated schema, which reaches every
+  position the column generates — the row type, the create and update inputs, the filter, the
+  aggregates
+- from there it is in `schema.graphql`, and in the JSON Schema of every `/mcp` tool that touches
+  the column, so an agent filling in `create_task` reads what `prompt` is for
+- `@cubicecho/graphql-codegen-field-descriptions` reads the same schema and emits
+  `web/__generated__/graphql/descriptions.ts`, a runtime map, which `web/lib/docs.ts` wraps as
+  `describe("Setting", "maxRetries")` — the note under the field in the web app
+
+The web helper is typed against the generated map, so renaming a column and regenerating turns
+a stale reference in a form into a typecheck error rather than a note that quietly disappears.
+`tests/docs.test.ts` holds the three readings against each other, because each can break on its
+own — a hook dropped from `buildSchema`, a plugin dropped from `codegen.ts` — and nothing else
+would fail: descriptions would just stop arriving.
+
+Write these for both readers, which is usually the same sentence: what the value does, what an
+empty one falls back to, and what it is not. Keep them short. A description is repeated at every
+position its column generates, which is what took the `/mcp` listing from ~155 kB to ~167 kB
+against the 250 kB the size test allows.
+
+What stays in `server/db/schema.ts` is the other kind of comment: why a column exists at all,
+why it is shaped the way it is, what would go wrong without it. That has no room in a field
+description and no business in a form.
 
 ## Postgres
 

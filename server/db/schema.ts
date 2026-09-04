@@ -19,6 +19,12 @@ import {
  * **trigger** is a reason to run it, a **step** is something that happens after the prompt,
  * and a **run** is one execution with its output.
  *
+ * What each column *means* is not here: it is in `graphql/docs.ts`, which puts it on the
+ * generated schema, so the one sentence reaches an agent reading a tool schema and a person
+ * reading the form as well as anyone reading this file. Comments that survive here are the ones
+ * that explain why a column exists or why it is shaped this way — the part no field description
+ * has room for.
+ *
  * Triggers are deliberately a separate table rather than a `cron` column on the task. Cron is
  * the only kind that fires today, but the point of the split is that "when a new email arrives"
  * is a second row against the same task, not a second column on every task that will never use
@@ -44,11 +50,8 @@ const createdAt = () =>
 export const tasks = pgTable("tasks", {
   id: id(),
   name: text().notNull(),
-  /** What the agent is asked to do, each time this task fires. */
   prompt: text().notNull(),
-  /** Empty falls back to the default model in settings. */
   model: text().notNull().default(""),
-  /** Empty falls back to the default system prompt in settings. */
   systemPrompt: text().notNull().default(""),
   enabled: boolean().notNull().default(true),
   createdAt: createdAt(),
@@ -65,23 +68,16 @@ export const triggers = pgTable(
     taskId: text()
       .notNull()
       .references(() => tasks.id, { onDelete: "cascade" }),
-    /** `cron` fires on a schedule. `event` fires when `POST /webhooks/<event>` arrives. */
     kind: text({ enum: ["cron", "event"] })
       .notNull()
       .default("cron"),
-    /** Cron expression, for `kind: "cron"`. */
     cron: text().notNull().default(""),
-    /** IANA zone the expression is read in. Empty means the server's own zone. */
     timezone: text().notNull().default(""),
     /**
-     * The webhook id, for `kind: "event"`. `POST /webhooks/<this>` runs the task.
-     *
-     * It is the whole of the address: any id is accepted by the route, and one that no trigger
-     * is listening for is answered and dropped. Pick something unguessable if the server is
-     * reachable by anyone you would rather not have firing your tasks.
+     * Any id is accepted by the route, and one that no trigger is listening for is answered and
+     * dropped — so an unanswered delivery and a wrong id look the same from outside.
      */
     event: text().notNull().default(""),
-    /** Free-form JSON for the event's matching rules. Opaque to the server for now. */
     config: jsonb().$type<Record<string, unknown>>(),
     enabled: boolean().notNull().default(true),
     createdAt: createdAt(),
@@ -110,25 +106,17 @@ export const steps = pgTable(
     taskId: text()
       .notNull()
       .references(() => tasks.id, { onDelete: "cascade" }),
-    /** The decision this step hangs off. Null means the task's own top-level sequence. */
     parentId: text().references((): AnyPgColumn => steps.id, { onDelete: "cascade" }),
-    /** Which arm of the parent decision this sits in. Empty at the top level. */
     branch: text().notNull().default(""),
-    /** Where in its sequence this step runs. */
     position: integer().notNull().default(0),
-    /** `agent` does the work. `decision` does the work *and* picks the arm to run next. */
     kind: text({ enum: ["agent", "decision"] })
       .notNull()
       .default("agent"),
-    /** What this step is called, in the run history and in `{{steps.<name>}}`. */
     name: text().notNull().default(""),
     prompt: text().notNull().default(""),
-    /** Decision only: the arms it may choose between. `default` is always available. */
     cases: jsonb().$type<string[]>(),
-    /** Empty falls back to the task's model, then to settings. */
     model: text().notNull().default(""),
     systemPrompt: text().notNull().default(""),
-    /** How much of the run so far this step is shown before its own prompt. */
     context: text({ enum: ["all", "previous", "none"] })
       .notNull()
       .default("all"),
@@ -148,15 +136,11 @@ export const runs = pgTable(
     taskId: text()
       .notNull()
       .references(() => tasks.id, { onDelete: "cascade" }),
-    /** Null for a run started by hand from the UI. */
     triggerId: text().references(() => triggers.id, { onDelete: "set null" }),
     /**
-     * `stopped` is a run called off by hand — not a failure, and not a result either.
-     *
-     * `skipped` is a trigger that fired at a task already running. Nothing executed, so there
-     * is nothing to report but the reason, which is in `error`. It is a row rather than a log
-     * line because a delivery that quietly does nothing is the one thing a webhook's sender
-     * cannot see, and the run history is where someone goes to look.
+     * A `skipped` firing is a row rather than a log line because a delivery that quietly does
+     * nothing is the one thing a webhook's sender cannot see, and the run history is where
+     * someone goes to look.
      */
     status: text({ enum: ["running", "ok", "error", "stopped", "skipped"] })
       .notNull()
@@ -164,33 +148,22 @@ export const runs = pgTable(
     startedAt: createdAt(),
     finishedAt: timestamp({ mode: "date", withTimezone: true }),
     /**
-     * What the trigger handed the run: a webhook's parsed body, and null for everything else.
-     *
-     * A cron tick carries no information beyond having happened, and neither does the play
-     * button, so only an `event` trigger ever fills this in. It is kept because a run's account
-     * of itself is otherwise incomplete — the prompt the agent saw depended on this, and
-     * `{{event}}` is how it got in there. A body that would not parse as JSON is a delivery
-     * with no payload, not a failed one.
+     * Kept because a run's account of itself is otherwise incomplete — the prompt the agent saw
+     * depended on this. A cron tick carries no information beyond having happened, and neither
+     * does the play button, so only an `event` trigger ever fills it in; a body that would not
+     * parse as JSON is a delivery with no payload, not a failed one.
      */
     payload: jsonb().$type<unknown>(),
     /**
-     * `skipped` only: the run that was in the way.
-     *
      * A skip is a fact about a pair — this trigger fired while that run was going — so it is
      * recorded against the run it collided with, and a second delivery into the same collision
      * bumps `attempts` rather than writing another row. Without that, a webhook posted every
      * second at a task that takes five minutes writes three hundred rows saying one thing.
      */
     blockedBy: text().references((): AnyPgColumn => runs.id, { onDelete: "set null" }),
-    /**
-     * How many firings this row accounts for. One for a run, which is the usual case; more for
-     * a skip that the same trigger walked into repeatedly while the same run held the task.
-     */
     attempts: integer().notNull().default(1),
-    /** The agent's final reply. */
     output: text().notNull().default(""),
     error: text().notNull().default(""),
-    /** Every tool the run called, in order, as JSON — enough to see what it actually did. */
     toolCalls: jsonb().$type<{ name: string; ok: boolean }[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
@@ -219,20 +192,14 @@ export const runSteps = pgTable(
     runId: text()
       .notNull()
       .references(() => runs.id, { onDelete: "cascade" }),
-    /** Null once the step it came from has been edited away — the run's account still stands. */
     stepId: text().references(() => steps.id, { onDelete: "set null" }),
-    /** Execution order within the run, from 0. */
     position: integer().notNull().default(0),
-    /** How deep in the tree this ran, so the history can be indented the way the task is. */
     depth: integer().notNull().default(0),
-    /** The step's name when it ran; the step itself may since have been renamed or deleted. */
     name: text().notNull().default(""),
     kind: text().notNull().default("agent"),
-    /** `skipped` is a disabled step, which is neither a success nor a failure. */
     status: text({ enum: ["running", "ok", "error", "stopped", "skipped"] })
       .notNull()
       .default("running"),
-    /** Decision only: the arm it took. */
     branch: text().notNull().default(""),
     startedAt: createdAt(),
     finishedAt: timestamp({ mode: "date", withTimezone: true }),
@@ -248,7 +215,6 @@ export const runSteps = pgTable(
 
 export const mcpServers = pgTable("mcp_servers", {
   id: id(),
-  /** Namespace for this server's tools: the agent sees `<slug>__<tool name>`. */
   slug: text().notNull().unique(),
   label: text().notNull().default(""),
   enabled: boolean().notNull().default(true),
@@ -265,7 +231,6 @@ export const mcpServers = pgTable("mcp_servers", {
 /** One row, `id: "default"`. A table rather than a file so it comes free over GraphQL. */
 export const settings = pgTable("settings", {
   id: text().primaryKey().default("default"),
-  /** Any OpenAI-compatible endpoint: OpenAI, Ollama, LM Studio, vLLM, OpenRouter, ... */
   baseUrl: text().notNull().default("http://localhost:11434/v1"),
   /** Empty falls back to $OPENAI_API_KEY. */
   apiKey: text().notNull().default(""),
@@ -278,38 +243,19 @@ export const settings = pgTable("settings", {
     ),
   maxTokens: integer().notNull().default(4096),
   temperature: real().notNull().default(0.7),
-  /** Ceiling on tool round-trips in one run, so a stuck task cannot loop forever. */
   maxToolIterations: integer().notNull().default(20),
-  /**
-   * `eager` sends every MCP tool definition on every request. `ondemand` sends a name-only
-   * catalogue and lets the model load the schemas it needs — far cheaper with many tools,
-   * at the cost of a round trip on the runs that use them.
-   */
   toolDiscovery: text({ enum: ["eager", "ondemand"] })
     .notNull()
     .default("eager"),
-  /** Small model that guesses a run's tools before it starts. Empty uses the task's model. */
   toolSelectModel: text().notNull().default(""),
   /**
-   * How long a finished run is kept, in days. Zero — the default — keeps every run forever.
-   *
    * A run row holds the whole output and error text, so a task on a five-minute cron writes
    * something over a hundred thousand of them a year. This is the ceiling on that. See
    * `scheduler/cleanup.ts`.
    */
   runRetentionDays: integer().notNull().default(0),
-  /**
-   * Seconds of silence from the model endpoint before a request is given up on.
-   *
-   * Silence, not total duration: the clock resets on every chunk, so a long answer is never
-   * cut off halfway and an endpoint that has stopped talking does not hang the run forever.
-   */
   requestTimeoutSeconds: integer().notNull().default(120),
-  /**
-   * How many times a request that failed *before producing anything* is tried again.
-   *
-   * Only that case is safe to retry — see `runner/agent.ts`. Zero turns retries off.
-   */
+  /** Only a failure before the first chunk is safe to retry — see `runner/agent.ts`. */
   maxRetries: integer().notNull().default(2),
 });
 
