@@ -8,6 +8,8 @@ served three ways from one process: GraphQL at `/graphql`, MCP tools at `/mcp`, 
 React app on everything else, with `POST /webhooks/:id` alongside them.
 
 Read [`README.md`](README.md) first — it holds the design decisions this file only summarises.
+When the question is what to build or adopt *next* rather than how this works today, read
+[`future-libs-architecture.md`](future-libs-architecture.md) — see [Future work](#future-work).
 
 Single package, no workspaces: `server/` (Express 5 + graphql-yoga + Drizzle), `web/` (Vite +
 React 19 + TanStack Router/Query + shadcn), `tests/` (Vitest).
@@ -313,6 +315,15 @@ query keys it affected.
   skipped rather than failing the release. Note that an organisation secret on the free
   plan reaches public repositories only. A `workflow_dispatch` with a version publishes
   the images without cutting a release
+
+## Future work
+
+Before proposing a library, a search feature, an audit log, or client-side form validation,
+read [`future-libs-architecture.md`](future-libs-architecture.md). It is the standing answer to
+"would this help here?" for the libraries next door — what each would buy this server, what
+blocks it, and what would have to be true first. Four were looked at and ruled out with
+reasons, so a proposal that reopens one of those needs to answer the reason rather than restate
+the idea. Findings age: correct the file when one stops being true.
 
 ## Finding code
 
