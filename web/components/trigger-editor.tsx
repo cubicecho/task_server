@@ -1,10 +1,10 @@
 import { Check, Copy, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { TaskFieldsFragment } from "@/gql/graphql";
+import { useCopy } from "@/lib/use-copy";
 
 /**
  * The two things that can start a task: a schedule, and a webhook.
@@ -243,21 +243,7 @@ function WebhookRow({
   onRegenerate: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    // `writeText` needs a secure context, which this server often is not — reached over plain
-    // http at a LAN address, the clipboard API is simply absent. Selecting the field is the
-    // honest fallback: the user copies it, and the button has not silently done nothing.
-    try {
-      await navigator.clipboard.writeText(webhookUrl(trigger.event));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      document.getElementById(`webhook-${trigger.key}`)?.focus();
-      (document.getElementById(`webhook-${trigger.key}`) as HTMLInputElement | null)?.select();
-    }
-  };
+  const { copied, copy } = useCopy();
 
   return (
     <div className="flex items-center gap-2">
@@ -279,7 +265,7 @@ function WebhookRow({
         size="icon"
         title={copied ? "Copied" : "Copy the URL"}
         disabled={!trigger.event}
-        onClick={() => void copy()}
+        onClick={() => void copy(webhookUrl(trigger.event))}
       >
         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
       </Button>

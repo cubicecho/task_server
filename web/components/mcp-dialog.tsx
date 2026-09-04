@@ -2,6 +2,15 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, ClipboardPaste, PlugZap, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  CreateMcpServerDocument,
+  type McpProbe,
+  type McpServersQuery,
+  McpServersTransportEnum,
+  TestMcpServerDocument,
+  UpdateMcpServerDocument,
+} from "@/__generated__/graphql/graphql";
+import { Field } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,14 +31,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  CreateMcpServerDocument,
-  type McpProbe,
-  type McpServersQuery,
-  McpServersTransportEnum,
-  TestMcpServerDocument,
-  UpdateMcpServerDocument,
-} from "@/gql/graphql";
 import { request } from "@/lib/gql";
 import { parseJson, parseMcpJson } from "@/lib/mcp-config";
 
@@ -95,7 +96,6 @@ export function McpDialog({
       return testMcpServer;
     },
     onSuccess: (result) => setProbe(result),
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const save = useMutation({
@@ -119,7 +119,6 @@ export function McpDialog({
       onSaved();
       onClose();
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const applyPaste = () => {
@@ -143,8 +142,11 @@ export function McpDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
-            <Label htmlFor="paste">Paste a config</Label>
+          <Field
+            label="Paste a config"
+            htmlFor="paste"
+            className="rounded-md border border-dashed p-3"
+          >
             <Textarea
               id="paste"
               rows={3}
@@ -162,11 +164,10 @@ export function McpDialog({
                 Apply
               </Button>
             </div>
-          </div>
+          </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="slug">Slug</Label>
+            <Field label="Slug" htmlFor="slug">
               <Input
                 id="slug"
                 className="font-mono"
@@ -174,20 +175,18 @@ export function McpDialog({
                 onChange={(event) => set({ slug: event.target.value })}
                 placeholder="filesystem"
               />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="label">Label</Label>
+            </Field>
+            <Field label="Label" htmlFor="label">
               <Input
                 id="label"
                 value={draft.label}
                 onChange={(event) => set({ label: event.target.value })}
                 placeholder="Local files"
               />
-            </div>
+            </Field>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="transport">Transport</Label>
+          <Field label="Transport" htmlFor="transport">
             <Select
               value={draft.transport}
               onValueChange={(value) => set({ transport: value as McpServersTransportEnum })}
@@ -204,12 +203,11 @@ export function McpDialog({
                 </SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </Field>
 
           {stdio ? (
             <>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="command">Command</Label>
+              <Field label="Command" htmlFor="command">
                 <Input
                   id="command"
                   className="font-mono"
@@ -217,9 +215,8 @@ export function McpDialog({
                   onChange={(event) => set({ command: event.target.value })}
                   placeholder="npx"
                 />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="args">Args</Label>
+              </Field>
+              <Field label="Args" htmlFor="args">
                 <Input
                   id="args"
                   className="font-mono text-xs"
@@ -227,9 +224,12 @@ export function McpDialog({
                   onChange={(event) => set({ args: event.target.value })}
                   placeholder='["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]'
                 />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="env">Env</Label>
+              </Field>
+              <Field
+                label="Env"
+                htmlFor="env"
+                hint="Merged over the server's own environment, so the child still inherits PATH."
+              >
                 <Input
                   id="env"
                   className="font-mono text-xs"
@@ -237,15 +237,11 @@ export function McpDialog({
                   onChange={(event) => set({ env: event.target.value })}
                   placeholder='{ "API_TOKEN": "…" }'
                 />
-                <p className="text-xs text-muted-foreground">
-                  Merged over the server's own environment, so the child still inherits PATH.
-                </p>
-              </div>
+              </Field>
             </>
           ) : (
             <>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="url">URL</Label>
+              <Field label="URL" htmlFor="url">
                 <Input
                   id="url"
                   className="font-mono"
@@ -253,9 +249,8 @@ export function McpDialog({
                   onChange={(event) => set({ url: event.target.value })}
                   placeholder="https://example.com/mcp"
                 />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="headers">Headers</Label>
+              </Field>
+              <Field label="Headers" htmlFor="headers">
                 <Input
                   id="headers"
                   className="font-mono text-xs"
@@ -263,7 +258,7 @@ export function McpDialog({
                   onChange={(event) => set({ headers: event.target.value })}
                   placeholder='{ "Authorization": "Bearer …" }'
                 />
-              </div>
+              </Field>
             </>
           )}
 

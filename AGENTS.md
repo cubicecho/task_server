@@ -9,7 +9,7 @@ React app on everything else, with `POST /webhooks/:id` alongside them.
 
 Read [`README.md`](README.md) first — it holds the design decisions this file only summarises.
 
-Single package, no workspaces: `server/` (Express 5 + graphql-yoga + Drizzle), `src/` (Vite +
+Single package, no workspaces: `server/` (Express 5 + graphql-yoga + Drizzle), `web/` (Vite +
 React 19 + TanStack Router/Query + shadcn), `tests/` (Vitest).
 
 ## Commands
@@ -28,7 +28,7 @@ npm test                 # vitest run
 
 # Schema and types
 npm run schema           # prints the runtime schema to schema.graphql
-npm run codegen          # schema, then graphql-codegen into src/gql/graphql.ts
+npm run codegen          # schema, then graphql-codegen into web/__generated__/graphql/graphql.ts
 npm run db:generate      # drizzle-kit, after a change to server/db/schema.ts
 npm run db:migrate       # apply drizzle/ by hand; the server does this on boot anyway
 npm run db:studio
@@ -56,15 +56,21 @@ docker compose up --build
 require it, and `allowImportingTsExtensions` is on for that reason.
 
 **The schema is the contract, and it is generated.** Add a column to `server/db/schema.ts` and
-the typed documents in `src/graphql/*.graphql` see it. Never hand-write a type that codegen
-produces, and never edit `src/gql/graphql.ts` — biome ignores it because it is output.
+the typed documents in `web/graphql/*.graphql` see it. Never hand-write a type that codegen
+produces, and never edit `web/__generated__/graphql/graphql.ts` — it's gitignored, not committed,
+because it is output: `typecheck`, `build` and the dev server all regenerate it themselves, so a
+checked-in copy could only go stale silently instead of being caught.
 
-`npm run codegen` does it explicitly, but under `npm run dev` you should not need to: the
-server rewrites `schema.graphql` on boot and regenerates with it when the SDL moved, and vite
-runs codegen off its own watcher for the documents. Both are dev-only — `@graphql-codegen/cli`
-is a devDependency and `server/dev/codegen.ts` is behind a `NODE_ENV !== "production"` guard,
-because the image has neither codegen nor the sources it would write. `npm run build` runs
-codegen before the typecheck, and CI regenerates and diffs it against what is committed.
+`npm run codegen` does it explicitly, but you rarely need to: `typecheck` and `test` each
+regenerate it first via a `pre*` script, `build` runs `typecheck`, and under `npm run dev` the
+server rewrites `schema.graphql` on boot and regenerates with it when the SDL moved, while vite
+runs codegen off its own watcher for the documents. The dev-server and vite paths are dev-only —
+`@graphql-codegen/cli` is a devDependency and `server/dev/codegen.ts` is behind a
+`NODE_ENV !== "production"` guard, because the image has neither codegen nor the sources it
+would write; production serves a `dist/` built against the types it was typechecked with, and
+`npm start` never calls it. `schema.graphql` is the one artefact still committed — CI
+regenerates and diffs it against what is committed, so a table changed without a `npm run
+schema` is caught as drift.
 
 **A schema change is an edit and a generate.** Change `server/db/schema.ts`, then run
 `npm run db:generate` and commit what lands in `drizzle/` — the SQL and the snapshot both.
@@ -217,8 +223,8 @@ its iteration rather than throwing — hence the `throwIfAborted()` after the lo
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
 
-**Frontend:** shadcn primitives in `src/components/ui/` with no app logic; routes in
-`src/routes/`; `@/` maps to `src/`. Every query goes through `request()` in `src/lib/gql.ts`
+**Frontend:** shadcn primitives in `web/components/ui/` with no app logic; routes in
+`web/routes/`; `@/` maps to `web/`. Every query goes through `request()` in `web/lib/gql.ts`
 with a typed document — no raw `fetch` in a component — and every mutation invalidates the
 query keys it affected.
 

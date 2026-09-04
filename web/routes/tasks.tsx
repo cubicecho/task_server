@@ -2,11 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Page } from "@/components/app-shell";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import {
   DeleteTaskDocument,
   RunTaskDocument,
@@ -14,7 +9,12 @@ import {
   type TaskFieldsFragment,
   TasksDocument,
   UpdateTaskDocument,
-} from "@/gql/graphql";
+} from "@/__generated__/graphql/graphql";
+import { Page } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { request } from "@/lib/gql";
 import { STATUS_VARIANT } from "@/lib/run-status";
 
@@ -35,7 +35,6 @@ export function TasksRoute() {
     mutationFn: (task: TaskFieldsFragment) =>
       request(UpdateTaskDocument, { id: task.id, set: { enabled: !task.enabled } }),
     onSuccess: refresh,
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const remove = useMutation({
@@ -44,7 +43,6 @@ export function TasksRoute() {
       toast.success("Task deleted");
       refresh();
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const stop = useMutation({
@@ -56,7 +54,6 @@ export function TasksRoute() {
       refresh();
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const run = useMutation({
@@ -68,7 +65,6 @@ export function TasksRoute() {
       else toast.success("Run finished — see Runs for the output");
       refresh();
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   // The scheduler is the authority on when a trigger next fires; the trigger row only holds

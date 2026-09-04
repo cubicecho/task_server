@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { List } from "lucide-react";
 import { useState } from "react";
+import { ModelsDocument } from "@/__generated__/graphql/graphql";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ModelsDocument } from "@/gql/graphql";
 import { request } from "@/lib/gql";
 
 // Radix refuses an empty item value, so the two non-model choices carry sentinels.

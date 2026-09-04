@@ -14,8 +14,8 @@ import { mountWebhooks } from "./webhooks.ts";
 await ensureSchema();
 
 // The GraphQL schema comes from the tables, so a column added upstairs changes the API here.
-// In dev that is regenerated into `schema.graphql` and `src/gql/graphql.ts` on boot; the
-// production image has neither codegen nor sources to write. See `dev/codegen.ts`.
+// In dev that is regenerated into `schema.graphql` and `web/__generated__/graphql/graphql.ts`
+// on boot; the production image has neither codegen nor sources to write. See `dev/codegen.ts`.
 if (process.env.NODE_ENV !== "production") {
   await import("./dev/codegen.ts")
     .then((dev) => dev.runCodegen())

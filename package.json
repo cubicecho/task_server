@@ -8,16 +8,18 @@
     "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "tsx watch server/index.ts",
     "dev:web": "vite",
-    "build": "npm run codegen && npm run typecheck && vite build",
+    "build": "npm run typecheck && vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "schema": "tsx scripts/print-schema.ts",
     "codegen": "npm run schema && graphql-codegen",
+    "pretypecheck": "npm run codegen",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
+    "pretest": "npm run codegen",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -69,8 +71,7 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vite-plugin-graphql-codegen": "^3.9.1",
-    "vitest": "^4.1.11",
-    "yaml": "^2.9.0"
+    "vitest": "^4.1.11"
   },
   "allowScripts": {
     "esbuild@0.25.12": true,

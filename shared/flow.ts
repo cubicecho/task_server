@@ -8,7 +8,7 @@
  * editor builds happily and the server will not take.
  *
  * Nothing in here may import anything. It is read by `server/`, which runs under Node's type
- * stripping, and by `src/`, which is bundled for a browser.
+ * stripping, and by `web/`, which is bundled for a browser.
  */
 
 /** What a step is. `agent` does the work; `decision` does the work *and* picks the arm next. */

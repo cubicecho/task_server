@@ -19,20 +19,42 @@ import {
   requestedNames,
 } from "./tool-loading.ts";
 
-/**
- * llama.cpp-backed servers compile every tool schema into one grammar and reject keywords
- * their converter cannot express — one bad shape from one MCP server fails the whole request.
- * Once we have seen that, the advisory keywords stay off for the life of the process rather
- * than costing every later run a failed call first.
- */
-let strictSchemas = true;
+/** What one endpoint turned out not to support. Both start optimistic and only ever latch off. */
+interface Capabilities {
+  /**
+   * llama.cpp-backed servers compile every tool schema into one grammar and reject keywords
+   * their converter cannot express — one bad shape from one MCP server fails the whole request.
+   * Once we have seen that, the advisory keywords stay off rather than costing every later run
+   * a failed call first.
+   */
+  strictSchemas: boolean;
+  /**
+   * `stream_options` is how a streamed request asks for its token counts, and a server that has
+   * not heard of it rejects the whole request. Dropped for good once that happens: the counts
+   * are worth one failed call to find out about, not one per run.
+   */
+  usageInStream: boolean;
+}
 
 /**
- * `stream_options` is how a streamed request asks for its token counts, and a server that has
- * not heard of it rejects the whole request. Dropped for good once that happens: the counts are
- * worth one failed call to find out about, not one per run.
+ * What each endpoint cannot do, remembered for the life of the process.
+ *
+ * Keyed by base URL because these are facts about the server on the other end, not about this
+ * one: a llama.cpp box that cannot compile a grammar and a cloud API that can are both reachable
+ * from the same settings row over its lifetime, and the first one's refusal must not quietly
+ * strip pattern/format from the second one's requests forever. Bounded by the number of
+ * endpoints ever configured here, which is a settings row's worth.
  */
-let usageInStream = true;
+const capabilities = new Map<string, Capabilities>();
+
+function capabilitiesFor(baseUrl: string): Capabilities {
+  let known = capabilities.get(baseUrl);
+  if (!known) {
+    known = { strictSchemas: true, usageInStream: true };
+    capabilities.set(baseUrl, known);
+  }
+  return known;
+}
 
 export interface AgentResult {
   output: string;
@@ -265,6 +287,7 @@ export async function runAgent({
   if (!model) throw new Error("No model selected — pick one in Settings.");
 
   const client = getClient(config);
+  const supports = capabilitiesFor(config.baseUrl);
   const idleMs = timeoutMs(config);
   // Both columns are `notNull` with a default, so this is belt and braces — but an unbounded
   // retry loop is a bad way to find out about a row that predates them.
@@ -325,14 +348,14 @@ export async function runAgent({
     );
 
     const request = (): OpenAI.ChatCompletionCreateParamsStreaming => {
-      const tools = strictSchemas ? declared : relaxTools(declared);
+      const tools = supports.strictSchemas ? declared : relaxTools(declared);
       return {
         model,
         max_tokens: config.maxTokens,
         temperature: config.temperature,
         messages,
         stream: true,
-        ...(usageInStream ? { stream_options: { include_usage: true } } : {}),
+        ...(supports.usageInStream ? { stream_options: { include_usage: true } } : {}),
         ...(tools.length ? { tools } : {}),
       };
     };
@@ -341,9 +364,9 @@ export async function runAgent({
     //
     // Two different things are being recovered from here, and they nest. The inner one is a
     // capability the endpoint turns out not to have: it is negotiated away and tried once more,
-    // and it latches for the life of the process so it costs one failed call rather than one a
-    // run. The outer one is the endpoint being unreachable, busy or silent, which is not about
-    // this request at all and is worth simply waiting out.
+    // and it latches against that endpoint for the life of the process, so it costs one failed
+    // call rather than one a run. The outer one is the endpoint being unreachable, busy or
+    // silent, which is not about this request at all and is worth simply waiting out.
     //
     // Both are bounded by the same rule: nothing is retried once the server has started
     // answering. The tokens are already out and on their way to whoever is watching, and a
@@ -372,14 +395,14 @@ export async function runAgent({
       } catch (error) {
         const detail = errorMessage(error);
         if (produced.any) throw error;
-        if (strictSchemas && isGrammarError(detail)) {
+        if (supports.strictSchemas && isGrammarError(detail)) {
           const notice = "server could not build a grammar; retrying without pattern/format";
           console.warn(`[agent] ${notice}`);
           onEvent?.({ kind: "notice", text: notice });
-          strictSchemas = false;
-        } else if (usageInStream && /stream_options/i.test(detail)) {
+          supports.strictSchemas = false;
+        } else if (supports.usageInStream && /stream_options/i.test(detail)) {
           console.warn("[agent] server rejected stream_options; token counts will be unavailable");
-          usageInStream = false;
+          supports.usageInStream = false;
         } else {
           throw error;
         }

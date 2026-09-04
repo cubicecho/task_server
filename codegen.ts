@@ -9,10 +9,10 @@ const scalars = { DateTime: "string", JSON: "unknown", UUID: "string", BigInt: "
 
 const config: CodegenConfig = {
   schema: "./schema.graphql",
-  documents: "./src/graphql/**/*.graphql",
+  documents: "./web/graphql/**/*.graphql",
   ignoreNoDocuments: true,
   generates: {
-    "./src/gql/graphql.ts": {
+    "./web/__generated__/graphql/graphql.ts": {
       plugins: ["typescript", "typescript-operations", "typed-document-node"],
       config: { scalars, useTypeImports: true, skipTypename: true },
     },

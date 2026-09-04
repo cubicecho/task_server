@@ -4,14 +4,14 @@
   "files": {
     "ignoreUnknown": true,
     "includes": [
-      "src/**",
+      "web/**",
       "server/**",
       "shared/**",
       "tests/**",
       "scripts/**",
       "*.ts",
       "*.json",
-      "!src/gql",
+      "!web/__generated__",
       "!.claude"
     ]
   },

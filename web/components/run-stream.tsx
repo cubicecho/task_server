@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { RunEventsDocument, type RunEventsSubscription } from "@/gql/graphql";
+import { RunEventsDocument, type RunEventsSubscription } from "@/__generated__/graphql/graphql";
 import { subscribe } from "@/lib/gql";
 
 type RunEvent = RunEventsSubscription["runEvents"];

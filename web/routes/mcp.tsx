@@ -11,12 +11,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Page } from "@/components/app-shell";
-import { McpDialog } from "@/components/mcp-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
 import {
   DeleteMcpServerDocument,
   type McpProbe,
@@ -25,7 +19,13 @@ import {
   ReconnectMcpDocument,
   TestMcpServerDocument,
   UpdateMcpServerDocument,
-} from "@/gql/graphql";
+} from "@/__generated__/graphql/graphql";
+import { Page } from "@/components/app-shell";
+import { McpDialog } from "@/components/mcp-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { request } from "@/lib/gql";
 import { toConnection } from "@/lib/mcp-config";
 
@@ -52,7 +52,6 @@ export function McpRoute() {
       toast.success("Reconnecting");
       refresh();
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const toggle = useMutation({
@@ -60,7 +59,6 @@ export function McpRoute() {
       request(UpdateMcpServerDocument, { id, set: { enabled } }),
     // The write reconnects the pool, so the status this row shows is a beat behind the switch.
     onSuccess: refresh,
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const test = useMutation({
@@ -71,13 +69,11 @@ export function McpRoute() {
       return { id: server.id, probe: testMcpServer };
     },
     onSuccess: ({ id, probe }) => setProbes((current) => ({ ...current, [id]: probe })),
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteMcpServerDocument, { id }),
     onSuccess: refresh,
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const statusOf = (id: string) => servers.data?.mcpStatus.find((entry) => entry.id === id);
