@@ -112,8 +112,14 @@ interface Entry {
  */
 class McpPool {
   private entries = new Map<string, Entry>();
-  /** Qualified name -> the client that answers it. Only ever holds callable tools. */
-  private index = new Map<string, { client: Client; tool: PooledTool }>();
+  /**
+   * Qualified name -> the client that answers it. Only ever holds callable tools.
+   *
+   * `serverId` rides along so a run scoped to a few servers can be held to them by name: an
+   * agent profile narrows what is *offered*, and `call` refuses the rest, since a model that
+   * remembers a tool from a wider run would otherwise still reach it.
+   */
+  private index = new Map<string, { client: Client; tool: PooledTool; serverId: string }>();
 
   /**
    * Whatever the pool is already doing. Reconciling is a sequence of awaits over a map, and two
@@ -197,7 +203,9 @@ class McpPool {
     for (const entry of this.entries.values()) {
       const { client } = entry;
       if (entry.status !== "ready" || !client) continue;
-      for (const tool of entry.tools) this.index.set(tool.qualified, { client, tool });
+      for (const tool of entry.tools) {
+        this.index.set(tool.qualified, { client, tool, serverId: entry.config.id });
+      }
     }
   }
 
@@ -256,19 +264,27 @@ class McpPool {
   /**
    * Tool definitions for the model. Pass `names` to get only those — on-demand loading sends
    * a handful of schemas instead of every one.
+   *
+   * `servers` is the run's scope, from its agent profile: a set of server ids, or undefined for
+   * every connected server. It is applied here as well as in `catalog` because a name can also
+   * arrive from `load_tools`, where the model rather than the pool chose it.
    */
-  tools(names?: string[]): OpenAI.ChatCompletionTool[] {
-    const wanted = names
-      ? names.map((name) => this.index.get(name)?.tool)
-      : [...this.index.values()].map(({ tool }) => tool);
-    return wanted.filter((tool) => tool !== undefined).map((tool) => tool.definition);
+  tools(names?: string[], servers?: ReadonlySet<string>): OpenAI.ChatCompletionTool[] {
+    const entries = names ? names.map((name) => this.index.get(name)) : [...this.index.values()];
+    const definitions: OpenAI.ChatCompletionTool[] = [];
+    for (const found of entries) {
+      if (!found || (servers && !servers.has(found.serverId))) continue;
+      definitions.push(found.tool.definition);
+    }
+    return definitions;
   }
 
   /** Names and descriptions only — what the model browses before loading any schemas. */
-  catalog(): CatalogServer[] {
+  catalog(servers?: ReadonlySet<string>): CatalogServer[] {
     const catalog: CatalogServer[] = [];
     for (const entry of this.entries.values()) {
       if (entry.status !== "ready" || !entry.tools.length) continue;
+      if (servers && !servers.has(entry.config.id)) continue;
       catalog.push({
         id: entry.config.id,
         label: entry.config.label || entry.config.slug,
@@ -282,11 +298,17 @@ class McpPool {
   }
 
   /** Runs one tool call and returns text for a tool message. */
-  async call(qualifiedName: string, input: unknown): Promise<string> {
+  async call(
+    qualifiedName: string,
+    input: unknown,
+    servers?: ReadonlySet<string>,
+  ): Promise<string> {
     // Resolved by the whole qualified name rather than by splitting it: `qualify` truncates at
     // 64 characters, and the split of a truncated name names a tool its server never had.
     const found = this.index.get(qualifiedName);
-    if (!found) {
+    // A tool outside this run's scope is answered as one that does not exist, because to this
+    // run it does not: saying "that server is not yours" would teach the model to ask again.
+    if (!found || (servers && !servers.has(found.serverId))) {
       throw new Error(`no connected MCP server offers a tool called "${qualifiedName}"`);
     }
 

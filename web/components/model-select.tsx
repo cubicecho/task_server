@@ -30,19 +30,26 @@ export function ModelSelect({
   value,
   onChange,
   defaultLabel,
+  agentId,
 }: {
   id?: string;
   value: string;
   onChange: (model: string) => void;
   /** Label for the empty choice. Omitted, a model must be named. */
   defaultLabel?: string;
+  /**
+   * Ask this agent profile's endpoint rather than the server's. A profile that names an
+   * endpoint of its own runs somewhere else, and the server's model list is not its list.
+   */
+  agentId?: string;
 }) {
   const [typing, setTyping] = useState(false);
   const [opened, setOpened] = useState(false);
 
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: () => request(ModelsDocument),
+    // Keyed by endpoint, not by page: two profiles on two servers are two different lists.
+    queryKey: ["models", agentId ?? ""],
+    queryFn: () => request(ModelsDocument, { agentId }),
     enabled: opened,
     retry: false,
     staleTime: 60_000,

@@ -1,5 +1,5 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Activity, History, ListChecks, Plug, SlidersHorizontal, Zap } from "lucide-react";
+import { Activity, Bot, History, ListChecks, Plug, SlidersHorizontal, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -7,6 +7,7 @@ const NAV = [
   { to: "/tasks", label: "Tasks", icon: ListChecks },
   { to: "/runs", label: "Runs", icon: History },
   { to: "/servers", label: "MCP servers", icon: Plug },
+  { to: "/agents", label: "Agents", icon: Bot },
   { to: "/settings", label: "Settings", icon: SlidersHorizontal },
 ] as const;
 

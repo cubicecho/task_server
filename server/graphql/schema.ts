@@ -14,10 +14,11 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
-import { settings, steps, tasks } from "../db/schema.ts";
+import { agents, settings, steps, tasks } from "../db/schema.ts";
 import { fold, history, type RunEvent, watch } from "../runner/events.ts";
-import { listModels } from "../runner/llm.ts";
+import { listModels, loadSettings } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
+import { resolveConfig } from "../runner/profile.ts";
 import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
 import { describeColumn, describeTable } from "./docs.ts";
@@ -60,8 +61,10 @@ const { entities } = buildSchema(db, {
     // triggers, and a flow is written by `setTaskSteps` rather than row at a time regardless.
   },
   exclude: {
-    // The key never needs to travel back to the browser; the UI only ever writes it.
-    columns: { settings: ["apiKey"] },
+    // A key never needs to travel back to the browser; the UI only ever writes one. Both are
+    // written by a mutation of their own — `setApiKey` and `setAgentApiKey` — because excluding
+    // the column takes it out of the update input as well as out of the row.
+    columns: { settings: ["apiKey"], agents: ["apiKey"] },
   },
   // Any write can change when things fire — a new trigger, a disabled task, an edited
   // expression — so the scheduler is rebuilt after each one rather than at named call sites
@@ -210,8 +213,25 @@ const baseSchema = new GraphQLSchema({
       ...entities.queries,
       models: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))),
-        description: "Model ids the configured OpenAI-compatible server reports.",
-        resolve: () => listModels(),
+        description:
+          "Model ids the configured OpenAI-compatible server reports. Pass `agentId` to ask " +
+          "that agent's endpoint instead — an agent with no endpoint of its own answers the " +
+          "same as the server does.",
+        args: {
+          agentId: {
+            type: GraphQLString,
+            description: "Ask this agent profile's endpoint. Omit for the server's own.",
+          },
+        },
+        resolve: async (_source, args: { agentId?: string | null }) => {
+          if (!args.agentId) return listModels();
+          const [agent] = await db
+            .select()
+            .from(agents)
+            .where(eq(agents.id, args.agentId))
+            .limit(1);
+          return listModels(resolveConfig(await loadSettings(), agent));
+        },
       },
       mcpStatus: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpServerStatusType))),
@@ -371,6 +391,32 @@ const baseSchema = new GraphQLSchema({
           await mcp.shutdown();
           await mcp.sync();
           return mcp.state();
+        },
+      },
+      setAgentApiKey: {
+        type: new GraphQLNonNull(GraphQLBoolean),
+        description:
+          "Writes one agent profile's API key. Separate from updateAgent for the reason " +
+          "`setApiKey` is separate from updateSetting: the key is write-only, excluded from the " +
+          "Agent type so it can never be read back out. An empty string clears it, which puts " +
+          "the profile back on the server's key — unless it has an endpoint of its own, which " +
+          "is never sent the server's key.",
+        args: {
+          agentId: { type: new GraphQLNonNull(GraphQLString) },
+          apiKey: { type: new GraphQLNonNull(GraphQLString) },
+        },
+        resolve: async (_source, args: { agentId: string; apiKey: string }) => {
+          const updated = await db
+            .update(agents)
+            .set({ apiKey: args.apiKey })
+            .where(eq(agents.id, args.agentId))
+            .returning({ id: agents.id });
+          if (!updated.length) {
+            throw new GraphQLError(`There is no agent with id ${args.agentId}.`, {
+              extensions: { code: "NOT_FOUND" },
+            });
+          }
+          return true;
         },
       },
       setApiKey: {

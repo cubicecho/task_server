@@ -48,8 +48,48 @@ instead of the UI.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
   will dial a config (`testMcpServer`) to list its tools before you save it.
+- **agent profile** — a named set of overrides for that settings row, which a task can be
+  pointed at: its own endpoint and key, model, system prompt, ceilings, and which MCP servers a
+  run on it may reach. Everything left blank comes from settings, so a server with no profiles
+  runs exactly as one that never had them. See **Agent profiles**.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
   temperature limits, the cap on tool iterations per run, and how MCP tools are discovered.
+
+## Agent profiles
+
+One settings row is the right answer until it is not: a summariser that should run on a cheap
+local model, a task that has to reach a hosted one, a nightly job that may spend an hour of
+retries where the rest may not. A **profile** is that bundle, made once and pointed at by as many
+tasks as want it — `tasks.agentId`, null on a task that runs on settings, which is every task
+until somebody makes a profile.
+
+A profile does not add a second thing the runner reads. `server/runner/profile.ts` lays it over
+the settings row and hands the result to the run, so the agent loop, the flow and the LLM client
+see one `Settings` object exactly as they always did.
+
+Blank is inherit, and the sentinels differ by column because zero is a real answer for most of
+them: `""` for a text column, `-1` for a number — zero retries, zero seconds of patience and zero
+tokens all mean something — and the word `inherit` for tool discovery. The form on the **Agents**
+page shows an inherited number as an empty box.
+
+The one column that is not a plain override is the key. A profile that names a `baseUrl` of its
+own never inherits the server's API key or `$OPENAI_API_KEY`: a credential issued for one
+endpoint has no business being posted to another, and "I pointed a task at a friend's server and
+it sent my OpenAI key" is not a mistake worth being able to make. Such a profile uses its own key
+or none, which is what a local server wants anyway. A profile on the *same* endpoint inherits the
+key like everything else. The key is write-only in both places — `setAgentApiKey` writes it, and
+it is excluded from the `Agent` type, so it cannot be read back out of the API.
+
+`mcpServerIds` is which MCP servers a run on the profile may reach, and an empty or absent list is
+every enabled server. It is a scope, not a listing: a tool outside it is refused by
+`mcp.call` as one that does not exist, so a model that remembers a name from a wider run does not
+reach it either. Which *tools* of a server a task may use is deliberately not here — that is what
+a router endpoint in front of them is for, and scope written twice is scope that disagrees.
+
+Profiles are the operator's, on both sides of the API: a visiting agent on `/mcp` can see that a
+task runs on one — `agentId` is a column like any other — but cannot read a profile, write one,
+or point a task at a different one. They carry an endpoint, a key and the tool scope, which is
+the settings row's own argument. See **Permissions**.
 
 ## Flows
 
@@ -259,7 +299,7 @@ server/
   webhooks.ts  POST /webhooks/:id, which fires matching event triggers
   index.ts     express + yoga + the MCP endpoint + the webhook route + the built SPA
 web/           vite + react + tanstack router/query + shadcn
-               (status, tasks, runs, mcp servers, settings)
+               (status, tasks, runs, mcp servers, agents, settings)
   __generated__/  codegen output, gitignored — see GraphQL below
 tests/         vitest
 ```
@@ -270,7 +310,7 @@ The API is generated from the Drizzle tables by
 [`@vantreeseba/drizzle-graphql`](https://github.com/vantreeseba/drizzle-graphql), so a new
 column is queryable as soon as it exists. Hand-written fields fill the gaps that CRUD cannot
 express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `runTask`,
-`stopTask`, `reconnectMcp` and `setApiKey` on the mutation side.
+`stopTask`, `reconnectMcp`, `setApiKey` and `setAgentApiKey` on the mutation side.
 
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
 - **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,
@@ -530,7 +570,7 @@ a test calling `graphql()`, this server executing its own schema in process — 
 
 The operator may do anything; the web app is the whole of the API. An agent writes and runs
 tasks: it makes them, edits their flows with `setTaskSteps`, schedules them, starts and stops
-them, and reads what happened. Three things it may not touch:
+them, and reads what happened. Four things it may not touch:
 
 - **The settings row.** The operator's account of their own server — endpoint, model, key.
   `setApiKey` writes a credential, and an agent that could repoint `baseUrl` would have
@@ -540,6 +580,11 @@ them, and reads what happened. Three things it may not touch:
 - **The MCP server rows.** `env` and `headers` on one of those are credentials in all but name,
   and `testMcpServer` spawns whatever stdio command it is handed, so it is arbitrary execution on
   this host for anyone who reaches it.
+- **The agent profiles.** The settings row again in miniature, one per profile: an endpoint, a
+  key, and which MCP servers a task on it may reach. An agent that could write one could point a
+  task at a model of its choosing and hand it every tool this server has. A task still carries
+  its `agentId`, so a visiting agent can see that a task runs on a profile — it just cannot
+  choose or change which, or read what the profile says.
 - **The run history.** An agent tidying away the run that recorded what it did is the one edit
   nobody can audit afterwards.
 

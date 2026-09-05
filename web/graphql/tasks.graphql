@@ -2,6 +2,7 @@ fragment TaskFields on Task {
   id
   name
   prompt
+  agentId
   model
   systemPrompt
   enabled

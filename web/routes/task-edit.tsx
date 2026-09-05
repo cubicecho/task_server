@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  AgentOptionsDocument,
   CreateTaskDocument,
   CreateTriggerDocument,
   DeleteTriggerDocument,
@@ -21,6 +22,13 @@ import { StepList } from "@/components/step-editor";
 import { type DraftTrigger, TriggerEditor, toDraftTriggers } from "@/components/trigger-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
@@ -34,6 +42,9 @@ import { request } from "@/lib/gql";
  */
 /** The notes under this form's fields are the columns' own descriptions. */
 const doc = describeFor("Task");
+
+// Radix refuses an empty item value, so "no profile" — which is null in the column — carries one.
+const NO_AGENT = "__settings__";
 
 export function TaskEditRoute() {
   const { taskId } = useParams({ strict: false });
@@ -83,6 +94,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
 
   const [name, setName] = useState(task?.name ?? "");
   const [prompt, setPrompt] = useState(task?.prompt ?? "");
+  const [agentId, setAgentId] = useState(task?.agentId ?? "");
   const [model, setModel] = useState(task?.model ?? "");
   const [systemPrompt, setSystemPrompt] = useState(task?.systemPrompt ?? "");
   const [triggers, setTriggers] = useState<DraftTrigger[]>(() =>
@@ -92,9 +104,23 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
 
   const [steps, setSteps] = useState<DraftStep[]>(() => toDraft(task?.steps ?? []));
 
+  // Names only, and shared with every other form that needs them: a page that lists two tasks
+  // side by side asks the server once.
+  const agents = useQuery({
+    queryKey: ["agents", "options"],
+    queryFn: () => request(AgentOptionsDocument),
+  });
+
   const save = useMutation({
     mutationFn: async () => {
-      const values = { name: name.trim(), prompt: prompt.trim(), model, systemPrompt };
+      // Null rather than "": the column is a foreign key, and an empty string is not a profile.
+      const values = {
+        name: name.trim(),
+        prompt: prompt.trim(),
+        agentId: agentId || null,
+        model,
+        systemPrompt,
+      };
       // Caught here so the message names the field, rather than arriving as a server error.
       if (!values.name) throw new Error("A task needs a name.");
       if (!values.prompt) throw new Error("A task needs a prompt.");
@@ -202,13 +228,40 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         ) : null}
       </Field>
 
+      <Field label="Agent profile" htmlFor="agent" hint={doc("agentId")}>
+        <Select
+          value={agentId || NO_AGENT}
+          onValueChange={(next) => setAgentId(next === NO_AGENT ? "" : next)}
+        >
+          <SelectTrigger id="agent" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_AGENT}>Server settings</SelectItem>
+            {(agents.data?.agents ?? []).map((agent) => (
+              <SelectItem key={agent.id} value={agent.id}>
+                {agent.name}
+                {agent.description ? (
+                  <span className="text-muted-foreground"> — {agent.description}</span>
+                ) : null}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Model" htmlFor="model" hint={doc("model")}>
+        <Field
+          label="Model"
+          htmlFor="model"
+          hint={agentId ? "Empty falls back to the profile above, then to Settings." : doc("model")}
+        >
           <ModelSelect
             id="model"
             value={model}
             onChange={setModel}
-            defaultLabel="Default from Settings"
+            defaultLabel={agentId ? "Default from the profile" : "Default from Settings"}
+            agentId={agentId || undefined}
           />
         </Field>
         <Field label="System prompt" htmlFor="system" hint={doc("systemPrompt")}>

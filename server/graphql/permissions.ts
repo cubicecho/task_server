@@ -39,7 +39,15 @@ import {
  * got is caught when the map is applied, which is as the server is built rather than on the
  * request that would have needed it.
  */
-type SubjectName = "Task" | "Trigger" | "Step" | "Run" | "RunStep" | "McpServer" | "Setting";
+type SubjectName =
+  | "Task"
+  | "Trigger"
+  | "Step"
+  | "Run"
+  | "RunStep"
+  | "McpServer"
+  | "Setting"
+  | "Agent";
 
 type Subjects = Record<SubjectName, Record<string, unknown>>;
 
@@ -73,6 +81,13 @@ const BOARD = ["Task", "Trigger", "Step"] as const;
  * do is re-key the server or re-wire it, because which endpoint runs on whose key, and which
  * MCP servers this one dials, are the operator's business.
  *
+ * Agent profiles are the third refusal, and they are the settings row again in miniature: a
+ * profile carries an endpoint and a key of its own, and says which MCP servers a task on it may
+ * reach. An agent that could write one could point a task at a model of its choosing and hand it
+ * every tool this server has; one that could read them has read the operator's map of which
+ * endpoint runs on whose key. A task still carries its `agentId` either way, so a visiting agent
+ * can see that a task runs on a profile — it just cannot choose or change which.
+ *
  * Two of those refusals are worth naming. The settings row is the operator's account of their
  * own server — endpoint, model, key — and `setApiKey` writes a credential; an agent that can
  * repoint `baseUrl` has redirected every future run's prompt to a server of its choosing. The
@@ -92,7 +107,7 @@ const BOARD = ["Task", "Trigger", "Step"] as const;
 function abilitiesFor(caller: Caller) {
   const { can, build } = createGraphQLAbility<Subjects>();
   if (caller === "operator") {
-    can(Actions.manage, [...BOARD, "Run", "RunStep", "McpServer", "Setting"]);
+    can(Actions.manage, [...BOARD, "Run", "RunStep", "McpServer", "Setting", "Agent"]);
     return build();
   }
   can(Actions.read, [...BOARD, "Run", "RunStep"]);
@@ -154,6 +169,12 @@ const MUTATIONS: Record<string, Rule> = {
 
   updateSettingSingle: canUser(Actions.update, "Setting"),
   setApiKey: canUser(Actions.update, "Setting"),
+
+  createAgent: canUser(Actions.create, "Agent"),
+  updateAgentSingle: canUser(Actions.update, "Agent"),
+  deleteAgentSingle: canUser(Actions.delete, "Agent"),
+  // Write-only, exactly as `setApiKey` is, and for the same reason.
+  setAgentApiKey: canUser(Actions.update, "Agent"),
 };
 
 /**
@@ -188,6 +209,9 @@ export const permissions: PermissionsMap = {
     // keys.
     ...tableReads("setting", "settings", "Setting"),
     ...tableReads("mcpServer", "mcpServers", "McpServer"),
+    // And the profiles, which are the settings row per task: an endpoint, a key, and which of
+    // those MCP servers a task on the profile may reach.
+    ...tableReads("agent", "agents", "Agent"),
     // The same servers, answered from the live pool instead of the table. It carries no
     // credentials, but it is the same list of what this server dials and with which tools.
     mcpStatus: canUser(Actions.read, "McpServer"),
@@ -200,4 +224,7 @@ export const permissions: PermissionsMap = {
   // keeps that true of the relation a new column adds tomorrow.
   Setting: canUser(Actions.read, "Setting"),
   McpServer: canUser(Actions.read, "McpServer"),
+  // This one is not hypothetical: `Task.agent` is a relation an agent may walk to from a task
+  // it is allowed to read, and the rule on the type is what meets it there.
+  Agent: canUser(Actions.read, "Agent"),
 };

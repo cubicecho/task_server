@@ -113,8 +113,13 @@ the one with an architectural bearing: it is a gateway, so pointing this server'
 router instead of at five stdio children would move tool-budget management — the whole reason
 `toolDiscovery` and `toolSelectModel` exist — out of this server and behind one connection.
 
-Per-task tool scope is the same answer. A task that summarises an inbox has no business holding
-a shell, and the fix is a router endpoint that does not offer one rather than a join table here:
-scoping written twice is scoping that disagrees, and the copy here would only ever cover the
-servers this pool spawns itself. Decided against on
+Per-tool scope is the same answer, and the line is drawn at the tool. A task that summarises an
+inbox has no business holding a shell, and the fix is a router endpoint that does not offer one
+rather than a per-tool allow list here: scoping written twice is scoping that disagrees, and the
+copy here would only ever cover the servers this pool spawns itself. Which *servers* a run may
+reach is a different question and did ship — an agent profile carries `mcpServerIds`, and
+`server/runner/mcp.ts` holds a run to it — because that list is this pool's own membership, which
+nothing else can answer for it. A profile pointed at one router endpoint is how the two meet: the
+server list picks the door, and what is behind it is the router's to scope, for every app in the
+ecosystem rather than for this one. Decided on
 [#21](https://github.com/cubicecho/task_server/issues/21).

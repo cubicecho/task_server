@@ -207,13 +207,16 @@ test("advertises tools small enough for a client to read", async () => {
 
   // The columns, and no relations. `TaskFilters.triggers` reaches `TriggerFilters`, which reaches
   // back through `RunFilters` and `StepFilters` — the closure that was most of the listing, for a
-  // question no agent on this surface asked in a hundred calls. `inputField` prunes it from the
-  // projection only: the same schema object serves the web app, which still has all three.
+  // question no agent on this surface asked in a hundred calls. `TaskFilters.agent` is the same
+  // thing for a one-relation: a whole `AgentFilters` for a table this surface does not offer.
+  // `inputField` prunes them from the projection only: the same schema object serves the web
+  // app, which still has all four. `agentId` stays — a scalar column costs a `StringFilter`.
   const input = tools.find((tool) => tool.name === "tasks")?.inputSchema as SchemaNode;
   expect(whereKeys(input)).toEqual([
     "id",
     "name",
     "prompt",
+    "agentId",
     "model",
     "systemPrompt",
     "enabled",
@@ -226,6 +229,7 @@ test("advertises tools small enough for a client to read", async () => {
   const { schema } = await import("../server/graphql/schema.ts");
   const taskFilters = schema.getType("TaskFilters") as GraphQLInputObjectType;
   expect(Object.keys(taskFilters.getFields())).toContain("triggers");
+  expect(Object.keys(taskFilters.getFields())).toContain("agent");
 });
 
 /**
