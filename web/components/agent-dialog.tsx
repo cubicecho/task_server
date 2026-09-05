@@ -1,5 +1,4 @@
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
 import { toast } from "sonner";
 import {
   type AgentFieldsFragment,
@@ -9,28 +8,14 @@ import {
   SetAgentApiKeyDocument,
   UpdateAgentDocument,
 } from "@/__generated__/graphql/graphql";
-import { Field } from "@/components/field";
-import { ModelSelect } from "@/components/model-select";
+import { useAppForm } from "@/components/app-form";
+import { DialogLayout } from "@/components/dialog-layout";
+import { FieldRow } from "@/components/field-row";
+import { ModelSelectField } from "@/components/model-select-field";
+import { MultiSelectField } from "@/components/multi-select-field";
+import { PasswordField } from "@/components/password-field";
+import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 
@@ -44,78 +29,68 @@ const doc = describeFor("Agent");
  *
  * `mcpServerIds` is a list here rather than the nullable JSON the column holds — an absent
  * list and an empty one both mean "every server", and the form only has to say one of them.
+ *
+ * The five numbers are `number | null` where the column stores `-1`. The column needs a sentinel
+ * because zero is a real answer for retries, for patience and for tokens; a form does not, and an
+ * empty box is what "leave it to settings" looks like. {@link toValues} is where the two meet.
  */
 interface Draft {
   name: string;
   description: string;
   baseUrl: string;
+  apiKey: string;
   model: string;
   systemPrompt: string;
-  maxTokens: number;
-  temperature: number;
-  maxToolIterations: number;
+  maxTokens: number | null;
+  temperature: number | null;
+  maxToolIterations: number | null;
   toolDiscovery: AgentsToolDiscoveryEnum;
   toolSelectModel: string;
-  requestTimeoutSeconds: number;
-  maxRetries: number;
+  requestTimeoutSeconds: number | null;
+  maxRetries: number | null;
   mcpServerIds: string[];
 }
+
+/** `-1` is the column's word for inherit; an empty box is the form's. */
+const inherited = (value: number | null) => value ?? -1;
+const shown = (value: number) => (value < 0 ? null : value);
 
 const toDraft = (agent?: AgentFieldsFragment): Draft => ({
   name: agent?.name ?? "",
   description: agent?.description ?? "",
   baseUrl: agent?.baseUrl ?? "",
+  // Write-only, and never sent back: blank means "keep whatever is stored".
+  apiKey: "",
   model: agent?.model ?? "",
   systemPrompt: agent?.systemPrompt ?? "",
-  maxTokens: agent?.maxTokens ?? -1,
-  temperature: agent?.temperature ?? -1,
-  maxToolIterations: agent?.maxToolIterations ?? -1,
+  maxTokens: shown(agent?.maxTokens ?? -1),
+  temperature: shown(agent?.temperature ?? -1),
+  maxToolIterations: shown(agent?.maxToolIterations ?? -1),
   toolDiscovery: agent?.toolDiscovery ?? AgentsToolDiscoveryEnum.Inherit,
   toolSelectModel: agent?.toolSelectModel ?? "",
-  requestTimeoutSeconds: agent?.requestTimeoutSeconds ?? -1,
-  maxRetries: agent?.maxRetries ?? -1,
+  requestTimeoutSeconds: shown(agent?.requestTimeoutSeconds ?? -1),
+  maxRetries: shown(agent?.maxRetries ?? -1),
   // The JSON scalar carries no shape, so this is where it is said what the column holds.
   mcpServerIds: (agent?.mcpServerIds as string[] | null) ?? [],
 });
 
-/**
- * A number that may be left to settings, where an empty box is how that is said.
- *
- * The column stores `-1` for "ask settings" — zero is a real answer for retries, for patience
- * and for tokens, so the sentinel has to be a value none of them can hold — and nobody should
- * have to know that to fill in a form. Blank is inherit, and inherit shows as blank.
- */
-function InheritField({
-  id,
-  label,
-  hint,
-  value,
-  step,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  hint?: string;
-  value: number;
-  step?: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <Field label={label} htmlFor={id} hint={hint}>
-      <Input
-        id={id}
-        type="number"
-        step={step}
-        placeholder="From settings"
-        value={value < 0 ? "" : String(value)}
-        onChange={(event) => {
-          const next = Number(event.target.value);
-          // A half-typed "-" parses to NaN, and an emptied box to "". Both are inherit.
-          onChange(event.target.value.trim() === "" || !Number.isFinite(next) ? -1 : next);
-        }}
-      />
-    </Field>
-  );
+/** The draft as the row wants it — sentinels back in, and the key left behind. */
+function toValues(draft: Draft) {
+  const { apiKey: _apiKey, ...rest } = draft;
+  return {
+    ...rest,
+    name: draft.name.trim(),
+    description: draft.description.trim(),
+    baseUrl: draft.baseUrl.trim(),
+    maxTokens: inherited(draft.maxTokens),
+    temperature: inherited(draft.temperature),
+    maxToolIterations: inherited(draft.maxToolIterations),
+    requestTimeoutSeconds: inherited(draft.requestTimeoutSeconds),
+    maxRetries: inherited(draft.maxRetries),
+    // An empty list is stored as null, which is the column's own word for "every server":
+    // a profile nobody has narrowed and one narrowed to nothing would otherwise differ.
+    mcpServerIds: draft.mcpServerIds.length ? draft.mcpServerIds : null,
+  };
 }
 
 export function AgentDialog({
@@ -129,30 +104,9 @@ export function AgentDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [draft, setDraft] = useState<Draft>(() => toDraft(agent));
-  const [apiKey, setApiKey] = useState("");
-  const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
-
-  const toggleServer = (id: string, on: boolean) =>
-    set({
-      mcpServerIds: on
-        ? [...draft.mcpServerIds, id]
-        : draft.mcpServerIds.filter((current) => current !== id),
-    });
-
   const save = useMutation({
-    mutationFn: async () => {
-      const values = {
-        ...draft,
-        name: draft.name.trim(),
-        description: draft.description.trim(),
-        baseUrl: draft.baseUrl.trim(),
-        // An empty list is stored as null, which is the column's own word for "every server":
-        // a profile nobody has narrowed and one narrowed to nothing would otherwise differ.
-        mcpServerIds: draft.mcpServerIds.length ? draft.mcpServerIds : null,
-      };
-      if (!values.name) throw new Error("A profile needs a name.");
-
+    mutationFn: async (draft: Draft) => {
+      const values = toValues(draft);
       const id = agent
         ? ((await request(UpdateAgentDocument, { id: agent.id, set: values })).updateAgentSingle
             ?.id ?? agent.id)
@@ -160,198 +114,202 @@ export function AgentDialog({
 
       // The key travels on its own mutation because it is write-only, exactly as the server's
       // own key does — it is excluded from the Agent type and can never be read back.
-      if (apiKey) await request(SetAgentApiKeyDocument, { agentId: id, apiKey });
-      setApiKey("");
+      if (draft.apiKey)
+        await request(SetAgentApiKeyDocument, { agentId: id, apiKey: draft.apiKey });
     },
     onSuccess: () => {
       toast.success(agent ? "Profile saved" : "Profile created");
       onSaved();
       onClose();
     },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const form = useAppForm({
+    defaultValues: toDraft(agent),
+    onSubmit: ({ value }) => save.mutateAsync(value),
   });
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{agent ? "Edit profile" : "New agent profile"}</DialogTitle>
-          <DialogDescription>
-            Everything left blank comes from Settings, so a profile only has to say what it changes.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Name" htmlFor="name" hint={doc("name")}>
-              <Input
-                id="name"
-                value={draft.name}
-                onChange={(event) => set({ name: event.target.value })}
-                placeholder="Local Qwen"
-              />
-            </Field>
-            <Field label="Description" htmlFor="description">
-              <Input
-                id="description"
-                value={draft.description}
-                onChange={(event) => set({ description: event.target.value })}
-                placeholder="Cheap and offline"
-              />
-            </Field>
-          </div>
-
-          <Field label="Base URL" htmlFor="baseUrl" hint={doc("baseUrl")}>
-            <Input
-              id="baseUrl"
-              value={draft.baseUrl}
-              onChange={(event) => set({ baseUrl: event.target.value })}
-              placeholder="(from settings)"
-            />
-          </Field>
-
-          <Field
-            label="API key"
-            htmlFor="apiKey"
-            hint="Only needed for an endpoint of this profile's own. One that names an endpoint never borrows the server's key."
-          >
-            <Input
-              id="apiKey"
-              type="password"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder={agent ? "unchanged — leave blank to keep the stored key" : "sk-…"}
-            />
-          </Field>
-
-          <Field
-            label="Model"
-            htmlFor="model"
-            hint="Opening the list asks this profile's endpoint for its models, so save a new base URL first."
-          >
-            <ModelSelect
-              id="model"
-              value={draft.model}
-              onChange={(model) => set({ model })}
-              defaultLabel="Default from Settings"
-              agentId={agent?.id}
-            />
-          </Field>
-
-          <Field label="System prompt" htmlFor="systemPrompt" hint={doc("systemPrompt")}>
-            <Textarea
-              id="systemPrompt"
-              rows={3}
-              value={draft.systemPrompt}
-              onChange={(event) => set({ systemPrompt: event.target.value })}
-              placeholder="(from settings)"
-            />
-          </Field>
-
-          <div className="grid grid-cols-3 gap-4">
-            <InheritField
-              id="maxTokens"
-              label="Max tokens"
-              value={draft.maxTokens}
-              onChange={(maxTokens) => set({ maxTokens })}
-            />
-            <InheritField
-              id="temperature"
-              label="Temperature"
-              step="0.1"
-              value={draft.temperature}
-              onChange={(temperature) => set({ temperature })}
-            />
-            <InheritField
-              id="maxToolIterations"
-              label="Max tool steps"
-              value={draft.maxToolIterations}
-              onChange={(maxToolIterations) => set({ maxToolIterations })}
-            />
-            <InheritField
-              id="requestTimeoutSeconds"
-              label="Silence before giving up (s)"
-              value={draft.requestTimeoutSeconds}
-              onChange={(requestTimeoutSeconds) => set({ requestTimeoutSeconds })}
-            />
-            <InheritField
-              id="maxRetries"
-              label="Retries"
-              value={draft.maxRetries}
-              onChange={(maxRetries) => set({ maxRetries })}
-            />
-          </div>
-
-          <Field label="Tool discovery" htmlFor="toolDiscovery" hint={doc("toolDiscovery")}>
-            <Select
-              value={draft.toolDiscovery}
-              onValueChange={(value) => set({ toolDiscovery: value as AgentsToolDiscoveryEnum })}
-            >
-              <SelectTrigger id="toolDiscovery" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={AgentsToolDiscoveryEnum.Inherit}>From settings</SelectItem>
-                <SelectItem value={AgentsToolDiscoveryEnum.Eager}>
-                  Eager — send every definition every time
-                </SelectItem>
-                <SelectItem value={AgentsToolDiscoveryEnum.Ondemand}>
-                  On demand — load definitions as needed
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field label="Tool-picking model" htmlFor="toolSelectModel" hint={doc("toolSelectModel")}>
-            <ModelSelect
-              id="toolSelectModel"
-              value={draft.toolSelectModel}
-              onChange={(toolSelectModel) => set({ toolSelectModel })}
-              defaultLabel="From settings"
-              agentId={agent?.id}
-            />
-          </Field>
-
-          <Field label="MCP servers" hint={doc("mcpServerIds")}>
-            {servers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No MCP servers configured, so there is nothing to narrow.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2 rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">
-                  {draft.mcpServerIds.length === 0
-                    ? "None picked — a task on this profile reaches every enabled server."
-                    : `${draft.mcpServerIds.length} of ${servers.length} — a task on this profile reaches no others.`}
-                </p>
-                {servers.map((server) => (
-                  <div key={server.id} className="flex items-center justify-between gap-3">
-                    <Label htmlFor={`server-${server.id}`} className="font-mono text-sm">
-                      {server.label || server.slug}
-                      {server.enabled ? null : (
-                        <span className="text-muted-foreground"> (disabled)</span>
-                      )}
-                    </Label>
-                    <Switch
-                      id={`server-${server.id}`}
-                      checked={draft.mcpServerIds.includes(server.id)}
-                      onCheckedChange={(on) => toggleServer(server.id, on)}
+    <DialogLayout
+      open
+      onOpenChange={(open) => !open && onClose()}
+      hasUnsavedChanges={form.state.isDirty}
+      size="lg"
+      title={agent ? "Edit profile" : "New agent profile"}
+      description="Everything left blank comes from Settings, so a profile only has to say what it changes."
+      content={
+        <form
+          id="agent-profile"
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            form.handleSubmit();
+          }}
+        >
+          <FieldRow
+            content={
+              <>
+                <form.AppField
+                  name="name"
+                  validators={{
+                    onChange: ({ value }: { value: string }) =>
+                      value.trim() ? undefined : "A profile needs a name.",
+                  }}
+                >
+                  {(field) => (
+                    <field.InputField
+                      label="Name"
+                      description={doc("name")}
+                      required
+                      placeholder="Local Qwen"
                     />
-                  </div>
-                ))}
-              </div>
-            )}
-          </Field>
-        </div>
+                  )}
+                </form.AppField>
+                <form.AppField name="description">
+                  {(field) => (
+                    <field.InputField label="Description" placeholder="Cheap and offline" />
+                  )}
+                </form.AppField>
+              </>
+            }
+          />
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
+          <form.AppField name="baseUrl">
+            {(field) => (
+              <field.InputField
+                label="Base URL"
+                description={doc("baseUrl")}
+                placeholder="(from settings)"
+              />
+            )}
+          </form.AppField>
+
+          <PasswordField
+            form={form}
+            name="apiKey"
+            label="API key"
+            description="Only needed for an endpoint of this profile's own. One that names an endpoint never borrows the server's key."
+            placeholder={agent ? "unchanged — leave blank to keep the stored key" : "sk-…"}
+          />
+
+          <ModelSelectField
+            form={form}
+            name="model"
+            label="Model"
+            description="Opening the list asks this profile's endpoint for its models, so save a new base URL first."
+            defaultLabel="Default from Settings"
+            agentId={agent?.id}
+          />
+
+          <form.AppField name="systemPrompt">
+            {(field) => (
+              <field.TextareaField
+                label="System prompt"
+                description={doc("systemPrompt")}
+                rows={3}
+                placeholder="(from settings)"
+              />
+            )}
+          </form.AppField>
+
+          <FieldRow
+            perRow={3}
+            content={
+              <>
+                <form.AppField name="maxTokens">
+                  {(field) => <field.NumberField label="Max tokens" placeholder="From settings" />}
+                </form.AppField>
+                <form.AppField name="temperature">
+                  {(field) => (
+                    <field.NumberField label="Temperature" step="0.1" placeholder="From settings" />
+                  )}
+                </form.AppField>
+                <form.AppField name="maxToolIterations">
+                  {(field) => (
+                    <field.NumberField label="Max tool steps" placeholder="From settings" />
+                  )}
+                </form.AppField>
+                <form.AppField name="requestTimeoutSeconds">
+                  {(field) => (
+                    <field.NumberField
+                      label="Silence before giving up (s)"
+                      placeholder="From settings"
+                    />
+                  )}
+                </form.AppField>
+                <form.AppField name="maxRetries">
+                  {(field) => <field.NumberField label="Retries" placeholder="From settings" />}
+                </form.AppField>
+              </>
+            }
+          />
+
+          <RadioGroupField
+            form={form}
+            name="toolDiscovery"
+            label="Tool discovery"
+            description={doc("toolDiscovery")}
+            options={[
+              { value: AgentsToolDiscoveryEnum.Inherit, label: "From settings" },
+              {
+                value: AgentsToolDiscoveryEnum.Eager,
+                label: "Eager",
+                description: "Send every definition every time.",
+              },
+              {
+                value: AgentsToolDiscoveryEnum.Ondemand,
+                label: "On demand",
+                description: "Load definitions as the run asks for them.",
+              },
+            ]}
+          />
+
+          <ModelSelectField
+            form={form}
+            name="toolSelectModel"
+            label="Tool-picking model"
+            description={doc("toolSelectModel")}
+            defaultLabel="From settings"
+            agentId={agent?.id}
+          />
+
+          {servers.length === 0 ? null : (
+            <form.Subscribe selector={(state) => state.values.mcpServerIds.length}>
+              {(picked) => (
+                <MultiSelectField
+                  form={form}
+                  name="mcpServerIds"
+                  label="MCP servers"
+                  description={
+                    picked === 0
+                      ? "None picked — a task on this profile reaches every enabled server."
+                      : `${picked} of ${servers.length} — a task on this profile reaches no others.`
+                  }
+                  placeholder="Every enabled server"
+                  searchLabel="Search servers"
+                  popoverLabel="MCP servers"
+                  options={servers.map((server) => ({
+                    value: server.id,
+                    label: `${server.label || server.slug}${server.enabled ? "" : " (disabled)"}`,
+                    keywords: [server.slug],
+                  }))}
+                />
+              )}
+            </form.Subscribe>
+          )}
+        </form>
+      }
+      footerActions={
+        <>
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <form.AppForm>
+            <form.SubmitButton form="agent-profile">Save</form.SubmitButton>
+          </form.AppForm>
+        </>
+      }
+    />
   );
 }

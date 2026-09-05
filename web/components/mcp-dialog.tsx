@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, ClipboardPaste, PlugZap, XCircle } from "lucide-react";
+import { ClipboardPaste, PlugZap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -10,26 +10,13 @@ import {
   TestMcpServerDocument,
   UpdateMcpServerDocument,
 } from "@/__generated__/graphql/graphql";
-import { Field } from "@/components/field";
+import { useAppForm } from "@/components/app-form";
+import { DialogLayout } from "@/components/dialog-layout";
+import { FieldRow } from "@/components/field-row";
+import { McpProbeResult } from "@/components/mcp-probe";
+import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
@@ -69,6 +56,28 @@ const toDraft = (server?: McpServer): Draft => ({
   headers: json(server?.headers, "{}"),
 });
 
+/**
+ * A field that has to parse, checked as it is typed.
+ *
+ * These three columns are jsonb and are edited here as text, so the only moment the text is
+ * known to be an object is when something parses it. That used to be `save`, which meant a
+ * missing bracket was a toast on the way out naming a field that was no longer on screen.
+ */
+const parses = (what: string, fallback: unknown) => ({
+  onChange: ({ value }: { value: string }) => {
+    try {
+      parseJson(value, what, fallback);
+      return undefined;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  },
+});
+
+const required = (what: string) => ({
+  onChange: ({ value }: { value: string }) => (value.trim() ? undefined : what),
+});
+
 export function McpDialog({
   server,
   onClose,
@@ -78,14 +87,11 @@ export function McpDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [draft, setDraft] = useState<Draft>(() => toDraft(server));
   const [paste, setPaste] = useState("");
   const [probe, setProbe] = useState<McpProbe | null>(null);
-  const set = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
-  const stdio = draft.transport === McpServersTransportEnum.Stdio;
 
-  /** The connection half of the draft, as the API wants it. Throws on malformed JSON. */
-  const connection = () => ({
+  /** The connection half of a draft, as the API wants it. */
+  const connection = (draft: Draft) => ({
     transport: draft.transport,
     command: draft.command.trim(),
     args: parseJson<string[]>(draft.args, "Args", []),
@@ -94,41 +100,49 @@ export function McpDialog({
     headers: parseJson<Record<string, string>>(draft.headers, "Headers", {}),
   });
 
-  const test = useMutation({
-    mutationFn: async () => {
-      setProbe(null);
-      const { testMcpServer } = await request(TestMcpServerDocument, { config: connection() });
-      return testMcpServer;
-    },
-    onSuccess: (result) => setProbe(result),
-  });
-
   const save = useMutation({
-    mutationFn: async () => {
-      const values = { ...connection(), slug: draft.slug.trim(), label: draft.label.trim() };
-      if (!values.slug) throw new Error("A server needs a slug — its tools are named after it.");
-      if (stdio && !values.command) throw new Error("A stdio server needs a command.");
-      if (!stdio && !values.url) throw new Error("An http server needs a url.");
-
-      if (server) {
-        await request(UpdateMcpServerDocument, {
-          id: server.id,
-          set: { ...values, enabled: draft.enabled },
-        });
-      } else {
-        await request(CreateMcpServerDocument, { values: { ...values, enabled: draft.enabled } });
-      }
+    mutationFn: async (draft: Draft) => {
+      const values = {
+        ...connection(draft),
+        slug: draft.slug.trim(),
+        label: draft.label.trim(),
+        enabled: draft.enabled,
+      };
+      if (server) await request(UpdateMcpServerDocument, { id: server.id, set: values });
+      else await request(CreateMcpServerDocument, { values });
     },
     onSuccess: () => {
       toast.success(server ? "Server saved" : "Server added");
       onSaved();
       onClose();
     },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const form = useAppForm({
+    defaultValues: toDraft(server),
+    onSubmit: ({ value }) => save.mutateAsync(value),
+  });
+
+  const test = useMutation({
+    mutationFn: async () => {
+      setProbe(null);
+      const { testMcpServer } = await request(TestMcpServerDocument, {
+        config: connection(form.state.values),
+      });
+      return testMcpServer;
+    },
+    onSuccess: setProbe,
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const applyPaste = () => {
     try {
-      set(parseMcpJson(paste));
+      // Field by field rather than as a whole draft, so the form counts as dirty and the fields
+      // the config did not mention keep what was typed into them.
+      for (const [key, value] of Object.entries(parseMcpJson(paste))) {
+        form.setFieldValue(key as keyof Draft, value as never);
+      }
       setPaste("");
       toast.success("Config applied");
     } catch (error) {
@@ -137,196 +151,205 @@ export function McpDialog({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{server ? "Edit server" : "New MCP server"}</DialogTitle>
-          <DialogDescription>
-            Its tools reach every task as <code>{draft.slug || "slug"}__tool-name</code>.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-4">
-          <Field
-            label="Paste a config"
-            htmlFor="paste"
-            className="rounded-md border border-dashed p-3"
-          >
+    <DialogLayout
+      open
+      onOpenChange={(open) => !open && onClose()}
+      hasUnsavedChanges={form.state.isDirty}
+      size="lg"
+      title={server ? "Edit server" : "New MCP server"}
+      description={
+        <form.Subscribe selector={(state) => state.values.slug}>
+          {(slug) => (
+            <>
+              Its tools reach every task as <code>{slug || "slug"}__tool-name</code>.
+            </>
+          )}
+        </form.Subscribe>
+      }
+      content={
+        <form
+          id="mcp-server"
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            form.handleSubmit();
+          }}
+        >
+          {/* Not a form field: it is a way of filling several of them in, and nothing here is
+              saved. Most servers arrive as a block of JSON from a README, and typing that out
+              again by hand is four fields' worth of chances to get one wrong. */}
+          <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
+            <Label htmlFor="mcp-paste">Paste a config</Label>
             <Textarea
-              id="paste"
+              id="mcp-paste"
               rows={3}
               className="font-mono text-xs"
               value={paste}
               onChange={(event) => setPaste(event.target.value)}
               placeholder={'{ "mcpServers": { "fs": { "command": "npx", "args": ["-y", "…"] } } }'}
             />
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-muted-foreground text-xs">
                 <code>.mcp.json</code> shaped — the whole file, one entry, or just the body.
               </p>
-              <Button variant="secondary" size="sm" onClick={applyPaste} disabled={!paste.trim()}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={applyPaste}
+                disabled={!paste.trim()}
+              >
                 <ClipboardPaste className="size-4" />
                 Apply
               </Button>
             </div>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Slug" htmlFor="slug" hint={doc("slug")}>
-              <Input
-                id="slug"
-                className="font-mono"
-                value={draft.slug}
-                onChange={(event) => set({ slug: event.target.value })}
-                placeholder="filesystem"
-              />
-            </Field>
-            <Field label="Label" htmlFor="label">
-              <Input
-                id="label"
-                value={draft.label}
-                onChange={(event) => set({ label: event.target.value })}
-                placeholder="Local files"
-              />
-            </Field>
           </div>
 
-          <Field label="Transport" htmlFor="transport" hint={doc("transport")}>
-            <Select
-              value={draft.transport}
-              onValueChange={(value) => set({ transport: value as McpServersTransportEnum })}
-            >
-              <SelectTrigger id="transport" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={McpServersTransportEnum.Stdio}>
-                  stdio — run a local command
-                </SelectItem>
-                <SelectItem value={McpServersTransportEnum.Http}>
-                  http — connect to a URL
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
+          <FieldRow
+            content={
+              <>
+                <form.AppField
+                  name="slug"
+                  validators={required("A server needs a slug — its tools are named after it.")}
+                >
+                  {(field) => (
+                    <field.InputField
+                      label="Slug"
+                      description={doc("slug")}
+                      required
+                      className="font-mono"
+                      placeholder="filesystem"
+                    />
+                  )}
+                </form.AppField>
+                <form.AppField name="label">
+                  {(field) => <field.InputField label="Label" placeholder="Local files" />}
+                </form.AppField>
+              </>
+            }
+          />
 
-          {stdio ? (
-            <>
-              <Field label="Command" htmlFor="command" hint={doc("command")}>
-                <Input
-                  id="command"
-                  className="font-mono"
-                  value={draft.command}
-                  onChange={(event) => set({ command: event.target.value })}
-                  placeholder="npx"
-                />
-              </Field>
-              <Field label="Args" htmlFor="args" hint={doc("args")}>
-                <Input
-                  id="args"
-                  className="font-mono text-xs"
-                  value={draft.args}
-                  onChange={(event) => set({ args: event.target.value })}
-                  placeholder='["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]'
-                />
-              </Field>
-              <Field label="Env" htmlFor="env" hint={doc("env")}>
-                <Input
-                  id="env"
-                  className="font-mono text-xs"
-                  value={draft.env}
-                  onChange={(event) => set({ env: event.target.value })}
-                  placeholder='{ "API_TOKEN": "…" }'
-                />
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="URL" htmlFor="url" hint={doc("url")}>
-                <Input
-                  id="url"
-                  className="font-mono"
-                  value={draft.url}
-                  onChange={(event) => set({ url: event.target.value })}
-                  placeholder="https://example.com/mcp"
-                />
-              </Field>
-              <Field label="Headers" htmlFor="headers" hint={doc("headers")}>
-                <Input
-                  id="headers"
-                  className="font-mono text-xs"
-                  value={draft.headers}
-                  onChange={(event) => set({ headers: event.target.value })}
-                  placeholder='{ "Authorization": "Bearer …" }'
-                />
-              </Field>
-            </>
-          )}
+          <RadioGroupField
+            form={form}
+            name="transport"
+            label="Transport"
+            description={doc("transport")}
+            options={[
+              {
+                value: McpServersTransportEnum.Stdio,
+                label: "stdio",
+                description: "Run a local command and talk to it over its own pipes.",
+              },
+              {
+                value: McpServersTransportEnum.Http,
+                label: "http",
+                description: "Connect to a server that is already running, at a URL.",
+              },
+            ]}
+          />
 
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div>
-              <Label htmlFor="enabled">Enabled</Label>
-              <p className="text-xs text-muted-foreground">
-                A disabled server stays configured but offers no tools.
-              </p>
-            </div>
-            <Switch
-              id="enabled"
-              checked={draft.enabled}
-              onCheckedChange={(enabled) => set({ enabled })}
-            />
-          </div>
-
-          {probe ? (
-            <div
-              className={`flex flex-col gap-2 rounded-md border p-3 text-sm ${
-                probe.ok ? "" : "border-destructive"
-              }`}
-            >
-              <div className="flex items-center gap-2 font-medium">
-                {probe.ok ? (
-                  <CheckCircle2 className="size-4" />
-                ) : (
-                  <XCircle className="size-4 text-destructive" />
-                )}
-                {probe.ok ? `Connected — ${probe.tools.length} tool(s)` : "Could not connect"}
-              </div>
-              {probe.ok ? (
-                <div className="flex flex-wrap gap-1">
-                  {probe.tools.map((tool) => (
-                    <span
-                      key={tool.name}
-                      title={tool.description}
-                      className="rounded-md border px-2 py-0.5 font-mono text-xs text-muted-foreground"
-                    >
-                      {tool.name}
-                    </span>
-                  ))}
-                </div>
+          <form.Subscribe selector={(state) => state.values.transport}>
+            {(transport) =>
+              transport === McpServersTransportEnum.Stdio ? (
+                <>
+                  <form.AppField
+                    name="command"
+                    validators={required("A stdio server needs a command.")}
+                  >
+                    {(field) => (
+                      <field.InputField
+                        label="Command"
+                        description={doc("command")}
+                        required
+                        className="font-mono"
+                        placeholder="npx"
+                      />
+                    )}
+                  </form.AppField>
+                  <form.AppField name="args" validators={parses("Args", [])}>
+                    {(field) => (
+                      <field.InputField
+                        label="Args"
+                        description={doc("args")}
+                        className="font-mono text-xs"
+                        placeholder='["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]'
+                      />
+                    )}
+                  </form.AppField>
+                  <form.AppField name="env" validators={parses("Env", {})}>
+                    {(field) => (
+                      <field.InputField
+                        label="Env"
+                        description={doc("env")}
+                        className="font-mono text-xs"
+                        placeholder='{ "API_TOKEN": "…" }'
+                      />
+                    )}
+                  </form.AppField>
+                </>
               ) : (
-                <p className="whitespace-pre-wrap font-mono text-xs text-destructive">
-                  {probe.error}
-                </p>
-              )}
-            </div>
-          ) : null}
-        </div>
+                <>
+                  <form.AppField name="url" validators={required("An http server needs a url.")}>
+                    {(field) => (
+                      <field.InputField
+                        label="URL"
+                        description={doc("url")}
+                        required
+                        className="font-mono"
+                        placeholder="https://example.com/mcp"
+                      />
+                    )}
+                  </form.AppField>
+                  <form.AppField name="headers" validators={parses("Headers", {})}>
+                    {(field) => (
+                      <field.InputField
+                        label="Headers"
+                        description={doc("headers")}
+                        className="font-mono text-xs"
+                        placeholder='{ "Authorization": "Bearer …" }'
+                      />
+                    )}
+                  </form.AppField>
+                </>
+              )
+            }
+          </form.Subscribe>
 
-        <DialogFooter className="sm:justify-between">
-          <Button variant="secondary" onClick={() => test.mutate()} disabled={test.isPending}>
-            <PlugZap className="size-4" />
-            {test.isPending ? "Connecting…" : "Test connection"}
+          <form.AppField name="enabled">
+            {(field) => (
+              <field.SwitchField
+                label="Enabled"
+                description="A disabled server stays configured but offers no tools."
+                orientation="horizontal"
+                className="rounded-md border p-3"
+              />
+            )}
+          </form.AppField>
+
+          {probe ? <McpProbeResult probe={probe} /> : null}
+        </form>
+      }
+      footer={
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => test.mutate()}
+          disabled={test.isPending}
+        >
+          <PlugZap className="size-4" />
+          {test.isPending ? "Connecting…" : "Test connection"}
+        </Button>
+      }
+      footerActions={
+        <>
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
           </Button>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={() => save.mutate()} disabled={save.isPending}>
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <form.AppForm>
+            <form.SubmitButton form="mcp-server">Save</form.SubmitButton>
+          </form.AppForm>
+        </>
+      }
+    />
   );
 }

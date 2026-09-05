@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { List } from "lucide-react";
 import { useState } from "react";
 import { ModelsDocument } from "@/__generated__/graphql/graphql";
-import { Button } from "@/components/ui/button";
+import { ActionButton } from "@/components/action-button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,6 +19,19 @@ const DEFAULT = "__default__";
 const CUSTOM = "__custom__";
 
 /**
+ * The props a `FormField` hands its control, which this passes to whichever of its two
+ * controls is on screen. Its root renders no DOM of its own, so callers inside a field reach
+ * it through the function form of `control` — see `ModelSelectField`.
+ */
+type Wired = {
+  id?: string;
+  "aria-labelledby"?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: true;
+  "aria-required"?: true;
+};
+
+/**
  * Picks a model from whatever the configured server offers.
  *
  * The list is a live call to that server, which may not be running, so it is only fetched
@@ -26,13 +39,12 @@ const CUSTOM = "__custom__";
  * all, "Type a name…" drops the field back to free text.
  */
 export function ModelSelect({
-  id,
   value,
   onChange,
   defaultLabel,
   agentId,
-}: {
-  id?: string;
+  ...wired
+}: Wired & {
   value: string;
   onChange: (model: string) => void;
   /** Label for the empty choice. Omitted, a model must be named. */
@@ -59,19 +71,19 @@ export function ModelSelect({
     return (
       <div className="flex gap-2">
         <Input
-          id={id}
+          {...wired}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="llama3.1:8b"
         />
-        <Button
+        <ActionButton
+          label="Pick from the list"
           variant="ghost"
           size="icon"
-          title="Pick from the list"
           onClick={() => setTyping(false)}
         >
-          <List className="size-4" />
-        </Button>
+          <List />
+        </ActionButton>
       </div>
     );
   }
@@ -89,7 +101,7 @@ export function ModelSelect({
       }}
       onOpenChange={(open) => open && setOpened(true)}
     >
-      <SelectTrigger id={id} className="w-full">
+      <SelectTrigger {...wired} className="w-full">
         <SelectValue placeholder="Select a model" />
       </SelectTrigger>
       <SelectContent>

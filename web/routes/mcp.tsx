@@ -1,14 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CheckCircle2,
-  Pencil,
-  Plug,
-  PlugZap,
-  Plus,
-  RefreshCw,
-  Trash2,
-  XCircle,
-} from "lucide-react";
+import { Pencil, Plug, PlugZap, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -20,11 +11,22 @@ import {
   TestMcpServerDocument,
   UpdateMcpServerDocument,
 } from "@/__generated__/graphql/graphql";
-import { Page } from "@/components/app-shell";
+import { ActionButton } from "@/components/action-button";
+import { ConfirmButton } from "@/components/confirm-button";
 import { McpDialog } from "@/components/mcp-dialog";
+import { McpProbeResult } from "@/components/mcp-probe";
+import { PageLayout } from "@/components/page-layout";
+import { QueryState } from "@/components/query-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { request } from "@/lib/gql";
 import { toConnection } from "@/lib/mcp-config";
@@ -77,12 +79,13 @@ export function McpRoute() {
   });
 
   const statusOf = (id: string) => servers.data?.mcpStatus.find((entry) => entry.id === id);
+  const rows = servers.data?.mcpServers ?? [];
 
   return (
-    <Page
+    <PageLayout
       title="MCP servers"
       description="The tools every task can reach, named slug__tool-name."
-      actions={
+      action={
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => reconnect.mutate()} disabled={reconnect.isPending}>
             <RefreshCw className="size-4" />
@@ -94,106 +97,105 @@ export function McpRoute() {
           </Button>
         </div>
       }
-    >
-      {servers.data?.mcpServers.length === 0 ? (
-        <Card className="items-center gap-2 p-8 text-center">
-          <Plug className="size-5 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No servers yet. Without one a task can think, but not act.
-          </p>
-        </Card>
-      ) : null}
+      content={
+        <>
+          <QueryState
+            query={servers}
+            what="your MCP servers"
+            count={rows.length}
+            empty={
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Plug />
+                  </EmptyMedia>
+                  <EmptyTitle>No servers yet</EmptyTitle>
+                  <EmptyDescription>Without one a task can think, but not act.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            }
+          />
 
-      {servers.data?.mcpServers.map((server) => {
-        const status = statusOf(server.id);
-        const tools = status?.tools ?? [];
-        const probe = probes[server.id];
-        return (
-          <Card key={server.id} className="gap-3 p-4">
-            <div className="flex items-center gap-3">
-              <div className={`min-w-0 flex-1 ${server.enabled ? "" : "opacity-50"}`}>
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-mono text-sm font-medium">{server.slug}</span>
-                  <Badge variant="outline">{server.transport}</Badge>
-                  <Badge variant={status?.status === "ready" ? "secondary" : "outline"}>
-                    {status?.status ?? "unknown"}
-                  </Badge>
-                  {tools.length ? (
-                    <span className="text-xs text-muted-foreground">{tools.length} tool(s)</span>
-                  ) : null}
+          {rows.map((server) => {
+            const status = statusOf(server.id);
+            const tools = status?.tools ?? [];
+            const probe = probes[server.id];
+            return (
+              <Item key={server.id} variant="outline" className="flex-col items-stretch gap-3">
+                <div className="flex w-full items-center gap-3">
+                  <ItemContent className={server.enabled ? undefined : "opacity-50"}>
+                    <ItemTitle>
+                      <span className="truncate font-mono">{server.slug}</span>
+                      <Badge variant="outline">{server.transport}</Badge>
+                      <Badge variant={status?.status === "ready" ? "secondary" : "outline"}>
+                        {status?.status ?? "unknown"}
+                      </Badge>
+                      {tools.length ? (
+                        <span className="font-normal text-muted-foreground text-xs">
+                          {tools.length} tool(s)
+                        </span>
+                      ) : null}
+                    </ItemTitle>
+                    <ItemDescription className="truncate font-mono text-xs">
+                      {server.transport === "stdio"
+                        ? [server.command, ...(toConnection(server).args ?? [])].join(" ")
+                        : server.url}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions className="gap-1">
+                    <Switch
+                      checked={server.enabled}
+                      onCheckedChange={(enabled) => toggle.mutate({ id: server.id, enabled })}
+                      aria-label={`Enable ${server.slug}`}
+                    />
+                    <ActionButton
+                      label="Test connection"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => test.mutate(server)}
+                      disabled={test.isPending && test.variables?.id === server.id}
+                    >
+                      <PlugZap />
+                    </ActionButton>
+                    <ActionButton
+                      label="Edit"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEditing(server)}
+                    >
+                      <Pencil />
+                    </ActionButton>
+                    <ConfirmButton
+                      label="Delete"
+                      variant="ghost"
+                      size="icon"
+                      title={`Delete ${server.slug}?`}
+                      description="Every task loses its tools, and any profile scoped to it falls back to the servers that are left."
+                      onConfirm={() => remove.mutate(server.id)}
+                    >
+                      <Trash2 />
+                    </ConfirmButton>
+                  </ItemActions>
                 </div>
-                <p className="truncate font-mono text-xs text-muted-foreground">
-                  {server.transport === "stdio"
-                    ? [server.command, ...(toConnection(server).args ?? [])].join(" ")
-                    : server.url}
-                </p>
-              </div>
-              <Switch
-                checked={server.enabled}
-                onCheckedChange={(enabled) => toggle.mutate({ id: server.id, enabled })}
-                aria-label={`Enable ${server.slug}`}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                title="Test connection"
-                onClick={() => test.mutate(server)}
-                disabled={test.isPending && test.variables?.id === server.id}
-              >
-                <PlugZap className="size-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => setEditing(server)}>
-                <Pencil className="size-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => remove.mutate(server.id)}>
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
 
-            {status?.error ? (
-              <p className="whitespace-pre-wrap font-mono text-xs text-destructive">
-                {status.error}
-              </p>
-            ) : null}
-
-            {probe ? (
-              <div className="flex flex-col gap-2 border-t pt-3 text-sm">
-                <div className="flex items-center gap-2">
-                  {probe.ok ? (
-                    <CheckCircle2 className="size-4" />
-                  ) : (
-                    <XCircle className="size-4 text-destructive" />
-                  )}
-                  {probe.ok ? `Connected — ${probe.tools.length} tool(s)` : "Could not connect"}
-                </div>
-                {probe.ok ? (
-                  <div className="flex flex-wrap gap-1">
-                    {probe.tools.map((tool) => (
-                      <span
-                        key={tool.name}
-                        title={tool.description}
-                        className="rounded-md border px-2 py-0.5 font-mono text-xs text-muted-foreground"
-                      >
-                        {tool.name}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="whitespace-pre-wrap font-mono text-xs text-destructive">
-                    {probe.error}
+                {status?.error ? (
+                  <p className="whitespace-pre-wrap font-mono text-destructive text-xs">
+                    {status.error}
                   </p>
-                )}
-              </div>
-            ) : null}
-          </Card>
-        );
-      })}
+                ) : null}
 
-      {creating ? (
-        <McpDialog onClose={() => setCreating(false)} onSaved={refresh} />
-      ) : editing ? (
-        <McpDialog server={editing} onClose={() => setEditing(null)} onSaved={refresh} />
-      ) : null}
-    </Page>
+                {probe ? <McpProbeResult probe={probe} /> : null}
+              </Item>
+            );
+          })}
+
+          {creating ? (
+            <McpDialog onClose={() => setCreating(false)} onSaved={refresh} />
+          ) : editing ? (
+            <McpDialog server={editing} onClose={() => setEditing(null)} onSaved={refresh} />
+          ) : null}
+        </>
+      }
+    />
   );
 }

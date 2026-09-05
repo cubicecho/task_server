@@ -13,12 +13,16 @@ import {
   RunTaskDocument,
   StopTaskDocument,
 } from "@/__generated__/graphql/graphql";
-import { Page } from "@/components/app-shell";
+import { ActionButton } from "@/components/action-button";
+import { ConfirmButton } from "@/components/confirm-button";
+import { DisclosureRow } from "@/components/disclosure-row";
+import { PageLayout } from "@/components/page-layout";
+import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -47,7 +51,7 @@ const duration = (from: string, to?: string | null) =>
 function Provenance({ trigger }: { trigger: Run["trigger"] }) {
   if (!trigger) return null;
   const label = trigger.kind === "cron" ? trigger.cron : `/webhooks/${trigger.event}`;
-  return <span className="shrink-0 font-mono text-xs text-muted-foreground">{label}</span>;
+  return <span className="shrink-0 font-mono text-muted-foreground text-xs">{label}</span>;
 }
 
 /** Tool names as chips, red where the call failed. */
@@ -88,14 +92,14 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
         >
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={STATUS_VARIANT[step.status] ?? "secondary"}>{step.status}</Badge>
-            <span className="text-sm font-medium">{step.name}</span>
+            <span className="font-medium text-sm">{step.name}</span>
             {step.kind === "decision" ? (
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="font-mono text-muted-foreground text-xs">
                 → {step.branch || "(undecided)"}
               </span>
             ) : null}
             {step.totalTokens ? (
-              <span className="text-xs text-muted-foreground">{step.totalTokens} tokens</span>
+              <span className="text-muted-foreground text-xs">{step.totalTokens} tokens</span>
             ) : null}
           </div>
           <ToolChips calls={step.toolCalls} />
@@ -158,9 +162,9 @@ function RunDetail({
 
   if (!found) {
     return detail.error ? (
-      <p className="text-sm text-destructive">{(detail.error as Error).message}</p>
+      <p className="text-destructive text-sm">{(detail.error as Error).message}</p>
     ) : (
-      <p className="text-sm text-muted-foreground">Loading…</p>
+      <p className="text-muted-foreground text-sm">Loading…</p>
     );
   }
 
@@ -183,7 +187,7 @@ function RunDetail({
         <>
           <RunSteps steps={found.steps} />
           {/* The run failed before or between steps — nothing above says why. */}
-          {run.error ? <p className="text-sm text-destructive">{run.error}</p> : null}
+          {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
         </>
       ) : (
         <>
@@ -222,12 +226,13 @@ function FilterBar({
       <Input
         value={filters.search}
         onChange={(event) => onChange({ search: event.target.value })}
+        aria-label="Search runs"
         placeholder="Search output, errors and task names…"
         className="min-w-56 flex-1"
       />
 
       <Select value={filters.status} onValueChange={(status) => onChange({ status })}>
-        <SelectTrigger className="w-36">
+        <SelectTrigger className="w-36" aria-label="Status">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -241,7 +246,7 @@ function FilterBar({
       </Select>
 
       <Select value={filters.taskId} onValueChange={(taskId) => onChange({ taskId })}>
-        <SelectTrigger className="w-44">
+        <SelectTrigger className="w-44" aria-label="Task">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -264,7 +269,7 @@ function FilterBar({
           });
         }}
       >
-        <SelectTrigger className="w-40">
+        <SelectTrigger className="w-40" aria-label="Time window">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -277,14 +282,14 @@ function FilterBar({
       </Select>
 
       {dirty ? (
-        <Button
+        <ActionButton
+          label="Clear filters"
           variant="ghost"
           size="icon"
-          title="Clear filters"
           onClick={() => onChange(NO_FILTERS)}
         >
-          <X className="size-4" />
-        </Button>
+          <X />
+        </ActionButton>
       ) : null}
     </div>
   );
@@ -369,10 +374,10 @@ export function RunsRoute() {
   });
 
   return (
-    <Page
+    <PageLayout
       title="Runs"
       description="Every execution, newest first."
-      actions={
+      action={
         <Button
           variant="outline"
           onClick={() => queryClient.invalidateQueries({ queryKey: ["runs"] })}
@@ -381,122 +386,149 @@ export function RunsRoute() {
           Refresh
         </Button>
       }
-    >
-      <FilterBar filters={filters} onChange={update} tasks={tasks.data?.tasks ?? []} />
+      headerContent={
+        <FilterBar filters={filters} onChange={update} tasks={tasks.data?.tasks ?? []} />
+      }
+      content={
+        <>
+          <QueryState
+            query={runs}
+            what="the run history"
+            count={rows.length}
+            empty={
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>{filtered ? "No matches" : "Nothing has run yet"}</EmptyTitle>
+                  <EmptyDescription>
+                    {filtered
+                      ? "No runs match these filters."
+                      : "A run appears here the moment a task starts — by schedule, by webhook, or by hand."}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            }
+          />
 
-      {rows.length === 0 && !runs.isPending ? (
-        <p className="text-sm text-muted-foreground">
-          {filtered ? "No runs match these filters." : "Nothing has run yet."}
-        </p>
-      ) : null}
-
-      {rows.map((run) => {
-        const expanded = open === run.id;
-        const running = run.status === "running";
-        // A trigger that fired at a busy task: a real delivery, and nothing behind it to open.
-        const skipped = run.status === "skipped";
-        // A firing waiting for a slot. Nothing has happened yet, and deleting the row is how
-        // you call it off.
-        const queued = run.status === "queued";
-        return (
-          <Card key={run.id} className="gap-2 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <button
-                type="button"
-                className="min-w-0 flex-1 text-left"
-                onClick={() => setOpen(expanded ? null : run.id)}
-              >
-                <div className="flex items-center gap-2">
+          {rows.map((run) => {
+            const running = run.status === "running";
+            // A trigger that fired at a busy task: a real delivery, and nothing behind it to
+            // open.
+            const skipped = run.status === "skipped";
+            // A firing waiting for a slot. Nothing has happened yet, and deleting the row is how
+            // you call it off.
+            const queued = run.status === "queued";
+            return (
+              <DisclosureRow
+                key={run.id}
+                open={open === run.id}
+                onOpenChange={(next) => setOpen(next ? run.id : null)}
+                badges={
                   <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>{run.status}</Badge>
-                  <span className="truncate font-medium">{run.task.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(run.startedAt).toLocaleString()}
-                    {skipped || queued ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
-                    {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
-                    {/* Only worth saying when the row stands for more than the one firing. */}
-                    {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
-                  </span>
-                  <Provenance trigger={run.trigger} />
-                </div>
-                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                  {run.error || run.output || "(no output)"}
-                </p>
-              </button>
-              <div className="flex shrink-0 items-center gap-1">
-                {running ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Stop this run"
-                    // Only this row's button: `isPending` alone disabled every other running
-                    // run's Stop while one of them was being stopped.
-                    disabled={stop.isPending && stop.variables === run.taskId}
-                    onClick={() => stop.mutate(run.taskId)}
-                  >
-                    <Square className="size-4" />
-                  </Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title={running ? "Stop the run before deleting" : "Delete"}
-                  disabled={running}
-                  onClick={() => remove.mutate(run.id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </div>
+                }
+                title={run.task.name}
+                meta={
+                  <>
+                    <span className="shrink-0 font-normal text-muted-foreground text-xs">
+                      {new Date(run.startedAt).toLocaleString()}
+                      {skipped || queued ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
+                      {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
+                      {/* Only worth saying when the row stands for more than the one firing. */}
+                      {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
+                    </span>
+                    <Provenance trigger={run.trigger} />
+                  </>
+                }
+                description={
+                  <span className="line-clamp-2">{run.error || run.output || "(no output)"}</span>
+                }
+                action={
+                  <>
+                    {running ? (
+                      <ActionButton
+                        label="Stop this run"
+                        variant="ghost"
+                        size="icon"
+                        // Only this row's button: `isPending` alone disabled every other running
+                        // run's Stop while one of them was being stopped.
+                        disabled={stop.isPending && stop.variables === run.taskId}
+                        onClick={() => stop.mutate(run.taskId)}
+                      >
+                        <Square />
+                      </ActionButton>
+                    ) : null}
+                    <ConfirmButton
+                      label="Delete"
+                      variant="ghost"
+                      size="icon"
+                      hint={running ? "Stop the run before deleting" : undefined}
+                      disabled={running}
+                      title="Delete this run?"
+                      description={
+                        queued
+                          ? "The firing is called off — it never starts, and nothing is retried in its place."
+                          : "Its output, its steps and the webhook body it was given go with it."
+                      }
+                      onConfirm={() => remove.mutate(run.id)}
+                    >
+                      <Trash2 />
+                    </ConfirmButton>
+                  </>
+                }
+                content={
+                  <>
+                    {/* A run in flight has no stored output yet — this is the run itself, live. */}
+                    {running ? <RunStream runId={run.id} /> : null}
+                    {skipped ? (
+                      <p className="text-muted-foreground text-sm">
+                        {run.attempts > 1
+                          ? `The trigger fired ${run.attempts} times while this task was already running, so nothing was started.`
+                          : "The trigger fired while this task was already running, so nothing was started."}{" "}
+                        {/* Not "the run above": the list is newest first, so the run it collided
+                            with — which started before it — is below. Naming neither is safer. */}
+                        It collided with the run that was already under way.
+                      </p>
+                    ) : null}
+                    {queued ? (
+                      <p className="text-muted-foreground text-sm">
+                        {run.attempts > 1
+                          ? `The trigger fired ${run.attempts} times while the server was at its limit, and this row stands for all of them.`
+                          : "The trigger fired while the server was at its limit."}{" "}
+                        It starts on its own when a slot comes back, in this same row — or delete it
+                        to call it off. {run.error}
+                      </p>
+                    ) : null}
+                    <RunDetail
+                      run={run}
+                      withResult={!running && !skipped && !queued}
+                      onReplay={(payload) => setReplay({ run, payload })}
+                    />
+                  </>
+                }
+              />
+            );
+          })}
 
-            {expanded ? (
-              <div className="flex flex-col gap-2 border-t pt-3">
-                {/* A run in flight has no stored output yet — this is the run itself, live. */}
-                {running ? <RunStream runId={run.id} /> : null}
-                {skipped ? (
-                  <p className="text-sm text-muted-foreground">
-                    {run.attempts > 1
-                      ? `The trigger fired ${run.attempts} times while this task was already running, so nothing was started.`
-                      : "The trigger fired while this task was already running, so nothing was started."}{" "}
-                    {/* Not "the run above": the list is newest first, so the run it collided
-                        with — which started before it — is below. Naming neither is safer. */}
-                    It collided with the run that was already under way.
-                  </p>
-                ) : null}
-                {queued ? (
-                  <p className="text-sm text-muted-foreground">
-                    {run.attempts > 1
-                      ? `The trigger fired ${run.attempts} times while the server was at its limit, and this row stands for all of them.`
-                      : "The trigger fired while the server was at its limit."}{" "}
-                    It starts on its own when a slot comes back, in this same row — or delete it to
-                    call it off. {run.error}
-                  </p>
-                ) : null}
-                <RunDetail
-                  run={run}
-                  withResult={!running && !skipped && !queued}
-                  onReplay={(payload) => setReplay({ run, payload })}
-                />
-              </div>
-            ) : null}
-          </Card>
-        );
-      })}
+          {more ? (
+            <Button
+              variant="outline"
+              onClick={() => setLimit(limit + PAGE)}
+              disabled={runs.isFetching}
+            >
+              Load {PAGE} more
+            </Button>
+          ) : null}
 
-      {more ? (
-        <Button variant="outline" onClick={() => setLimit(limit + PAGE)} disabled={runs.isFetching}>
-          Load {PAGE} more
-        </Button>
-      ) : null}
-
-      {replay ? (
-        <RunDialog
-          taskId={replay.run.taskId}
-          taskName={replay.run.task.name}
-          body={replay.payload}
-          onClose={() => setReplay(null)}
-          onRun={(payload) => start.mutate({ taskId: replay.run.taskId, payload })}
-        />
-      ) : null}
-    </Page>
+          {replay ? (
+            <RunDialog
+              taskId={replay.run.taskId}
+              taskName={replay.run.task.name}
+              body={replay.payload}
+              onClose={() => setReplay(null)}
+              onRun={(payload) => start.mutate({ taskId: replay.run.taskId, payload })}
+            />
+          ) : null}
+        </>
+      }
+    />
   );
 }

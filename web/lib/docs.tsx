@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react";
 import { type FieldDescriptionMap, FieldDescriptions } from "@/__generated__/graphql/descriptions";
 
 /**
@@ -21,12 +22,31 @@ export function describe<T extends keyof FieldDescriptionMap>(
 }
 
 /**
- * `describe` bound to one type, for a form that is mostly one table.
+ * A schema description with its backticks rendered.
+ *
+ * These sentences are written once and read by two audiences, so they are marked up the only way
+ * both understand: a model reads `` `ondemand` `` as markdown, and this turns it into a `<code>`
+ * for everyone else. It lives beside `describe` because every caller of one wants the other.
+ */
+export function ticks(text: string): ReactNode {
+  return text.split("`").map((part, index) =>
+    index % 2 === 1 ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: the split of a fixed string is the order
+      <code key={index}>{part}</code>
+    ) : (
+      // biome-ignore lint/suspicious/noArrayIndexKey: same
+      <Fragment key={index}>{part}</Fragment>
+    ),
+  );
+}
+
+/**
+ * `describe` bound to one type and rendered, for a form that is mostly one table.
  *
  * `settings.tsx` names fourteen fields of `Setting` and would otherwise repeat the type name at
  * every one of them.
  */
 export const describeFor =
   <T extends keyof FieldDescriptionMap>(type: T) =>
-  (field: keyof FieldDescriptionMap[T]) =>
-    describe(type, field);
+  (field: keyof FieldDescriptionMap[T]): ReactNode =>
+    ticks(describe(type, field));

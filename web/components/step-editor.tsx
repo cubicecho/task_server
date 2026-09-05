@@ -1,8 +1,11 @@
 import { ChevronDown, ChevronUp, GitBranch, Plus, Trash2, X } from "lucide-react";
+import { ActionButton } from "@/components/action-button";
+import { FieldRow } from "@/components/field-row";
+import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
+import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -72,6 +75,7 @@ export function StepList({
 
       <div className="flex gap-2">
         <Button
+          type="button"
           variant="outline"
           size="sm"
           onClick={() => onChange([...steps, emptyStep("agent")])}
@@ -79,17 +83,20 @@ export function StepList({
           <Plus className="size-4" />
           Add step
         </Button>
-        <Button
+        <ActionButton
+          type="button"
+          label="Add decision"
+          tooltip={false}
           variant="outline"
           size="sm"
           // A decision's arms sit one level deeper, and the server refuses past MAX_DEPTH.
           disabled={depth >= MAX_DEPTH}
-          title={depth >= MAX_DEPTH ? `Steps cannot nest more than ${MAX_DEPTH} deep.` : undefined}
+          hint={depth >= MAX_DEPTH ? `Steps cannot nest more than ${MAX_DEPTH} deep.` : undefined}
           onClick={() => onChange([...steps, emptyStep("decision")])}
         >
           <GitBranch className="size-4" />
           Add decision
-        </Button>
+        </ActionButton>
       </div>
     </div>
   );
@@ -183,6 +190,7 @@ function StepCard({
           value={step.name}
           onChange={(event) => patch({ name: event.target.value })}
           placeholder={decision ? "Name this decision" : "Name this step"}
+          aria-label={decision ? "Decision name" : "Step name"}
         />
         <Switch
           checked={step.enabled}
@@ -190,27 +198,35 @@ function StepCard({
           aria-label="Enabled"
           title={step.enabled ? "Runs" : "Skipped"}
         />
-        <Button
+        <ActionButton
+          type="button"
+          label="Move up"
           variant="ghost"
           size="icon"
-          title="Move up"
           disabled={first}
           onClick={() => onMove(-1)}
         >
-          <ChevronUp className="size-4" />
-        </Button>
-        <Button
+          <ChevronUp />
+        </ActionButton>
+        <ActionButton
+          type="button"
+          label="Move down"
           variant="ghost"
           size="icon"
-          title="Move down"
           disabled={last}
           onClick={() => onMove(1)}
         >
-          <ChevronDown className="size-4" />
-        </Button>
-        <Button variant="ghost" size="icon" title="Remove" onClick={onRemove}>
-          <Trash2 className="size-4" />
-        </Button>
+          <ChevronDown />
+        </ActionButton>
+        <ActionButton
+          type="button"
+          label={decision ? "Remove this decision" : "Remove this step"}
+          variant="ghost"
+          size="icon"
+          onClick={onRemove}
+        >
+          <Trash2 />
+        </ActionButton>
       </div>
 
       <div className="flex flex-col gap-3 p-3">
@@ -218,6 +234,7 @@ function StepCard({
           value={step.prompt}
           onChange={(event) => patch({ prompt: event.target.value })}
           rows={3}
+          aria-label={decision ? "What is being decided" : "Prompt"}
           placeholder={
             decision
               ? "Do any of these report an application error?"
@@ -226,10 +243,11 @@ function StepCard({
         />
 
         {decision ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Cases</Label>
+          <Section
+            title="Cases"
+            action={
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => patch({ cases: [...step.cases, ""] })}
@@ -237,80 +255,101 @@ function StepCard({
                 <Plus className="size-4" />
                 Add case
               </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {step.cases.map((label, index) => (
-                // Cases are reordered by nothing and renamed in place, so the index is stable.
-                // biome-ignore lint/suspicious/noArrayIndexKey: no id, and the list is positional
-                <div key={index} className="flex items-center gap-1">
-                  <Input
-                    className={`h-8 w-40 font-mono ${duplicate(index) ? "border-destructive" : ""}`}
-                    value={label}
-                    onChange={(event) => setCase(index, event.target.value)}
-                    placeholder="error"
-                    aria-invalid={duplicate(index)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Remove this case"
-                    onClick={() => dropCase(index)}
-                  >
-                    <X className="size-4" />
-                  </Button>
+            }
+            content={
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {step.cases.map((label, index) => (
+                    // Cases are reordered by nothing and renamed in place, so the index is stable.
+                    // biome-ignore lint/suspicious/noArrayIndexKey: no id, and the list is positional
+                    <div key={index} className="flex items-center gap-1">
+                      <Input
+                        className={`h-8 w-40 font-mono ${duplicate(index) ? "border-destructive" : ""}`}
+                        value={label}
+                        onChange={(event) => setCase(index, event.target.value)}
+                        placeholder="error"
+                        aria-label={`Case ${index + 1}`}
+                        aria-invalid={duplicate(index)}
+                      />
+                      <ActionButton
+                        type="button"
+                        label="Remove this case"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => dropCase(index)}
+                      >
+                        <X />
+                      </ActionButton>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            {/* Said here rather than at save time: the server refuses the whole flow over it,
-                and by then it is a message about a step you have scrolled away from. */}
-            {step.cases.some((_, index) => duplicate(index)) ? (
-              <p className="text-xs text-destructive">
-                Two cases spelling the same thing are one case. Rename or remove one.
-              </p>
-            ) : null}
-          </div>
+                {/* Said here rather than at save time: the server refuses the whole flow over it,
+                    and by then it is a message about a step you have scrolled away from. */}
+                {step.cases.some((_, index) => duplicate(index)) ? (
+                  <p className="text-destructive text-xs">
+                    Two cases spelling the same thing are one case. Rename or remove one.
+                  </p>
+                ) : null}
+              </>
+            }
+          />
         ) : null}
 
         <details className="text-sm">
           <summary className="cursor-pointer text-xs text-muted-foreground">
             Model, system prompt, context
           </summary>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Model</Label>
-              <ModelSelect
-                value={step.model}
-                onChange={(model) => patch({ model })}
-                defaultLabel="Same as the task"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">System prompt</Label>
-              <Input
-                value={step.systemPrompt}
-                onChange={(event) => patch({ systemPrompt: event.target.value })}
-                placeholder="(same as the task)"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Sees</Label>
-              <Select
-                value={step.context}
-                onValueChange={(context) => patch({ context: context as StepContext })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONTEXTS.map((context) => (
-                    <SelectItem key={context} value={context}>
-                      {CONTEXT_LABELS[context]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <FieldRow
+            className="mt-3"
+            perRow={3}
+            content={
+              <>
+                <FormField
+                  label="Model"
+                  // The function form, because a Radix `Select` renders no DOM of its own and the
+                  // id has to reach the trigger.
+                  control={(wired) => (
+                    <ModelSelect
+                      {...wired}
+                      value={step.model}
+                      onChange={(model) => patch({ model })}
+                      defaultLabel="Same as the task"
+                    />
+                  )}
+                />
+                <FormField
+                  label="System prompt"
+                  control={
+                    <Input
+                      value={step.systemPrompt}
+                      onChange={(event) => patch({ systemPrompt: event.target.value })}
+                      placeholder="(same as the task)"
+                    />
+                  }
+                />
+                <FormField
+                  label="Sees"
+                  control={(wired) => (
+                    <Select
+                      value={step.context}
+                      onValueChange={(context) => patch({ context: context as StepContext })}
+                    >
+                      <SelectTrigger {...wired} className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONTEXTS.map((context) => (
+                          <SelectItem key={context} value={context}>
+                            {CONTEXT_LABELS[context]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </>
+            }
+          />
         </details>
 
         {decision

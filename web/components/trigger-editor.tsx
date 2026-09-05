@@ -1,8 +1,9 @@
 import { Check, Copy, Plus, Trash2 } from "lucide-react";
 import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
+import { ActionButton } from "@/components/action-button";
+import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useCopy } from "@/lib/use-copy";
 
@@ -100,10 +101,11 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
 
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <Label>Schedule</Label>
+      <Section
+        title="Schedule"
+        action={
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => add({ kind: "cron", cron: "", timezone: "", event: "", enabled: true })}
@@ -111,60 +113,76 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
             <Plus className="size-4" />
             Add
           </Button>
-        </div>
+        }
+        content={
+          <>
+            {cron.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                No schedule — the task only runs when you press play.
+              </p>
+            ) : null}
 
-        {cron.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No schedule — the task only runs when you press play.
-          </p>
-        ) : null}
+            {cron.map((trigger) => (
+              <div key={trigger.key} className="flex items-center gap-2">
+                <Input
+                  className="font-mono"
+                  value={trigger.cron}
+                  onChange={(event) => patch(trigger.key, { cron: event.target.value })}
+                  placeholder="0 9 * * *"
+                  aria-label="Cron expression"
+                />
+                <Input
+                  className="w-52"
+                  value={trigger.timezone}
+                  onChange={(event) => patch(trigger.key, { timezone: event.target.value })}
+                  placeholder="America/Chicago"
+                  aria-label="Time zone"
+                />
+                <TriggerSwitch
+                  trigger={trigger}
+                  onChange={(enabled) => patch(trigger.key, { enabled })}
+                />
+                <ActionButton
+                  type="button"
+                  label="Remove this schedule"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => drop(trigger)}
+                >
+                  <Trash2 />
+                </ActionButton>
+              </div>
+            ))}
 
-        {cron.map((trigger) => (
-          <div key={trigger.key} className="flex items-center gap-2">
-            <Input
-              className="font-mono"
-              value={trigger.cron}
-              onChange={(event) => patch(trigger.key, { cron: event.target.value })}
-              placeholder="0 9 * * *"
-              aria-label="Cron expression"
-            />
-            <Input
-              className="w-52"
-              value={trigger.timezone}
-              onChange={(event) => patch(trigger.key, { timezone: event.target.value })}
-              placeholder="America/Chicago"
-              aria-label="Time zone"
-            />
-            <TriggerSwitch
-              trigger={trigger}
-              onChange={(enabled) => patch(trigger.key, { enabled })}
-            />
-            <Button variant="ghost" size="icon" title="Remove" onClick={() => drop(trigger)}>
-              <Trash2 className="size-4" />
-            </Button>
-          </div>
-        ))}
+            <div className="flex gap-2 text-muted-foreground text-xs">
+              {CRON_EXAMPLES.map((example) => (
+                <button
+                  key={example.cron}
+                  type="button"
+                  className="rounded-md border px-2 py-1 hover:bg-accent"
+                  onClick={() =>
+                    add({
+                      kind: "cron",
+                      cron: example.cron,
+                      timezone: "",
+                      event: "",
+                      enabled: true,
+                    })
+                  }
+                >
+                  {example.label} <span className="font-mono">{example.cron}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        }
+      />
 
-        <div className="flex gap-2 text-xs text-muted-foreground">
-          {CRON_EXAMPLES.map((example) => (
-            <button
-              key={example.cron}
-              type="button"
-              className="rounded-md border px-2 py-1 hover:bg-accent"
-              onClick={() =>
-                add({ kind: "cron", cron: example.cron, timezone: "", event: "", enabled: true })
-              }
-            >
-              {example.label} <span className="font-mono">{example.cron}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <Label>Webhooks</Label>
+      <Section
+        title="Webhooks"
+        action={
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() =>
@@ -174,31 +192,35 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
             <Plus className="size-4" />
             Add
           </Button>
-        </div>
+        }
+        content={
+          <>
+            {webhooks.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                No webhooks — nothing outside can start this task.
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                A <code className="font-mono">POST</code> to one of these runs the task. There is no
+                secret beyond the address itself, so treat the URL as one and generate a new id
+                rather than picking a memorable one for anything you would rather strangers could
+                not fire.
+              </p>
+            )}
 
-        {webhooks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No webhooks — nothing outside can start this task.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            A <code className="font-mono">POST</code> to one of these runs the task. There is no
-            secret beyond the address itself, so treat the URL as one and generate a new id rather
-            than picking a memorable one for anything you would rather strangers could not fire.
-          </p>
-        )}
-
-        {webhooks.map((trigger) => (
-          <WebhookRow
-            key={trigger.key}
-            trigger={trigger}
-            onChange={(event) => patch(trigger.key, { event })}
-            onRemove={() => drop(trigger)}
-            onRegenerate={() => patch(trigger.key, { event: newWebhookId() })}
-            onToggle={(enabled) => patch(trigger.key, { enabled })}
-          />
-        ))}
-      </div>
+            {webhooks.map((trigger) => (
+              <WebhookRow
+                key={trigger.key}
+                trigger={trigger}
+                onChange={(event) => patch(trigger.key, { event })}
+                onRemove={() => drop(trigger)}
+                onRegenerate={() => patch(trigger.key, { event: newWebhookId() })}
+                onToggle={(enabled) => patch(trigger.key, { enabled })}
+              />
+            ))}
+          </>
+        }
+      />
     </>
   );
 }
@@ -260,27 +282,30 @@ function WebhookRow({
           spellCheck={false}
         />
       </div>
-      <Button
+      <ActionButton
+        type="button"
+        label={copied ? "Copied" : "Copy the URL"}
         variant="ghost"
         size="icon"
-        title={copied ? "Copied" : "Copy the URL"}
         disabled={!trigger.event}
+        hint={trigger.event ? undefined : "Give the webhook an id first"}
         onClick={() => void copy(webhookUrl(trigger.event))}
       >
-        {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        title="Replace this id with a new one"
-        onClick={onRegenerate}
-      >
+        {copied ? <Check /> : <Copy />}
+      </ActionButton>
+      <Button type="button" variant="ghost" size="sm" onClick={onRegenerate}>
         New id
       </Button>
       <TriggerSwitch trigger={trigger} onChange={onToggle} />
-      <Button variant="ghost" size="icon" title="Remove" onClick={onRemove}>
-        <Trash2 className="size-4" />
-      </Button>
+      <ActionButton
+        type="button"
+        label="Remove this webhook"
+        variant="ghost"
+        size="icon"
+        onClick={onRemove}
+      >
+        <Trash2 />
+      </ActionButton>
     </div>
   );
 }

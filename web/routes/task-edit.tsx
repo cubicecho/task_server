@@ -15,21 +15,15 @@ import {
   UpdateTaskDocument,
   UpdateTriggerDocument,
 } from "@/__generated__/graphql/graphql";
-import { Page } from "@/components/app-shell";
-import { Field } from "@/components/field";
-import { ModelSelect } from "@/components/model-select";
+import { useAppForm } from "@/components/app-form";
+import { FieldRow } from "@/components/field-row";
+import { ModelSelectField } from "@/components/model-select-field";
+import { PageLayout } from "@/components/page-layout";
+import { QueryError } from "@/components/query-state";
+import { Section } from "@/components/section";
 import { StepList } from "@/components/step-editor";
 import { type DraftTrigger, TriggerEditor, toDraftTriggers } from "@/components/trigger-editor";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
@@ -46,6 +40,16 @@ const doc = describeFor("Task");
 // Radix refuses an empty item value, so "no profile" — which is null in the column — carries one.
 const NO_AGENT = "__settings__";
 
+const DESCRIPTION = "The prompt is step one. Everything in the flow runs after it, in order.";
+
+/** Back to the list, in the slot a page's back link belongs in. */
+const Breadcrumbs = () => (
+  <Link to="/tasks" className="flex items-center gap-1 hover:underline">
+    <ArrowLeft className="size-3.5" />
+    Tasks
+  </Link>
+);
+
 export function TaskEditRoute() {
   const { taskId } = useParams({ strict: false });
 
@@ -56,21 +60,25 @@ export function TaskEditRoute() {
   });
 
   if (!taskId) return <TaskForm />;
-  if (task.isPending) {
+  if (task.isPending || task.isError || !task.data?.task) {
     return (
-      <Page title="Task">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </Page>
-    );
-  }
-  if (task.error || !task.data?.task) {
-    return (
-      <Page title="Task">
-        <p className="text-sm text-destructive">
-          {(task.error as Error | null)?.message ?? "There is no task with that id."}
-        </p>
-        <Back />
-      </Page>
+      <PageLayout
+        title="Task"
+        description={DESCRIPTION}
+        breadcrumbs={<Breadcrumbs />}
+        loading={task.isPending}
+        content={
+          task.isPending ? null : (
+            <QueryError
+              // A task that is simply not there is not a failed request, and saying "try again"
+              // about it would be a lie — so the absence is phrased as the error it is.
+              error={(task.error as Error | null) ?? new Error("There is no task with that id.")}
+              onRetry={() => task.refetch()}
+              what="that task"
+            />
+          )
+        }
+      />
     );
   }
   // Keyed so that navigating between two tasks rebuilds the form instead of keeping the
@@ -78,31 +86,41 @@ export function TaskEditRoute() {
   return <TaskForm key={task.data.task.id} task={task.data.task} />;
 }
 
-const Back = () => (
-  <Link
-    to="/tasks"
-    className="flex items-center gap-1 text-sm text-muted-foreground hover:underline"
-  >
-    <ArrowLeft className="size-4" />
-    Back to tasks
-  </Link>
-);
+/**
+ * Everything the page edits, in one store.
+ *
+ * The triggers and the flow are in here beside the five columns rather than in `useState` of
+ * their own, so "are there unsaved changes" has one answer and the save writes one value.
+ */
+interface Form {
+  name: string;
+  prompt: string;
+  agentId: string;
+  model: string;
+  systemPrompt: string;
+  triggers: DraftTrigger[];
+  /**
+   * The flow, held as `unknown` and cast at the two places it crosses this boundary.
+   *
+   * A step holds branches and a branch holds steps, so the type contains itself — and
+   * TanStack Form types a field's `name` by walking the whole store's shape, which on a tree
+   * like that does not terminate (`TS2589`, on the first field in the form rather than on the
+   * flow). `unknown` is the one thing that walk stops at, so it is what keeps the flow in the
+   * same store as the rest and the tree still typed everywhere it is actually edited.
+   */
+  steps: unknown;
+}
+
+const required = (what: string) => ({
+  onChange: ({ value }: { value: string }) => (value.trim() ? undefined : what),
+});
 
 function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [name, setName] = useState(task?.name ?? "");
-  const [prompt, setPrompt] = useState(task?.prompt ?? "");
-  const [agentId, setAgentId] = useState(task?.agentId ?? "");
-  const [model, setModel] = useState(task?.model ?? "");
-  const [systemPrompt, setSystemPrompt] = useState(task?.systemPrompt ?? "");
-  const [triggers, setTriggers] = useState<DraftTrigger[]>(() =>
-    toDraftTriggers(task?.triggers ?? []),
-  );
+  // Not a field: it is the tail of what the *last* save has to delete, not a value being edited.
   const [removed, setRemoved] = useState<string[]>([]);
-
-  const [steps, setSteps] = useState<DraftStep[]>(() => toDraft(task?.steps ?? []));
 
   // Names only, and shared with every other form that needs them: a page that lists two tasks
   // side by side asks the server once.
@@ -112,18 +130,15 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
   });
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (form: Form) => {
       // Null rather than "": the column is a foreign key, and an empty string is not a profile.
       const values = {
-        name: name.trim(),
-        prompt: prompt.trim(),
-        agentId: agentId || null,
-        model,
-        systemPrompt,
+        name: form.name.trim(),
+        prompt: form.prompt.trim(),
+        agentId: form.agentId === NO_AGENT ? null : form.agentId,
+        model: form.model,
+        systemPrompt: form.systemPrompt,
       };
-      // Caught here so the message names the field, rather than arriving as a server error.
-      if (!values.name) throw new Error("A task needs a name.");
-      if (!values.prompt) throw new Error("A task needs a prompt.");
 
       const taskId = task
         ? ((await request(UpdateTaskDocument, { id: task.id, set: values })).updateTaskSingle?.id ??
@@ -135,7 +150,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       // transaction, so a flow either lands whole or not at all.
       for (const id of removed) await request(DeleteTriggerDocument, { id });
       const saved: DraftTrigger[] = [];
-      for (const trigger of triggers) {
+      for (const trigger of form.triggers) {
         // A row left blank is one that was added and never filled in, which is not an edit to
         // save. A webhook with no id would be worse than nothing: no address reaches it.
         const cron = trigger.cron.trim();
@@ -164,130 +179,192 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         saved.push({ ...trigger, id, cron, event, timezone: set.timezone });
       }
 
-      const written = await request(SetTaskStepsDocument, { taskId, steps: toInput(steps) });
-      return { taskId, triggers: saved, steps: written.setTaskSteps };
+      const written = await request(SetTaskStepsDocument, {
+        taskId,
+        steps: toInput(form.steps as DraftStep[]),
+      });
+      return { taskId, triggers: saved, steps: toDraft(written.setTaskSteps) };
     },
-    onSuccess: ({ taskId, triggers: savedTriggers, steps: written }) => {
+  });
+
+  // Annotated, not `satisfies`: the form's field names are typed from what is passed here, so
+  // the flow has to arrive as `Form` says it does — opaquely — rather than as `toDraft` returns it.
+  const defaults: Form = {
+    name: task?.name ?? "",
+    prompt: task?.prompt ?? "",
+    agentId: task?.agentId ?? NO_AGENT,
+    model: task?.model ?? "",
+    systemPrompt: task?.systemPrompt ?? "",
+    triggers: toDraftTriggers(task?.triggers ?? []),
+    steps: toDraft(task?.steps ?? []),
+  };
+
+  const form = useAppForm({
+    defaultValues: defaults,
+    onSubmit: async ({ value, formApi }) => {
+      const written = await save.mutateAsync(value);
       toast.success(task ? "Task saved" : "Task created");
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["task", written.taskId] });
       // The ids the server assigned come back, so a second save edits the same rows rather
       // than replacing them and orphaning their run history. The form is keyed on the task, so
       // the refetch behind these invalidations does not rebuild it — without this a second save
       // created every trigger a second time, and deleting one it had just created deleted
       // nothing, because the draft still had no id to delete by.
-      setTriggers(savedTriggers);
-      setSteps(toDraft(written));
+      formApi.reset({ ...value, triggers: written.triggers, steps: written.steps });
       setRemoved([]);
-      if (!task) navigate({ to: "/tasks/$taskId", params: { taskId } });
+      if (!task) navigate({ to: "/tasks/$taskId", params: { taskId: written.taskId } });
     },
   });
 
   return (
-    <Page
-      wide
+    <PageLayout
       title={task ? "Edit task" : "New task"}
-      description="The prompt is step one. Everything in the flow runs after it, in order."
-      actions={
+      description={DESCRIPTION}
+      breadcrumbs={<Breadcrumbs />}
+      action={
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => navigate({ to: "/tasks" })}>
             Cancel
           </Button>
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
+          <form.AppForm>
+            <form.SubmitButton form="task">Save</form.SubmitButton>
+          </form.AppForm>
         </div>
       }
-    >
-      <Back />
-
-      <Field label="Name" htmlFor="name">
-        <Input
-          id="name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Morning brief"
-        />
-      </Field>
-
-      <Field label="Prompt" htmlFor="prompt" hint={doc("prompt")}>
-        <Textarea
-          id="prompt"
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          rows={5}
-          placeholder="Check the build status and summarise anything that broke overnight."
-        />
-        {/* Only worth saying where there is a webhook to say it about — on a task started by
-            hand or on a schedule the placeholder has nothing to put there. */}
-        {triggers.some((trigger) => trigger.kind === "event") ? (
-          <p className="text-sm text-muted-foreground">
-            Write <code>{"{{event}}"}</code> to place the body of the webhook that started the run.
-            A run started any other way renders it as a note saying there was none.
-          </p>
-        ) : null}
-      </Field>
-
-      <Field label="Agent profile" htmlFor="agent" hint={doc("agentId")}>
-        <Select
-          value={agentId || NO_AGENT}
-          onValueChange={(next) => setAgentId(next === NO_AGENT ? "" : next)}
+      content={
+        <form
+          id="task"
+          className="flex flex-col gap-6"
+          onSubmit={(event) => {
+            event.preventDefault();
+            form.handleSubmit();
+          }}
         >
-          <SelectTrigger id="agent" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NO_AGENT}>Server settings</SelectItem>
-            {(agents.data?.agents ?? []).map((agent) => (
-              <SelectItem key={agent.id} value={agent.id}>
-                {agent.name}
-                {agent.description ? (
-                  <span className="text-muted-foreground"> — {agent.description}</span>
-                ) : null}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
+          <form.AppField name="name" validators={required("A task needs a name.")}>
+            {(field) => <field.InputField label="Name" required placeholder="Morning brief" />}
+          </form.AppField>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field
-          label="Model"
-          htmlFor="model"
-          hint={agentId ? "Empty falls back to the profile above, then to Settings." : doc("model")}
-        >
-          <ModelSelect
-            id="model"
-            value={model}
-            onChange={setModel}
-            defaultLabel={agentId ? "Default from the profile" : "Default from Settings"}
-            agentId={agentId || undefined}
+          <div className="flex flex-col gap-2">
+            <form.AppField name="prompt" validators={required("A task needs a prompt.")}>
+              {(field) => (
+                <field.TextareaField
+                  label="Prompt"
+                  required
+                  description={doc("prompt")}
+                  rows={5}
+                  placeholder="Check the build status and summarise anything that broke overnight."
+                />
+              )}
+            </form.AppField>
+            {/* Only worth saying where there is a webhook to say it about — on a task started by
+                hand or on a schedule the placeholder has nothing to put there. */}
+            <form.Subscribe
+              selector={(state) => state.values.triggers.some((t) => t.kind === "event")}
+            >
+              {(hasWebhook) =>
+                hasWebhook ? (
+                  <p className="text-muted-foreground text-sm">
+                    Write <code>{"{{event}}"}</code> to place the body of the webhook that started
+                    the run. A run started any other way renders it as a note saying there was none.
+                  </p>
+                ) : null
+              }
+            </form.Subscribe>
+          </div>
+
+          <form.AppField name="agentId">
+            {(field) => (
+              <field.SelectField
+                label="Agent profile"
+                description={doc("agentId")}
+                options={[
+                  { value: NO_AGENT, label: "Server settings" },
+                  ...(agents.data?.agents ?? []).map((agent) => ({
+                    value: agent.id,
+                    label: (
+                      <>
+                        {agent.name}
+                        {agent.description ? (
+                          <span className="text-muted-foreground"> — {agent.description}</span>
+                        ) : null}
+                      </>
+                    ),
+                  })),
+                ]}
+              />
+            )}
+          </form.AppField>
+
+          {/* The model picker asks the *profile's* endpoint for its models, so it is subscribed
+              to the field above rather than reading a snapshot taken on render. */}
+          <form.Subscribe selector={(state) => state.values.agentId}>
+            {(agentId) => (
+              <FieldRow
+                content={
+                  <>
+                    <ModelSelectField
+                      form={form}
+                      name="model"
+                      label="Model"
+                      description={
+                        agentId === NO_AGENT
+                          ? doc("model")
+                          : "Empty falls back to the profile above, then to Settings."
+                      }
+                      defaultLabel={
+                        agentId === NO_AGENT ? "Default from Settings" : "Default from the profile"
+                      }
+                      agentId={agentId === NO_AGENT ? undefined : agentId}
+                    />
+                    <form.AppField name="systemPrompt">
+                      {(field) => (
+                        <field.InputField
+                          label="System prompt"
+                          description={doc("systemPrompt")}
+                          placeholder="(default from Settings)"
+                        />
+                      )}
+                    </form.AppField>
+                  </>
+                }
+              />
+            )}
+          </form.Subscribe>
+
+          <form.Field name="triggers">
+            {(field) => (
+              <TriggerEditor
+                triggers={field.state.value}
+                onChange={field.handleChange}
+                onRemoveSaved={(id) => setRemoved((current) => [...current, id])}
+              />
+            )}
+          </form.Field>
+
+          <Section
+            title="Flow"
+            description={
+              <>
+                Each step is shown what came before it. Write <code>{"{{previous}}"}</code> or{" "}
+                <code>{"{{steps.<name>}}"}</code> in a prompt to place that output yourself. A
+                decision runs like any other step — tools included — and then picks which of its
+                cases runs next.
+              </>
+            }
+            content={
+              <form.Field name="steps">
+                {(field) => (
+                  <StepList
+                    steps={field.state.value as DraftStep[]}
+                    onChange={field.handleChange}
+                  />
+                )}
+              </form.Field>
+            }
           />
-        </Field>
-        <Field label="System prompt" htmlFor="system" hint={doc("systemPrompt")}>
-          <Input
-            id="system"
-            value={systemPrompt}
-            onChange={(event) => setSystemPrompt(event.target.value)}
-            placeholder="(default from Settings)"
-          />
-        </Field>
-      </div>
-
-      <TriggerEditor
-        triggers={triggers}
-        onChange={setTriggers}
-        onRemoveSaved={(id) => setRemoved((current) => [...current, id])}
-      />
-
-      <Field label="Flow" className="gap-3">
-        <p className="text-sm text-muted-foreground">
-          Each step is shown what came before it. Write <code>{"{{previous}}"}</code> or{" "}
-          <code>{"{{steps.<name>}}"}</code> in a prompt to place that output yourself. A decision
-          runs like any other step — tools included — and then picks which of its cases runs next.
-        </p>
-        <StepList steps={steps} onChange={setSteps} />
-      </Field>
-    </Page>
+        </form>
+      }
+    />
   );
 }

@@ -6,11 +6,21 @@ import {
   AgentsDocument,
   DeleteAgentDocument,
 } from "@/__generated__/graphql/graphql";
+import { ActionButton } from "@/components/action-button";
 import { AgentDialog } from "@/components/agent-dialog";
-import { Page } from "@/components/app-shell";
+import { ConfirmButton } from "@/components/confirm-button";
+import { PageLayout } from "@/components/page-layout";
+import { QueryState } from "@/components/query-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { request } from "@/lib/gql";
 
 /**
@@ -53,86 +63,119 @@ export function AgentsRoute() {
   });
 
   const servers = agents.data?.mcpServers ?? [];
+  const rows = agents.data?.agents ?? [];
 
   return (
-    <Page
+    <PageLayout
       title="Agent profiles"
       description="A named set of overrides for Settings, that a task can be pointed at."
-      actions={
+      action={
         <Button onClick={() => setCreating(true)}>
           <Plus className="size-4" />
           New profile
         </Button>
       }
-    >
-      {agents.data?.agents.length === 0 ? (
-        <Card className="items-center gap-2 p-8 text-center">
-          <Bot className="size-5 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No profiles. Every task runs on Settings, which is all a server with one model needs.
-          </p>
-        </Card>
-      ) : null}
+      content={
+        <>
+          <QueryState
+            query={agents}
+            what="your agent profiles"
+            count={rows.length}
+            empty={
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Bot />
+                  </EmptyMedia>
+                  <EmptyTitle>No profiles</EmptyTitle>
+                  <EmptyDescription>
+                    Every task runs on Settings, which is all a server with one model needs.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            }
+          />
 
-      {agents.data?.agents.map((agent) => {
-        const scoped = (agent.mcpServerIds as string[] | null) ?? [];
-        return (
-          <Card key={agent.id} className="gap-3 p-4">
-            <div className="flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">{agent.name}</span>
-                  <Badge variant="outline">
-                    {agent.tasks.length === 1 ? "1 task" : `${agent.tasks.length} tasks`}
-                  </Badge>
-                  <Badge variant="outline">
-                    {scoped.length
-                      ? `${scoped.length} of ${servers.length} servers`
-                      : "all servers"}
-                  </Badge>
+          {rows.map((agent) => {
+            const scoped = (agent.mcpServerIds as string[] | null) ?? [];
+            const said = overrides(agent);
+            return (
+              <Item key={agent.id} variant="outline" className="flex-col items-stretch gap-3">
+                <div className="flex w-full items-center gap-3">
+                  <ItemContent>
+                    <ItemTitle>
+                      <span className="truncate">{agent.name}</span>
+                      <Badge variant="outline">
+                        {agent.tasks.length === 1 ? "1 task" : `${agent.tasks.length} tasks`}
+                      </Badge>
+                      <Badge variant="outline">
+                        {scoped.length
+                          ? `${scoped.length} of ${servers.length} servers`
+                          : "all servers"}
+                      </Badge>
+                    </ItemTitle>
+                    {agent.description ? (
+                      <ItemDescription className="truncate">{agent.description}</ItemDescription>
+                    ) : null}
+                  </ItemContent>
+                  <ItemActions className="gap-1">
+                    <ActionButton
+                      label="Edit"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEditing(agent)}
+                    >
+                      <Pencil />
+                    </ActionButton>
+                    <ConfirmButton
+                      label="Delete"
+                      variant="ghost"
+                      size="icon"
+                      title={`Delete ${agent.name}?`}
+                      description={
+                        agent.tasks.length
+                          ? `The ${agent.tasks.length === 1 ? "task" : `${agent.tasks.length} tasks`} on it fall back to Settings — a different endpoint, key and model.`
+                          : "Nothing runs on it, so nothing changes but the list."
+                      }
+                      onConfirm={() => remove.mutate(agent.id)}
+                    >
+                      <Trash2 />
+                    </ConfirmButton>
+                  </ItemActions>
                 </div>
-                {agent.description ? (
-                  <p className="truncate text-sm text-muted-foreground">{agent.description}</p>
-                ) : null}
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => setEditing(agent)}>
-                <Pencil className="size-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => remove.mutate(agent.id)}>
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
 
-            <div className="flex flex-wrap gap-1">
-              {overrides(agent).length === 0 ? (
-                <span className="text-xs text-muted-foreground">
-                  Overrides nothing — a task on it runs exactly as one on Settings.
-                </span>
-              ) : (
-                overrides(agent).map((said) => (
-                  <span
-                    key={said}
-                    className="rounded-md border px-2 py-0.5 font-mono text-xs text-muted-foreground"
-                  >
-                    {said}
-                  </span>
-                ))
-              )}
-            </div>
-          </Card>
-        );
-      })}
+                <div className="flex flex-wrap gap-1">
+                  {said.length === 0 ? (
+                    <span className="text-muted-foreground text-xs">
+                      Overrides nothing — a task on it runs exactly as one on Settings.
+                    </span>
+                  ) : (
+                    said.map((one) => (
+                      <span
+                        key={one}
+                        className="rounded-md border px-2 py-0.5 font-mono text-muted-foreground text-xs"
+                      >
+                        {one}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </Item>
+            );
+          })}
 
-      {creating ? (
-        <AgentDialog servers={servers} onClose={() => setCreating(false)} onSaved={refresh} />
-      ) : editing ? (
-        <AgentDialog
-          agent={editing}
-          servers={servers}
-          onClose={() => setEditing(null)}
-          onSaved={refresh}
-        />
-      ) : null}
-    </Page>
+          {creating ? (
+            <AgentDialog servers={servers} onClose={() => setCreating(false)} onSaved={refresh} />
+          ) : editing ? (
+            <AgentDialog
+              agent={editing}
+              servers={servers}
+              onClose={() => setEditing(null)}
+              onSaved={refresh}
+            />
+          ) : null}
+        </>
+      }
+    />
   );
 }

@@ -1,0 +1,140 @@
+import type { ComponentProps, MouseEvent, ReactNode } from "react";
+import { useId } from "react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+
+type ActionButtonProps = Omit<ComponentProps<typeof Button>, "aria-label"> & {
+  /**
+   * The accessible name, and the tooltip when there is nothing more to say.
+   *
+   * Not optional, and that is the whole point of the component. Of the 134 icon-sized buttons
+   * across these projects, 78 have no accessible name at all — they are a `<Trash2 />` inside a
+   * `<Button size="icon">` and nothing else, which a screen reader announces as "button". Some
+   * carry a `title`, which is a hint shown on hover, not a name: it is not read in place of one,
+   * it never appears on a touch device, and it is the single most common way an icon button is
+   * *believed* to be labelled. Making this a required prop is what stops the next one arriving
+   * the same way, because the type is checked and a code review is not.
+   */
+  label: string;
+  /**
+   * Why it is unavailable, or what it will do — shown in the tooltip instead of `label`, and
+   * read after the name whether or not the tooltip is open.
+   *
+   * This is the prop `disabled` exists for. See the component note.
+   */
+  hint?: ReactNode;
+  side?: ComponentProps<typeof TooltipContent>["side"];
+  /** Off, the button keeps its accessible name and drops the tooltip. */
+  tooltip?: boolean;
+};
+
+/**
+ * A button whose reason can always be read — including when it cannot be pressed.
+ *
+ * Two bugs, and the second is the one worth the file.
+ *
+ * **It has a name.** See {@link ActionButtonProps.label}.
+ *
+ * **Its reason survives being disabled.** These apps are full of `title="Empty the lane first"`
+ * on controls disabled for exactly that reason, and shadcn's `Button` sets
+ * `disabled:pointer-events-none`: the browser never fires the hover, so the one explanation a
+ * person needed is the one they cannot get. A `disabled` button is also out of the tab order
+ * entirely, so a keyboard user cannot reach the answer by any route at all — the control is
+ * simultaneously refusing and mute.
+ *
+ * So `disabled` here is `aria-disabled` instead. The control keeps its focus ring, its hover and
+ * its tooltip, the press is refused in the handler, and assistive technology reads it as
+ * unavailable either way. Pass `hint` and the tooltip says why.
+ *
+ * **Its reason is not only visual.** A tooltip's text exists in the DOM only while the tooltip
+ * is open — Radix unmounts the content on close — so a `hint` that lives only there is a thing
+ * you can see and cannot hear: the button announces "Delete workspace" and stops, and the
+ * sentence explaining that it is refused, or what it takes with it, is never read. It is worst
+ * in exactly the case the prop is for, because a person who cannot see the button is the one
+ * who cannot hover it either.
+ *
+ * So `hint` is also rendered into an `sr-only` span that is always mounted, and the button
+ * points at it with `aria-describedby`. That covers the closed tooltip and one more case: Radix
+ * closes a tooltip when its trigger is scrolled into view by focus, which is precisely how a
+ * keyboard user arrives at one.
+ *
+ * The description wins over the one Radix sets while open — `Slot` lets the child's props
+ * override the trigger's — so the hint is announced once, from the same text, open or closed.
+ *
+ * **The provider.** shadcn's `Tooltip` needs a `TooltipProvider` above it and throws without
+ * one, so this renders its own — a component installed from a registry cannot assume the app it
+ * lands in has already put one at the root. Radix nests providers happily. The cost is that
+ * `skipDelayDuration` no longer groups a row of these, so moving along a toolbar re-waits at
+ * each button rather than opening instantly after the first; an app that minds can still put a
+ * provider at its root and pass `delayDuration={0}` here.
+ */
+export function ActionButton({
+  label,
+  hint,
+  side = "top",
+  tooltip = true,
+  disabled,
+  className,
+  onClick,
+  children,
+  "aria-describedby": ariaDescribedBy,
+  ...props
+}: ActionButtonProps) {
+  const hintId = useId();
+  // Destructured rather than left in `props`, which is spread after this and would drop the id.
+  // Only pointed at when there is a hint: with none the tooltip repeats the name, and describing
+  // the button with its own name has it read as "Delete workspace, Delete workspace".
+  const describedBy = hint ? [ariaDescribedBy, hintId].filter(Boolean).join(" ") : ariaDescribedBy;
+
+  const button = (
+    <Button
+      aria-label={label}
+      // Not `disabled`: the attribute is what removes the hover and the tab stop, and with them
+      // the explanation. `opacity-50` is what `disabled:opacity-50` would have drawn.
+      aria-disabled={disabled || undefined}
+      aria-describedby={describedBy}
+      className={cn(disabled && "opacity-50", className)}
+      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        if (disabled) {
+          event.preventDefault();
+          return;
+        }
+        onClick?.(event);
+      }}
+      {...props}
+    >
+      {children}
+    </Button>
+  );
+
+  // Outside the trigger, not inside the button: `TooltipTrigger asChild` takes exactly one
+  // child, and text inside the button would be dead weight anyway — `aria-label` already
+  // overrides the content for the name.
+  const description = hint ? (
+    <span id={hintId} className="sr-only">
+      {hint}
+    </span>
+  ) : null;
+
+  // `tooltip={false}` drops the tooltip, not the explanation: the hint is still the reason the
+  // control is the way it is, and it is still the only place a screen reader can get it.
+  if (!tooltip) {
+    return (
+      <>
+        {button}
+        {description}
+      </>
+    );
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side={side}>{hint ?? label}</TooltipContent>
+      </Tooltip>
+      {description}
+    </TooltipProvider>
+  );
+}
