@@ -298,7 +298,7 @@ server/
                cleanup.ts prunes old runs hourly
   webhooks.ts  POST /webhooks/:id, which fires matching event triggers
   index.ts     express + yoga + the MCP endpoint + the webhook route + the built SPA
-web/           vite + react + tanstack router/query + shadcn
+web/           vite + react + tanstack router/query/form + shadcn and @cubeui shells
                (status, tasks, runs, mcp servers, agents, settings)
   __generated__/  codegen output, gitignored — see GraphQL below
 tests/         vitest
@@ -694,7 +694,7 @@ So the prose moved to one place, and the schema carries it:
 - from there it is in `schema.graphql`, and in the JSON Schema of every `/mcp` tool that touches
   the column, so an agent filling in `create_task` reads what `prompt` is for
 - `@cubicecho/graphql-codegen-field-descriptions` reads the same schema and emits
-  `web/__generated__/graphql/descriptions.ts`, a runtime map, which `web/lib/docs.ts` wraps as
+  `web/__generated__/graphql/descriptions.ts`, a runtime map, which `web/lib/docs.tsx` wraps as
   `describe("Setting", "maxRetries")` — the note under the field in the web app
 
 The web helper is typed against the generated map, so renaming a column and regenerating turns

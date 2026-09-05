@@ -268,7 +268,10 @@ the measurement did not already answer.
 a generated field means. `describeColumn` puts it on the schema, so it lands in `schema.graphql`,
 in the JSON Schema of every `/mcp` tool that touches the column, and — through the codegen plugin,
 as `web/__generated__/graphql/descriptions.ts` — under the field in the web app, where
-`web/lib/docs.ts` reads it as `describe("Setting", "maxRetries")`.
+`web/lib/docs.tsx` reads it as `describe("Setting", "maxRetries")` — or, since a form is usually
+one table, `describeFor("Setting")`. It renders as a node rather than a string because these
+sentences are written for two readers at once: `ticks()` turns the backticks a model reads as
+markdown into `<code>` for everyone else.
 
 It was written twice before and reached nobody twice: JSDoc on the column, which is compile-time
 only and so never reached an agent, and a `hint` literal in the form, which never reached one
@@ -357,6 +360,63 @@ minute after the run ends. Anything worth keeping goes in the run row.
 `web/routes/`; `@/` maps to `web/`. Every query goes through `request()` in `web/lib/gql.ts`
 with a typed document — no raw `fetch` in a component — and every mutation invalidates the
 query keys it affected.
+
+**The shapes come from `@cubeui`, and they take parts rather than children.** `components.json`
+registers `https://cubicecho.github.io/cubeui/r/{name}.json`, and `npx shadcn add @cubeui/<name>`
+copies a shell into `web/components/` rewritten against the local aliases — there is no runtime
+dependency, and an installed file is this repo's to edit. What is here: `PageLayout` (every
+route's header, trail, action row and body), `DialogLayout` (title, body, `footer` for a side
+control and `footerActions` for cancel/confirm, and the unsaved-changes guard), `Section`,
+`CardLayout`, `SplitLayout`, `QueryState` with `QueryError`, `DisclosureRow`, `ActionButton`,
+`ConfirmButton`, `FormField`, `FieldRow`, `MultiSelect`, `PasswordInput`, `ModelSelect`'s field
+wrapper. **No cubeui component takes `children`** — the body is the `content` prop, and every
+other slot is a prop too, which is what stops a shell from being subclassed by nesting. Never
+hand-write `mx-auto max-w-3xl` or a `<header className="border-b px-6 py-4">`: that is
+`PageLayout` being re-derived, and the point of taking the registry was to stop having four of
+them.
+
+`ActionButton` and `ConfirmButton` take a required `label`, which is the accessible name — an
+icon-only button with no `label` does not typecheck. Neither sets `type`, so inside a `<form>`
+every one of them needs `type="button"` or it submits the form
+([cubeui#18](https://github.com/cubicecho/cubeui/issues/18)).
+
+**Updating is `npx shadcn add -o @cubeui/<name>`, and two things have to be put back after it.**
+The CLI rewrites a cross-item `import` to the local alias and leaves an `export … from` at the
+registry path ([cubeui#9](https://github.com/cubicecho/cubeui/issues/9)), so the re-export tails of
+`multi-select-field` and `password-field` arrive pointing at `@/components/control/…` and do not
+resolve — the same file's imports, three lines up, are fine. And shadcn's own primitives now import
+`cn` from the `cn` package rather than from the `utils` alias
+([cubeui#24](https://github.com/cubicecho/cubeui/issues/24)), which installs a runtime dependency —
+into `dependencies`, which is the section `npm ci --omit=dev` keeps — and leaves this repo with two
+`cn`s. Both are mechanical: point the exports at `@/components/`, and keep every
+`web/components/ui/*` on `@/lib/utils`, which is what `components.json` says the alias is. The
+linter is off for `web/components/ui/**` in `biome.json` for the same reason it is off upstream —
+the files are vendored, and which of Biome's rules a shadcn update trips is not this repo's
+question to answer per rule, which a narrower override learned the hard way when one more appeared
+on this update.
+
+**Forms are `@tanstack/react-form`, through `web/components/app-form.tsx`.** Every field is one
+line, taking the form and the name — `<InputField form={form} name="name" label="Name" required
+validators={…} />` — and the error lands under the input as it is typed rather than as a toast on
+the way out. `name` is checked against the store, so a renamed field is a build error. That is the
+form to write: `form.AppField` with a render prop is the escape hatch for a field that has to read
+a sibling, and there is none of it in this app. The bound controls are `InputField`, `NumberField`,
+`TextareaField`, `SelectField`, `CheckboxField` and `SwitchField` from `app-form.tsx`, plus
+`ModelSelectField`, `MultiSelectField`, `PasswordField` and `RadioGroupField` from their own files,
+used exactly the same way.
+
+Nothing at a call site writes `id`, `aria-describedby`, `aria-invalid`, or a `disabled` that
+re-derives `canSubmit`/`isSubmitting` — `FormField` and `SubmitButton` own those. `SubmitButton`'s
+own `disabled` is OR-ed with the store's two, so it can only tighten: settings and the two edit
+dialogs pass `disabled={!isDirty}`, because a form nobody has touched has nothing to save. The run
+dialog does not — replaying the body already in the box is the whole feature. A dialog passes
+`form.state.isDirty` to `DialogLayout`'s `hasUnsavedChanges`; the guard is asked for, never
+computed.
+
+One thing the driver cannot do: it types a field's `name` by walking the whole store's shape,
+with no depth limit, so a value that contains itself is `TS2589` — reported at the *first* field
+in the form, not at the recursive one. `task-edit.tsx` holds the flow as `unknown` for that
+reason (a step has branches, and a branch has steps) and casts at the one place it is read.
 
 **A `where` a person assembles goes in `web/lib/`, not in the route.** `run-filters.ts` builds
 the runs page's filter, and `tests/run-history.test.ts` runs what it builds — with the printed

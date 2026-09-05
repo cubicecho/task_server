@@ -11,11 +11,21 @@ import {
   TasksDocument,
   UpdateTaskDocument,
 } from "@/__generated__/graphql/graphql";
-import { Page } from "@/components/app-shell";
+import { ActionButton } from "@/components/action-button";
+import { ConfirmButton } from "@/components/confirm-button";
+import { PageLayout } from "@/components/page-layout";
+import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { request } from "@/lib/gql";
 import { STATUS_VARIANT } from "@/lib/run-status";
@@ -84,11 +94,13 @@ export function TasksRoute() {
     else run.mutate({ taskId: task.id });
   };
 
+  const rows = tasks.data?.tasks ?? [];
+
   return (
-    <Page
+    <PageLayout
       title="Tasks"
       description="A prompt, and the triggers that decide when it runs."
-      actions={
+      action={
         <Button asChild>
           <Link to="/tasks/new">
             <Plus className="size-4" />
@@ -96,130 +108,150 @@ export function TasksRoute() {
           </Link>
         </Button>
       }
-    >
-      {tasks.isPending ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
-      {tasks.error ? (
-        <p className="text-sm text-destructive">{(tasks.error as Error).message}</p>
-      ) : null}
-      {tasks.data?.tasks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No tasks yet. Create one, give it a cron expression, and it runs on its own.
-        </p>
-      ) : null}
+      content={
+        <>
+          <QueryState
+            query={tasks}
+            what="your tasks"
+            count={rows.length}
+            empty={
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>No tasks yet</EmptyTitle>
+                  <EmptyDescription>
+                    Create one, give it a cron expression, and it runs on its own.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button asChild>
+                    <Link to="/tasks/new">
+                      <Plus className="size-4" />
+                      New task
+                    </Link>
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            }
+          />
 
-      {tasks.data?.tasks.map((task) => {
-        // The last run that actually ran: a `skipped` row is a trigger firing at this very
-        // task while it was busy, so taking it as the latest would hide the run it collided
-        // with — the running one, whose Stop button is the thing someone wants at that moment.
-        // Skips are the Runs page's to show.
-        const lastRun = task.runs[0];
-        // `runTask` resolves only when the run finishes, so the mutation being in flight is a
-        // run in flight too — before the poll has had a chance to see the row.
-        const running =
-          lastRun?.status === "running" || (run.isPending && run.variables?.taskId === task.id);
-        return (
-          <Card key={task.id} className="gap-3 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="truncate font-medium">{task.name}</h2>
-                  {lastRun ? (
-                    <Badge variant={STATUS_VARIANT[lastRun.status] ?? "secondary"}>
-                      {lastRun.status}
-                    </Badge>
-                  ) : null}
+          {rows.map((task) => {
+            // The last run that actually ran: a `skipped` row is a trigger firing at this very
+            // task while it was busy, so taking it as the latest would hide the run it collided
+            // with — the running one, whose Stop button is the thing someone wants at that
+            // moment. Skips are the Runs page's to show.
+            const lastRun = task.runs[0];
+            // `runTask` resolves only when the run finishes, so the mutation being in flight is
+            // a run in flight too — before the poll has had a chance to see the row.
+            const running =
+              lastRun?.status === "running" || (run.isPending && run.variables?.taskId === task.id);
+            return (
+              <Item key={task.id} variant="outline" className="flex-col items-stretch gap-3">
+                <div className="flex w-full items-start justify-between gap-3">
+                  <ItemContent>
+                    <ItemTitle>
+                      <span className="truncate">{task.name}</span>
+                      {lastRun ? (
+                        <Badge variant={STATUS_VARIANT[lastRun.status] ?? "secondary"}>
+                          {lastRun.status}
+                        </Badge>
+                      ) : null}
+                    </ItemTitle>
+                    <ItemDescription className="line-clamp-2">{task.prompt}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions className="gap-1">
+                    <Switch
+                      checked={task.enabled}
+                      onCheckedChange={() => toggle.mutate(task)}
+                      aria-label="Enabled"
+                    />
+                    {running ? (
+                      <ActionButton
+                        label="Stop this run"
+                        variant="ghost"
+                        size="icon"
+                        // Only this card's button. `isPending` alone is true for the whole list
+                        // while any one task is being started or stopped, which greyed out every
+                        // other row's control along with the one that was clicked.
+                        disabled={stop.isPending && stop.variables === task.id}
+                        onClick={() => stop.mutate(task.id)}
+                      >
+                        <Square />
+                      </ActionButton>
+                    ) : (
+                      <ActionButton
+                        label="Run now"
+                        variant="ghost"
+                        size="icon"
+                        disabled={run.isPending && run.variables?.taskId === task.id}
+                        onClick={() => press(task)}
+                      >
+                        <Play />
+                      </ActionButton>
+                    )}
+                    <ActionButton label="Edit" variant="ghost" size="icon" asChild>
+                      <Link to="/tasks/$taskId" params={{ taskId: task.id }}>
+                        <Pencil />
+                      </Link>
+                    </ActionButton>
+                    <ConfirmButton
+                      label="Delete"
+                      variant="ghost"
+                      size="icon"
+                      hint={running ? "Stop the run before deleting" : undefined}
+                      disabled={running}
+                      title={`Delete ${task.name}?`}
+                      description="Its triggers and its whole run history go with it, output included."
+                      onConfirm={() => remove.mutate(task.id)}
+                    >
+                      <Trash2 />
+                    </ConfirmButton>
+                  </ItemActions>
                 </div>
-                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{task.prompt}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Switch
-                  checked={task.enabled}
-                  onCheckedChange={() => toggle.mutate(task)}
-                  aria-label="Enabled"
-                />
-                {running ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Stop this run"
-                    // Only this card's button. `isPending` alone is true for the whole list
-                    // while any one task is being started or stopped, which greyed out every
-                    // other row's control along with the one that was clicked.
-                    disabled={stop.isPending && stop.variables === task.id}
-                    onClick={() => stop.mutate(task.id)}
-                  >
-                    <Square className="size-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Run now"
-                    disabled={run.isPending && run.variables?.taskId === task.id}
-                    onClick={() => press(task)}
-                  >
-                    <Play className="size-4" />
-                  </Button>
-                )}
-                <Button variant="ghost" size="icon" title="Edit" asChild>
-                  <Link to="/tasks/$taskId" params={{ taskId: task.id }}>
-                    <Pencil className="size-4" />
-                  </Link>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title={running ? "Stop the run before deleting" : "Delete"}
-                  disabled={running}
-                  onClick={() => remove.mutate(task.id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </div>
 
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {task.triggers.length === 0 ? (
-                <span>No triggers — it only runs when you press play.</span>
-              ) : null}
-              {task.triggers.map((trigger) => {
-                // A webhook has no next time to show and is not waiting on the scheduler: it
-                // fires when someone posts to it. Saying "not scheduled" of one reads as a
-                // fault, when it is simply a different kind of trigger.
-                if (trigger.kind === "event") {
-                  return (
-                    <span key={trigger.id} className="rounded-md border px-2 py-1 font-mono">
-                      POST /webhooks/{trigger.event}
-                    </span>
-                  );
-                }
-                const next = nextRuns.get(trigger.id);
-                return (
-                  <span
-                    key={trigger.id}
-                    className="rounded-md border px-2 py-1 font-mono"
-                    title={next ? `next: ${new Date(next).toLocaleString()}` : undefined}
-                  >
-                    {trigger.cron}
-                    {trigger.timezone ? ` (${trigger.timezone})` : ""}
-                    {next ? ` · next ${new Date(next).toLocaleString()}` : " · not scheduled"}
-                  </span>
-                );
-              })}
-              {task.model ? <span className="px-1 py-1">model: {task.model}</span> : null}
-            </div>
-          </Card>
-        );
-      })}
+                <div className="flex flex-wrap gap-2 text-muted-foreground text-xs">
+                  {task.triggers.length === 0 ? (
+                    <span>No triggers — it only runs when you press play.</span>
+                  ) : null}
+                  {task.triggers.map((trigger) => {
+                    // A webhook has no next time to show and is not waiting on the scheduler: it
+                    // fires when someone posts to it. Saying "not scheduled" of one reads as a
+                    // fault, when it is simply a different kind of trigger.
+                    if (trigger.kind === "event") {
+                      return (
+                        <span key={trigger.id} className="rounded-md border px-2 py-1 font-mono">
+                          POST /webhooks/{trigger.event}
+                        </span>
+                      );
+                    }
+                    const next = nextRuns.get(trigger.id);
+                    return (
+                      <span
+                        key={trigger.id}
+                        className="rounded-md border px-2 py-1 font-mono"
+                        title={next ? `next: ${new Date(next).toLocaleString()}` : undefined}
+                      >
+                        {trigger.cron}
+                        {trigger.timezone ? ` (${trigger.timezone})` : ""}
+                        {next ? ` · next ${new Date(next).toLocaleString()}` : " · not scheduled"}
+                      </span>
+                    );
+                  })}
+                  {task.model ? <span className="px-1 py-1">model: {task.model}</span> : null}
+                </div>
+              </Item>
+            );
+          })}
 
-      {askFor ? (
-        <RunDialog
-          taskId={askFor.id}
-          taskName={askFor.name}
-          onClose={() => setAskFor(null)}
-          onRun={(payload) => run.mutate({ taskId: askFor.id, payload })}
-        />
-      ) : null}
-    </Page>
+          {askFor ? (
+            <RunDialog
+              taskId={askFor.id}
+              taskName={askFor.name}
+              onClose={() => setAskFor(null)}
+              onRun={(payload) => run.mutate({ taskId: askFor.id, payload })}
+            />
+          ) : null}
+        </>
+      }
+    />
   );
 }
