@@ -186,7 +186,16 @@ function SettingsForm({ settings }: { settings: SettingsRow }) {
       width="prose"
       action={
         <form.AppForm>
-          <form.SubmitButton form="settings">Save</form.SubmitButton>
+          {/* Off until something has changed: this row is one long form of defaults, and a Save
+              that is always lit says nothing about whether there is anything to save. The store's
+              own two reasons still apply — this only ever tightens them. */}
+          <form.Subscribe selector={(state) => state.isDirty}>
+            {(isDirty) => (
+              <form.SubmitButton form="settings" disabled={!isDirty}>
+                Save
+              </form.SubmitButton>
+            )}
+          </form.Subscribe>
         </form.AppForm>
       }
       content={

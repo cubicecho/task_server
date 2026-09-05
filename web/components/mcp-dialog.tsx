@@ -10,7 +10,7 @@ import {
   TestMcpServerDocument,
   UpdateMcpServerDocument,
 } from "@/__generated__/graphql/graphql";
-import { useAppForm } from "@/components/app-form";
+import { InputField, SwitchField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { FieldRow } from "@/components/field-row";
 import { McpProbeResult } from "@/components/mcp-probe";
@@ -208,23 +208,17 @@ export function McpDialog({
           <FieldRow
             content={
               <>
-                <form.AppField
+                <InputField
+                  form={form}
                   name="slug"
+                  label="Slug"
+                  description={doc("slug")}
+                  required
+                  className="font-mono"
+                  placeholder="filesystem"
                   validators={required("A server needs a slug — its tools are named after it.")}
-                >
-                  {(field) => (
-                    <field.InputField
-                      label="Slug"
-                      description={doc("slug")}
-                      required
-                      className="font-mono"
-                      placeholder="filesystem"
-                    />
-                  )}
-                </form.AppField>
-                <form.AppField name="label">
-                  {(field) => <field.InputField label="Label" placeholder="Local files" />}
-                </form.AppField>
+                />
+                <InputField form={form} name="label" label="Label" placeholder="Local files" />
               </>
             }
           />
@@ -252,79 +246,69 @@ export function McpDialog({
             {(transport) =>
               transport === McpServersTransportEnum.Stdio ? (
                 <>
-                  <form.AppField
+                  <InputField
+                    form={form}
                     name="command"
+                    label="Command"
+                    description={doc("command")}
+                    required
+                    className="font-mono"
+                    placeholder="npx"
                     validators={required("A stdio server needs a command.")}
-                  >
-                    {(field) => (
-                      <field.InputField
-                        label="Command"
-                        description={doc("command")}
-                        required
-                        className="font-mono"
-                        placeholder="npx"
-                      />
-                    )}
-                  </form.AppField>
-                  <form.AppField name="args" validators={parses("Args", [])}>
-                    {(field) => (
-                      <field.InputField
-                        label="Args"
-                        description={doc("args")}
-                        className="font-mono text-xs"
-                        placeholder='["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]'
-                      />
-                    )}
-                  </form.AppField>
-                  <form.AppField name="env" validators={parses("Env", {})}>
-                    {(field) => (
-                      <field.InputField
-                        label="Env"
-                        description={doc("env")}
-                        className="font-mono text-xs"
-                        placeholder='{ "API_TOKEN": "…" }'
-                      />
-                    )}
-                  </form.AppField>
+                  />
+                  <InputField
+                    form={form}
+                    name="args"
+                    label="Args"
+                    description={doc("args")}
+                    className="font-mono text-xs"
+                    placeholder='["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]'
+                    validators={parses("Args", [])}
+                  />
+                  <InputField
+                    form={form}
+                    name="env"
+                    label="Env"
+                    description={doc("env")}
+                    className="font-mono text-xs"
+                    placeholder='{ "API_TOKEN": "…" }'
+                    validators={parses("Env", {})}
+                  />
                 </>
               ) : (
                 <>
-                  <form.AppField name="url" validators={required("An http server needs a url.")}>
-                    {(field) => (
-                      <field.InputField
-                        label="URL"
-                        description={doc("url")}
-                        required
-                        className="font-mono"
-                        placeholder="https://example.com/mcp"
-                      />
-                    )}
-                  </form.AppField>
-                  <form.AppField name="headers" validators={parses("Headers", {})}>
-                    {(field) => (
-                      <field.InputField
-                        label="Headers"
-                        description={doc("headers")}
-                        className="font-mono text-xs"
-                        placeholder='{ "Authorization": "Bearer …" }'
-                      />
-                    )}
-                  </form.AppField>
+                  <InputField
+                    form={form}
+                    name="url"
+                    label="URL"
+                    description={doc("url")}
+                    required
+                    className="font-mono"
+                    placeholder="https://example.com/mcp"
+                    validators={required("An http server needs a url.")}
+                  />
+                  <InputField
+                    form={form}
+                    name="headers"
+                    label="Headers"
+                    description={doc("headers")}
+                    className="font-mono text-xs"
+                    placeholder='{ "Authorization": "Bearer …" }'
+                    validators={parses("Headers", {})}
+                  />
                 </>
               )
             }
           </form.Subscribe>
 
-          <form.AppField name="enabled">
-            {(field) => (
-              <field.SwitchField
-                label="Enabled"
-                description="A disabled server stays configured but offers no tools."
-                orientation="horizontal"
-                className="rounded-md border p-3"
-              />
-            )}
-          </form.AppField>
+          <SwitchField
+            form={form}
+            name="enabled"
+            label="Enabled"
+            description="A disabled server stays configured but offers no tools."
+            orientation="horizontal"
+            className="rounded-md border p-3"
+          />
 
           {probe ? <McpProbeResult probe={probe} /> : null}
         </form>
@@ -346,7 +330,15 @@ export function McpDialog({
             Cancel
           </Button>
           <form.AppForm>
-            <form.SubmitButton form="mcp-server">Save</form.SubmitButton>
+            {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
+                server would refuse. Passing `disabled` tightens the store's own two reasons. */}
+            <form.Subscribe selector={(state) => state.isDirty}>
+              {(isDirty) => (
+                <form.SubmitButton form="mcp-server" disabled={!isDirty}>
+                  Save
+                </form.SubmitButton>
+              )}
+            </form.Subscribe>
           </form.AppForm>
         </>
       }

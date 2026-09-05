@@ -1,5 +1,5 @@
 import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { useId, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,18 @@ export type MultiSelectOption = {
   /** A CSS colour for the chip. The text on it is chosen for contrast, not hardcoded. */
   color?: string;
   disabled?: boolean;
+  /**
+   * Why this option is the way it is — most often why it is unavailable.
+   *
+   * Drawn under the label and read after it, so it survives the case it is for: a `disabled` row
+   * fires no hover, so a tooltip on it is text nobody can reach, and "greyed out" on its own
+   * reads as a bug in the picker rather than as a decision. The reason is knowable when the
+   * options are built and unreachable by the time somebody wonders — this is the one place to
+   * put it.
+   *
+   * Same argument as {@link ActionButton}'s `hint`, in a control that had not had it yet.
+   */
+  hint?: ReactNode;
 };
 
 /**
@@ -164,6 +176,7 @@ export function MultiSelect({
   const [search, setSearch] = useState("");
   const generatedId = useId();
   const titleId = useId();
+  const hintId = useId();
   // The trigger needs a stable id whether or not a field shell gave it one, because the popover
   // is named by pointing at it — a Radix popover is `role="dialog"`, and an unnamed dialog is an
   // accessibility failure that only shows up once something opens it.
@@ -269,20 +282,44 @@ export function MultiSelect({
                     // it the selection is a visual mark and nothing else, which is what every
                     // version of this in these projects ships.
                     aria-checked={isSelected}
+                    // The name is the label and nothing else. Without this the hint below would
+                    // be swept into the accessible name by the contents, so the row would
+                    // announce the reason as part of what it is called, and again as its
+                    // description — twice, in the wrong order, as one sentence.
+                    aria-label={option.label}
+                    aria-describedby={option.hint ? `${hintId}-${option.value}` : undefined}
                     onSelect={() => toggle(option.value)}
+                    className={option.hint ? "items-start" : undefined}
                   >
                     <Check
-                      className={cn("size-4", isSelected ? "opacity-100" : "opacity-0")}
+                      className={cn(
+                        "size-4 shrink-0",
+                        option.hint && "mt-0.5",
+                        isSelected ? "opacity-100" : "opacity-0",
+                      )}
                       aria-hidden
                     />
                     {option.color ? (
                       <span
-                        className="size-2.5 shrink-0 rounded-full"
+                        className={cn("size-2.5 shrink-0 rounded-full", option.hint && "mt-1.5")}
                         style={{ backgroundColor: option.color }}
                         aria-hidden
                       />
                     ) : null}
-                    <span className="truncate">{option.label}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{option.label}</span>
+                      {option.hint ? (
+                        // Wrapped rather than truncated: a reason cut off at the edge of the
+                        // popover is the same as no reason.
+                        <span
+                          id={`${hintId}-${option.value}`}
+                          data-slot="multi-select-option-hint"
+                          className="block text-muted-foreground text-xs"
+                        >
+                          {option.hint}
+                        </span>
+                      ) : null}
+                    </span>
                   </CommandItem>
                 );
               })}

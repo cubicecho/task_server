@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { LastPayloadDocument } from "@/__generated__/graphql/graphql";
-import { useAppForm } from "@/components/app-form";
+import { TextareaField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { Button } from "@/components/ui/button";
 import { request } from "@/lib/gql";
@@ -108,8 +108,14 @@ function BodyForm({
             form.handleSubmit();
           }}
         >
-          <form.AppField
+          <TextareaField
+            form={form}
             name="body"
+            label="Body"
+            description={description}
+            rows={10}
+            className="font-mono text-xs"
+            placeholder={'{ "repository": "task_server", "status": "failed" }'}
             validators={{
               // Malformed JSON used to be a toast on the way out, which arrived after the dialog
               // was already gone and said nothing about where in the box the fault was.
@@ -122,17 +128,7 @@ function BodyForm({
                 }
               },
             }}
-          >
-            {(field) => (
-              <field.TextareaField
-                label="Body"
-                description={description}
-                rows={10}
-                className="font-mono text-xs"
-                placeholder={'{ "repository": "task_server", "status": "failed" }'}
-              />
-            )}
-          </form.AppField>
+          />
         </form>
       }
       footerActions={

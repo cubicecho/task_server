@@ -325,7 +325,7 @@ function BoundSwitchField(props: SwitchFieldProps) {
   );
 }
 
-type SubmitButtonProps = Omit<ComponentProps<typeof Button>, "type" | "disabled" | "children"> & {
+type SubmitButtonProps = Omit<ComponentProps<typeof Button>, "type" | "children"> & {
   children?: ReactNode;
   /** What it says mid-flight. The label is replaced, not appended to. */
   pendingLabel?: ReactNode;
@@ -337,18 +337,28 @@ type SubmitButtonProps = Omit<ComponentProps<typeof Button>, "type" | "disabled"
  * Every form in the source apps wrote `disabled={isSubmitting}` by hand and roughly half of them
  * forgot `canSubmit`, so an invalid form submitted anyway and failed at the server. Both come
  * off the form store, and there is one of these.
+ *
+ * `disabled` is a third reason, not a replacement for the two: it is OR-ed in, so a caller can
+ * only ever *tighten* the guard. The reasons the store cannot know are real ones — a mutation in
+ * flight on the other half of the screen, a settings form that is valid but unchanged — and
+ * without a way to say them the whole component gets dropped for a hand-written
+ * `<Button type="submit">` that re-derives `canSubmit` and `isSubmitting`, which is the
+ * duplication this exists to remove.
  */
 export function SubmitButton({
   children = "Save",
   pendingLabel = "Saving…",
+  disabled,
   ...props
 }: SubmitButtonProps) {
   const form = useFormContext();
   const canSubmit = useStore(form.store, (state) => state.canSubmit);
   const isSubmitting = useStore(form.store, (state) => state.isSubmitting);
 
+  // Ahead of the spread as well as OR-ed, so that neither a caller nor a future prop can put a
+  // `disabled={false}` back over the store's answer.
   return (
-    <Button type="submit" disabled={!canSubmit || isSubmitting} {...props}>
+    <Button type="submit" {...props} disabled={disabled || !canSubmit || isSubmitting}>
       {isSubmitting ? pendingLabel : children}
     </Button>
   );

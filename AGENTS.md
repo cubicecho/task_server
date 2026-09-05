@@ -377,15 +377,35 @@ them.
 
 `ActionButton` and `ConfirmButton` take a required `label`, which is the accessible name — an
 icon-only button with no `label` does not typecheck. Neither sets `type`, so inside a `<form>`
-every one of them needs `type="button"` or it submits the form.
+every one of them needs `type="button"` or it submits the form
+([cubeui#18](https://github.com/cubicecho/cubeui/issues/18)).
 
-**Forms are `@tanstack/react-form`, through `web/components/app-form.tsx`.** `useAppForm` binds
-the shadcn controls to `FormField`, so a field is one line — `<field.InputField label="Name"
-required />` — with its own `validators`, and the error lands under the input as it is typed
-rather than as a toast on the way out. The hook's `fieldComponents` are `InputField`,
-`NumberField`, `TextareaField`, `SelectField`, `CheckboxField` and `SwitchField`; the richer
-ones (`ModelSelectField`, `MultiSelectField`, `PasswordField`, `RadioGroupField`) are standalone
-and take the form — `<PasswordField form={form} name="apiKey" …/>`. A dialog passes
+**Updating is `npx shadcn add -o @cubeui/<name>`, and two things have to be put back after it.**
+The CLI does not rewrite the `export … from` paths in `multi-select-field` and `password-field`
+([cubeui#9](https://github.com/cubicecho/cubeui/issues/9)), which arrive pointing at
+`@/components/control/…`; and shadcn's own primitives now import `cn` from the `cn` package
+rather than from the `utils` alias, which installs a runtime dependency and leaves this repo with
+two `cn`s. Both are mechanical: point the exports at `@/components/`, and keep every
+`web/components/ui/*` on `@/lib/utils`, which is what `components.json` says the alias is. The
+linter is off for `web/components/ui/**` in `biome.json` for the same reason it is off upstream —
+the files are vendored, and which of Biome's rules a shadcn update trips is not this repo's
+question to answer per rule.
+
+**Forms are `@tanstack/react-form`, through `web/components/app-form.tsx`.** Every field is one
+line, taking the form and the name — `<InputField form={form} name="name" label="Name" required
+validators={…} />` — and the error lands under the input as it is typed rather than as a toast on
+the way out. `name` is checked against the store, so a renamed field is a build error. That is the
+form to write: `form.AppField` with a render prop is the escape hatch for a field that has to read
+a sibling, and there is none of it in this app. The bound controls are `InputField`, `NumberField`,
+`TextareaField`, `SelectField`, `CheckboxField` and `SwitchField` from `app-form.tsx`, plus
+`ModelSelectField`, `MultiSelectField`, `PasswordField` and `RadioGroupField` from their own files,
+used exactly the same way.
+
+Nothing at a call site writes `id`, `aria-describedby`, `aria-invalid`, or a `disabled` that
+re-derives `canSubmit`/`isSubmitting` — `FormField` and `SubmitButton` own those. `SubmitButton`'s
+own `disabled` is OR-ed with the store's two, so it can only tighten: settings and the two edit
+dialogs pass `disabled={!isDirty}`, because a form nobody has touched has nothing to save. The run
+dialog does not — replaying the body already in the box is the whole feature. A dialog passes
 `form.state.isDirty` to `DialogLayout`'s `hasUnsavedChanges`; the guard is asked for, never
 computed.
 

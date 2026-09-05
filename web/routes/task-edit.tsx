@@ -15,7 +15,7 @@ import {
   UpdateTaskDocument,
   UpdateTriggerDocument,
 } from "@/__generated__/graphql/graphql";
-import { useAppForm } from "@/components/app-form";
+import { InputField, SelectField, TextareaField, useAppForm } from "@/components/app-form";
 import { FieldRow } from "@/components/field-row";
 import { ModelSelectField } from "@/components/model-select-field";
 import { PageLayout } from "@/components/page-layout";
@@ -241,22 +241,26 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
             form.handleSubmit();
           }}
         >
-          <form.AppField name="name" validators={required("A task needs a name.")}>
-            {(field) => <field.InputField label="Name" required placeholder="Morning brief" />}
-          </form.AppField>
+          <InputField
+            form={form}
+            name="name"
+            label="Name"
+            required
+            placeholder="Morning brief"
+            validators={required("A task needs a name.")}
+          />
 
           <div className="flex flex-col gap-2">
-            <form.AppField name="prompt" validators={required("A task needs a prompt.")}>
-              {(field) => (
-                <field.TextareaField
-                  label="Prompt"
-                  required
-                  description={doc("prompt")}
-                  rows={5}
-                  placeholder="Check the build status and summarise anything that broke overnight."
-                />
-              )}
-            </form.AppField>
+            <TextareaField
+              form={form}
+              name="prompt"
+              label="Prompt"
+              required
+              description={doc("prompt")}
+              rows={5}
+              placeholder="Check the build status and summarise anything that broke overnight."
+              validators={required("A task needs a prompt.")}
+            />
             {/* Only worth saying where there is a webhook to say it about — on a task started by
                 hand or on a schedule the placeholder has nothing to put there. */}
             <form.Subscribe
@@ -273,28 +277,26 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
             </form.Subscribe>
           </div>
 
-          <form.AppField name="agentId">
-            {(field) => (
-              <field.SelectField
-                label="Agent profile"
-                description={doc("agentId")}
-                options={[
-                  { value: NO_AGENT, label: "Server settings" },
-                  ...(agents.data?.agents ?? []).map((agent) => ({
-                    value: agent.id,
-                    label: (
-                      <>
-                        {agent.name}
-                        {agent.description ? (
-                          <span className="text-muted-foreground"> — {agent.description}</span>
-                        ) : null}
-                      </>
-                    ),
-                  })),
-                ]}
-              />
-            )}
-          </form.AppField>
+          <SelectField
+            form={form}
+            name="agentId"
+            label="Agent profile"
+            description={doc("agentId")}
+            options={[
+              { value: NO_AGENT, label: "Server settings" },
+              ...(agents.data?.agents ?? []).map((agent) => ({
+                value: agent.id,
+                label: (
+                  <>
+                    {agent.name}
+                    {agent.description ? (
+                      <span className="text-muted-foreground"> — {agent.description}</span>
+                    ) : null}
+                  </>
+                ),
+              })),
+            ]}
+          />
 
           {/* The model picker asks the *profile's* endpoint for its models, so it is subscribed
               to the field above rather than reading a snapshot taken on render. */}
@@ -317,15 +319,13 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
                       }
                       agentId={agentId === NO_AGENT ? undefined : agentId}
                     />
-                    <form.AppField name="systemPrompt">
-                      {(field) => (
-                        <field.InputField
-                          label="System prompt"
-                          description={doc("systemPrompt")}
-                          placeholder="(default from Settings)"
-                        />
-                      )}
-                    </form.AppField>
+                    <InputField
+                      form={form}
+                      name="systemPrompt"
+                      label="System prompt"
+                      description={doc("systemPrompt")}
+                      placeholder="(default from Settings)"
+                    />
                   </>
                 }
               />

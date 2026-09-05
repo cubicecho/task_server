@@ -8,7 +8,7 @@ import {
   SetAgentApiKeyDocument,
   UpdateAgentDocument,
 } from "@/__generated__/graphql/graphql";
-import { useAppForm } from "@/components/app-form";
+import { InputField, NumberField, TextareaField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { FieldRow } from "@/components/field-row";
 import { ModelSelectField } from "@/components/model-select-field";
@@ -150,40 +150,35 @@ export function AgentDialog({
           <FieldRow
             content={
               <>
-                <form.AppField
+                <InputField
+                  form={form}
                   name="name"
+                  label="Name"
+                  description={doc("name")}
+                  required
+                  placeholder="Local Qwen"
                   validators={{
                     onChange: ({ value }: { value: string }) =>
                       value.trim() ? undefined : "A profile needs a name.",
                   }}
-                >
-                  {(field) => (
-                    <field.InputField
-                      label="Name"
-                      description={doc("name")}
-                      required
-                      placeholder="Local Qwen"
-                    />
-                  )}
-                </form.AppField>
-                <form.AppField name="description">
-                  {(field) => (
-                    <field.InputField label="Description" placeholder="Cheap and offline" />
-                  )}
-                </form.AppField>
+                />
+                <InputField
+                  form={form}
+                  name="description"
+                  label="Description"
+                  placeholder="Cheap and offline"
+                />
               </>
             }
           />
 
-          <form.AppField name="baseUrl">
-            {(field) => (
-              <field.InputField
-                label="Base URL"
-                description={doc("baseUrl")}
-                placeholder="(from settings)"
-              />
-            )}
-          </form.AppField>
+          <InputField
+            form={form}
+            name="baseUrl"
+            label="Base URL"
+            description={doc("baseUrl")}
+            placeholder="(from settings)"
+          />
 
           <PasswordField
             form={form}
@@ -202,45 +197,50 @@ export function AgentDialog({
             agentId={agent?.id}
           />
 
-          <form.AppField name="systemPrompt">
-            {(field) => (
-              <field.TextareaField
-                label="System prompt"
-                description={doc("systemPrompt")}
-                rows={3}
-                placeholder="(from settings)"
-              />
-            )}
-          </form.AppField>
+          <TextareaField
+            form={form}
+            name="systemPrompt"
+            label="System prompt"
+            description={doc("systemPrompt")}
+            rows={3}
+            placeholder="(from settings)"
+          />
 
           <FieldRow
             perRow={3}
             content={
               <>
-                <form.AppField name="maxTokens">
-                  {(field) => <field.NumberField label="Max tokens" placeholder="From settings" />}
-                </form.AppField>
-                <form.AppField name="temperature">
-                  {(field) => (
-                    <field.NumberField label="Temperature" step="0.1" placeholder="From settings" />
-                  )}
-                </form.AppField>
-                <form.AppField name="maxToolIterations">
-                  {(field) => (
-                    <field.NumberField label="Max tool steps" placeholder="From settings" />
-                  )}
-                </form.AppField>
-                <form.AppField name="requestTimeoutSeconds">
-                  {(field) => (
-                    <field.NumberField
-                      label="Silence before giving up (s)"
-                      placeholder="From settings"
-                    />
-                  )}
-                </form.AppField>
-                <form.AppField name="maxRetries">
-                  {(field) => <field.NumberField label="Retries" placeholder="From settings" />}
-                </form.AppField>
+                <NumberField
+                  form={form}
+                  name="maxTokens"
+                  label="Max tokens"
+                  placeholder="From settings"
+                />
+                <NumberField
+                  form={form}
+                  name="temperature"
+                  label="Temperature"
+                  step="0.1"
+                  placeholder="From settings"
+                />
+                <NumberField
+                  form={form}
+                  name="maxToolIterations"
+                  label="Max tool steps"
+                  placeholder="From settings"
+                />
+                <NumberField
+                  form={form}
+                  name="requestTimeoutSeconds"
+                  label="Silence before giving up (s)"
+                  placeholder="From settings"
+                />
+                <NumberField
+                  form={form}
+                  name="maxRetries"
+                  label="Retries"
+                  placeholder="From settings"
+                />
               </>
             }
           />
@@ -291,8 +291,14 @@ export function AgentDialog({
                   popoverLabel="MCP servers"
                   options={servers.map((server) => ({
                     value: server.id,
-                    label: `${server.label || server.slug}${server.enabled ? "" : " (disabled)"}`,
+                    label: server.label || server.slug,
                     keywords: [server.slug],
+                    // A server that is off is still worth scoping a profile to — it comes back
+                    // when it is enabled — so the row stays selectable and says why it is quiet
+                    // rather than wearing "(disabled)" in the middle of its own name.
+                    hint: server.enabled
+                      ? undefined
+                      : "Configured but off. It offers no tools until it is enabled.",
                   }))}
                 />
               )}
@@ -306,7 +312,15 @@ export function AgentDialog({
             Cancel
           </Button>
           <form.AppForm>
-            <form.SubmitButton form="agent-profile">Save</form.SubmitButton>
+            {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
+                server would refuse. Passing `disabled` tightens the store's own two reasons. */}
+            <form.Subscribe selector={(state) => state.isDirty}>
+              {(isDirty) => (
+                <form.SubmitButton form="agent-profile" disabled={!isDirty}>
+                  Save
+                </form.SubmitButton>
+              )}
+            </form.Subscribe>
           </form.AppForm>
         </>
       }
