@@ -381,15 +381,19 @@ every one of them needs `type="button"` or it submits the form
 ([cubeui#18](https://github.com/cubicecho/cubeui/issues/18)).
 
 **Updating is `npx shadcn add -o @cubeui/<name>`, and two things have to be put back after it.**
-The CLI does not rewrite the `export … from` paths in `multi-select-field` and `password-field`
-([cubeui#9](https://github.com/cubicecho/cubeui/issues/9)), which arrive pointing at
-`@/components/control/…`; and shadcn's own primitives now import `cn` from the `cn` package
-rather than from the `utils` alias, which installs a runtime dependency and leaves this repo with
-two `cn`s. Both are mechanical: point the exports at `@/components/`, and keep every
+The CLI rewrites a cross-item `import` to the local alias and leaves an `export … from` at the
+registry path ([cubeui#9](https://github.com/cubicecho/cubeui/issues/9)), so the re-export tails of
+`multi-select-field` and `password-field` arrive pointing at `@/components/control/…` and do not
+resolve — the same file's imports, three lines up, are fine. And shadcn's own primitives now import
+`cn` from the `cn` package rather than from the `utils` alias
+([cubeui#24](https://github.com/cubicecho/cubeui/issues/24)), which installs a runtime dependency —
+into `dependencies`, which is the section `npm ci --omit=dev` keeps — and leaves this repo with two
+`cn`s. Both are mechanical: point the exports at `@/components/`, and keep every
 `web/components/ui/*` on `@/lib/utils`, which is what `components.json` says the alias is. The
 linter is off for `web/components/ui/**` in `biome.json` for the same reason it is off upstream —
 the files are vendored, and which of Biome's rules a shadcn update trips is not this repo's
-question to answer per rule.
+question to answer per rule, which a narrower override learned the hard way when one more appeared
+on this update.
 
 **Forms are `@tanstack/react-form`, through `web/components/app-form.tsx`.** Every field is one
 line, taking the form and the name — `<InputField form={form} name="name" label="Name" required
