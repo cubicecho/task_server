@@ -1,6 +1,6 @@
+import { errorMessage } from "@cubicecho/agent-core";
 import { and, eq } from "drizzle-orm";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
-import { errorMessage } from "../shared/errors.ts";
 import { db } from "./db/client.ts";
 import { tasks, triggers } from "./db/schema.ts";
 import { fireTask } from "./runner/run.ts";

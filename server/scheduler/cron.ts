@@ -1,6 +1,6 @@
+import { errorMessage } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { type ScheduledTask, schedule, validate } from "node-cron";
-import { errorMessage } from "../../shared/errors.ts";
 import { db } from "../db/client.ts";
 import { tasks, triggers } from "../db/schema.ts";
 import { fireTask } from "../runner/run.ts";

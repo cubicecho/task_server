@@ -1,11 +1,9 @@
+import { ask, errorMessage, parseJson, type RunEventInput, tryAsk } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
-import { errorMessage } from "../../shared/errors.ts";
 import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
 import { runAgent } from "./agent.ts";
-import type { RunEventInput } from "./events.ts";
-import { ask, parseJson, tryAsk } from "./side-task.ts";
 
 /**
  * A task as a flow: its prompt, then a tree of steps under it.

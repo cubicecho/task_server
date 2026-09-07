@@ -1,7 +1,8 @@
+import { NO_KEY } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Agent, agents, type Settings, type Task } from "../db/schema.ts";
-import { loadSettings, NO_KEY } from "./llm.ts";
+import { loadSettings } from "./llm.ts";
 
 /**
  * What a run is configured with: the settings row, with a task's agent laid over it.

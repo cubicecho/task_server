@@ -1,8 +1,7 @@
+import { emit, errorMessage } from "@cubicecho/agent-core";
 import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
-import { errorMessage } from "../../shared/errors.ts";
 import { db } from "../db/client.ts";
 import { type Run, runs, steps, tasks } from "../db/schema.ts";
-import { emit } from "./events.ts";
 import { runFlow } from "./flow.ts";
 import { loadSettings } from "./llm.ts";
 import { configForTask } from "./profile.ts";
@@ -468,7 +467,7 @@ async function execute({
   payload?: unknown;
   controller: AbortController;
 }): Promise<Run> {
-  // Everything the run says as it goes, for anyone watching it — see `runner/events.ts`.
+  // Everything the run says as it goes, for anyone watching it — see the event bus in `@cubicecho/agent-core`.
   const onEvent = (event: Parameters<typeof emit>[1]) => emit(run.id, event);
   onEvent({ kind: "notice", text: `${task.name} started` });
   try {

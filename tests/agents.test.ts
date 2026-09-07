@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { NO_KEY } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { Agent, McpServerRow, Settings } from "../server/db/schema.ts";
@@ -109,8 +110,6 @@ test("whitespace is not an override", () => {
 });
 
 test("a profile with an endpoint of its own never inherits the server's key", async () => {
-  const { NO_KEY } = await import("../server/runner/llm.ts");
-
   const borrowed = profile.resolveConfig(settings(), agent({ baseUrl: "http://friend/v1" }));
   expect(borrowed.baseUrl).toBe("http://friend/v1");
   expect(borrowed.apiKey).toBe(NO_KEY);

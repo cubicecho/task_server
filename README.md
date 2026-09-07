@@ -141,7 +141,7 @@ is doing as it does it: reasoning and reply tokens, each tool call with its argu
 result, the turn boundaries of the agent loop, and which flow step each of them happened in —
 the live view groups by step the same way the finished run does.
 
-Those events go to an in-memory bus (`server/runner/events.ts`) and out over a GraphQL
+Those events go to an in-memory bus (`@cubicecho/agent-core`) and out over a GraphQL
 subscription, `runEvents(runId:)`, which yoga serves as SSE — the browser reads it with its own
 `EventSource`, so the client needs no library for it. Expand a running run on the **Runs** page
 to watch. A watcher that joins halfway through is replayed the run so far, so opening it late
@@ -220,7 +220,7 @@ a question about SQL, and nothing in the browser can answer it.
 
 With several servers connected, tool definitions cost more per request than the task's own
 prompt — they are mostly JSON Schema, and every one is sent on every turn. Settings offers two
-discovery modes (`runner/tool-loading.ts`):
+discovery modes (`@cubicecho/agent-core`):
 
 - **eager** — every definition on every request. Simple, and fine with a handful of tools.
 - **on demand** — the system prompt carries a name-only catalogue and the model calls
@@ -231,7 +231,7 @@ discovery modes (`runner/tool-loading.ts`):
   round trip. A wrong guess only costs an unused definition for one run, and the model can
   still load whatever it actually wanted.
 
-MCP tool schemas are normalised before they reach the model (`runner/schema-compat.ts`):
+MCP tool schemas are normalised before they reach the model (`@cubicecho/agent-core`):
 llama.cpp-backed servers compile every tool into one grammar, so a single shape their
 converter dislikes — a `type: ["string", "null"]`, a lookaround `pattern`, a bare type name
 where a schema belongs — fails the whole request rather than the one tool. If the server still
@@ -293,7 +293,10 @@ server/
   graphql/     the schema: drizzle-graphql entities plus a few hand-written fields;
                permissions.ts says who may call what, applied to the schema itself;
                docs.ts is the one copy of what every column means
-  runner/      llm client, MCP pool, tool loading + schema compat, agent loop, flow, recorder
+  runner/      the agent loop and the flow that drives it, over @cubicecho/agent-core
+               and @cubicecho/agent-mcp-pool; llm.ts is the settings row, mcp.ts the pool
+               wired to the mcp_servers table, profile.ts an agent profile laid over
+               settings
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write;
                cleanup.ts prunes old runs hourly
   webhooks.ts  POST /webhooks/:id, which fires matching event triggers
@@ -303,6 +306,28 @@ web/           vite + react + tanstack router/query/form + shadcn and @cubeui sh
   __generated__/  codegen output, gitignored — see GraphQL below
 tests/         vitest
 ```
+
+### The two packages under the runner
+
+The endpoint-agnostic half of the agent loop is not here any more. It is
+[`@cubicecho/agent-core`](https://github.com/cubicecho/agent-core) — the pooled OpenAI client,
+the retry rules, the tool-schema compatibility pass, on-demand tool loading, the one-shot side
+tasks and the run-event bus — and
+[`@cubicecho/agent-mcp-pool`](https://github.com/cubicecho/agent-mcp-pool), which is the MCP
+connection pool
+that offers a run its tools as `<slug>__<tool name>`. Three servers had grown their own copies
+of both and the copies had begun to disagree; this one now consumes them.
+
+Neither package imports anything of this server's. agent-core takes the narrowest structural
+config each function reads — an endpoint, a model, a tool policy — and the Drizzle `settings`
+row satisfies all of them, which is why a task's agent profile still costs the loop no branch.
+agent-mcp-pool takes a `load()` that returns the configured servers, and here that is a select
+against `mcp_servers`.
+
+The two do not depend on each other. agent-mcp-pool duplicates the one expression it wanted from
+agent-core (`errorMessage`) and satisfies `CatalogServer` structurally instead of importing it, so
+neither can drag in a second copy of the other — or of `openai`, which is a peer dependency of
+both and therefore this server's single copy.
 
 ## GraphQL
 

@@ -1,23 +1,33 @@
-import OpenAI from "openai";
-import { errorMessage } from "../../shared/errors.ts";
-import type { Settings } from "../db/schema.ts";
-import type { RunEventInput } from "./events.ts";
-import { getClient, timeoutMs } from "./llm.ts";
-import { type CatalogServer, mcp } from "./mcp.ts";
-import { isGrammarError, relaxTools, sanitizeTools } from "./schema-compat.ts";
-import { ask, parseJson, tryAsk } from "./side-task.ts";
 import {
+  ask,
+  backoffMs,
+  type CatalogServer,
   catalogPrompt,
+  EndpointSilent,
+  errorMessage,
   expandNames,
+  getClient,
   inCatalog,
+  isGrammarError,
+  isTransient,
   LOAD_TOOLS,
   LOAD_TOOLS_DEFINITION,
   loadResult,
   PRESELECT_SYSTEM,
+  parseJson,
   preselectInput,
   preselection,
+  type RunEventInput,
+  relaxTools,
   requestedNames,
-} from "./tool-loading.ts";
+  sanitizeTools,
+  sleep,
+  timeoutMs,
+  tryAsk,
+} from "@cubicecho/agent-core";
+import type OpenAI from "openai";
+import type { Settings } from "../db/schema.ts";
+import { mcp } from "./mcp.ts";
 
 /** What one endpoint turned out not to support. Both start optimistic and only ever latch off. */
 interface Capabilities {
@@ -75,49 +85,9 @@ export interface AgentOptions {
    */
   servers?: ReadonlySet<string>;
   signal?: AbortSignal;
-  /** Called as the run happens, for whoever is watching it. See `runner/events.ts`. */
+  /** Called as the run happens, for whoever is watching it. See `@cubicecho/agent-core`. */
   onEvent?: (event: RunEventInput) => void;
 }
-
-/** The endpoint stopped answering mid-request. Its own class so the retry can recognise it. */
-class EndpointSilent extends Error {
-  override readonly name = "EndpointSilent";
-}
-
-/**
- * Whether a failed request is worth trying again.
- *
- * The question is whether the request was *refused or lost*, rather than answered with a
- * complaint about its contents: a connection that never landed, a server too busy or too broken
- * to answer, an endpoint that went quiet. A 400 for a malformed tool schema would fail exactly
- * the same way on every attempt, and the two capability cases below are negotiated rather than
- * retried blindly.
- */
-function isTransient(error: unknown): boolean {
-  if (error instanceof EndpointSilent) return true;
-  if (error instanceof OpenAI.APIConnectionError) return true;
-  if (!(error instanceof OpenAI.APIError)) return false;
-  const { status } = error;
-  return status === 408 || status === 409 || status === 429 || (status ?? 0) >= 500;
-}
-
-/** Exponential, with jitter so several tasks failing at once do not return in lockstep. */
-const backoffMs = (attempt: number) =>
-  Math.min(8000, 2 ** attempt * 500) * (0.5 + Math.random() / 2);
-
-const sleep = (ms: number, signal?: AbortSignal) =>
-  new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(signal?.reason ?? new Error("aborted"));
-    };
-    if (signal?.aborted) return onAbort();
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
 
 /** One streamed turn, put back together into the shape the loop and the history work with. */
 interface Step {
