@@ -29,7 +29,14 @@ import type OpenAI from "openai";
 import type { Settings } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
 
-/** What one endpoint turned out not to support. Both start optimistic and only ever latch off. */
+/**
+ * What one endpoint turned out not to support. Both start optimistic and only ever latch off.
+ *
+ * Still here rather than in agent-core because the package has the tests for a refusal
+ * (`isGrammarError`, `relaxTools`) and not the memory of having answered one —
+ * [agent-core#8](https://github.com/cubicecho/agent-core/issues/8). Filed, not forgotten: this
+ * copy is the one the other two servers want, so it goes upstream rather than being tidied here.
+ */
 interface Capabilities {
   /**
    * llama.cpp-backed servers compile every tool schema into one grammar and reject keywords
@@ -113,6 +120,10 @@ const preview = (text: string, limit = 2000) =>
  * Streaming buys no speed here — nothing waits on the reply but the loop itself. It is what
  * makes a run watchable: a task that stalls, loops, or reaches for the wrong tool says so while
  * it is happening, instead of only in the row it leaves behind.
+ *
+ * agent-core exports `EndpointSilent` and `timeoutMs` for this loop and not the loop —
+ * [agent-core#6](https://github.com/cubicecho/agent-core/issues/6) is where it goes, along with
+ * the two copies of it next door.
  */
 async function streamStep(
   client: OpenAI,

@@ -121,9 +121,24 @@ library, so it stays out until it is asked for on its own terms.
 **What to watch.** The standing rule is cubeui's, from the other direction. cubeui is copied in,
 so an upstream fix has to be pulled; these are depended on, so an upstream fix arrives with the
 range — and the corollary is that a fix to retry, tool loading or the event bus belongs *upstream*.
-A copy re-grown under `server/runner/` is the drift the extraction was for. Both are on `^0.1.0`,
-and a caret on a `0.x` only admits patches, so a minor is a deliberate bump — which is the right
-setting while their APIs are this young.
+A copy re-grown under `server/runner/` is the drift the extraction was for. agent-mcp-pool is on
+`^0.1.0`, where a caret admits only patches, so a minor is a deliberate bump; agent-core reached
+`1.0.0` and its caret now takes minors on its own, which is what a stable API is for and is also
+the reason a minor there is worth reading the changelog for rather than only the lockfile.
+
+**What is still here that should not be.** Two copies under `server/runner/agent.ts` are known
+and filed rather than forgotten, so neither is a candidate for being tidied into a local
+abstraction — the fix is upstream and arrives with the range:
+
+- `streamStep` — the rearming silence watchdog, the tool-call reassembly and the reasoning-delta
+  spellings ([agent-core#6](https://github.com/cubicecho/agent-core/issues/6)). agent-core
+  exports `EndpointSilent` and `timeoutMs` for a loop it does not have, and all three servers
+  wrote that loop.
+- `Capabilities` and `negotiate` — the memory of what an endpoint turned out not to support
+  ([agent-core#8](https://github.com/cubicecho/agent-core/issues/8)). This server's copy is the
+  one the other two want: keyed by `baseUrl` rather than a module global, and a loop rather than
+  a single retry, so an endpoint that refuses both `stream_options` and a grammar keyword is
+  answered on both.
 
 ## Looked at and ruled out
 

@@ -12,12 +12,20 @@ import { mcpServers } from "../db/schema.ts";
  * `sync()` reconciles without being handed rows, which is the boot path and every `onWrite`
  * hook on the table.
  */
+/**
+ * How this process introduces itself to the servers it connects to. Written once because the
+ * pool and the probe each ask for it separately — see
+ * [agent-mcp-pool#3](https://github.com/cubicecho/agent-mcp-pool/issues/3), where the pool grows
+ * a `probe` of its own and this becomes one argument in one place.
+ */
+const CLIENT_NAME = "task-server";
+
 export const mcp = new McpPool({
   load: () => db.select().from(mcpServers),
-  clientName: "task-server",
+  clientName: CLIENT_NAME,
 });
 
 /** What the "Test connection" button calls, introducing itself as this server. */
-export const probe = (config: McpConnection) => probeConfig(config, "task-server");
+export const probe = (config: McpConnection) => probeConfig(config, CLIENT_NAME);
 
 export type { McpConnection };
