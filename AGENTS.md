@@ -175,8 +175,12 @@ run whose side tasks authenticate and whose turns do not.
 one expression it wanted from agent-core (`errorMessage`, which is one line) and satisfies
 `CatalogServer` structurally rather than importing it. A dependency between them would put a
 second `openai` in the tree the moment their ranges disagreed, and two sets of its classes do not
-typecheck against each other — `openai` is a peer dependency of both, which is what keeps this
-server's copy the only one. Do not "tidy" this into a shared dependency.
+typecheck against each other. `openai` is a peer dependency of agent-core, and therefore this
+server's single copy. agent-mcp-pool dropped its own peer in 1.0.0: it needed the type for one
+position — what `tools()` hands back — and declares `ToolDefinition` for it instead, the function
+arm of `ChatCompletionTool` and structurally assignable to it, so a consumer that proxies MCP
+without ever calling a model no longer installs 24 MB to satisfy a type that is erased anyway.
+Do not "tidy" either of these into a shared dependency.
 
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change

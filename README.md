@@ -327,8 +327,9 @@ against `mcp_servers`.
 
 The two do not depend on each other. agent-mcp-pool duplicates the one expression it wanted from
 agent-core (`errorMessage`) and satisfies `CatalogServer` structurally instead of importing it, so
-neither can drag in a second copy of the other — or of `openai`, which is a peer dependency of
-both and therefore this server's single copy.
+neither can drag in a second copy of the other. `openai` is a peer dependency of agent-core, and
+therefore this server's single copy; agent-mcp-pool wanted it for one type position and declares
+its own `ToolDefinition` instead, so proxying MCP no longer costs a consumer the whole SDK.
 
 ## GraphQL
 
