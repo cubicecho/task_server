@@ -10,7 +10,8 @@ true before it went in. Read it when picking up future work, and correct it when
 being true — a `no` here is a measurement, not a policy.
 
 Already in: `@vantreeseba/drizzle-graphql`, `@vantreeseba/graphql-casl`,
-`@cubicecho/graphql-mcp`, `@cubicecho/graphql-codegen-field-descriptions`, `@cubicecho/cubeui`.
+`@cubicecho/graphql-mcp`, `@cubicecho/graphql-codegen-field-descriptions`, `@cubicecho/cubeui`,
+`@cubicecho/agent-core`, `@cubicecho/agent-mcp-pool`.
 Those are argued in
 [`README.md`](README.md) and [`AGENTS.md`](AGENTS.md); this file is only the ones that are not.
 
@@ -78,13 +79,51 @@ the omissions typecheck errors rather than review comments.
 to `FormField` — replaced four hand-rolled `useState` forms, which is what moved validation from
 a toast on the way out to a message under the input as it is typed. See the frontend section of
 [`AGENTS.md`](AGENTS.md) for the conventions; the two sharp edges are that no cubeui component
-takes `children` (the body is `content`) and that `ActionButton` does not set `type`, so one
-inside a `<form>` submits it unless the caller says `type="button"`.
+takes `children` (the body is `content`) and that `ActionButton` and `ConfirmButton` take a
+required `label`, which is the accessible name. `ActionButton` used to submit the `<form>` around
+it unless the caller passed `type="button"`; [cubeui#18](https://github.com/cubicecho/cubeui/issues/18)
+made `type="button"` the default, which is the fix being right rather than the reminder being
+remembered.
 
 **What to watch.** The registry is a copy, so an upstream fix does not arrive on its own —
 re-running `npx shadcn add @cubeui/<name>` overwrites the local file, and anything edited here
 has to be re-applied or, better, pushed upstream. Generic improvements found while using it
 belong in cubeui rather than in this repo's copy.
+
+## `@cubicecho/agent-core` and `@cubicecho/agent-mcp-pool` — in, because three copies had drifted
+
+**What they are.** The endpoint-agnostic half of an agent runner, extracted from this server,
+`kanban_server` and `min-agent`: the pooled OpenAI client, `timeoutMs`, the retry rules and their
+backoff, the tool-schema compatibility pass, on-demand tool loading, the one-shot side tasks, and
+the run-event bus. agent-mcp-pool is the MCP connection pool beside it — one long-lived client per
+configured server, tools offered to a run as `<slug>__<tool name>`.
+
+**Why they went in.** Not to save lines, though it removed about a thousand. Three servers had
+written the same loop and the three copies had begun to disagree, and a disagreement in a retry
+rule is not visible until an endpoint is down. The extraction surfaced one immediately: agent-core
+had taken the older shape of the side-task hint fallback, a global boolean latched on any error,
+where this server had since narrowed it to per-`baseUrl` and 4xx only. That was fixed upstream
+with a test, and it is exactly the class of drift that only shows up when the copies are put side
+by side.
+
+**Why the seam holds.** Neither package imports anything of this server's. agent-core takes the
+narrowest structural config each function reads — an endpoint, a model, a tool policy, a retry
+policy — and the Drizzle `Settings` row satisfies all of them, which is why a task's agent profile
+still costs the loop no branch. agent-mcp-pool takes a `load()` returning the configured servers,
+and here that is a select against `mcp_servers`.
+
+**What was deliberately not taken.** agent-core's context-overflow guard — `requestTokens`,
+`isOverflow`, `contextLimitFor`, `compact` — is a feature this server does not have, and adopting
+it would change what a run does: a prompt could be refused or silently compacted before it is
+sent. That is a product decision about this server's behaviour, not a consequence of taking a
+library, so it stays out until it is asked for on its own terms.
+
+**What to watch.** They install from git URLs until they are published, so `npm ci` is pinned to a
+commit and moving forward is a deliberate `npm update` — see the packaging paragraphs in
+[`AGENTS.md`](AGENTS.md) for why `prepare`, `allowScripts` and `git` in the Dockerfile are all
+part of that. The standing rule is the same as cubeui's, from the other direction: a fix to
+retry, tool loading or the event bus belongs upstream, and a copy re-grown under
+`server/runner/` is the drift the extraction was for.
 
 ## Looked at and ruled out
 

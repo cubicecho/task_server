@@ -1,3 +1,4 @@
+import { fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
 import { buildSchema, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import { applyPermissions } from "@vantreeseba/graphql-casl";
 import { eq } from "drizzle-orm";
@@ -15,7 +16,6 @@ import {
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
 import { agents, settings, steps, tasks } from "../db/schema.ts";
-import { fold, history, type RunEvent, watch } from "../runner/events.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
 import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
 import { resolveConfig } from "../runner/profile.ts";

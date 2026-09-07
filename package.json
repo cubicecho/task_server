@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@casl/ability": "^7.0.1",
+    "@cubicecho/agent-core": "git+https://github.com/cubicecho/agent-core.git",
+    "@cubicecho/agent-mcp-pool": "git+https://github.com/cubicecho/agent-mcp-pool.git",
     "@cubicecho/graphql-mcp": "^2.10.0",
     "@electric-sql/pglite": "^0.5.8",
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -80,6 +82,8 @@
     "vitest": "^4.1.11"
   },
   "allowScripts": {
+    "@cubicecho/agent-core@0.0.0-development": true,
+    "@cubicecho/agent-mcp-pool@0.0.0-development": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.2": true
   }

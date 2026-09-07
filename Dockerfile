@@ -8,6 +8,12 @@ FROM node:26-slim AS builder
 
 WORKDIR /app
 
+# git, because two dependencies are git URLs until they are published (see
+# AGENTS.md) and npm clones them. It is already gone from the runtime stage.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/*
+
 # Manifests first so a source-only change reuses the install layer.
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -30,8 +36,16 @@ ENV NODE_ENV=production
 # this without a flag), and nothing under server/ uses syntax that survives
 # erasure. If that ever changes — an enum, a parameter property — the fix is to
 # move tsx into dependencies and make the CMD `npx tsx server/index.ts`.
+# git is a build-time need only — the two git dependencies are cloned, built and
+# then are ordinary directories — so it is installed, used and purged in one
+# layer rather than shipped.
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm ci --omit=dev \
+  && npm cache clean --force \
+  && apt-get purge -y git && apt-get autoremove -y
 
 COPY server server
 # The rules both halves of the app agree on — step kinds, context modes, nesting

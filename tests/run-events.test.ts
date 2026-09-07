@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as events from "@cubicecho/agent-core";
 import { type ExecutionResult, parse, subscribe } from "graphql";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 
@@ -8,13 +9,11 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-events-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
 
-let events: typeof import("../server/runner/events.ts");
 let schema: import("graphql").GraphQLSchema;
 
 beforeAll(async () => {
   const { ensureSchema } = await import("../server/db/migrate.ts");
   await ensureSchema();
-  events = await import("../server/runner/events.ts");
   schema = (await import("../server/graphql/schema.ts")).schema;
 });
 

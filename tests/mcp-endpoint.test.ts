@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import * as events from "@cubicecho/agent-core";
 import type { McpHttpHandler } from "@cubicecho/graphql-mcp";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -15,7 +16,6 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-mcp-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
 
-let events: typeof import("../server/runner/events.ts");
 let server: Server;
 let endpoint: URL;
 let client: Client;
@@ -26,7 +26,6 @@ let COLUMN_DOCS: typeof import("../server/graphql/docs.ts").COLUMN_DOCS;
 beforeAll(async () => {
   const { ensureSchema } = await import("../server/db/migrate.ts");
   await ensureSchema();
-  events = await import("../server/runner/events.ts");
   const { mountMcp } = await import("../server/mcp-endpoint.ts");
   COLUMN_DOCS = (await import("../server/graphql/docs.ts")).COLUMN_DOCS;
 

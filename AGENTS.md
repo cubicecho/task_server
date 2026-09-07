@@ -51,6 +51,7 @@ docker compose up --build
 | **`@vantreeseba/graphql-casl`** | Who may call what, as CASL rules over the schema rather than over an endpoint. `applyPermissions` wraps the schema `server/graphql/schema.ts` exports, so `/graphql` and `/mcp` are held to one map — see below |
 | **`@cubicecho/graphql-codegen-field-descriptions`** | The SDL descriptions authored in `server/graphql/docs.ts` reach the browser as data, not as JSDoc that erases. One string is the note under a form field and the tool-schema description an agent reads |
 | **`@cubicecho/graphql-mcp`** | Projects the same schema as MCP tools. `server/mcp-endpoint.ts` curates which ones — see below |
+| **`@cubicecho/agent-core`** and **`@cubicecho/agent-mcp-pool`** | The endpoint-agnostic half of the runner, and the MCP connection pool. Three servers had grown their own copies and the copies had begun to disagree. Installed from git URLs until they are published — see below |
 | **Node type stripping** | The container runs `node server/index.ts`; `tsx` is a devDependency and is not in the image. Nothing under `server/` may use syntax that survives erasure — no enums, no parameter properties |
 | **Biome** | One formatter and linter. `noExplicitAny` and `noNonNullAssertion` are errors here, not warnings |
 
@@ -150,6 +151,34 @@ the same tick would otherwise both read `size < limit` and both start.
 `tests/concurrency.test.ts` races two `Promise.all`'d firings for the last slot — one starts and
 one queues — and it fails if the claim moves back down. `runningRunIds()` filters empty ids out for the same reason — a
 claimed entry has no run id for the width of the insert.
+
+**The runner's generic half is `@cubicecho/agent-core`'s, and it does not come back.** The
+pooled OpenAI client, the retry rules and their backoff, the tool-schema compatibility pass,
+on-demand tool loading, the one-shot side tasks and the run-event bus all live there;
+`@cubicecho/agent-mcp-pool` holds the MCP pool that offers a run its tools as
+`<slug>__<tool name>`. What stays under `server/runner/` is what is *this* server's: `llm.ts`
+reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
+`profile.ts` lays an agent profile over settings, `agent.ts` and `flow.ts` drive the loop.
+Neither package imports anything of this server's — agent-core takes the narrowest structural
+config each function reads, and the Drizzle `Settings` row satisfies all of them, which is why a
+per-task endpoint still costs the loop no branch. A fix to retry, tool loading or the event bus
+belongs upstream and comes back through the dependency; a copy re-grown here is the drift the
+extraction was for.
+
+`$OPENAI_API_KEY` is folded in by `loadSettings`, not at the call that uses it. agent-core takes
+a config and asks no questions of it, so a fallback applied in one caller and not another is a
+run whose side tasks authenticate and whose turns do not.
+
+**The two packages install from git, and both build on install.** `package.json` names
+`git+https://github.com/cubicecho/<name>.git` — HTTPS explicitly, since a Docker build has no
+SSH key — and the lockfile pins the commit, so `npm ci` is reproducible and moving to a new one
+is a deliberate `npm update`. Each needs `prepare` rather than `prepack`, because `prepack` runs
+when npm packs a tarball and never when it installs from a git URL, which would leave `exports`
+naming a `dist/` that is not there; both are in `allowScripts` for the same reason. agent-mcp-pool
+names agent-core by the same URL so npm dedupes to one copy — a nested second copy would bring a
+second `openai` with it, and two sets of its classes do not typecheck against each other. The
+cost is that `npm ci` needs `git`, which `node:26-slim` lacks: the Dockerfile installs it in the
+builder, and installs, uses and purges it in one layer in the runtime stage.
 
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change
