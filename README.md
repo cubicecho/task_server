@@ -311,8 +311,9 @@ tests/         vitest
 
 The endpoint-agnostic half of the agent loop is not here any more. It is
 [`@cubicecho/agent-core`](https://github.com/cubicecho/agent-core) — the pooled OpenAI client,
-the retry rules, the tool-schema compatibility pass, on-demand tool loading, the one-shot side
-tasks and the run-event bus — and
+the retry rules, one streamed turn read back into a message, the negotiation that answers an
+endpoint refusing part of a request, the tool-schema compatibility pass, on-demand tool loading,
+the one-shot side tasks and the run-event bus — and
 [`@cubicecho/agent-mcp-pool`](https://github.com/cubicecho/agent-mcp-pool), which is the MCP
 connection pool
 that offers a run its tools as `<slug>__<tool name>`. Three servers had grown their own copies

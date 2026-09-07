@@ -303,7 +303,7 @@ test("a question about a task's triggers is asked from the trigger end", async (
 });
 
 test("hands a run's progress to a client that polls for it", async () => {
-  events.reset();
+  events.resetEvents();
   events.emit("run-mcp", { kind: "step", text: "step 1" });
   for (const piece of ["think", "ing ", "out ", "loud"]) {
     events.emit("run-mcp", { kind: "thinking", text: piece });
