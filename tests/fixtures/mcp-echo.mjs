@@ -29,6 +29,15 @@ const tools = [
 ];
 
 const server = new Server({ name: "echo", version: "0.0.1" }, { capabilities: { tools: {} } });
+
+// The `clientInfo` of the handshake, when a test asks for it. It is the whole of what a dialled
+// server learns about who is calling it, and nothing on the pool's side of the connection can
+// read it back — so, like the spawn log above, the child is the only witness.
+if (process.env.MCP_ECHO_CLIENT_LOG)
+  server.oninitialized = () => {
+    const client = server.getClientVersion();
+    appendFileSync(process.env.MCP_ECHO_CLIENT_LOG, `${client?.name}/${client?.version}\n`);
+  };
 server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }));
 server.setRequestHandler(CallToolRequestSchema, (request) => ({
   content: [
