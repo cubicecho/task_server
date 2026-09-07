@@ -131,9 +131,12 @@ function BodyForm({
           />
         </form>
       }
-      footerActions={
+      // A function, so Cancel closes through the dialog's own door: `hasUnsavedChanges` guards
+      // Escape, the overlay and the X, and a Cancel wired straight to `onClose` was the fourth
+      // way out — the one people actually click — going around the ask.
+      footerActions={(close) => (
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={close}>
             Cancel
           </Button>
           <form.AppForm>
@@ -142,7 +145,7 @@ function BodyForm({
             </form.SubmitButton>
           </form.AppForm>
         </>
-      }
+      )}
     />
   );
 }

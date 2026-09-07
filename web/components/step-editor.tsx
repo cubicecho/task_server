@@ -4,15 +4,9 @@ import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
 import { Section } from "@/components/section";
+import { Select } from "@/components/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -84,7 +78,6 @@ export function StepList({
           Add step
         </Button>
         <ActionButton
-          type="button"
           label="Add decision"
           tooltip={false}
           variant="outline"
@@ -199,7 +192,6 @@ function StepCard({
           title={step.enabled ? "Runs" : "Skipped"}
         />
         <ActionButton
-          type="button"
           label="Move up"
           variant="ghost"
           size="icon"
@@ -209,7 +201,6 @@ function StepCard({
           <ChevronUp />
         </ActionButton>
         <ActionButton
-          type="button"
           label="Move down"
           variant="ghost"
           size="icon"
@@ -219,7 +210,6 @@ function StepCard({
           <ChevronDown />
         </ActionButton>
         <ActionButton
-          type="button"
           label={decision ? "Remove this decision" : "Remove this step"}
           variant="ghost"
           size="icon"
@@ -272,7 +262,6 @@ function StepCard({
                         aria-invalid={duplicate(index)}
                       />
                       <ActionButton
-                        type="button"
                         label="Remove this case"
                         variant="ghost"
                         size="icon"
@@ -329,22 +318,18 @@ function StepCard({
                 />
                 <FormField
                   label="Sees"
+                  // Still the function form: the control spreads what it is handed onto the
+                  // trigger, and the trigger is the only element a Radix select renders.
                   control={(wired) => (
                     <Select
+                      {...wired}
                       value={step.context}
                       onValueChange={(context) => patch({ context: context as StepContext })}
-                    >
-                      <SelectTrigger {...wired} className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONTEXTS.map((context) => (
-                          <SelectItem key={context} value={context}>
-                            {CONTEXT_LABELS[context]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      options={CONTEXTS.map((context) => ({
+                        value: context,
+                        label: CONTEXT_LABELS[context],
+                      }))}
+                    />
                   )}
                 />
               </>

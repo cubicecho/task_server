@@ -53,4 +53,7 @@ export const PasswordField = bindToForm<PasswordFieldProps, string>(
   "PasswordField",
 );
 
-export { PasswordInput } from "@/components/password-input";
+// Re-exported as a local binding rather than `export … from`: the shadcn CLI rewrites import
+// declarations on install and leaves re-export declarations alone, so the `from` form would ship
+// a path into `control/` that does not exist in a consumer's tree. See AGENTS.md.
+export { PasswordInput };

@@ -7,7 +7,7 @@ import {
   useFieldError,
 } from "@/components/app-form";
 import { FormField } from "@/components/form-field";
-import { MultiSelect } from "@/components/multi-select";
+import { MultiSelect, type MultiSelectOption } from "@/components/multi-select";
 
 type MultiSelectFieldProps = FieldProps &
   Omit<
@@ -59,5 +59,8 @@ export const MultiSelectField = bindToForm<MultiSelectFieldProps, readonly strin
   "MultiSelectField",
 );
 
-export type { MultiSelectOption } from "@/components/multi-select";
-export { MultiSelect } from "@/components/multi-select";
+export type { MultiSelectOption };
+// Local bindings rather than `export … from`: the shadcn CLI rewrites import declarations on
+// install and leaves re-export declarations alone, so the `from` form would ship a path into
+// `control/` that does not exist in a consumer's tree. See AGENTS.md.
+export { MultiSelect };

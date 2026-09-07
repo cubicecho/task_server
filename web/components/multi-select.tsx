@@ -25,6 +25,24 @@ export type MultiSelectOption = {
   color?: string;
   disabled?: boolean;
   /**
+   * The end of the row: a status badge, a count, a date. Drawn beside the label, never on the
+   * chip — the chip is a string and stays one.
+   *
+   * A description rather than a name, so a row still announces as what it is called and the
+   * badge is read after it. `color` cannot do this job: it is the chip's colour, and pointing it
+   * at a status would mint a second colour vocabulary beside the app's own.
+   */
+  meta?: ReactNode;
+  /**
+   * The heading these options are drawn under. Options sharing one are drawn together beneath
+   * it, in the order they were given rather than sorted — a board's lanes are ordered, and
+   * alphabetical would be wrong.
+   *
+   * The heading is also searched, so typing a lane's name still finds the cards in it. cmdk
+   * hides a heading whose options are all filtered out, which is what you want.
+   */
+  group?: string;
+  /**
    * Why this option is the way it is — most often why it is unavailable.
    *
    * Drawn under the label and read after it, so it survives the case it is for: a `disabled` row
@@ -55,6 +73,29 @@ export function mergeMultiSelectOptions(
   return orphans.length === 0
     ? [...options]
     : [...options, ...orphans.map((selected) => ({ value: selected, label: selected }))];
+}
+
+type MultiSelectRun = { group?: string; options: MultiSelectOption[] };
+
+/**
+ * The flat list as the runs it is drawn in: consecutive options sharing a `group` are one.
+ *
+ * Walked rather than bucketed, because the order is the caller's — a board's lanes are ordered —
+ * and a heading that reappears later is a caller who meant it. Options with no `group` are a run
+ * with no heading, which is every list that has not asked for one, including the values
+ * {@link mergeMultiSelectOptions} synthesised.
+ */
+function groupsOf(options: readonly MultiSelectOption[]): MultiSelectRun[] {
+  const runs: MultiSelectRun[] = [];
+  for (const option of options) {
+    const last = runs.at(-1);
+    if (last && last.group === option.group) {
+      last.options.push(option);
+    } else {
+      runs.push({ group: option.group, options: [option] });
+    }
+  }
+  return runs;
 }
 
 /**
@@ -134,6 +175,104 @@ type MultiSelectProps = Omit<
 };
 
 /**
+ * One option, which is up to four things: the tick, the colour dot, what it is called, and what
+ * else is true of it.
+ *
+ * Its own component because the rows are drawn inside a run now rather than in one flat map, and
+ * because everything about the row that is not the label is a *description* — which takes two
+ * ids, an explicit name, and a layout that changes when there is a second line. That is more
+ * than belongs in a nested map.
+ */
+function OptionRow({
+  option,
+  idPrefix,
+  selected,
+  onToggle,
+}: {
+  option: MultiSelectOption;
+  idPrefix: string;
+  selected: boolean;
+  onToggle: (value: string) => void;
+}) {
+  const hintId = option.hint ? `${idPrefix}-hint-${option.value}` : undefined;
+  const metaId = option.meta ? `${idPrefix}-meta-${option.value}` : undefined;
+  // A second line changes the row from centred to top-aligned, and everything on the first line
+  // has to be nudged down to sit on it.
+  const stacked = Boolean(option.hint);
+
+  return (
+    <CommandItem
+      // What the filter sees. `value` alone would search ids, which nobody types; the heading is
+      // in here so that typing a lane's name still finds the cards in it.
+      value={[option.label, option.group, ...(option.keywords ?? [])].filter(Boolean).join(" ")}
+      disabled={option.disabled}
+      // `aria-checked`, not `aria-selected`, and not by preference: cmdk uses
+      // `aria-selected` for which option is *highlighted* and sets it after the
+      // props it is given, so it cannot also carry which options are chosen.
+      // `aria-checked` is valid on `role="option"`, is the one cmdk leaves alone,
+      // and is read as "checked" — which is what the tick beside it means. Without
+      // it the selection is a visual mark and nothing else, which is what every
+      // version of this in these projects ships.
+      aria-checked={selected}
+      // The name is the label and nothing else. Without this the badge and the hint would be
+      // swept into the accessible name by the contents, so the row would announce them as part
+      // of what it is called, and again as its description — twice, in the wrong order, as one
+      // sentence.
+      aria-label={option.label}
+      // In reading order: the end of the row, then the line under it.
+      aria-describedby={[metaId, hintId].filter(Boolean).join(" ") || undefined}
+      onSelect={() => onToggle(option.value)}
+      // `group` so the two muted lines can answer the highlight. cmdk paints the highlighted row
+      // `bg-accent`, and muted text on it is 4.34:1 — under the 4.5 a body-size string needs, so
+      // whichever row the arrow keys are on is the one that cannot be read.
+      className={cn("group", stacked && "items-start")}
+    >
+      <Check
+        className={cn(
+          "size-4 shrink-0",
+          stacked && "mt-0.5",
+          selected ? "opacity-100" : "opacity-0",
+        )}
+        aria-hidden
+      />
+      {option.color ? (
+        <span
+          className={cn("size-2.5 shrink-0 rounded-full", stacked && "mt-1.5")}
+          style={{ backgroundColor: option.color }}
+          aria-hidden
+        />
+      ) : null}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{option.label}</span>
+        {option.hint ? (
+          // Wrapped rather than truncated: a reason cut off at the edge of the
+          // popover is the same as no reason.
+          <span
+            id={hintId}
+            data-slot="multi-select-option-hint"
+            className="block text-muted-foreground text-xs group-data-[selected=true]:text-accent-foreground/80"
+          >
+            {option.hint}
+          </span>
+        ) : null}
+      </span>
+      {option.meta ? (
+        <span
+          id={metaId}
+          data-slot="multi-select-option-meta"
+          className={cn(
+            "shrink-0 text-muted-foreground text-xs group-data-[selected=true]:text-accent-foreground/80",
+            stacked && "mt-0.5",
+          )}
+        >
+          {option.meta}
+        </span>
+      ) : null}
+    </CommandItem>
+  );
+}
+
+/**
  * A combobox that selects more than one thing.
  *
  * There are three of these across these projects and none of them is the same shape. One is a
@@ -176,13 +315,14 @@ export function MultiSelect({
   const [search, setSearch] = useState("");
   const generatedId = useId();
   const titleId = useId();
-  const hintId = useId();
+  const rowId = useId();
   // The trigger needs a stable id whether or not a field shell gave it one, because the popover
   // is named by pointing at it — a Radix popover is `role="dialog"`, and an unnamed dialog is an
   // accessibility failure that only shows up once something opens it.
   const triggerId = id ?? generatedId;
 
   const merged = useMemo(() => mergeMultiSelectOptions(options, value), [options, value]);
+  const runs = useMemo(() => groupsOf(merged), [merged]);
   const selected = useMemo(
     () => value.map((v) => merged.find((option) => option.value === v)).filter(Boolean),
     [merged, value],
@@ -265,65 +405,22 @@ export function MultiSelect({
           ) : null}
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
-            <CommandGroup>
-              {merged.map((option) => {
-                const isSelected = value.includes(option.value);
-                return (
-                  <CommandItem
+            {runs.map((run, index) => (
+              // Positional, because a heading that appears twice is a caller who meant it and so
+              // is not unique. The list is the caller's and is drawn in the order given.
+              // biome-ignore lint/suspicious/noArrayIndexKey: a run has no id of its own
+              <CommandGroup key={`run-${index}`} heading={run.group}>
+                {run.options.map((option) => (
+                  <OptionRow
                     key={option.value}
-                    // What the filter sees. `value` alone would search ids, which nobody types.
-                    value={[option.label, ...(option.keywords ?? [])].join(" ")}
-                    disabled={option.disabled}
-                    // `aria-checked`, not `aria-selected`, and not by preference: cmdk uses
-                    // `aria-selected` for which option is *highlighted* and sets it after the
-                    // props it is given, so it cannot also carry which options are chosen.
-                    // `aria-checked` is valid on `role="option"`, is the one cmdk leaves alone,
-                    // and is read as "checked" — which is what the tick beside it means. Without
-                    // it the selection is a visual mark and nothing else, which is what every
-                    // version of this in these projects ships.
-                    aria-checked={isSelected}
-                    // The name is the label and nothing else. Without this the hint below would
-                    // be swept into the accessible name by the contents, so the row would
-                    // announce the reason as part of what it is called, and again as its
-                    // description — twice, in the wrong order, as one sentence.
-                    aria-label={option.label}
-                    aria-describedby={option.hint ? `${hintId}-${option.value}` : undefined}
-                    onSelect={() => toggle(option.value)}
-                    className={option.hint ? "items-start" : undefined}
-                  >
-                    <Check
-                      className={cn(
-                        "size-4 shrink-0",
-                        option.hint && "mt-0.5",
-                        isSelected ? "opacity-100" : "opacity-0",
-                      )}
-                      aria-hidden
-                    />
-                    {option.color ? (
-                      <span
-                        className={cn("size-2.5 shrink-0 rounded-full", option.hint && "mt-1.5")}
-                        style={{ backgroundColor: option.color }}
-                        aria-hidden
-                      />
-                    ) : null}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">{option.label}</span>
-                      {option.hint ? (
-                        // Wrapped rather than truncated: a reason cut off at the edge of the
-                        // popover is the same as no reason.
-                        <span
-                          id={`${hintId}-${option.value}`}
-                          data-slot="multi-select-option-hint"
-                          className="block text-muted-foreground text-xs"
-                        >
-                          {option.hint}
-                        </span>
-                      ) : null}
-                    </span>
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
+                    option={option}
+                    idPrefix={rowId}
+                    selected={value.includes(option.value)}
+                    onToggle={toggle}
+                  />
+                ))}
+              </CommandGroup>
+            ))}
 
             {canCreate ? (
               // An explicit row, not an Enter handler on the input: cmdk already consumes Enter

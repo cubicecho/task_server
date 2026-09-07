@@ -95,10 +95,24 @@ type ActionButtonProps = Omit<ComponentProps<typeof Button>, "aria-label"> & {
  * provider is already above you, so the button cannot render one only when it is needed, and
  * cannot read what the outer one was set to. Leaving these unset keeps shadcn's `0` rather than
  * finding the app's number.
+ *
+ * **It is `type="button"` unless you say otherwise.** A `<button>` with no type is a submit
+ * button, and these live inside forms by the dozen — a row of icon buttons beside the fields
+ * they act on. Untyped, the trash icon beside a cron box both removes the row *and* submits the
+ * form, and a stray Enter in that box submits through the first submit button in tree order,
+ * which is the trash. Neither is visible in review: the call site reads as a button with an
+ * `onClick`.
+ *
+ * `disabled` makes it worse rather than better. The click path is refused in the handler, and
+ * implicit submission never goes through a click — so a disabled `ActionButton` was still a live
+ * submit button for the Enter key.
+ *
+ * A caller who wants one of these to submit can still say `type="submit"`, and now has to.
  */
 export function ActionButton({
   label,
   hint,
+  type = "button",
   side = "top",
   tooltip = true,
   delayDuration,
@@ -118,6 +132,7 @@ export function ActionButton({
 
   const button = (
     <Button
+      type={type}
       aria-label={label}
       // Not `disabled`: the attribute is what removes the hover and the tab stop, and with them
       // the explanation. `opacity-50` is what `disabled:opacity-50` would have drawn.

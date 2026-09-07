@@ -268,10 +268,13 @@ the measurement did not already answer.
 a generated field means. `describeColumn` puts it on the schema, so it lands in `schema.graphql`,
 in the JSON Schema of every `/mcp` tool that touches the column, and — through the codegen plugin,
 as `web/__generated__/graphql/descriptions.ts` — under the field in the web app, where
-`web/lib/docs.tsx` reads it as `describe("Setting", "maxRetries")` — or, since a form is usually
+`web/lib/docs.ts` reads it as `describe("Setting", "maxRetries")` — or, since a form is usually
 one table, `describeFor("Setting")`. It renders as a node rather than a string because these
 sentences are written for two readers at once: `ticks()` turns the backticks a model reads as
-markdown into `<code>` for everyone else.
+markdown into `<code>` for everyone else. That function is the registry's, exported beside
+`FormField` ([cubeui#20](https://github.com/cubicecho/cubeui/issues/20)) — rendering a description
+written for a model and a person at once is not this app's problem, and the copy that used to live
+here dropped an unpaired backtick's worth of the sentence on the floor.
 
 It was written twice before and reached nobody twice: JSDoc on the column, which is compile-time
 only and so never reached an agent, and a `hint` literal in the form, which never reached one
@@ -368,27 +371,48 @@ dependency, and an installed file is this repo's to edit. What is here: `PageLay
 route's header, trail, action row and body), `DialogLayout` (title, body, `footer` for a side
 control and `footerActions` for cancel/confirm, and the unsaved-changes guard), `Section`,
 `CardLayout`, `SplitLayout`, `QueryState` with `QueryError`, `DisclosureRow`, `ActionButton`,
-`ConfirmButton`, `FormField`, `FieldRow`, `MultiSelect`, `PasswordInput`, `ModelSelect`'s field
-wrapper. **No cubeui component takes `children`** — the body is the `content` prop, and every
+`ConfirmButton`, `FormField`, `FieldRow`, `Select`, `MultiSelect`, `PasswordInput`,
+`ModelSelect`'s field wrapper. **No cubeui component takes `children`** — the body is the `content` prop, and every
 other slot is a prop too, which is what stops a shell from being subclassed by nesting. Never
 hand-write `mx-auto max-w-3xl` or a `<header className="border-b px-6 py-4">`: that is
 `PageLayout` being re-derived, and the point of taking the registry was to stop having four of
 them.
 
 `ActionButton` and `ConfirmButton` take a required `label`, which is the accessible name — an
-icon-only button with no `label` does not typecheck. Neither sets `type`, so inside a `<form>`
-every one of them needs `type="button"` or it submits the form
-([cubeui#18](https://github.com/cubicecho/cubeui/issues/18)).
+icon-only button with no `label` does not typecheck. Both default to `type="button"` as of
+[cubeui#18](https://github.com/cubicecho/cubeui/issues/18), so the call sites inside a `<form>`
+that used to carry one by hand have dropped it; a row action that submitted the form
+around it was the bug, and it is the default that is right rather than the reminder.
+
+`DialogLayout`'s `footerActions` takes a function, and every dialog here uses that form: it is
+handed the dialog's own `close`, which is the one Escape, the overlay and the X go through, so
+`hasUnsavedChanges` asks on the way out of Cancel too
+([cubeui#2](https://github.com/cubicecho/cubeui/issues/2)). Wired straight to the caller's
+`onClose` — which is what all three did — Cancel was the fourth way out of a dialog and the only
+one that skipped the ask, which is also the one people click.
+
+**`Select` takes `options`, and it is not shadcn's `Select`.** The primitive at
+`@/components/ui/select` takes seven parts to assemble; the control at `@/components/select` takes
+a list — `{ value, label }`, plus `{ separator: true }` for a rule and `group` for a heading
+([cubeui#5](https://github.com/cubicecho/cubeui/issues/5),
+[#10](https://github.com/cubicecho/cubeui/issues/10)) — and spreads the rest of its props onto the
+trigger, which is the only element Radix's select root actually renders. That is what `FormField`'s
+function form hands a control, so it drops into one without a wrapper. The runs filter bar and the
+step editor's "Sees" are on it. `ModelSelect` is deliberately not: it fetches `/models` when the
+menu opens and draws a loading and an error row, and the control has neither `onOpenChange` nor a
+non-option entry ([cubeui#37](https://github.com/cubicecho/cubeui/issues/37)).
 
 **Updating is `npx shadcn add -o @cubeui/<name>`, and two things have to be put back after it.**
-The CLI rewrites a cross-item `import` to the local alias and leaves an `export … from` at the
-registry path ([cubeui#9](https://github.com/cubicecho/cubeui/issues/9)), so the re-export tails of
-`multi-select-field` and `password-field` arrive pointing at `@/components/control/…` and do not
-resolve — the same file's imports, three lines up, are fine. And shadcn's own primitives now import
-`cn` from the `cn` package rather than from the `utils` alias
+`app-form.tsx` arrives importing `Select` from `@/components/ui/select` — shadcn's primitive,
+which is a real file with a real `Select` in it, so it resolves and then fails four lines down on
+members it does not have. The cubeui item is *called* `select` and depends on the primitive of the
+same name, so the CLI has two of them in the run and picks the `ui` alias
+([cubeui#36](https://github.com/cubicecho/cubeui/issues/36)); the line above it, `form-field`, is
+the same kind of import and lands correctly, because nothing upstream is called that. And shadcn's
+own primitives import `cn` from the `cn` package rather than from the `utils` alias
 ([cubeui#24](https://github.com/cubicecho/cubeui/issues/24)), which installs a runtime dependency —
 into `dependencies`, which is the section `npm ci --omit=dev` keeps — and leaves this repo with two
-`cn`s. Both are mechanical: point the exports at `@/components/`, and keep every
+`cn`s. Both are mechanical: point the two select imports at `@/components/select`, and keep every
 `web/components/ui/*` on `@/lib/utils`, which is what `components.json` says the alias is. The
 linter is off for `web/components/ui/**` in `biome.json` for the same reason it is off upstream —
 the files are vendored, and which of Biome's rules a shadcn update trips is not this repo's

@@ -54,8 +54,28 @@ type DialogLayoutProps = {
   size?: keyof typeof SIZES;
   /** The footer's start. A destructive action, or a word on why the confirm is refusing. */
   footer?: ReactNode;
-  /** The footer's end. Cancel and confirm. Given alone, the footer is simply right-aligned. */
-  footerActions?: ReactNode;
+  /**
+   * The footer's end. Cancel and confirm. Given alone, the footer is simply right-aligned.
+   *
+   * Pass a **function** to get the dialog's own close, guarded the same way Escape and the
+   * overlay are. A Cancel wired to the caller's `setOpen(false)` goes around the shell entirely,
+   * and `hasUnsavedChanges` then covers three of the four ways out — the fourth being the one
+   * people click. Taking `close` from here is the same close the other three doors use, so
+   * unsaved work asks on the way through it too.
+   *
+   * ```tsx
+   * footerActions={(close) => (
+   *   <>
+   *     <Button variant="ghost" onClick={close}>Cancel</Button>
+   *     <Button onClick={save}>Save</Button>
+   *   </>
+   * )}
+   * ```
+   *
+   * Only this slot takes the function. `footer` is the other end — a destructive action, or a
+   * word on why the confirm is refusing — and nothing there closes the dialog on the way out.
+   */
+  footerActions?: ReactNode | ((close: () => void) => ReactNode);
   /**
    * Whether Escape and a click on the overlay close it. Off refuses to leave; prefer
    * `hasUnsavedChanges`, which asks on the way out instead.
@@ -129,7 +149,6 @@ export function DialogLayout({
   contentClassName,
   footerClassName,
 }: DialogLayoutProps) {
-  const hasFooter = Boolean(footer || footerActions);
   const stop = dismissible ? undefined : (event: Event) => event.preventDefault();
 
   // Radix is handed an `open` either way, so one `requestClose` covers Escape, the overlay and
@@ -153,10 +172,21 @@ export function DialogLayout({
     setOpenState(next);
   };
 
+  const closeFromFooter = () => requestOpenChange(false);
+
   const discard = () => {
     setAskingToDiscard(false);
     setOpenState(false);
   };
+
+  // The same close Escape, the overlay and the close button go through, handed to the footer so
+  // a Cancel there is guarded by the thing that guards them.
+  const actions =
+    typeof footerActions === "function" ? footerActions(closeFromFooter) : footerActions;
+
+  // Asked of what the footer actually rendered: a function that returns nothing should leave the
+  // dialog with no footer, not with an empty one taking up a row.
+  const hasFooter = Boolean(footer || actions);
 
   return (
     <>
@@ -203,9 +233,7 @@ export function DialogLayout({
                   className={cn(footer && footerActions && "sm:justify-between", footerClassName)}
                 >
                   {footer}
-                  {footerActions ? (
-                    <div className="flex items-center gap-2">{footerActions}</div>
-                  ) : null}
+                  {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
                 </DialogFooter>
               ) : null
             }

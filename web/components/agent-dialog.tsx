@@ -289,26 +289,35 @@ export function AgentDialog({
                   placeholder="Every enabled server"
                   searchLabel="Search servers"
                   popoverLabel="MCP servers"
-                  options={servers.map((server) => ({
-                    value: server.id,
-                    label: server.label || server.slug,
-                    keywords: [server.slug],
-                    // A server that is off is still worth scoping a profile to — it comes back
-                    // when it is enabled — so the row stays selectable and says why it is quiet
-                    // rather than wearing "(disabled)" in the middle of its own name.
-                    hint: server.enabled
-                      ? undefined
-                      : "Configured but off. It offers no tools until it is enabled.",
-                  }))}
+                  // Enabled first, then the rest under a heading. A server that is off is still
+                  // worth scoping a profile to — it comes back when it is enabled — so the row
+                  // stays selectable and the heading says why it is quiet, once, instead of the
+                  // same sentence repeating down the list or "(disabled)" sitting in the middle
+                  // of every one of their names.
+                  options={[...servers]
+                    .sort((a, b) => Number(b.enabled) - Number(a.enabled))
+                    .map((server) => ({
+                      value: server.id,
+                      label: server.label || server.slug,
+                      keywords: [server.slug],
+                      // The slug, where a label is hiding it: it is what the server's tools are
+                      // named after — `slug__tool-name` — so it is the half of the row that says
+                      // what a task on this profile will actually see.
+                      meta: server.label ? server.slug : undefined,
+                      group: server.enabled ? undefined : "Off — no tools until enabled",
+                    }))}
                 />
               )}
             </form.Subscribe>
           )}
         </form>
       }
-      footerActions={
+      // A function, so Cancel closes through the dialog's own door: `hasUnsavedChanges` guards
+      // Escape, the overlay and the X, and a Cancel wired straight to `onClose` was the fourth
+      // way out — the one people actually click — going around the ask.
+      footerActions={(close) => (
         <>
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={close}>
             Cancel
           </Button>
           <form.AppForm>
@@ -323,7 +332,7 @@ export function AgentDialog({
             </form.Subscribe>
           </form.AppForm>
         </>
-      }
+      )}
     />
   );
 }

@@ -450,3 +450,50 @@ export function FormField({
     </Field>
   );
 }
+
+/**
+ * Turns the backtick spans in a schema description into `<code>`.
+ *
+ * {@link FormFieldProps.description} takes a `ReactNode` so a form can hand it
+ * `schema.fields[k].description` straight through. The string that arrives has usually been
+ * written for two readers at once — a GraphQL description, a JSON-schema `description`, a
+ * docstring off a generated type all end up in front of a model as well as a person — and the
+ * backticks are there for the model, which has no other way of being told that `ondemand` is a
+ * value and not a word. Printed as they stand, they are stray punctuation in the middle of an
+ * otherwise correct sentence. There is no wording that serves both readers, so this is the
+ * adapter between them:
+ *
+ * ```tsx
+ * <FormField label="Tool discovery" description={ticks(describe("Agent", "toolDiscovery"))} />
+ * ```
+ *
+ * Backticks and nothing else. It is the one piece of markdown that turns up in a schema
+ * description *because* it means something to both readers; the moment this parses emphasis or a
+ * link it is a markdown renderer, and that belongs behind a library rather than in six lines here.
+ *
+ * An unpaired backtick stays the character it is rather than swallowing the rest of the sentence
+ * into a `<code>`. A description is prose that has to survive however it was written, not markup
+ * being validated.
+ */
+export function ticks(text: string): ReactNode {
+  const parts = text.split("`");
+
+  return parts.map((part, index) => {
+    // An even part is plain prose. An odd one sat between two backticks — unless it is the last
+    // one, in which case the tick that opened it never closed and was only ever a tick.
+    if (index % 2 === 0) return part;
+    if (index === parts.length - 1) return `\`${part}`;
+
+    // No background. `code` in shadcn's docs is `bg-muted`, and this lands inside a
+    // `text-muted-foreground` description — muted on muted is 4.34:1, under the 4.5 a body-size
+    // string needs. Monospace at a hair under the surrounding size says the same thing and stays
+    // readable. The size is there because a monospace face at `1em` reads larger than the sans
+    // beside it.
+    return (
+      // biome-ignore lint/suspicious/noArrayIndexKey: a span of a split string has no identity but its position
+      <code key={index} className="font-mono text-[0.9em]">
+        {part}
+      </code>
+    );
+  });
+}

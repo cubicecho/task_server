@@ -324,9 +324,12 @@ export function McpDialog({
           {test.isPending ? "Connecting…" : "Test connection"}
         </Button>
       }
-      footerActions={
+      // A function, so Cancel closes through the dialog's own door: `hasUnsavedChanges` guards
+      // Escape, the overlay and the X, and a Cancel wired straight to `onClose` was the fourth
+      // way out — the one people actually click — going around the ask.
+      footerActions={(close) => (
         <>
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={close}>
             Cancel
           </Button>
           <form.AppForm>
@@ -341,7 +344,7 @@ export function McpDialog({
             </form.Subscribe>
           </form.AppForm>
         </>
-      }
+      )}
     />
   );
 }

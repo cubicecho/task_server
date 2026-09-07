@@ -1,5 +1,6 @@
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { type FieldDescriptionMap, FieldDescriptions } from "@/__generated__/graphql/descriptions";
+import { ticks } from "@/components/form-field";
 
 /**
  * The note under a field, read from the schema rather than typed out again here.
@@ -22,29 +23,14 @@ export function describe<T extends keyof FieldDescriptionMap>(
 }
 
 /**
- * A schema description with its backticks rendered.
- *
- * These sentences are written once and read by two audiences, so they are marked up the only way
- * both understand: a model reads `` `ondemand` `` as markdown, and this turns it into a `<code>`
- * for everyone else. It lives beside `describe` because every caller of one wants the other.
- */
-export function ticks(text: string): ReactNode {
-  return text.split("`").map((part, index) =>
-    index % 2 === 1 ? (
-      // biome-ignore lint/suspicious/noArrayIndexKey: the split of a fixed string is the order
-      <code key={index}>{part}</code>
-    ) : (
-      // biome-ignore lint/suspicious/noArrayIndexKey: same
-      <Fragment key={index}>{part}</Fragment>
-    ),
-  );
-}
-
-/**
  * `describe` bound to one type and rendered, for a form that is mostly one table.
  *
  * `settings.tsx` names fourteen fields of `Setting` and would otherwise repeat the type name at
  * every one of them.
+ *
+ * The rendering is `ticks` from `form-field`, which is the registry's now: a description written
+ * for a model and a person at once is not this app's problem, and the copy that used to live
+ * here dropped an unpaired backtick's worth of the sentence on the floor.
  */
 export const describeFor =
   <T extends keyof FieldDescriptionMap>(type: T) =>

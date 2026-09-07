@@ -20,17 +20,11 @@ import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
+import { Select } from "@/components/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { request } from "@/lib/gql";
 import { ANY, buildWhere, type Filters, isFiltered, NO_FILTERS, WINDOWS } from "@/lib/run-filters";
 import { STATUS_VARIANT } from "@/lib/run-status";
@@ -231,35 +225,35 @@ function FilterBar({
         className="min-w-56 flex-1"
       />
 
-      <Select value={filters.status} onValueChange={(status) => onChange({ status })}>
-        <SelectTrigger className="w-36" aria-label="Status">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ANY}>Any status</SelectItem>
-          {Object.values(RunsStatusEnum).map((status) => (
-            <SelectItem key={status} value={status}>
-              {status}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={filters.taskId} onValueChange={(taskId) => onChange({ taskId })}>
-        <SelectTrigger className="w-44" aria-label="Task">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ANY}>Any task</SelectItem>
-          {tasks.map((task) => (
-            <SelectItem key={task.id} value={task.id}>
-              {task.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* A rule under the first row of each of these: "any" is how the filter is turned off, not
+          one of the things it filters to, and without it the two read as peers. */}
+      <Select
+        aria-label="Status"
+        className="w-36"
+        value={filters.status}
+        onValueChange={(status) => onChange({ status })}
+        options={[
+          { value: ANY, label: "Any status" },
+          { separator: true },
+          ...Object.values(RunsStatusEnum).map((status) => ({ value: status, label: status })),
+        ]}
+      />
 
       <Select
+        aria-label="Task"
+        className="w-44"
+        value={filters.taskId}
+        onValueChange={(taskId) => onChange({ taskId })}
+        options={[
+          { value: ANY, label: "Any task" },
+          { separator: true },
+          ...tasks.map((task) => ({ value: task.id, label: task.name })),
+        ]}
+      />
+
+      <Select
+        aria-label="Time window"
+        className="w-40"
         value={filters.window}
         onValueChange={(value) => {
           const chosen = WINDOWS.find((option) => option.value === value);
@@ -268,18 +262,14 @@ function FilterBar({
             from: chosen?.ms ? new Date(Date.now() - chosen.ms).toISOString() : null,
           });
         }}
-      >
-        <SelectTrigger className="w-40" aria-label="Time window">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {WINDOWS.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        options={[
+          // Same rule, and `WINDOWS` already leads with "Any time", so it is sliced rather than
+          // written out twice.
+          { value: WINDOWS[0].value, label: WINDOWS[0].label },
+          { separator: true },
+          ...WINDOWS.slice(1).map((option) => ({ value: option.value, label: option.label })),
+        ]}
+      />
 
       {dirty ? (
         <ActionButton

@@ -143,7 +143,6 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
                   onChange={(enabled) => patch(trigger.key, { enabled })}
                 />
                 <ActionButton
-                  type="button"
                   label="Remove this schedule"
                   variant="ghost"
                   size="icon"
@@ -283,7 +282,6 @@ function WebhookRow({
         />
       </div>
       <ActionButton
-        type="button"
         label={copied ? "Copied" : "Copy the URL"}
         variant="ghost"
         size="icon"
@@ -297,13 +295,7 @@ function WebhookRow({
         New id
       </Button>
       <TriggerSwitch trigger={trigger} onChange={onToggle} />
-      <ActionButton
-        type="button"
-        label="Remove this webhook"
-        variant="ghost"
-        size="icon"
-        onClick={onRemove}
-      >
+      <ActionButton label="Remove this webhook" variant="ghost" size="icon" onClick={onRemove}>
         <Trash2 />
       </ActionButton>
     </div>

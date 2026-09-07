@@ -284,6 +284,9 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
             description={doc("agentId")}
             options={[
               { value: NO_AGENT, label: "Server settings" },
+              // A rule, because the first row is not one of the profiles: it is the absence of
+              // one. Flush against them it reads as a profile somebody named "Server settings".
+              { separator: true },
               ...(agents.data?.agents ?? []).map((agent) => ({
                 value: agent.id,
                 label: (
