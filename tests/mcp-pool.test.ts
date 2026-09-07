@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, expect, test } from "vitest";
+import pkg from "../package.json" with { type: "json" };
 import type { McpServerRow } from "../server/db/schema.ts";
 
 // Loading the pool pulls in the database module, so give it somewhere disposable first.
@@ -106,6 +107,24 @@ test("reports the child's real pid and when it connected", async () => {
   // entry is the reused-pid problem with a delay on it.
   await mcp.sync([config({ enabled: false })]);
   expect(mcp.state()).toMatchObject([{ status: "disabled", pid: undefined, startedAt: undefined }]);
+});
+
+test("introduces itself to a dialled server by this server's name and version", async () => {
+  const clientLog = path.join(dir, "clients.log");
+  await mcp.sync([
+    config({ env: { MCP_ECHO_SPAWN_LOG: spawnLog, MCP_ECHO_CLIENT_LOG: clientLog } }),
+  ]);
+
+  // `clientInfo` is the whole of what a server learns about its caller — what it logs, and what
+  // it would gate a behaviour on. Nothing on this side of the connection reports it, so a name
+  // or a version that is somebody else's shows up only in a remote server's logs, which is why
+  // the fixture writes down what it was told. The version used to be the pool's own literal
+  // `0.1.0`; it is this server's, and the same string `/mcp` answers a client with.
+  for (let attempt = 0; attempt < 40 && !fs.existsSync(clientLog); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  expect(fs.readFileSync(clientLog, "utf8").trim()).toBe(`task-server/${pkg.version}`);
+  fs.rmSync(clientLog, { force: true });
 });
 
 test("an unchanged config is left alone rather than reconnected", async () => {

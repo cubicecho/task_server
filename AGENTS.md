@@ -161,6 +161,12 @@ live there;
 `<slug>__<tool name>`. What stays under `server/runner/` is what is *this* server's: `llm.ts`
 reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
 `profile.ts` lays an agent profile over settings, `agent.ts` and `flow.ts` drive the loop.
+`mcp.ts` also says who this process is — `clientName` and `clientVersion` are the `clientInfo` of
+every handshake, and the whole of what a dialled server can log or gate on. The version is
+`package.json`'s, the same string `/mcp` answers a client with; left unset the pool reports its
+own, so a server would be told `task-server` at a version that is agent-mcp-pool's.
+`tests/mcp-pool.test.ts` reads it back off the fixture, which is the only witness there is —
+nothing on this side of a connection reports what it sent.
 Neither package imports anything of this server's — agent-core takes the narrowest structural
 config each function reads, and the Drizzle `Settings` row satisfies all of them, which is why a
 per-task endpoint still costs the loop no branch. A fix to retry, tool loading or the event bus
