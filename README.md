@@ -298,7 +298,7 @@ server/
                cleanup.ts prunes old runs hourly
   webhooks.ts  POST /webhooks/:id, which fires matching event triggers
   index.ts     express + yoga + the MCP endpoint + the webhook route + the built SPA
-web/           vite + react + tanstack router/query + shadcn
+web/           vite + react + tanstack router/query/form + shadcn and @cubeui shells
                (status, tasks, runs, mcp servers, agents, settings)
   __generated__/  codegen output, gitignored — see GraphQL below
 tests/         vitest

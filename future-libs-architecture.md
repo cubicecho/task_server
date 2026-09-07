@@ -10,7 +10,8 @@ true before it went in. Read it when picking up future work, and correct it when
 being true — a `no` here is a measurement, not a policy.
 
 Already in: `@vantreeseba/drizzle-graphql`, `@vantreeseba/graphql-casl`,
-`@cubicecho/graphql-mcp`, `@cubicecho/graphql-codegen-field-descriptions`. Those are argued in
+`@cubicecho/graphql-mcp`, `@cubicecho/graphql-codegen-field-descriptions`, `@cubicecho/cubeui`.
+Those are argued in
 [`README.md`](README.md) and [`AGENTS.md`](AGENTS.md); this file is only the ones that are not.
 
 ## `@vantreeseba/graphql-audit-middleware` — the best fit, unpublished
@@ -57,22 +58,33 @@ that only works when `DATABASE_URL` is set is a different feature from the one w
 **Before it goes in:** answer the PGlite question first, then decide whether the need is full
 text or just `ilike` over `output` with a date range, which needs no library at all.
 
-## `@cubicecho/cubeui` — right idea, nothing to collect yet
+## `@cubicecho/cubeui` — in, and it took the second dialog to earn it
 
-**What it is.** A shadcn registry of the layout shells the cubicecho apps kept re-deriving —
-`CardLayout`, `DialogLayout`, `PageHeader`, `PageLayout`, `SplitPane`. Components are copied in
-through the shadcn CLI and rewritten against local aliases, so there is no runtime dependency.
+**What it is.** A shadcn registry of the shapes the cubicecho apps kept re-deriving — page and
+dialog shells, a query-state wrapper, an icon button with a required accessible name, and a
+`FormField` that mints its own ids and wires `aria-describedby`. Components are copied in through
+the shadcn CLI and rewritten against the local aliases, so there is no runtime dependency and an
+installed file is this repo's to edit.
 
-**Why here.** `components.json` is already set up, so adopting it is one `npx shadcn add` and a
-registry entry.
+**Why it went in.** The entry that used to be here said to wait for the second dialog or the
+first page with a real header and a control row. Both arrived: agent profiles brought a third
+dialog, and the runs page grew a filter bar over a paginated list. By then the page header was
+written out five times with four different paddings, `useQuery` was unpacked into a spinner, an
+error and an empty state at nine call sites, and every icon button was an accessible name someone
+had to remember. Taking the shells deleted `web/components/field.tsx`, collapsed those, and made
+the omissions typecheck errors rather than review comments.
 
-**What blocks it.** Nothing technical — it is that there is not much to collapse. The web app is
-about 3,300 lines with one dialog and one shell (`app-shell.tsx`, `mcp-dialog.tsx`), and it is
-not re-deriving the shapes the registry exists to hold. Adopting it now would be a rewrite of
-working code for consistency with other apps rather than for less code here.
+**What came with it.** `useAppForm` — a `@tanstack/react-form` hook binding the shadcn controls
+to `FormField` — replaced four hand-rolled `useState` forms, which is what moved validation from
+a toast on the way out to a message under the input as it is typed. See the frontend section of
+[`AGENTS.md`](AGENTS.md) for the conventions; the two sharp edges are that no cubeui component
+takes `children` (the body is `content`) and that `ActionButton` does not set `type`, so one
+inside a `<form>` submits it unless the caller says `type="button"`.
 
-**Before it goes in:** wait for the second dialog, or the first page that wants a real header
-with a trail and a control row. Then take the shell rather than writing a third variant.
+**What to watch.** The registry is a copy, so an upstream fix does not arrive on its own —
+re-running `npx shadcn add @cubeui/<name>` overwrites the local file, and anything edited here
+has to be re-applied or, better, pushed upstream. Generic improvements found while using it
+belong in cubeui rather than in this repo's copy.
 
 ## Looked at and ruled out
 
@@ -87,7 +99,10 @@ adding `typescript-resolvers` over the whole generated surface to derive a union
 is a build for nothing. The reasoning is in `permissions.ts` beside the hand-written union.
 
 **`@vantreeseba/graphql-zod`** — generates a Zod schema per operation from the typed documents,
-which is the right shape for the client-side form validation this app does not have. Unpublished,
+which is the right shape for the form validation this app now does by hand. Since the cubeui
+adoption every form is `@tanstack/react-form` with per-field validators written out in the
+component; a schema derived from the operation the form submits is strictly better than that, so
+this one is worth reopening when it can be depended on. Unpublished,
 with no release pipeline on its own repo, so there is nothing to depend on. Two things would also
 have to be fixed before it could run here, both found by building it and pointing it at this
 schema: it stack-overflows on `tasks.graphql`, where `StepInput` and `StepBranchInput` are

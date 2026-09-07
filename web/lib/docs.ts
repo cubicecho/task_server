@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import { type FieldDescriptionMap, FieldDescriptions } from "@/__generated__/graphql/descriptions";
+import { ticks } from "@/components/form-field";
 
 /**
  * The note under a field, read from the schema rather than typed out again here.
@@ -21,12 +23,16 @@ export function describe<T extends keyof FieldDescriptionMap>(
 }
 
 /**
- * `describe` bound to one type, for a form that is mostly one table.
+ * `describe` bound to one type and rendered, for a form that is mostly one table.
  *
  * `settings.tsx` names fourteen fields of `Setting` and would otherwise repeat the type name at
  * every one of them.
+ *
+ * The rendering is `ticks` from `form-field`, which is the registry's now: a description written
+ * for a model and a person at once is not this app's problem, and the copy that used to live
+ * here dropped an unpaired backtick's worth of the sentence on the floor.
  */
 export const describeFor =
   <T extends keyof FieldDescriptionMap>(type: T) =>
-  (field: keyof FieldDescriptionMap[T]) =>
-    describe(type, field);
+  (field: keyof FieldDescriptionMap[T]): ReactNode =>
+    ticks(describe(type, field));

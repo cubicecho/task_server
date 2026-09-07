@@ -4,10 +4,12 @@ import { Play, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { RunTaskDocument, StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphql";
-import { Page } from "@/components/app-shell";
+import { PageLayout } from "@/components/page-layout";
+import { QueryError } from "@/components/query-state";
+import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { request } from "@/lib/gql";
 import { HEALTH, type Health, type StatusTask, tally, taskHealth, WRONG } from "@/lib/task-health";
 import { cn } from "@/lib/utils";
@@ -62,35 +64,35 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
   if (health === "refused" && collision) {
     const firings = collision.attempts === 1 ? "One firing" : `${collision.attempts} firings`;
     return (
-      <p className="text-sm text-destructive">
+      <ItemDescription className="text-destructive">
         {firings} turned away, the last at {when(collision.finishedAt ?? collision.startedAt)}.{" "}
         {collision.error}
-      </p>
+      </ItemDescription>
     );
   }
   if (health === "broken" && last) {
     return (
-      <p className="line-clamp-3 text-sm text-destructive">
+      <ItemDescription className="line-clamp-3 text-destructive">
         {last.error || "It broke without saying why."}
-      </p>
+      </ItemDescription>
     );
   }
   if (health === "running" && last) {
-    return <p className="text-sm text-muted-foreground">Started {when(last.startedAt)}.</p>;
+    return <ItemDescription>Started {when(last.startedAt)}.</ItemDescription>;
   }
   if (health === "waiting" && task.waiting[0]) {
     const queued = task.waiting[0];
     const firings = queued.attempts === 1 ? "A firing" : `${queued.attempts} firings`;
     return (
-      <p className="text-sm text-muted-foreground">
+      <ItemDescription>
         {firings} waiting since {when(queued.startedAt)}. {queued.error}
-      </p>
+      </ItemDescription>
     );
   }
   return (
-    <p className="text-sm text-muted-foreground">
+    <ItemDescription>
       {last ? `Last run ${last.status} at ${when(last.startedAt)}.` : "Not run yet."}
-    </p>
+    </ItemDescription>
   );
 }
 
@@ -107,18 +109,22 @@ function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
   });
 
   return (
-    <Card className="gap-1 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="font-medium underline">
-          {task.name}
-        </Link>
-        <Badge variant={WRONG.includes(health) ? "destructive" : "outline"}>
-          {LABELS[health].label}
-        </Badge>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>
+          <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="underline">
+            {task.name}
+          </Link>
+          <Badge variant={WRONG.includes(health) ? "destructive" : "outline"}>
+            {LABELS[health].label}
+          </Badge>
+        </ItemTitle>
+        <Why task={task} health={health} />
+      </ItemContent>
+      <ItemActions>
         <Button
           size="sm"
           variant="outline"
-          className="ml-auto"
           // Nothing is gained by offering to start a task that is already going: `runTask`
           // refuses one, and the refusal would arrive as a toast saying so.
           disabled={health === "running" || run.isPending}
@@ -127,33 +133,32 @@ function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
           <Play className="size-3.5" />
           Run now
         </Button>
-      </div>
-      <Why task={task} health={health} />
-    </Card>
+      </ItemActions>
+    </Item>
   );
 }
 
 function FailureRow({ failure }: { failure: Failure }) {
   return (
-    <Card className="gap-1 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {failure.task ? (
-          <Link
-            to="/tasks/$taskId"
-            params={{ taskId: failure.task.id }}
-            className="font-medium underline"
-          >
-            {failure.task.name}
-          </Link>
-        ) : (
-          <span className="font-medium">(deleted task)</span>
-        )}
-        <span className="text-xs text-muted-foreground">{when(failure.startedAt)}</span>
-      </div>
-      <p className="line-clamp-2 text-sm text-destructive">
-        {failure.error || "It broke without saying why."}
-      </p>
-    </Card>
+    <Item variant="outline">
+      <ItemContent>
+        <ItemTitle>
+          {failure.task ? (
+            <Link to="/tasks/$taskId" params={{ taskId: failure.task.id }} className="underline">
+              {failure.task.name}
+            </Link>
+          ) : (
+            <span>(deleted task)</span>
+          )}
+          <span className="font-normal text-muted-foreground text-xs">
+            {when(failure.startedAt)}
+          </span>
+        </ItemTitle>
+        <ItemDescription className="line-clamp-2 text-destructive">
+          {failure.error || "It broke without saying why."}
+        </ItemDescription>
+      </ItemContent>
+    </Item>
   );
 }
 
@@ -176,12 +181,12 @@ function Tile({
       title={blurb}
       onClick={onSelect}
       className={cn(
-        "rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected && "border-primary bg-accent",
       )}
     >
-      <div className={cn("text-2xl font-semibold tabular-nums", count > 0 && tone)}>{count}</div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={cn("font-semibold text-2xl tabular-nums", count > 0 && tone)}>{count}</div>
+      <div className="text-muted-foreground text-xs">{label}</div>
     </button>
   );
 }
@@ -222,10 +227,10 @@ export function StatusRoute() {
   );
 
   return (
-    <Page
+    <PageLayout
       title="Status"
       description="What is wrong, and what is about to be."
-      actions={
+      action={
         <Button
           variant="outline"
           size="sm"
@@ -236,84 +241,89 @@ export function StatusRoute() {
           Refresh
         </Button>
       }
-    >
-      {status.error ? (
-        <p className="text-sm text-destructive">{(status.error as Error).message}</p>
-      ) : null}
+      content={
+        <>
+          {status.isError ? (
+            <QueryError
+              error={status.error}
+              onRetry={() => status.refetch()}
+              what="the status of your tasks"
+            />
+          ) : null}
 
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
-        {HEALTH.map((health) => (
-          <Tile
-            key={health}
-            health={health}
-            count={counts[health]}
-            selected={selected === health}
-            onSelect={() => setSelected(selected === health ? null : health)}
-          />
-        ))}
-      </div>
-
-      {selected ? <p className="text-sm text-muted-foreground">{LABELS[selected].blurb}</p> : null}
-
-      {unreachable.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <div>
-            <h2 className="text-sm font-semibold">Servers that did not connect</h2>
-            <p className="text-sm text-muted-foreground">
-              Enabled, and not reached. Every run since has gone out without these tools, whether or
-              not its prompt was written expecting them.
-            </p>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
+            {HEALTH.map((health) => (
+              <Tile
+                key={health}
+                health={health}
+                count={counts[health]}
+                selected={selected === health}
+                onSelect={() => setSelected(selected === health ? null : health)}
+              />
+            ))}
           </div>
-          {unreachable.map((server) => (
-            <Card key={server.id} className="gap-1 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{server.label || server.slug}</span>
-                <Badge variant="destructive">{server.status}</Badge>
-                <Button asChild size="sm" variant="outline" className="ml-auto">
-                  <Link to="/servers">Servers</Link>
-                </Button>
-              </div>
-              <p className="line-clamp-2 text-sm text-destructive">{server.error}</p>
-            </Card>
-          ))}
-        </section>
-      ) : null}
 
-      {shown.length > 0 ? (
-        <section className="flex flex-col gap-2">
+          {selected ? (
+            <p className="text-muted-foreground text-sm">{LABELS[selected].blurb}</p>
+          ) : null}
+
+          {unreachable.length > 0 ? (
+            <Section
+              title="Unreachable servers"
+              description="Enabled, and not reached. Every run since has gone out without these tools, whether or not its prompt was written expecting them."
+              content={unreachable.map((server) => (
+                <Item key={server.id} variant="outline">
+                  <ItemContent>
+                    <ItemTitle>
+                      {server.label || server.slug}
+                      <Badge variant="destructive">{server.status}</Badge>
+                    </ItemTitle>
+                    <ItemDescription className="line-clamp-2 text-destructive">
+                      {server.error}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/servers">Servers</Link>
+                    </Button>
+                  </ItemActions>
+                </Item>
+              ))}
+            />
+          ) : null}
+
           {shown.map((task) => (
             <TaskRow key={task.id} task={task} health={taskHealth(task)} />
           ))}
-        </section>
-      ) : null}
 
-      {!status.isPending && shown.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {selected
-            ? `Nothing is ${LABELS[selected].label.toLowerCase()}.`
-            : tasks.length === 0
-              ? "No tasks yet."
-              : `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`}
-        </p>
-      ) : null}
-
-      {unexplained.length > 0 ? (
-        <section className="flex flex-col gap-2">
-          <div>
-            <h2 className="text-sm font-semibold">Failures with nothing standing behind them</h2>
-            <p className="text-sm text-muted-foreground">
-              Runs that broke and whose task has run since, or whose task is gone. Nothing above
-              counts these, and they are worth seeing once.
+          {!status.isPending && shown.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {selected
+                ? `Nothing is ${LABELS[selected].label.toLowerCase()}.`
+                : tasks.length === 0
+                  ? "No tasks yet."
+                  : `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`}
             </p>
-          </div>
-          {unexplained.slice(0, 5).map((failure) => (
-            <FailureRow key={failure.id} failure={failure} />
-          ))}
-          <Button asChild variant="outline" size="sm" className="self-start">
-            <Link to="/runs">Every run</Link>
-          </Button>
-        </section>
-      ) : null}
-    </Page>
+          ) : null}
+
+          {unexplained.length > 0 ? (
+            <Section
+              title="Unexplained failures"
+              description="Runs that broke and whose task has run since, or whose task is gone. Nothing above counts these, and they are worth seeing once."
+              content={
+                <>
+                  {unexplained.slice(0, 5).map((failure) => (
+                    <FailureRow key={failure.id} failure={failure} />
+                  ))}
+                  <Button asChild variant="outline" size="sm" className="self-start">
+                    <Link to="/runs">Every run</Link>
+                  </Button>
+                </>
+              }
+            />
+          ) : null}
+        </>
+      }
+    />
   );
 }
