@@ -153,8 +153,10 @@ one queues — and it fails if the claim moves back down. `runningRunIds()` filt
 claimed entry has no run id for the width of the insert.
 
 **The runner's generic half is `@cubicecho/agent-core`'s, and it does not come back.** The
-pooled OpenAI client, the retry rules and their backoff, the tool-schema compatibility pass,
-on-demand tool loading, the one-shot side tasks and the run-event bus all live there;
+pooled OpenAI client, the retry rules and their backoff, one streamed turn read back into a
+message, the negotiation that answers an endpoint refusing part of a request, the tool-schema
+compatibility pass, on-demand tool loading, the one-shot side tasks and the run-event bus all
+live there;
 `@cubicecho/agent-mcp-pool` holds the MCP pool that offers a run its tools as
 `<slug>__<tool name>`. What stays under `server/runner/` is what is *this* server's: `llm.ts`
 reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
@@ -173,8 +175,12 @@ run whose side tasks authenticate and whose turns do not.
 one expression it wanted from agent-core (`errorMessage`, which is one line) and satisfies
 `CatalogServer` structurally rather than importing it. A dependency between them would put a
 second `openai` in the tree the moment their ranges disagreed, and two sets of its classes do not
-typecheck against each other — `openai` is a peer dependency of both, which is what keeps this
-server's copy the only one. Do not "tidy" this into a shared dependency.
+typecheck against each other. `openai` is a peer dependency of agent-core, and therefore this
+server's single copy. agent-mcp-pool dropped its own peer in 1.0.0: it needed the type for one
+position — what `tools()` hands back — and declares `ToolDefinition` for it instead, the function
+arm of `ChatCompletionTool` and structurally assignable to it, so a consumer that proxies MCP
+without ever calling a model no longer installs 24 MB to satisfy a type that is erased anyway.
+Do not "tidy" either of these into a shared dependency.
 
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change
@@ -375,11 +381,18 @@ Profiles are the operator's on both sides: they carry an endpoint, a key and the
 which is the settings row's own argument. `agentId` on a task stays readable, so an agent on
 `/mcp` can see that a task runs on a profile without being able to read or choose one.
 
-**The LLM call retries only before the model has spoken.** `server/runner/agent.ts` owns the
-retry loop, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn
-is unrepeatable, so a failure after that propagates. `requestTimeoutSeconds` is a silence
-watchdog that rearms on every chunk, not a deadline on the request, and an aborted stream ends
-its iteration rather than throwing — hence the `throwIfAborted()` after the loop.
+**The LLM call retries only before the model has spoken.** agent-core's `runTurn` owns that
+rule, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn is
+unrepeatable, so a failure after that propagates. `requestTimeoutSeconds` is a silence watchdog
+that rearms on every chunk, not a deadline on the request.
+
+`agent.ts` calls `runTurn` and reads none of that back. It hands over a `request` callback —
+the body has to be rebuilt per attempt, since `relaxTools` applies to whatever the last refusal
+latched off — plus `onThinking`, `onOutput` and `onNotice`, which are the three places a turn
+reaches the run-event bus. A retry and a capability downgrade both arrive on `onNotice`, because
+a watcher reading an unexplained pause wants to be told either way. The loop, the silence
+watchdog and the endpoint's latched refusals were all written here once and are not to be
+written here again — see [Future work](#future-work).
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.

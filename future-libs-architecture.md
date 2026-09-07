@@ -121,24 +121,57 @@ library, so it stays out until it is asked for on its own terms.
 **What to watch.** The standing rule is cubeui's, from the other direction. cubeui is copied in,
 so an upstream fix has to be pulled; these are depended on, so an upstream fix arrives with the
 range — and the corollary is that a fix to retry, tool loading or the event bus belongs *upstream*.
-A copy re-grown under `server/runner/` is the drift the extraction was for. agent-mcp-pool is on
-`^0.1.0`, where a caret admits only patches, so a minor is a deliberate bump; agent-core reached
-`1.0.0` and its caret now takes minors on its own, which is what a stable API is for and is also
-the reason a minor there is worth reading the changelog for rather than only the lockfile.
+A copy re-grown under `server/runner/` is the drift the extraction was for. Both are now on a
+caret that takes minors on its own — agent-core `^2.0.6`, and agent-mcp-pool `^1.0.0`, which
+leaving 0.x cost it the rule where a caret admitted only patches and a minor was a deliberate
+bump. That is what a stable API is for, and it is also why a minor on either is worth reading the
+diff for rather than only the lockfile: 2.0.2–2.0.6 are five patch releases and every one of them
+is a real fix, including two to the event bus this server's `runEvents` subscription sits on.
 
-**What is still here that should not be.** Two copies under `server/runner/agent.ts` are known
-and filed rather than forgotten, so neither is a candidate for being tidied into a local
-abstraction — the fix is upstream and arrives with the range:
+A caution learned taking 2.0.1: `npm view` answers from its cache, and the cached `latest` here
+was two majors and three minors behind what the registry actually had. Ask with
+`--prefer-online` before concluding a package is already current.
+
+**What the pool's 1.0.0 settled.** Two defects found auditing 0.10.0 were filed and are fixed in
+it, and neither had reached this server — `load` hands the pool fresh Drizzle rows rather than
+objects it edits in place, and `McpServerStatus` never exposed `config`:
+[#51](https://github.com/cubicecho/agent-mcp-pool/issues/51), `state().config` aliasing the
+caller's row so an in-place edit was invisible to `sameConnection` while `state()` reported it as
+done, and [#52](https://github.com/cubicecho/agent-mcp-pool/issues/52), `state()` returning `env`
+and `headers`. `state()` now returns a copy without credentials, and `state({ secrets: true })` is
+the caller that genuinely needs them. It also added `pid` and `startedAt` on each row, which
+`McpServerStatus` now carries and the servers page shows as `up 3m · pid 1621967` — a
+crash-looping server reads `ready` either side of a restart, and only the start time says the
+restart happened. Still unread here: `McpPoolError`, which gives the refusals a `code` so
+`backoff` and `connect-failed` stop being told apart by matching message text. Nothing in this
+server branches on which refusal it got — `agent.ts` turns any of them into a tool message for
+the model — so the codes wait for a caller that would act on the difference.
+
+**One finding is outstanding upstream.**
+[agent-core#35](https://github.com/cubicecho/agent-core/issues/35): `sanitizeTools` drops every
+property of a tool whose root schema is a `oneOf`/`anyOf` of `$ref`s — the shape pydantic, zod and
+the MCP SDK all emit for a discriminated union — and keeps the `$defs` nothing points at any more.
+The model is offered a tool that looks argument-less and pays for the dead `$defs` on every turn.
+It predates 2.0.6 rather than arriving with it, and `sanitizeTools` is on this server's hot path
+for every MCP tool it offers, so it is worth watching for the fix rather than working around here.
+
+**The two copies that were here have gone home.** `server/runner/agent.ts` used to hold three
+things that were not this server's, all filed rather than forgotten, and agent-core 2.x landed
+every one of them — so the local copies are deleted rather than maintained, which is the whole
+argument for depending on the package:
 
 - `streamStep` — the rearming silence watchdog, the tool-call reassembly and the reasoning-delta
-  spellings ([agent-core#6](https://github.com/cubicecho/agent-core/issues/6)). agent-core
-  exports `EndpointSilent` and `timeoutMs` for a loop it does not have, and all three servers
-  wrote that loop.
-- `Capabilities` and `negotiate` — the memory of what an endpoint turned out not to support
-  ([agent-core#8](https://github.com/cubicecho/agent-core/issues/8)). This server's copy is the
-  one the other two want: keyed by `baseUrl` rather than a module global, and a loop rather than
-  a single retry, so an endpoint that refuses both `stream_options` and a grammar keyword is
-  answered on both.
+  spellings — is `streamTurn` ([agent-core#6](https://github.com/cubicecho/agent-core/issues/6)).
+- `Capabilities` and `negotiate` — the memory of what an endpoint turned out not to support — are
+  `capabilitiesFor` and `negotiate` ([agent-core#8](https://github.com/cubicecho/agent-core/issues/8)).
+  This server's copy was the one the other two wanted, and it went up as it stood: keyed by
+  `baseUrl` rather than a module global, and a loop rather than a single retry.
+- The outer retry loop around both is `runTurn`
+  ([agent-core#18](https://github.com/cubicecho/agent-core/issues/18)), which is what `agent.ts`
+  now calls: one await where a nested loop, a `negotiate` and a `streamStep` used to be.
+
+What is left under `server/runner/` is this server's own — the flow, the profile overlay, the
+settings row. There is no known copy outstanding; a new one is a bug, not a stage.
 
 ## Looked at and ruled out
 

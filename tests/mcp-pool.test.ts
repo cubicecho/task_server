@@ -91,6 +91,23 @@ test("connects a configured server and offers its tools qualified by slug", asyn
   expect(await mcp.call("echo__ping", {})).toBe("ping({})");
 });
 
+test("reports the child's real pid and when it connected", async () => {
+  const before = Date.now();
+  await mcp.sync([config()]);
+
+  const [entry] = mcp.state();
+  // Against the pid the fixture logged for itself, not merely against "a number": what the
+  // servers page offers is a pid to find in `ps` or to `kill`, and one naming the wrong process
+  // is worse than none — pids are reused, so the wrong one names somebody else's.
+  expect(entry.pid).toBe(spawnedPids().at(-1));
+  expect(Date.parse(entry.startedAt ?? "")).toBeGreaterThanOrEqual(before);
+
+  // Both describe a live connection, so both have to go with it. A pid left behind on a closed
+  // entry is the reused-pid problem with a delay on it.
+  await mcp.sync([config({ enabled: false })]);
+  expect(mcp.state()).toMatchObject([{ status: "disabled", pid: undefined, startedAt: undefined }]);
+});
+
 test("an unchanged config is left alone rather than reconnected", async () => {
   await mcp.sync([config()]);
   await mcp.sync([config()]);

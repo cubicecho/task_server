@@ -30,6 +30,7 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/co
 import { Switch } from "@/components/ui/switch";
 import { request } from "@/lib/gql";
 import { toConnection } from "@/lib/mcp-config";
+import { uptime } from "@/lib/uptime";
 
 type McpServer = McpServersQuery["mcpServers"][number];
 
@@ -119,6 +120,7 @@ export function McpRoute() {
           {rows.map((server) => {
             const status = statusOf(server.id);
             const tools = status?.tools ?? [];
+            const age = status?.startedAt ? uptime(status.startedAt) : null;
             const probe = probes[server.id];
             return (
               <Item key={server.id} variant="outline" className="flex-col items-stretch gap-3">
@@ -133,6 +135,17 @@ export function McpRoute() {
                       {tools.length ? (
                         <span className="font-normal text-muted-foreground text-xs">
                           {tools.length} tool(s)
+                        </span>
+                      ) : null}
+                      {/* Only while connected: a pid or an age for a server that is not running
+                          names a process that has exited, and a reused pid names someone else's. */}
+                      {age ? (
+                        <span
+                          className="font-normal text-muted-foreground text-xs"
+                          title={`connected ${new Date(status?.startedAt ?? "").toLocaleString()}`}
+                        >
+                          up {age}
+                          {status?.pid ? ` · pid ${status.pid}` : ""}
                         </span>
                       ) : null}
                     </ItemTitle>

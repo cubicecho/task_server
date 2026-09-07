@@ -17,7 +17,7 @@ beforeAll(async () => {
   schema = (await import("../server/graphql/schema.ts")).schema;
 });
 
-beforeEach(() => events.reset());
+beforeEach(() => events.resetEvents());
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
