@@ -42,6 +42,20 @@ export const McpServerStatusType = new GraphQLObjectType({
     status: { type: new GraphQLNonNull(GraphQLString) },
     error: { type: new GraphQLNonNull(GraphQLString) },
     tools: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpToolType))) },
+    pid: {
+      type: GraphQLInt,
+      description:
+        "The stdio child's process id. Null over http, and while the server is not connected. " +
+        "What to look for in `ps`, or to `kill` when a child has wedged past what a reconnect " +
+        "fixes — the pool owns the transport, so nothing else can say which process this is.",
+    },
+    startedAt: {
+      type: GraphQLString,
+      description:
+        "When this connection became ready, ISO 8601. Null while the server is not connected. " +
+        "How a server that is quietly crash-looping is spotted: `status` reads `ready` either " +
+        "side of a restart, and only the start time says the restart happened.",
+    },
   },
 });
 

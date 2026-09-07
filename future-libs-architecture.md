@@ -139,10 +139,13 @@ objects it edits in place, and `McpServerStatus` never exposed `config`:
 caller's row so an in-place edit was invisible to `sameConnection` while `state()` reported it as
 done, and [#52](https://github.com/cubicecho/agent-mcp-pool/issues/52), `state()` returning `env`
 and `headers`. `state()` now returns a copy without credentials, and `state({ secrets: true })` is
-the caller that genuinely needs them. What it also added and this server does not read yet: `pid`
-and `startedAt` on each row — a crash-looping server reads `ready` either side of a restart and
-only the start time says the restart happened — and `McpPoolError`, which gives the refusals a
-`code` so `backoff` and `connect-failed` stop being told apart by matching message text.
+the caller that genuinely needs them. It also added `pid` and `startedAt` on each row, which
+`McpServerStatus` now carries and the servers page shows as `up 3m · pid 1621967` — a
+crash-looping server reads `ready` either side of a restart, and only the start time says the
+restart happened. Still unread here: `McpPoolError`, which gives the refusals a `code` so
+`backoff` and `connect-failed` stop being told apart by matching message text. Nothing in this
+server branches on which refusal it got — `agent.ts` turns any of them into a tool message for
+the model — so the codes wait for a caller that would act on the difference.
 
 **One finding is outstanding upstream.**
 [agent-core#35](https://github.com/cubicecho/agent-core/issues/35): `sanitizeTools` drops every
