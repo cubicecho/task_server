@@ -176,7 +176,7 @@ test("a run scoped to one server cannot see or call another's tools", async () =
 
   const names = (servers?: ReadonlySet<string>) =>
     mcp
-      .tools(undefined, servers)
+      .tools({ servers })
       .flatMap((tool) => (tool.type === "function" ? [tool.function.name] : []));
 
   expect(names()).toEqual(expect.arrayContaining(["mine__echo", "theirs__echo"]));
@@ -192,5 +192,5 @@ test("a run scoped to one server cannot see or call another's tools", async () =
   await expect(mcp.call("mine__echo", { text: "hi" }, new Set(["mine"]))).resolves.toContain("hi");
 
   // Loading a schema by name is the same door, so it is held to the same scope.
-  expect(mcp.tools(["theirs__echo"], new Set(["mine"]))).toEqual([]);
+  expect(mcp.tools({ names: ["theirs__echo"], servers: new Set(["mine"]) })).toEqual([]);
 });

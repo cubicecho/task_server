@@ -394,6 +394,22 @@ a watcher reading an unexplained pause wants to be told either way. The loop, th
 watchdog and the endpoint's latched refusals were all written here once and are not to be
 written here again — see [Future work](#future-work).
 
+**Some of what a request is refused over is the model's, not the endpoint's.** `strictSchemas`
+and `usageInStream` are facts about a server and latch on its base URL. A ceiling spelled
+`max_completion_tokens` and a temperature that is not ours to pick are facts about one *model*,
+and they cannot latch on the endpoint: one key reaches every model a provider offers, so the
+first turn on a chat model would otherwise stop a reasoning model on the same key ever being
+sent the right spelling. agent-core 2.1.0 keys those at `(baseUrl, model)`, `agent.ts` passes
+`runTurn` the `model` option, and the `request` callback rebuilds `max_tokens` and `temperature`
+from the second argument it is now handed. This server lets an operator pick any name the
+endpoint lists, so it is one selection away from meeting both — which is why it opts in.
+`reasoningEffort` is the third and goes unread here: there is no column for an effort to send.
+
+The guard is `=== false` rather than the truthiness the upstream example uses, because that
+example reads `max_completion_tokens` out of an *absent* model as well as a refusing one. It is
+the right shape only for a caller that always passes `model`, which is this one — written the
+other way, dropping the option later would silently change the spelling for every endpoint.
+
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
 
