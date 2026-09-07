@@ -118,12 +118,12 @@ it would change what a run does: a prompt could be refused or silently compacted
 sent. That is a product decision about this server's behaviour, not a consequence of taking a
 library, so it stays out until it is asked for on its own terms.
 
-**What to watch.** They install from git URLs until they are published, so `npm ci` is pinned to a
-commit and moving forward is a deliberate `npm update` — see the packaging paragraphs in
-[`AGENTS.md`](AGENTS.md) for why `prepare`, `allowScripts` and `git` in the Dockerfile are all
-part of that. The standing rule is the same as cubeui's, from the other direction: a fix to
-retry, tool loading or the event bus belongs upstream, and a copy re-grown under
-`server/runner/` is the drift the extraction was for.
+**What to watch.** The standing rule is cubeui's, from the other direction. cubeui is copied in,
+so an upstream fix has to be pulled; these are depended on, so an upstream fix arrives with the
+range — and the corollary is that a fix to retry, tool loading or the event bus belongs *upstream*.
+A copy re-grown under `server/runner/` is the drift the extraction was for. Both are on `^0.1.0`,
+and a caret on a `0.x` only admits patches, so a minor is a deliberate bump — which is the right
+setting while their APIs are this young.
 
 ## Looked at and ruled out
 

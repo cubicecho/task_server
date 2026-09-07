@@ -51,7 +51,7 @@ docker compose up --build
 | **`@vantreeseba/graphql-casl`** | Who may call what, as CASL rules over the schema rather than over an endpoint. `applyPermissions` wraps the schema `server/graphql/schema.ts` exports, so `/graphql` and `/mcp` are held to one map — see below |
 | **`@cubicecho/graphql-codegen-field-descriptions`** | The SDL descriptions authored in `server/graphql/docs.ts` reach the browser as data, not as JSDoc that erases. One string is the note under a form field and the tool-schema description an agent reads |
 | **`@cubicecho/graphql-mcp`** | Projects the same schema as MCP tools. `server/mcp-endpoint.ts` curates which ones — see below |
-| **`@cubicecho/agent-core`** and **`@cubicecho/agent-mcp-pool`** | The endpoint-agnostic half of the runner, and the MCP connection pool. Three servers had grown their own copies and the copies had begun to disagree. Installed from git URLs until they are published — see below |
+| **`@cubicecho/agent-core`** and **`@cubicecho/agent-mcp-pool`** | The endpoint-agnostic half of the runner, and the MCP connection pool. Three servers had grown their own copies and the copies had begun to disagree. A fix to retry, tool loading or the event bus belongs upstream — see below |
 | **Node type stripping** | The container runs `node server/index.ts`; `tsx` is a devDependency and is not in the image. Nothing under `server/` may use syntax that survives erasure — no enums, no parameter properties |
 | **Biome** | One formatter and linter. `noExplicitAny` and `noNonNullAssertion` are errors here, not warnings |
 
@@ -169,16 +169,12 @@ extraction was for.
 a config and asks no questions of it, so a fallback applied in one caller and not another is a
 run whose side tasks authenticate and whose turns do not.
 
-**The two packages install from git, and both build on install.** `package.json` names
-`git+https://github.com/cubicecho/<name>.git` — HTTPS explicitly, since a Docker build has no
-SSH key — and the lockfile pins the commit, so `npm ci` is reproducible and moving to a new one
-is a deliberate `npm update`. Each needs `prepare` rather than `prepack`, because `prepack` runs
-when npm packs a tarball and never when it installs from a git URL, which would leave `exports`
-naming a `dist/` that is not there; both are in `allowScripts` for the same reason. agent-mcp-pool
-names agent-core by the same URL so npm dedupes to one copy — a nested second copy would bring a
-second `openai` with it, and two sets of its classes do not typecheck against each other. The
-cost is that `npm ci` needs `git`, which `node:26-slim` lacks: the Dockerfile installs it in the
-builder, and installs, uses and purges it in one layer in the runtime stage.
+**Neither package depends on the other, and that is deliberate.** agent-mcp-pool duplicates the
+one expression it wanted from agent-core (`errorMessage`, which is one line) and satisfies
+`CatalogServer` structurally rather than importing it. A dependency between them would put a
+second `openai` in the tree the moment their ranges disagreed, and two sets of its classes do not
+typecheck against each other — `openai` is a peer dependency of both, which is what keeps this
+server's copy the only one. Do not "tidy" this into a shared dependency.
 
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change

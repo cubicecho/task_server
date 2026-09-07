@@ -99,11 +99,30 @@ test("an unchanged config is left alone rather than reconnected", async () => {
   expect(spawned()).toBe(1);
 });
 
-test("overlapping syncs off the table reconnect an edited server once", async () => {
+test("a rename is taken without restarting the server", async () => {
   await db.insert(mcpServers).values(config());
   await mcp.sync();
 
   await db.update(mcpServers).set({ label: "Echo, renamed" });
+  await mcp.sync();
+
+  // The pool compares only the fields a child process is made of, so a corrected typo does not
+  // bounce a running server and drop whatever state it was holding. The derived half still has
+  // to move: the label is baked into every tool's description at connect time.
+  expect(spawned()).toBe(1);
+  expect(mcp.state()).toMatchObject([{ label: "Echo, renamed", status: "ready" }]);
+  const ping = mcp
+    .tools()
+    .find((tool) => tool.type === "function" && tool.function.name === "echo__ping");
+  expect(ping?.type === "function" && ping.function.description).toContain("[Echo, renamed]");
+});
+
+test("overlapping syncs off the table reconnect an edited server once", async () => {
+  await db.insert(mcpServers).values(config());
+  await mcp.sync();
+
+  // An edit to how the server is *reached*, since that is what earns a reconnect at all.
+  await db.update(mcpServers).set({ env: { MCP_ECHO_SPAWN_LOG: spawnLog, MCP_ECHO_EXTRA: "1" } });
   // Two callers arriving together is what a batch of writes through the GraphQL hook looks like.
   // Both read the table, both compared the edited row against the entry the other had not
   // replaced yet, and both reconnected — the second's entry overwriting the first, whose child
@@ -111,7 +130,7 @@ test("overlapping syncs off the table reconnect an edited server once", async ()
   // throughout.
   await Promise.all([mcp.sync(), mcp.sync()]);
 
-  expect(mcp.state()).toMatchObject([{ label: "Echo, renamed", status: "ready" }]);
+  expect(mcp.state()).toMatchObject([{ slug: "echo", status: "ready" }]);
   expect(spawned()).toBe(2);
 
   const pids = spawnedPids();

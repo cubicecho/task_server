@@ -324,18 +324,10 @@ row satisfies all of them, which is why a task's agent profile still costs the l
 agent-mcp-pool takes a `load()` that returns the configured servers, and here that is a select
 against `mcp_servers`.
 
-**They are installed from GitHub, not from a registry.** Neither is published yet, so
-`package.json` depends on `git+https://github.com/cubicecho/<name>.git` and the lockfile pins the
-commit each resolved to — so `npm ci` is reproducible, and moving to a new commit is an explicit
-`npm update`. Both build on install (`prepare`, not `prepack`, which never runs for a git
-dependency), and both are named in `allowScripts` because that build is wanted. agent-mcp-pool
-names agent-core by the same URL, so npm dedupes them to one copy rather than nesting a second —
-which matters, since a second `openai` in the tree is two incompatible sets of its classes.
-
-The one cost is that `npm ci` now needs `git`, which `node:26-slim` does not ship. The builder
-stage installs it; the runtime stage installs it, runs `npm ci`, and purges it in the same layer,
-since by then the two are ordinary directories. When they are published all of this becomes a
-version range.
+The two do not depend on each other. agent-mcp-pool duplicates the one expression it wanted from
+agent-core (`errorMessage`) and satisfies `CatalogServer` structurally instead of importing it, so
+neither can drag in a second copy of the other — or of `openai`, which is a peer dependency of
+both and therefore this server's single copy.
 
 ## GraphQL
 
