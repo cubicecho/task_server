@@ -158,10 +158,10 @@ export async function runAgent({
     // Normalising them here is cheap and cloud providers accept the result unchanged.
     const declared = sanitizeTools(
       routed
-        ? mcp.tools(preselected, servers)
+        ? mcp.tools({ names: preselected, servers })
         : onDemand
-          ? [LOAD_TOOLS_DEFINITION, ...mcp.tools([...loaded], servers)]
-          : mcp.tools(undefined, servers),
+          ? [LOAD_TOOLS_DEFINITION, ...mcp.tools({ names: [...loaded], servers })]
+          : mcp.tools({ servers }),
     );
 
     // One turn, with the endpoint's refusals negotiated away and its outages waited out.
@@ -173,12 +173,18 @@ export async function runAgent({
     const step = await runTurn(
       client,
       supports,
-      (supports): OpenAI.ChatCompletionCreateParamsStreaming => {
+      (supports, forModel): OpenAI.ChatCompletionCreateParamsStreaming => {
         const tools = supports.strictSchemas ? declared : relaxTools(declared);
         return {
           model,
-          max_tokens: config.maxTokens,
-          temperature: config.temperature,
+          // Both rebuilt per attempt from what this model has already refused. A reasoning
+          // model spells its ceiling `max_completion_tokens` and takes no temperature but its
+          // own — and this server lets an operator pick any name the endpoint lists, so it is
+          // one selection away from meeting both.
+          ...(forModel?.legacyTokenLimit === false
+            ? { max_completion_tokens: config.maxTokens }
+            : { max_tokens: config.maxTokens }),
+          ...(forModel?.chosenTemperature === false ? {} : { temperature: config.temperature }),
           messages,
           stream: true,
           ...(supports.usageInStream ? { stream_options: { include_usage: true } } : {}),
@@ -189,6 +195,9 @@ export async function runAgent({
         signal,
         idleMs,
         maxRetries,
+        // Negotiates the refusals that are the model's rather than the endpoint's, latched at
+        // `(baseUrl, model)` so one model's refusal never speaks for another on the same key.
+        model,
         onThinking: (text) => onEvent?.({ kind: "thinking", text }),
         onOutput: (text) => onEvent?.({ kind: "output", text }),
         // Carries both halves — what was given up on, and what is being waited out — so a

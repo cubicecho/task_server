@@ -312,7 +312,8 @@ tests/         vitest
 The endpoint-agnostic half of the agent loop is not here any more. It is
 [`@cubicecho/agent-core`](https://github.com/cubicecho/agent-core) — the pooled OpenAI client,
 the retry rules, one streamed turn read back into a message, the negotiation that answers an
-endpoint refusing part of a request, the tool-schema compatibility pass, on-demand tool loading,
+endpoint — or one model on it — refusing part of a request, the tool-schema compatibility pass,
+on-demand tool loading,
 the one-shot side tasks and the run-event bus — and
 [`@cubicecho/agent-mcp-pool`](https://github.com/cubicecho/agent-mcp-pool), which is the MCP
 connection pool
@@ -330,6 +331,12 @@ agent-core (`errorMessage`) and satisfies `CatalogServer` structurally instead o
 neither can drag in a second copy of the other. `openai` is a peer dependency of agent-core, and
 therefore this server's single copy; agent-mcp-pool wanted it for one type position and declares
 its own `ToolDefinition` instead, so proxying MCP no longer costs a consumer the whole SDK.
+
+The pool's `tools()` takes one named object — `tools({ names, servers })` — since 2.0.0. Both
+arguments were collections of strings in an order nothing could check, and the answer to a
+transposition is an empty array, which is also the right answer for a run scoped to servers that
+offer nothing: a swap compiled, connected, and offered its model no tools at all. `catalog` and
+`call` stay positional, neither having two arguments that could be confused for each other.
 
 ## GraphQL
 
