@@ -405,10 +405,13 @@ from the second argument it is now handed. This server lets an operator pick any
 endpoint lists, so it is one selection away from meeting both — which is why it opts in.
 `reasoningEffort` is the third and goes unread here: there is no column for an effort to send.
 
-The guard is `=== false` rather than the truthiness the upstream example uses, because that
-example reads `max_completion_tokens` out of an *absent* model as well as a refusing one. It is
-the right shape only for a caller that always passes `model`, which is this one — written the
-other way, dropping the option later would silently change the spelling for every endpoint.
+The guard is `=== false` rather than a truthiness test, because a model that was never named
+is `undefined` here and has refused nothing — read truthily, that reads `max_completion_tokens`
+out of an *absent* model as well as out of a refusing one, and dropping the `model` option later
+would silently change the spelling for every endpoint. agent-core 2.2.0 says the same on
+`legacyTokenLimit` itself, after its README example was fixed
+([agent-core#40](https://github.com/cubicecho/agent-core/issues/40)); this is no longer a place
+this server departs from upstream.
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
