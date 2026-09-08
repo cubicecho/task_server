@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@casl/ability": "^7.0.1",
-    "@cubicecho/agent-core": "^2.2.2",
+    "@cubicecho/agent-core": "^2.2.4",
     "@cubicecho/agent-mcp-pool": "^2.4.3",
     "@cubicecho/graphql-mcp": "^2.10.0",
     "@electric-sql/pglite": "^0.5.8",
