@@ -17,7 +17,7 @@ import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
 import { agents, settings, steps, tasks } from "../db/schema.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
-import { type McpConnection, mcp, probe } from "../runner/mcp.ts";
+import { mcp, probe } from "../runner/mcp.ts";
 import { resolveConfig } from "../runner/profile.ts";
 import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
@@ -32,6 +32,16 @@ import {
   ScheduleEntryType,
   StepInputType,
 } from "./types.ts";
+
+/** `McpConnectionInput` as it arrives: both arms' fields, all of them optional but the transport. */
+type McpConnectionArgs = {
+  transport: string;
+  command?: string | null;
+  args?: string[] | null;
+  env?: Record<string, string> | null;
+  url?: string | null;
+  headers?: Record<string, string> | null;
+};
 
 /**
  * The CRUD half of the API is generated from the Drizzle schema — tasks, triggers, runs, MCP
@@ -374,15 +384,19 @@ const baseSchema = new GraphQLSchema({
           "Connects to a config that need not be saved yet and lists its tools, so a server " +
           "can be checked before a task depends on it.",
         args: { config: { type: new GraphQLNonNull(McpConnectionInput) } },
-        resolve: (_source, args: { config: Partial<McpConnection> }) =>
-          probe({
-            transport: args.config.transport === "http" ? "http" : "stdio",
-            command: args.config.command ?? "",
-            args: args.config.args ?? null,
-            env: args.config.env ?? null,
-            url: args.config.url ?? "",
-            headers: args.config.headers ?? null,
-          }),
+        // The input is flat, the connection a union on `transport`: only the arm it names is built,
+        // so a stdio probe is never handed a `url` it would not read.
+        resolve: (_source, { config }: { config: McpConnectionArgs }) =>
+          probe(
+            config.transport === "http"
+              ? { transport: "http", url: config.url ?? "", headers: config.headers ?? null }
+              : {
+                  transport: "stdio",
+                  command: config.command ?? "",
+                  args: config.args ?? null,
+                  env: config.env ?? null,
+                },
+          ),
       },
       reconnectMcp: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpServerStatusType))),
