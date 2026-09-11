@@ -65,20 +65,21 @@ beforeAll(async () => {
 
   // One real stdio MCP server, so the catalogue and the tool calls are the genuine article.
   const { mcp } = await import("../server/runner/mcp.ts");
-  await mcp.sync([
-    {
-      id: "echo-1",
-      slug: "echo",
-      label: "Echo",
-      enabled: true,
-      transport: "stdio",
-      command: process.execPath,
-      args: [fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url))],
-      env: null,
-      url: "",
-      headers: null,
-    } satisfies McpServerRow,
-  ]);
+  // A table row, both arms' columns and all, handed over as `load()` hands one — a variable rather
+  // than a literal at the call, which excess-property checking would hold to the stdio arm alone.
+  const echo = {
+    id: "echo-1",
+    slug: "echo",
+    label: "Echo",
+    enabled: true,
+    transport: "stdio",
+    command: process.execPath,
+    args: [fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url))],
+    env: null,
+    url: "",
+    headers: null,
+  } satisfies McpServerRow;
+  await mcp.sync([echo]);
 });
 
 afterAll(async () => {
