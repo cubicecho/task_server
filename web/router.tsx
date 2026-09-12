@@ -6,6 +6,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
+import { isSettingsSection, type SettingsSection } from "@/lib/settings-form";
 
 /**
  * Each page is its own chunk, fetched when it is first needed.
@@ -76,6 +77,10 @@ const agentsRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
+  // `?tab=tools` opens on that panel, so a link can point at one.
+  validateSearch: (search: Record<string, unknown>): { tab?: SettingsSection } => ({
+    tab: isSettingsSection(search.tab) ? search.tab : undefined,
+  }),
   component: lazyRouteComponent(() => import("@/routes/settings"), "SettingsRoute"),
 });
 
