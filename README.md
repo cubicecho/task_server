@@ -47,7 +47,9 @@ instead of the UI.
   and it survives the step being edited or deleted afterwards.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
-  will dial a config (`testMcpServer`) to list its tools before you save it.
+  will dial a config (`testMcpServer`) to list its tools before you save it. A server that also
+  offers prompt templates puts them behind a picker next to every prompt box — see
+  **MCP prompts**.
 - **agent profile** — a named set of overrides for that settings row, which a task can be
   pointed at: its own endpoint and key, model, system prompt, ceilings, and which MCP servers a
   run on it may reach. Everything left blank comes from settings, so a server with no profiles
@@ -131,6 +133,38 @@ with the unrecognised keys stripped out is *accepted* and arrives entirely at th
 which leaves each decision holding its `cases` with nothing under them. Nothing on the server
 can tell that apart from a flow that was meant to be flat, so the `set_task_steps` tool
 description says it outright and `tests/mcp-endpoint.test.ts` pins that it still does.
+
+## MCP prompts
+
+A server's tools are the half of it a model drives. The other half is its **prompts** — the
+author's own phrasing of the jobs their server is good at — and the protocol calls those
+user-controlled: they are meant to reach a person as a menu item, not a model as a tool. So they
+are offered where a person writes a prompt. Wherever there is a prompt box — the task's own, and
+every step's in the flow editor — a **MCP prompt** button sits beside it when any connected
+server offers one, lists what they have, asks for whatever arguments the template declares, and
+puts the expansion in the box.
+
+It lands as text, and that is the whole design. What the task saves is the expansion, not a
+reference to the template: it is readable on the page, editable afterwards, and it cannot change
+under a task that has been running fine for a month because the server's author rephrased it.
+A template resolved at run time would be a prompt whose text nobody can read back off the task.
+Insert appends after a blank line rather than replacing, since the half-written prompt in the
+box is usually what sent somebody looking for a template.
+
+`server/runner/mcp-prompts.ts` is the whole of the server side. It asks only the servers whose
+handshake declared the `prompts` capability — the SDK refuses to send `prompts/list` to one that
+did not, so a `try` around every server would turn "offers no prompts" into an error per server
+per listing — and it goes through `mcp.client(id)` rather than the pool's tool path, which is the
+one place in this server that reaches past tools into the rest of the protocol. A template
+answers with a list of messages; a picker takes one string. One message unwraps verbatim, several
+are joined with their roles in front (`assistant: …`), and content that carries no text at all —
+an image, a resource link — is named in square brackets rather than dropped, because a gap where
+it was would read as a template that simply said less.
+
+The two fields are `mcpPrompts` and `mcpPrompt(server:, name:, args:)`, and both are the
+operator's, alongside `mcpStatus`: the listing is which servers this one dials and what each of
+them is for. They are not on the `/mcp` surface. An agent writing a task through that endpoint
+writes the prompt itself, which is the same text it would have got.
 
 ## Watching a run
 
@@ -296,7 +330,7 @@ server/
   runner/      the agent loop and the flow that drives it, over @cubicecho/agent-core
                and @cubicecho/agent-mcp-pool; llm.ts is the settings row, mcp.ts the pool
                wired to the mcp_servers table, profile.ts an agent profile laid over
-               settings
+               settings, mcp-prompts.ts the templates those servers offer a person
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write;
                cleanup.ts prunes old runs hourly
   webhooks.ts  POST /webhooks/:id, which fires matching event triggers
@@ -613,7 +647,8 @@ them, and reads what happened. Four things it may not touch:
   same values under a different heading.
 - **The MCP server rows.** `env` and `headers` on one of those are credentials in all but name,
   and `testMcpServer` spawns whatever stdio command it is handed, so it is arbitrary execution on
-  this host for anyone who reaches it.
+  this host for anyone who reaches it. `mcpStatus` and `mcpPrompts` are the same list answered
+  from the live pool, carrying no credentials but saying just as plainly what this server dials.
 - **The agent profiles.** The settings row again in miniature, one per profile: an endpoint, a
   key, and which MCP servers a task on it may reach. An agent that could write one could point a
   task at a model of its choosing and hand it every tool this server has. A task still carries

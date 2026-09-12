@@ -161,6 +161,8 @@ live there;
 `<slug>__<tool name>`. What stays under `server/runner/` is what is *this* server's: `llm.ts`
 reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
 `profile.ts` lays an agent profile over settings, `agent.ts` and `flow.ts` drive the loop.
+`mcp-prompts.ts` is the one thing here that reaches past tools into the rest of the protocol —
+see below.
 `mcp.ts` also says who this process is — `clientName` and `clientVersion` are the `clientInfo` of
 every handshake, and the whole of what a dialled server can log or gate on. The version is
 `package.json`'s, the same string `/mcp` answers a client with; left unset the pool reports its
@@ -386,6 +388,24 @@ scope written twice is scope that disagrees.
 Profiles are the operator's on both sides: they carry an endpoint, a key and the tool scope,
 which is the settings row's own argument. `agentId` on a task stays readable, so an agent on
 `/mcp` can see that a task runs on a profile without being able to read or choose one.
+
+**An MCP prompt is expanded into a prompt box, not resolved at run time.**
+`server/runner/mcp-prompts.ts` reads `prompts/list` and `prompts/get` off `mcp.client(id)` —
+past the pool's tool path, which is the only place this server does that — and the web app's
+`McpPromptButton` sits beside the task prompt and every step's. What the task stores is the
+expanded text: readable on the page, editable afterwards, and unable to change under a working
+task because a server's author rephrased their template. Prompts are the user-controlled half of
+the protocol, so they reach a person as a menu item and never a run as a tool.
+
+Only servers whose handshake declared the `prompts` capability are asked. The SDK refuses to send
+`prompts/list` to one that did not, so a `try` per server would make "offers no prompts" an error
+per server per listing, indistinguishable from a broken one. A template answers with messages and
+a prompt box takes one string: one message unwraps verbatim, several are joined with their roles
+in front, and non-text content is named in brackets rather than dropped.
+
+`mcpPrompts` and `mcpPrompt` are the operator's, with `mcpStatus` and for its reason — the
+listing is which servers this one dials and what each is for — and are deliberately not in
+`TOOLS`. An agent writing a task through `/mcp` writes the prompt itself.
 
 **The LLM call retries only before the model has spoken.** agent-core's `runTurn` owns that
 rule, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn is

@@ -4577,6 +4577,23 @@ type Query {
   mcpStatus: [McpServerStatus!]!
 
   """
+  The prompts the connected MCP servers offer, for a picker — a prompt is the server author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` and the text becomes a task's or a step's prompt, editable before it is saved. Empty when no connected server offers any; a server that cannot be listed is left out rather than failing the query.
+  """
+  mcpPrompts: [McpPrompt!]!
+
+  """
+  One prompt from `mcpPrompts`, expanded with the arguments given and flattened to the single string a prompt is. A template that answers with more than one message comes back with its roles labelled.
+  """
+  mcpPrompt(
+    """The MCP server row's id, as `mcpPrompts` reports it."""
+    server: String!
+    name: String!
+
+    """The prompt's arguments by name. Absent is the same as none."""
+    args: JSON
+  ): String!
+
+  """
   When each armed cron trigger fires next, read from the running scheduler rather than the table — so it answers what will happen, not what was asked for. A `cron` trigger missing here is not armed, which usually means it or its task is disabled. `event` triggers never appear; they fire on a webhook, not a clock.
   """
   schedule: [ScheduleEntry!]!
@@ -4797,6 +4814,30 @@ type McpServerStatus {
 type McpTool {
   name: String!
   description: String!
+}
+
+"""
+A prompt a connected MCP server offers — the server author's own phrasing of a job that server is good at. `server` and `name` together identify it: a name is unique only within the server that offers it.
+"""
+type McpPrompt {
+  """The MCP server row's id, which is what `mcpPrompt` is addressed with."""
+  server: String!
+  serverLabel: String!
+  name: String!
+
+  """
+  What the server calls it for a person. Empty where it gave none; show `name`.
+  """
+  title: String!
+  description: String!
+  arguments: [McpPromptArgument!]!
+}
+
+"""One blank in a prompt template, as the server that wrote it declared."""
+type McpPromptArgument {
+  name: String!
+  description: String!
+  required: Boolean!
 }
 
 """A cron trigger that is currently armed, and when it next fires."""

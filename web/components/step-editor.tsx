@@ -3,6 +3,7 @@ import { ActionButton } from "@/components/action-button";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
+import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { Section } from "@/components/section";
 import { Select } from "@/components/select";
 import { Button } from "@/components/ui/button";
@@ -230,6 +231,14 @@ function StepCard({
               ? "Do any of these report an application error?"
               : "Write what came back to ~/notes/errors.md — {{previous}}"
           }
+        />
+
+        {/* A flex child of the column above rather than a row of its own: the picker draws
+            nothing where no MCP server offers prompts, and an empty wrapper would still take
+            the column's gap on every step of every flow. */}
+        <McpPromptButton
+          className="self-end"
+          onInsert={(text) => patch({ prompt: withPrompt(step.prompt, text) })}
         />
 
         {decision ? (
