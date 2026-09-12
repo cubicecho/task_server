@@ -1,7 +1,12 @@
 import { appendFileSync } from "node:fs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 
 // One line per process started. The pool is supposed to keep one child per configured server,
 // and nothing it exposes can tell one child from two — so the children say so themselves.
@@ -28,7 +33,47 @@ const tools = [
   },
 ];
 
-const server = new Server({ name: "echo", version: "0.0.1" }, { capabilities: { tools: {} } });
+/**
+ * Prompt templates, behind `MCP_ECHO_PROMPTS` so that a test can have a server that offers none.
+ *
+ * The capability is what a client reads before it asks — the SDK refuses `prompts/list` against
+ * a server that never declared it — so the two have to move together, which is why the flag
+ * gates the capability rather than only the handlers.
+ */
+const prompts = [
+  {
+    name: "greet",
+    title: "Greet somebody",
+    description: "Says hello to a name you give it",
+    arguments: [
+      { name: "who", description: "The name to greet", required: true },
+      { name: "mood", description: "How warmly" },
+    ],
+  },
+  { name: "worked-example", description: "Two messages, to be flattened into one" },
+  { name: "attached", description: "Content that is not text at all" },
+];
+
+/** What each template expands to. A list of messages, which is what the protocol answers with. */
+const expand = {
+  greet: (args) => [
+    { role: "user", content: { type: "text", text: `Say hello to ${args.who ?? "nobody"}.` } },
+  ],
+  "worked-example": () => [
+    { role: "assistant", content: { type: "text", text: "Here is how I would answer." } },
+    { role: "user", content: { type: "text", text: "Now do it for mine." } },
+  ],
+  attached: () => [
+    { role: "user", content: { type: "resource", resource: { uri: "doc://a", text: "A" } } },
+    // Real base64: the SDK validates the field, and a placeholder is refused before it ships.
+    { role: "user", content: { type: "image", mimeType: "image/png", data: "aGk=" } },
+  ],
+};
+
+const server = new Server(
+  { name: "echo", version: "0.0.1" },
+  { capabilities: { tools: {}, ...(process.env.MCP_ECHO_PROMPTS ? { prompts: {} } : {}) } },
+);
 
 // The `clientInfo` of the handshake, when a test asks for it. It is the whole of what a dialled
 // server learns about who is calling it, and nothing on the pool's side of the connection can
@@ -47,5 +92,14 @@ server.setRequestHandler(CallToolRequestSchema, (request) => ({
     },
   ],
 }));
+
+if (process.env.MCP_ECHO_PROMPTS) {
+  server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }));
+  server.setRequestHandler(GetPromptRequestSchema, (request) => {
+    const messages = expand[request.params.name];
+    if (!messages) throw new Error(`no prompt named ${request.params.name}`);
+    return { messages: messages(request.params.arguments ?? {}) };
+  });
+}
 
 await server.connect(new StdioServerTransport());

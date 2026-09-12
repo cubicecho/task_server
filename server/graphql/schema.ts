@@ -18,6 +18,7 @@ import { db } from "../db/client.ts";
 import { agents, settings, steps, tasks } from "../db/schema.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
+import * as mcpPrompts from "../runner/mcp-prompts.ts";
 import { resolveConfig } from "../runner/profile.ts";
 import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
@@ -27,6 +28,7 @@ import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./step
 import {
   McpConnectionInput,
   McpProbeType,
+  McpPromptType,
   McpServerStatusType,
   RunEventType,
   ScheduleEntryType,
@@ -255,6 +257,36 @@ const baseSchema = new GraphQLSchema({
           await mcp.flush();
           return mcp.state();
         },
+      },
+      mcpPrompts: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpPromptType))),
+        description:
+          "The prompts the connected MCP servers offer, for a picker — a prompt is the server " +
+          "author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` " +
+          "and the text becomes a task's or a step's prompt, editable before it is saved. " +
+          "Empty when no connected server offers any; a server that cannot be listed is left " +
+          "out rather than failing the query.",
+        resolve: () => mcpPrompts.list(),
+      },
+      mcpPrompt: {
+        type: new GraphQLNonNull(GraphQLString),
+        description:
+          "One prompt from `mcpPrompts`, expanded with the arguments given and flattened to " +
+          "the single string a prompt is. A template that answers with more than one message " +
+          "comes back with its roles labelled.",
+        args: {
+          server: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The MCP server row's id, as `mcpPrompts` reports it.",
+          },
+          name: { type: new GraphQLNonNull(GraphQLString) },
+          args: {
+            type: GraphQLJSON,
+            description: "The prompt's arguments by name. Absent is the same as none.",
+          },
+        },
+        resolve: (_source, args: { server: string; name: string; args?: unknown }) =>
+          mcpPrompts.get(args.server, args.name, (args.args ?? {}) as Record<string, string>),
       },
       schedule: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(ScheduleEntryType))),

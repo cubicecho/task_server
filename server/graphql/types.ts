@@ -59,6 +59,40 @@ export const McpServerStatusType = new GraphQLObjectType({
   },
 });
 
+const McpPromptArgumentType = new GraphQLObjectType({
+  name: "McpPromptArgument",
+  description: "One blank in a prompt template, as the server that wrote it declared.",
+  fields: {
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    description: { type: new GraphQLNonNull(GraphQLString) },
+    required: { type: new GraphQLNonNull(GraphQLBoolean) },
+  },
+});
+
+export const McpPromptType = new GraphQLObjectType({
+  name: "McpPrompt",
+  description:
+    "A prompt a connected MCP server offers — the server author's own phrasing of a job that " +
+    "server is good at. `server` and `name` together identify it: a name is unique only " +
+    "within the server that offers it.",
+  fields: {
+    server: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The MCP server row's id, which is what `mcpPrompt` is addressed with.",
+    },
+    serverLabel: { type: new GraphQLNonNull(GraphQLString) },
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    title: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "What the server calls it for a person. Empty where it gave none; show `name`.",
+    },
+    description: { type: new GraphQLNonNull(GraphQLString) },
+    arguments: {
+      type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpPromptArgumentType))),
+    },
+  },
+});
+
 export const McpConnectionInput = new GraphQLInputObjectType({
   name: "McpConnectionInput",
   description: "How to reach an MCP server — the connection half of a row, without its identity.",

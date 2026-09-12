@@ -19,6 +19,7 @@ import { InputField, SelectField, TextareaField, useAppForm } from "@/components
 import { FieldRow } from "@/components/field-row";
 import { ModelSelectField } from "@/components/model-select-field";
 import { PageLayout } from "@/components/page-layout";
+import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
 import { StepList } from "@/components/step-editor";
@@ -257,6 +258,15 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
               label="Prompt"
               required
               description={doc("prompt")}
+              // The label row's far end, which is where a control that writes into the field
+              // belongs — beside its name rather than under the box it fills.
+              action={
+                <McpPromptButton
+                  onInsert={(text) =>
+                    form.setFieldValue("prompt", (current) => withPrompt(current, text))
+                  }
+                />
+              }
               rows={5}
               placeholder="Check the build status and summarise anything that broke overnight."
               validators={required("A task needs a prompt.")}

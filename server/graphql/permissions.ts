@@ -215,6 +215,13 @@ export const permissions: PermissionsMap = {
     // The same servers, answered from the live pool instead of the table. It carries no
     // credentials, but it is the same list of what this server dials and with which tools.
     mcpStatus: canUser(Actions.read, "McpServer"),
+    // And the prompts those servers offer, which are the same list again with a second column:
+    // reading them is reading which servers this one is wired to and what each is for. Both go
+    // with `mcpStatus` rather than with the tasks they end up in, because the expansion is an
+    // editing aid — the operator picks one, the text lands in a prompt, and what a run sends is
+    // the text. An agent writing a task through `/mcp` writes the prompt itself.
+    mcpPrompts: canUser(Actions.read, "McpServer"),
+    mcpPrompt: canUser(Actions.read, "McpServer"),
   },
   Mutation: MUTATIONS,
 
