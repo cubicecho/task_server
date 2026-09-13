@@ -78,6 +78,8 @@ beforeAll(async () => {
     env: null,
     url: "",
     headers: null,
+    hiddenTools: null,
+    hooks: null,
   } satisfies McpServerRow;
   await mcp.sync([echo]);
 });

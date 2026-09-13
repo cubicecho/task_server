@@ -1,4 +1,4 @@
-import type { PromptMessage } from "@modelcontextprotocol/sdk/types.js";
+import { resultText } from "@cubicecho/agent-mcp-pool";
 import { mcp } from "./mcp.ts";
 
 /**
@@ -103,9 +103,9 @@ export async function get(
   }
 
   const { messages } = await (await mcp.client(server)).getPrompt({ name, arguments: args });
-  if (messages.length === 1) return messageText(messages[0].content).trim();
+  if (messages.length === 1) return messageText(messages[0].content);
   return messages
-    .map((message) => `${message.role}: ${messageText(message.content).trim()}`)
+    .map((message) => `${message.role}: ${messageText(message.content)}`)
     .join("\n\n")
     .trim();
 }
@@ -113,19 +113,9 @@ export async function get(
 /**
  * One message's content as text, with what has none named rather than dropped.
  *
- * A prompt message carries the same content blocks a tool result does: an image a server pasted
- * in, a file it embedded. The placeholder is what the pool's own `resultText` settled on — the
- * person reading the box can see that something was there and did not survive the trip through
- * a text field, rather than finding a gap where it was.
+ * A prompt message carries the same content blocks a tool result does, one at a time, so it is
+ * flattened by the pool's own `resultText` as a one-block result: the person reading the box sees
+ * the placeholder a model reads in a tool result, and a `resource_link` keeps the uri and name
+ * that make it worth following.
  */
-function messageText(content: PromptMessage["content"]): string {
-  if (content.type === "text") return content.text;
-  if (content.type === "resource") {
-    if ("text" in content.resource && typeof content.resource.text === "string") {
-      return content.resource.text;
-    }
-    return `[resource content at ${content.resource.uri}]`;
-  }
-  if (content.type === "resource_link") return `[resource link to ${content.uri}]`;
-  return `[${content.type} content]`;
-}
+const messageText = (content: unknown) => resultText({ content: [content] });

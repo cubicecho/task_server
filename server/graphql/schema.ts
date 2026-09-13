@@ -1,7 +1,7 @@
 import { fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
-import { buildSchema, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
+import { buildSchema, extractFilters, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import { applyPermissions } from "@vantreeseba/graphql-casl";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   GraphQLBoolean,
   GraphQLError,
@@ -15,7 +15,8 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
-import { agents, settings, steps, tasks } from "../db/schema.ts";
+import { agents, runs, settings, steps, tasks } from "../db/schema.ts";
+import { hookProblems, runsDeleted } from "../runner/hooks.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
 import * as mcpPrompts from "../runner/mcp-prompts.ts";
@@ -83,16 +84,25 @@ const { entities } = buildSchema(db, {
   // that would drift from the mutations that need them.
   onWrite: {
     tasks: {
-      before: ({ operation, args }) => {
+      before: async ({ operation, args, tx }) => {
         if (operation === "delete") {
           refuseWhileRunning(
             args,
             runningTaskIds(),
             "A running task cannot be deleted. Stop the run first.",
           );
+          // The task's runs go with it by cascade, so the hooks' `sessionDelete` has to be told
+          // their ids now: by `after` there is nothing left to read them from.
+          doomedRuns.set(args, await runsOfTasks(tx, args));
         }
       },
-      after: () => syncSoon(),
+      after: ({ operation, args }) => {
+        if (operation === "delete") {
+          runsDeleted(doomedRuns.get(args) ?? []);
+          doomedRuns.delete(args);
+        }
+        syncSoon();
+      },
     },
     // `runs` are read-only apart from deletes, so this hook only ever guards one.
     runs: {
@@ -102,6 +112,12 @@ const { entities } = buildSchema(db, {
           runningRunIds(),
           "This run is still going. Stop it first, then delete it.",
         ),
+      // Once the delete has returned its rows, so a memory server is only ever told to forget a
+      // run that is really gone. A rolled-back transaction after this is the one gap, and a
+      // forgotten memory of a run that still exists costs less than a remembered one that doesn't.
+      after: ({ operation, rows }) => {
+        if (operation === "delete") runsDeleted((rows as { id: string }[]).map((row) => row.id));
+      },
     },
     triggers: {
       // A trigger nothing can fire — a bad expression, or a webhook with no address — is
@@ -111,7 +127,10 @@ const { entities } = buildSchema(db, {
     },
     // Debounced past the commit, like the schedule above: this hook runs inside the mutation's
     // transaction, so reconnecting from here read the table as it was before the write.
-    mcpServers: () => mcp.syncSoon(),
+    mcpServers: {
+      before: ({ args }) => vetMcpServer(args),
+      after: () => mcp.syncSoon(),
+    },
     // Raising `maxConcurrentRuns` is the one edit that can start work on its own — whatever is
     // queued for a slot can have one now. Debounced for the same reason: a drain from inside the
     // transaction would read the limit as it stood before the write that raised it.
@@ -205,6 +224,64 @@ function refuseWhileRunning(args: unknown, running: Set<string>, message: string
   // A plain Error would reach the client as "Internal server error" — the library only lets a
   // GraphQLError of its own through. This one is the client's to act on, so it says why.
   throw new GraphQLError(message, { extensions: { code: "RUN_IN_FLIGHT" } });
+}
+
+/**
+ * The run ids of the tasks a delete is about to remove, keyed by the mutation's own arguments
+ * object — the one both of its hooks are handed — so its `after` finds them. A `WeakMap` so a delete that fails between the two leaks
+ * nothing.
+ */
+const doomedRuns = new WeakMap<object, string[]>();
+
+async function runsOfTasks(tx: typeof db, args: unknown): Promise<string[]> {
+  const where = (args as { where?: unknown } | undefined)?.where;
+  if (!where || typeof where !== "object") return [];
+  try {
+    const filter = extractFilters(tasks, "tasks", where as Parameters<typeof extractFilters>[2]);
+    const doomed = tx.select({ id: tasks.id }).from(tasks).where(filter);
+    const rows = await tx.select({ id: runs.id }).from(runs).where(inArray(runs.taskId, doomed));
+    return rows.map((row) => row.id);
+  } catch (error) {
+    // A filter this cannot read is a delete that goes ahead with its runs' hooks unfired, not a
+    // delete that fails: forgetting is the hooks' business, and deleting is the operator's.
+    console.warn(`[hooks] could not list the runs of a deleted task: ${error}`);
+    return [];
+  }
+}
+
+/**
+ * Refuses an MCP server row whose hooks could never run as written, or whose `hiddenTools` is
+ * not a list of names. Swept across every shape a write puts its values in, as `vetTrigger` is.
+ */
+function vetMcpServer(args: unknown) {
+  const arg = args as
+    | { values?: unknown; set?: unknown; updates?: { set?: unknown }[] }
+    | undefined;
+  const candidates = [
+    ...(Array.isArray(arg?.values) ? arg.values : [arg?.values]),
+    arg?.set,
+    ...(arg?.updates ?? []).map((update) => update?.set),
+  ];
+  for (const raw of candidates) {
+    const candidate = raw as { hooks?: unknown; hiddenTools?: unknown } | undefined;
+    if (!candidate) continue;
+    const { hiddenTools } = candidate;
+    if (
+      hiddenTools !== undefined &&
+      hiddenTools !== null &&
+      !(Array.isArray(hiddenTools) && hiddenTools.every((name) => typeof name === "string"))
+    ) {
+      throw new GraphQLError("hiddenTools must be a JSON array of tool names.", {
+        extensions: { code: "BAD_HIDDEN_TOOLS" },
+      });
+    }
+    const problems = hookProblems(candidate.hooks);
+    if (problems.length) {
+      throw new GraphQLError(`These hooks cannot run as written: ${problems.join("; ")}`, {
+        extensions: { code: "BAD_HOOKS", problems },
+      });
+    }
+  }
 }
 
 /** Generated types are keyed by the mapped name; a rename should fail loudly, not silently. */
@@ -488,7 +565,10 @@ const baseSchema = new GraphQLSchema({
           "live, and completes when the run ends. Subscribing to a run that has not started " +
           "waits for it; subscribing to one long finished ends straight away.",
         args: { runId: { type: new GraphQLNonNull(GraphQLString) } },
-        subscribe: (_source, args: { runId: string }) => watch(args.runId),
+        // The request's signal is how a client that leaves early is let go: without it the watcher
+        // waits at an `await` for the next event, and holds the run's backlog past its deadline.
+        subscribe: (_source, args: { runId: string }, context?: { request?: Request }) =>
+          watch(args.runId, context?.request?.signal),
         resolve: (event: RunEvent) => event,
       },
     },

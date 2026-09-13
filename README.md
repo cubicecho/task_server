@@ -372,6 +372,34 @@ transposition is an empty array, which is also the right answer for a run scoped
 offer nothing: a swap compiled, connected, and offered its model no tools at all. `catalog` and
 `call` stay positional, neither having two arguments that could be confused for each other.
 
+## MCP hooks
+
+A server row can carry `hooks`: tool calls made at points in a run rather than by the model. The
+usual use is memory — recall before each step, remember after it:
+
+```json
+[
+  { "id": "recall", "on": "beforeTurn", "tool": "recall",
+    "args": { "query": "{{prompt}}", "scope": "{{vars.task.id}}" }, "inject": true, "maxTokens": 500 },
+  { "id": "remember", "on": "afterTurn", "tool": "remember",
+    "args": { "scope": "{{vars.task.id}}", "messages": "{{turn.messages}}" } }
+]
+```
+
+| Event | When, in a run |
+| --- | --- |
+| `sessionStart` | Before the first step, alongside its `beforeTurn` |
+| `beforeTurn` | Before each step that executes; `inject: true` puts the result ahead of its prompt |
+| `afterTurn` | Once a step has its output (`{{reply}}`, `{{turn.messages}}`) |
+| `sessionEnd` | Once the run has finished (`{{status}}`: `ok`, `stopped` or `error`) |
+| `sessionDelete` | When the run is deleted, by hand, with its task, or by retention |
+
+`{{session.id}}` is the run id, so it changes every run; key memory that should outlast one on
+`{{vars.task.id}}` (also `{{vars.task.name}}`, `{{vars.step.name}}`, `{{vars.trigger}}`).
+`beforeCompact` is refused: a run never compacts. Injected context shares a 2000-token budget per
+step. A hook that fails never fails the step — it leaves a note, shown under the step on the Runs
+page. `hiddenTools` hides a server's tools from the model while its hooks can still call them.
+
 ## GraphQL
 
 The API is generated from the Drizzle tables by

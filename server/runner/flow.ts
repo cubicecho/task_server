@@ -4,6 +4,7 @@ import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
 import { runAgent } from "./agent.ts";
+import type { HookSession, HookStep } from "./hooks.ts";
 
 /**
  * A task as a flow: its prompt, then a tree of steps under it.
@@ -228,6 +229,8 @@ export interface FlowOptions {
   servers?: ReadonlySet<string>;
   /** The body of the webhook that started this run, for `{{event}}`. See `renderPayload`. */
   payload?: unknown;
+  /** The run's MCP hooks, fired around every step that executes. See `runner/hooks.ts`. */
+  hooks?: HookSession;
   signal?: AbortSignal;
   onEvent?: (event: RunEventInput) => void;
 }
@@ -247,6 +250,7 @@ export async function runFlow({
   config,
   servers,
   payload,
+  hooks,
   signal,
   onEvent,
 }: FlowOptions): Promise<FlowResult> {
@@ -305,12 +309,23 @@ export async function runFlow({
 
     const emit = scope(plan.name);
     const row = await record(plan, "running");
-    executed++;
+    const turn: HookStep = {
+      index: executed++,
+      name: plan.name,
+      kind: plan.kind,
+      prompt: renderPrompt(plan, context, payload),
+    };
     emit({ kind: "step", name: plan.name, text: plan.kind });
 
     const systemPrompt = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
+    // Kept on the row whether the step works or not: a recall that failed is as much a part of
+    // why a step went the way it did as one that worked.
+    let noted: Partial<Pick<RunStep, "hooks">> = {};
 
     try {
+      const gathered = await hooks?.before(turn, signal, emit);
+      if (gathered?.notes.length) noted = { hooks: gathered.notes };
+
       const agentResult = await runAgent({
         config,
         model: plan.model || task.model || config.model,
@@ -318,7 +333,8 @@ export async function runFlow({
           plan.kind === "decision"
             ? `${systemPrompt}\n\n${decisionInstruction(plan.cases)}`.trim()
             : systemPrompt,
-        prompt: renderPrompt(plan, context, payload),
+        prompt: turn.prompt,
+        context: gathered?.context,
         servers,
         signal,
         onEvent: emit,
@@ -339,19 +355,28 @@ export async function runFlow({
       };
 
       if (plan.kind !== "decision") {
-        await close(row.id, { status: "ok", output: agentResult.output, ...tokens });
+        await close(row.id, { status: "ok", output: agentResult.output, ...tokens, ...noted });
+        hooks?.after(turn, agentResult.output, row.id, emit);
         return undefined;
       }
 
       const branch = await resolveCase(plan, agentResult.output, emit);
       emit({ kind: "decision", name: plan.name, text: branch });
-      await close(row.id, { status: "ok", output: agentResult.output, branch, ...tokens });
+      await close(row.id, {
+        status: "ok",
+        output: agentResult.output,
+        branch,
+        ...tokens,
+        ...noted,
+      });
+      hooks?.after(turn, agentResult.output, row.id, emit);
       return branch;
     } catch (error) {
       const stopped = signal?.aborted === true;
       await close(row.id, {
         status: stopped ? "stopped" : "error",
         error: stopped ? "" : errorMessage(error),
+        ...noted,
       });
       throw error;
     }

@@ -29,6 +29,15 @@ const McpToolType = new GraphQLObjectType({
   fields: {
     name: { type: new GraphQLNonNull(GraphQLString) },
     description: { type: new GraphQLNonNull(GraphQLString) },
+    hidden: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description:
+        "In the row's `hiddenTools`: never offered to a run's model, still callable by its hooks. " +
+        "Always false on a probe, which tests a connection before there is a row to hide from.",
+      // A probe's tools come back without the flag, and a non-null field left undefined is an
+      // error for the whole probe rather than a false.
+      resolve: (tool: { hidden?: boolean }) => tool.hidden === true,
+    },
   },
 });
 

@@ -32,6 +32,8 @@ const config = (over: Partial<McpServerRow> = {}): McpServerRow => ({
   env: { MCP_ECHO_PROMPTS: "1" },
   url: "",
   headers: null,
+  hiddenTools: null,
+  hooks: null,
   ...over,
 });
 

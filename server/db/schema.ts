@@ -1,3 +1,5 @@
+import type { HookNote } from "@cubicecho/agent-core";
+import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { defineRelations } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -226,6 +228,12 @@ export const runs = pgTable(
     output: text().notNull().default(""),
     error: text().notNull().default(""),
     toolCalls: jsonb().$type<{ name: string; ok: boolean }[]>(),
+    /**
+     * What the MCP servers' `sessionEnd` hooks said, when it was worth saying: a failure. Written
+     * after the run has finished, since those hooks run once it has — so a run read the instant it
+     * ends may not have them yet. The steps' own hooks are on `run_steps`.
+     */
+    hooks: jsonb().$type<HookNote[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),
@@ -267,6 +275,13 @@ export const runSteps = pgTable(
     output: text().notNull().default(""),
     error: text().notNull().default(""),
     toolCalls: jsonb().$type<{ name: string; ok: boolean }[]>(),
+    /**
+     * What the MCP servers' hooks did around this step: the context each added to its prompt,
+     * and every hook that failed. A hook that worked and added nothing is not here — a
+     * `remember` that succeeded is not news. The prompt as sent is not stored, so this is the
+     * only record of what the model was given beyond the step's own prompt.
+     */
+    hooks: jsonb().$type<HookNote[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),
@@ -287,6 +302,20 @@ export const mcpServers = pgTable("mcp_servers", {
   env: jsonb().$type<Record<string, string>>(),
   url: text().notNull().default(""),
   headers: jsonb().$type<Record<string, string>>(),
+  /**
+   * Tools of this server a run's model is never offered, by the server's own names. For a tool
+   * that is the host's rather than the model's — a memory server's `remember`, called by a hook
+   * after every step, would only be filed twice if the model called it as well. Hooks may still
+   * call them. Read by the pool at call time, so an edit needs no reconnect.
+   */
+  hiddenTools: jsonb().$type<string[]>(),
+  /**
+   * Tool calls this server wants made at points in a run — recall before a step, remember after
+   * one. See `server/runner/hooks.ts` for which points a run has. Checked by `validateHooks` when
+   * the row is written, so a placeholder the event does not offer is refused rather than skipped
+   * on every run.
+   */
+  hooks: jsonb().$type<ToolHook[]>(),
 });
 
 /** One row, `id: "default"`. A table rather than a file so it comes free over GraphQL. */
@@ -362,6 +391,13 @@ export const relations = defineRelations(schema, (r) => ({
     run: r.one.runs({ from: r.runSteps.runId, to: r.runs.id, optional: false }),
   },
 }));
+
+/**
+ * What one MCP hook did that is worth keeping: the context it added to a prompt, or why it added
+ * none. agent-core's shape, stored as it is handed over; `source` is the server's label, so the
+ * note still reads after the row is renamed away.
+ */
+export type { HookNote };
 
 export type Agent = typeof agents.$inferSelect;
 export type Task = typeof tasks.$inferSelect;

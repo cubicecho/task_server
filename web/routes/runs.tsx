@@ -69,6 +69,52 @@ function ToolChips({ calls }: { calls: unknown }) {
   );
 }
 
+/** A hook's note, as `server/runner/hooks.ts` writes it. */
+interface HookNote {
+  event: string;
+  source: string;
+  hookId: string;
+  tokens?: number;
+  text?: string;
+  error?: string;
+}
+
+/**
+ * What the MCP servers' hooks did: the context each put in front of the prompt, and each one
+ * that failed. Collapsed, because context is an input — and one that failed is red in the summary
+ * so it is not missed for being folded away.
+ */
+function HookNotes({ notes }: { notes: unknown }) {
+  const list = (notes ?? []) as HookNote[];
+  if (list.length === 0) return null;
+  const failed = list.filter((note) => note.error).length;
+  return (
+    <details className="text-xs">
+      <summary
+        className={`cursor-pointer ${failed ? "text-destructive" : "text-muted-foreground"}`}
+      >
+        {list.length} hook note(s){failed ? `, ${failed} failed` : ""}
+      </summary>
+      <ul className="mt-1 flex flex-col gap-2">
+        {list.map((note, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: notes are only ever appended, and one hook may leave two
+          <li key={`${note.hookId}-${index}`} className="flex flex-col gap-0.5">
+            <span className="font-mono text-muted-foreground">
+              {note.source}/{note.hookId} · {note.event}
+              {note.tokens ? ` · ${note.tokens} tokens` : ""}
+            </span>
+            <pre
+              className={`overflow-x-auto whitespace-pre-wrap ${note.error ? "text-destructive" : ""}`}
+            >
+              {note.error ?? note.text}
+            </pre>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 /**
  * What the run actually did, step by step.
  *
@@ -97,6 +143,7 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
             ) : null}
           </div>
           <ToolChips calls={step.toolCalls} />
+          <HookNotes notes={step.hooks} />
           {step.error || step.output ? (
             <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
               {step.error || step.output}
@@ -177,6 +224,7 @@ function RunDetail({
           </Button>
         </div>
       )}
+      <HookNotes notes={found.hooks} />
       {!withResult ? null : found.steps.length ? (
         <>
           <RunSteps steps={found.steps} />
