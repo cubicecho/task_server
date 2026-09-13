@@ -10,10 +10,11 @@ import {
   TestMcpServerDocument,
   UpdateMcpServerDocument,
 } from "@/__generated__/graphql/graphql";
-import { InputField, SwitchField, useAppForm } from "@/components/app-form";
+import { InputField, SwitchField, TextareaField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { FieldRow } from "@/components/field-row";
 import { McpProbeResult } from "@/components/mcp-probe";
+import { MultiSelectField } from "@/components/multi-select-field";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -22,8 +23,10 @@ import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 import { parseJson } from "@/lib/json";
 import { parseMcpJson } from "@/lib/mcp-config";
+import { HOOK_PLACEHOLDER, hooksProblem } from "@/lib/mcp-hooks";
 
 type McpServer = McpServersQuery["mcpServers"][number];
+type McpTool = McpServersQuery["mcpStatus"][number]["tools"][number];
 
 /** The form's own shape: JSON columns are edited as text, so a half-typed object is allowed. */
 interface Draft {
@@ -36,6 +39,8 @@ interface Draft {
   env: string;
   url: string;
   headers: string;
+  hiddenTools: string[];
+  hooks: string;
 }
 
 /** The notes under this form's fields are the columns' own descriptions. */
@@ -54,6 +59,10 @@ const toDraft = (server?: McpServer): Draft => ({
   env: json(server?.env, "{}"),
   url: server?.url ?? "",
   headers: json(server?.headers, "{}"),
+  hiddenTools: (server?.hiddenTools as string[] | null | undefined) ?? [],
+  // Pretty-printed, unlike the one-line fields above: a hook is several keys deep and read more
+  // often than it is written.
+  hooks: server?.hooks ? JSON.stringify(server.hooks, null, 2) : "",
 });
 
 /**
@@ -80,10 +89,13 @@ const required = (what: string) => ({
 
 export function McpDialog({
   server,
+  tools = [],
   onClose,
   onSaved,
 }: {
   server?: McpServer;
+  /** What the server offers now, for the hidden-tools picker. Empty while it is not connected. */
+  tools?: readonly McpTool[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -107,6 +119,8 @@ export function McpDialog({
         slug: draft.slug.trim(),
         label: draft.label.trim(),
         enabled: draft.enabled,
+        hiddenTools: draft.hiddenTools.length ? draft.hiddenTools : null,
+        hooks: parseJson<unknown>(draft.hooks, "Hooks", null),
       };
       if (server) await request(UpdateMcpServerDocument, { id: server.id, set: values });
       else await request(CreateMcpServerDocument, { values });
@@ -300,6 +314,35 @@ export function McpDialog({
               )
             }
           </form.Subscribe>
+
+          <MultiSelectField
+            form={form}
+            name="hiddenTools"
+            label="Hidden tools"
+            description={doc("hiddenTools")}
+            placeholder={tools.length ? "None hidden" : "Connect the server to list its tools"}
+            options={tools.map((tool) => ({
+              value: tool.name,
+              label: tool.name,
+              hint: tool.description ?? undefined,
+            }))}
+            // A server that is not connected lists nothing, and a name can still be typed.
+            onCreateOption={(name) =>
+              form.setFieldValue("hiddenTools", (hidden) => [...new Set([...hidden, name.trim()])])
+            }
+            createLabel="Hide"
+          />
+
+          <TextareaField
+            form={form}
+            name="hooks"
+            label="Hooks"
+            description={doc("hooks")}
+            rows={6}
+            className="font-mono text-xs"
+            placeholder={HOOK_PLACEHOLDER}
+            validators={{ onChange: ({ value }: { value: string }) => hooksProblem(value) }}
+          />
 
           <SwitchField
             form={form}

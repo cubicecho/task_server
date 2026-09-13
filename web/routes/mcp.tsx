@@ -205,7 +205,12 @@ export function McpRoute() {
           {creating ? (
             <McpDialog onClose={() => setCreating(false)} onSaved={refresh} />
           ) : editing ? (
-            <McpDialog server={editing} onClose={() => setEditing(null)} onSaved={refresh} />
+            <McpDialog
+              server={editing}
+              tools={statusOf(editing.id)?.tools}
+              onClose={() => setEditing(null)}
+              onSaved={refresh}
+            />
           ) : null}
         </>
       }

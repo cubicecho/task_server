@@ -21,9 +21,11 @@ import {
   sanitizeTools,
   timeoutMs,
   tryAsk,
+  withContext,
 } from "@cubicecho/agent-core";
 import type OpenAI from "openai";
 import type { Settings } from "../db/schema.ts";
+import { HOOK_PREFACE } from "./hooks.ts";
 import { mcp } from "./mcp.ts";
 
 export interface AgentResult {
@@ -39,6 +41,11 @@ export interface AgentOptions {
   model: string;
   systemPrompt: string;
   prompt: string;
+  /**
+   * What the MCP servers' hooks added for this step — `<context>` blocks from `hooks.ts`. Put in
+   * front of the prompt in the request only: tool preselection reads the prompt as written.
+   */
+  context?: string;
   /**
    * Which MCP servers this run may reach, by id, from its task's agent profile. Undefined —
    * which is every task on a server with no profiles — is every connected server, as before.
@@ -97,6 +104,7 @@ export async function runAgent({
   model,
   systemPrompt,
   prompt,
+  context = "",
   servers,
   signal,
   onEvent,
@@ -104,7 +112,7 @@ export async function runAgent({
   if (!model) throw new Error("No model selected — pick one in Settings.");
 
   const client = getClient(config);
-  const supports = capabilitiesFor(config.baseUrl);
+  const supports = capabilitiesFor(config.baseUrl, config.apiKey);
   const idleMs = timeoutMs(config);
   // Both columns are `notNull` with a default, so this is belt and braces — but an unbounded
   // retry loop is a bad way to find out about a row that predates them.
@@ -128,10 +136,17 @@ export async function runAgent({
   const systemPromptFor = () =>
     onDemand ? `${systemPrompt}\n\n${catalogPrompt(catalog, loaded)}`.trim() : systemPrompt;
 
-  const messages: OpenAI.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPromptFor() },
-    { role: "user", content: prompt },
-  ];
+  // The context goes on the step's one question and stays there for the step's whole loop: a run
+  // keeps no transcript, so there is no stored message it could leak into.
+  const messages = withContext(
+    [
+      { role: "system", content: systemPromptFor() },
+      { role: "user", content: prompt },
+    ],
+    1,
+    context,
+    HOOK_PREFACE,
+  );
 
   const result: AgentResult = {
     output: "",
@@ -212,6 +227,14 @@ export async function runAgent({
     result.completionTokens += step.usage.completion;
     result.totalTokens += step.usage.total;
 
+    // A turn cut off at the ceiling reads exactly like a finished one — truncated prose, or a
+    // tool call whose arguments stop mid-JSON — so the watcher is told which it was.
+    if (step.finishReason === "length") {
+      const text = `the model stopped at maxTokens (${config.maxTokens}); this turn is cut short`;
+      console.warn(`[agent] ${text}`);
+      onEvent?.({ kind: "notice", text });
+    }
+
     messages.push({
       role: "assistant",
       content: step.content || null,
@@ -243,7 +266,7 @@ export async function runAgent({
           // A model that skips `load_tools` and calls a catalogued tool straight from its name
           // is right about what it wants; load it and run it rather than erroring.
           if (onDemand && !loaded.has(name) && inCatalog(catalog, name)) loaded.add(name);
-          content = await mcp.call(name, args, servers);
+          content = await mcp.call(name, args, { servers });
         }
       } catch (error) {
         content = errorMessage(error);

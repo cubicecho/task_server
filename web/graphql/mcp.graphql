@@ -10,6 +10,8 @@ query McpServers {
     env
     url
     headers
+    hiddenTools
+    hooks
   }
   mcpStatus {
     id
@@ -20,6 +22,7 @@ query McpServers {
     tools {
       name
       description
+      hidden
     }
   }
 }
@@ -49,6 +52,7 @@ mutation TestMcpServer($config: McpConnectionInput!) {
     tools {
       name
       description
+      hidden
     }
   }
 }

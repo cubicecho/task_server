@@ -128,6 +128,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     output: "The agent's final reply.",
     error: "Why it failed, or — on a `skipped` run — why it never started.",
     toolCalls: "Every tool the run called, in order, as JSON.",
+    hooks:
+      "MCP `sessionEnd` hooks that failed, as JSON. Written just after the run finishes. The " +
+      "steps' own hooks are on the run's steps.",
   },
 
   runSteps: {
@@ -141,6 +144,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     output: "What this step produced, and what later steps interpolate.",
     error: "Why this step failed.",
     toolCalls: "Every tool this step called, in order, as JSON.",
+    hooks:
+      "What MCP hooks did around this step, as JSON: the context each added to the prompt, and " +
+      "each that failed. A hook that worked and added nothing is not listed.",
   },
 
   mcpServers: {
@@ -155,6 +161,14 @@ export const COLUMN_DOCS: ColumnDocs = {
       "environment, so the child still inherits `PATH`. Credentials live here.",
     url: "The endpoint to dial, for `http`.",
     headers: "Headers sent with every request, as a JSON object. Credentials live here.",
+    hiddenTools:
+      "Tools of this server a run's model is never offered, as a JSON array of the server's own " +
+      "tool names. Its hooks can still call them — a memory server's `remember`, say.",
+    hooks:
+      "Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. " +
+      "`on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or " +
+      "`sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), " +
+      "`{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.",
   },
 
   settings: {

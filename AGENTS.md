@@ -407,6 +407,29 @@ in front, and non-text content is named in brackets rather than dropped.
 listing is which servers this one dials and what each is for — and are deliberately not in
 `TOOLS`. An agent writing a task through `/mcp` writes the prompt itself.
 
+**An MCP server's hooks fire at a run's points, and a run is the session.** A row's `hooks` are
+tool calls the pool makes on the host's behalf — a memory server's `recall` before a step and its
+`remember` after — in the vocabulary min-agent and kanban_server fire them in, so one server's
+documented config works on all three. `server/runner/hooks.ts` is the mapping: `{{session.id}}`
+is the run id, each executed step is a turn (the task's own prompt is turn 0, and
+`sessionStart` fires ahead of it), `sessionEnd` fires once the run's outcome is written, and
+`sessionDelete` for a run deleted by hand, with its task, or by retention. `beforeCompact`
+never fires — a step starts from nothing — so the write refuses a hook bound to it rather than
+leave it waiting forever. `{{vars.task.id}}` is the key for memory that should outlast one run.
+
+The host side is agent-core's: `gather` before a step, `notify` after, and `withContext` putting
+what was gathered on the step's question with this server's preface. What stays here is the
+mapping and the persistence — each hook that injected or failed leaves a note on
+`run_steps.hooks`, and a failed `sessionEnd` on `runs.hooks`, since run events are gone a minute
+later. `afterTurn` and `sessionEnd` are not awaited by the run; `sessionEnd` waits for the steps'
+`afterTurn`s so a memory server hears them in order, and `hooksSettled()` is the test seam.
+
+`hiddenTools` keeps a tool out of every run's listing and still callable by the row's hooks, and
+both columns are checked on write in `vetMcpServer` with the pool's `validateHooks`: a
+placeholder the event has no value for is a refusal on save, not a silent skip every step.
+`tests/hooks.test.ts` reads what the stdio fixture was called with from `MCP_ECHO_CALL_LOG`,
+because a hook's call never appears in a run's tool calls.
+
 **The LLM call retries only before the model has spoken.** agent-core's `runTurn` owns that
 rule, not the OpenAI SDK, whose own retries are off: once a chunk has arrived the turn is
 unrepeatable, so a failure after that propagates. `requestTimeoutSeconds` is a silence watchdog

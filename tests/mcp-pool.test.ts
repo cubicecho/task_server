@@ -59,6 +59,8 @@ const config = (over: Partial<McpServerRow> = {}): McpServerRow => ({
   env: { MCP_ECHO_SPAWN_LOG: spawnLog },
   url: "",
   headers: null,
+  hiddenTools: null,
+  hooks: null,
   ...over,
 });
 

@@ -1,6 +1,7 @@
 import { and, lt, ne } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { runs } from "../db/schema.ts";
+import { runsDeleted } from "../runner/hooks.ts";
 import { loadSettings } from "../runner/llm.ts";
 
 /** How often the retention setting is re-read and acted on. */
@@ -31,6 +32,9 @@ export async function prune(): Promise<number> {
     .where(and(lt(runs.startedAt, cutoff), ne(runs.status, "running")))
     .returning({ id: runs.id });
 
+  // The same `sessionDelete` a run deleted by hand sends: retention is a delete like any other,
+  // and a memory server keeping a year of runs would otherwise keep them past this window.
+  runsDeleted(gone.map((row) => row.id));
   if (gone.length) {
     console.log(`[cleanup] removed ${gone.length} run(s) older than ${runRetentionDays}d`);
   }

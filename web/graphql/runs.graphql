@@ -38,6 +38,7 @@ query RunDetail($id: String!) {
     id
     toolCalls
     payload
+    hooks
     steps(orderBy: { position: { direction: asc, priority: 1 } }) {
       id
       position
@@ -50,6 +51,7 @@ query RunDetail($id: String!) {
       error
       toolCalls
       totalTokens
+      hooks
     }
   }
 }

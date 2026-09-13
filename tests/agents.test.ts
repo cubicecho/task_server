@@ -169,6 +169,8 @@ test("a run scoped to one server cannot see or call another's tools", async () =
     env: null,
     url: "",
     headers: null,
+    hiddenTools: null,
+    hooks: null,
     ...over,
   });
 

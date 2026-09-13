@@ -84,14 +84,26 @@ if (process.env.MCP_ECHO_CLIENT_LOG)
     appendFileSync(process.env.MCP_ECHO_CLIENT_LOG, `${client?.name}/${client?.version}\n`);
   };
 server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }));
-server.setRequestHandler(CallToolRequestSchema, (request) => ({
+// Every call as one JSON line, when a test asks. A hook's call reaches the server and nothing
+// else — it is not a run event and not a tool call on the run — so the child is its witness too.
+server.setRequestHandler(CallToolRequestSchema, (request) => {
+  if (process.env.MCP_ECHO_CALL_LOG) {
+    appendFileSync(
+      process.env.MCP_ECHO_CALL_LOG,
+      `${JSON.stringify({ name: request.params.name, arguments: request.params.arguments ?? {} })}\n`,
+    );
+  }
+  return reply(request);
+});
+
+const reply = (request) => ({
   content: [
     {
       type: "text",
       text: `${request.params.name}(${JSON.stringify(request.params.arguments ?? {})})`,
     },
   ],
-}));
+});
 
 if (process.env.MCP_ECHO_PROMPTS) {
   server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }));

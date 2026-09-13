@@ -479,6 +479,7 @@ enum RunDistinctColumn {
   output
   error
   toolCalls
+  hooks
   promptTokens
   completionTokens
   totalTokens
@@ -1093,6 +1094,11 @@ type Run {
 
   """Every tool the run called, in order, as JSON."""
   toolCalls: JSON
+
+  """
+  MCP `sessionEnd` hooks that failed, as JSON. Written just after the run finishes. The steps' own hooks are on the run's steps.
+  """
+  hooks: JSON
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1154,6 +1160,7 @@ enum RunStepDistinctColumn {
   output
   error
   toolCalls
+  hooks
   promptTokens
   completionTokens
   totalTokens
@@ -1264,6 +1271,7 @@ type RunCountNonNullAggregate {
   output: Int!
   error: Int!
   toolCalls: Int!
+  hooks: Int!
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1379,6 +1387,11 @@ type RunStep {
 
   """Every tool this step called, in order, as JSON."""
   toolCalls: JSON
+
+  """
+  What MCP hooks did around this step, as JSON: the context each added to the prompt, and each that failed. A hook that worked and added nothing is not listed.
+  """
+  hooks: JSON
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1538,6 +1551,7 @@ type RunStepCountNonNullAggregate {
   output: Int!
   error: Int!
   toolCalls: Int!
+  hooks: Int!
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1659,6 +1673,16 @@ type McpServer {
   headers: JSON
 
   """
+  Tools of this server a run's model is never offered, as a JSON array of the server's own tool names. Its hooks can still call them — a memory server's `remember`, say.
+  """
+  hiddenTools: JSON
+
+  """
+  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
+  """
+  hooks: JSON
+
+  """
   Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
   """
   cursor: String
@@ -1733,6 +1757,8 @@ type McpServerCountNonNullAggregate {
   env: Int!
   url: Int!
   headers: Int!
+  hiddenTools: Int!
+  hooks: Int!
 }
 
 type McpServerCountDistinctAggregate {
@@ -3535,6 +3561,11 @@ input RunFilters {
 
   """Every tool the run called, in order, as JSON."""
   toolCalls: JSONFilter
+
+  """
+  MCP `sessionEnd` hooks that failed, as JSON. Written just after the run finishes. The steps' own hooks are on the run's steps.
+  """
+  hooks: JSONFilter
   promptTokens: IntFilter
   completionTokens: IntFilter
   totalTokens: IntFilter
@@ -3609,6 +3640,7 @@ input RunOrderBy {
   output: InnerOrder
   error: InnerOrder
   toolCalls: InnerOrder
+  hooks: InnerOrder
   promptTokens: InnerOrder
   completionTokens: InnerOrder
   totalTokens: InnerOrder
@@ -3673,6 +3705,7 @@ input RunCountNonNullHaving {
   output: AggregateNumberFilter
   error: AggregateNumberFilter
   toolCalls: AggregateNumberFilter
+  hooks: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
@@ -3737,6 +3770,11 @@ input RunStepFilters {
 
   """Every tool this step called, in order, as JSON."""
   toolCalls: JSONFilter
+
+  """
+  What MCP hooks did around this step, as JSON: the context each added to the prompt, and each that failed. A hook that worked and added nothing is not listed.
+  """
+  hooks: JSONFilter
   promptTokens: IntFilter
   completionTokens: IntFilter
   totalTokens: IntFilter
@@ -3798,6 +3836,7 @@ input RunStepOrderBy {
   output: InnerOrder
   error: InnerOrder
   toolCalls: InnerOrder
+  hooks: InnerOrder
   promptTokens: InnerOrder
   completionTokens: InnerOrder
   totalTokens: InnerOrder
@@ -3865,6 +3904,7 @@ input RunStepCountNonNullHaving {
   output: AggregateNumberFilter
   error: AggregateNumberFilter
   toolCalls: AggregateNumberFilter
+  hooks: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
@@ -3924,6 +3964,16 @@ input CreateMcpServerInput {
   Headers sent with every request, as a JSON object. Credentials live here.
   """
   headers: JSON
+
+  """
+  Tools of this server a run's model is never offered, as a JSON array of the server's own tool names. Its hooks can still call them — a memory server's `remember`, say.
+  """
+  hiddenTools: JSON
+
+  """
+  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
+  """
+  hooks: JSON
 }
 
 input UpdateMcpServerInput {
@@ -3961,6 +4011,16 @@ input UpdateMcpServerInput {
   Headers sent with every request, as a JSON object. Credentials live here.
   """
   headers: JSON
+
+  """
+  Tools of this server a run's model is never offered, as a JSON array of the server's own tool names. Its hooks can still call them — a memory server's `remember`, say.
+  """
+  hiddenTools: JSON
+
+  """
+  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
+  """
+  hooks: JSON
 }
 
 """
@@ -4007,6 +4067,16 @@ input McpServerFilters {
   Headers sent with every request, as a JSON object. Credentials live here.
   """
   headers: JSONFilter
+
+  """
+  Tools of this server a run's model is never offered, as a JSON array of the server's own tool names. Its hooks can still call them — a memory server's `remember`, say.
+  """
+  hiddenTools: JSONFilter
+
+  """
+  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
+  """
+  hooks: JSONFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [McpServerFilters!]
@@ -4058,6 +4128,8 @@ input McpServerOrderBy {
   env: InnerOrder
   url: InnerOrder
   headers: InnerOrder
+  hiddenTools: InnerOrder
+  hooks: InnerOrder
 }
 
 """Filters McpServer groups by their aggregated values"""
@@ -4079,6 +4151,8 @@ input McpServerCountNonNullHaving {
   env: AggregateNumberFilter
   url: AggregateNumberFilter
   headers: AggregateNumberFilter
+  hiddenTools: AggregateNumberFilter
+  hooks: AggregateNumberFilter
 }
 
 input McpServerCountDistinctHaving {
@@ -4742,6 +4816,8 @@ enum McpServerDistinctColumn {
   env
   url
   headers
+  hiddenTools
+  hooks
 }
 
 """Columns of McpServer that a query can group by"""
@@ -4814,6 +4890,11 @@ type McpServerStatus {
 type McpTool {
   name: String!
   description: String!
+
+  """
+  In the row's `hiddenTools`: never offered to a run's model, still callable by its hooks. Always false on a probe, which tests a connection before there is a row to hide from.
+  """
+  hidden: Boolean!
 }
 
 """

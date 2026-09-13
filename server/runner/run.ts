@@ -3,6 +3,7 @@ import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Run, runs, steps, tasks } from "../db/schema.ts";
 import { runFlow } from "./flow.ts";
+import { type HookSession, hookSession } from "./hooks.ts";
 import { loadSettings } from "./llm.ts";
 import { configForTask } from "./profile.ts";
 
@@ -470,10 +471,14 @@ async function execute({
   // Everything the run says as it goes, for anyone watching it — see the event bus in `@cubicecho/agent-core`.
   const onEvent = (event: Parameters<typeof emit>[1]) => emit(run.id, event);
   onEvent({ kind: "notice", text: `${task.name} started` });
+  // Made once the run's scope is known, and ended — not awaited — once its outcome is written:
+  // a memory server filing the last step is no reason for the slot to stay taken.
+  let hooks: HookSession | undefined;
   try {
     // The settings row, with the task's agent profile laid over it — endpoint, model and every
     // ceiling. A task with no profile gets the row itself, which is what every run used to get.
     const { config, servers } = await configForTask(task);
+    hooks = hookSession({ runId: run.id, task, triggerId: run.triggerId, servers });
     const result = await runFlow({
       runId: run.id,
       task,
@@ -481,10 +486,12 @@ async function execute({
       config,
       servers,
       payload,
+      hooks,
       signal: controller.signal,
       onEvent,
     });
     onEvent({ kind: "done", ok: true, text: "finished" });
+    void hooks.end("ok", result.output);
     return await finish(run.id, {
       status: "ok",
       output: result.output,
@@ -498,11 +505,13 @@ async function execute({
     if (controller.signal.aborted) {
       console.log(`[run] ${task.name}: stopped`);
       onEvent({ kind: "done", ok: false, text: "stopped" });
+      void hooks?.end("stopped", "");
       return await finish(run.id, { status: "stopped" });
     }
     const message = errorMessage(error);
     console.error(`[run] ${task.name}: ${message}`);
     onEvent({ kind: "done", ok: false, text: message });
+    void hooks?.end("error", "");
     return await finish(run.id, { status: "error", error: message });
   } finally {
     inFlight.delete(task.id);
