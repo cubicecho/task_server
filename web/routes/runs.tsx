@@ -16,11 +16,11 @@ import {
 import { ActionButton } from "@/components/action-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DisclosureRow } from "@/components/disclosure-row";
+import { OptionSelect } from "@/components/option-select";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
-import { Select } from "@/components/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -275,7 +275,7 @@ function FilterBar({
 
       {/* A rule under the first row of each of these: "any" is how the filter is turned off, not
           one of the things it filters to, and without it the two read as peers. */}
-      <Select
+      <OptionSelect
         aria-label="Status"
         className="w-36"
         value={filters.status}
@@ -287,7 +287,7 @@ function FilterBar({
         ]}
       />
 
-      <Select
+      <OptionSelect
         aria-label="Task"
         className="w-44"
         value={filters.taskId}
@@ -299,7 +299,7 @@ function FilterBar({
         ]}
       />
 
-      <Select
+      <OptionSelect
         aria-label="Time window"
         className="w-40"
         value={filters.window}

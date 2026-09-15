@@ -3,9 +3,9 @@ import { ActionButton } from "@/components/action-button";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
+import { OptionSelect } from "@/components/option-select";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { Section } from "@/components/section";
-import { Select } from "@/components/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -330,7 +330,7 @@ function StepCard({
                   // Still the function form: the control spreads what it is handed onto the
                   // trigger, and the trigger is the only element a Radix select renders.
                   control={(wired) => (
-                    <Select
+                    <OptionSelect
                       {...wired}
                       value={step.context}
                       onValueChange={(context) => patch({ context: context as StepContext })}
