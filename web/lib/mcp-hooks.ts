@@ -1,19 +1,15 @@
 /**
  * The hooks field of the MCP server dialog, checked as it is typed.
  *
- * Only the shape: the pool's `validateHooks` lives in a package the browser cannot import, and
- * the server runs it on every write and refuses with the problems named. What is caught here is
- * what makes that refusal a round trip for a missing bracket.
+ * The pool's own `validateHooks`, from its browser entry — the check the server runs on every
+ * write — so a hook the form accepts is not refused a round trip later.
  */
+import { HOOK_EVENTS, type HookEvent, validateHooks } from "@cubicecho/agent-mcp-pool/hooks";
 
-/** What task-server fires. `beforeCompact` is missing on purpose: a run never compacts. */
-export const HOOK_EVENTS = [
-  "sessionStart",
-  "beforeTurn",
-  "afterTurn",
-  "sessionEnd",
-  "sessionDelete",
-] as const;
+/** What task-server fires: every pool event but `beforeCompact`, since a run never compacts. */
+export const HOOK_EVENTS_FIRED: readonly HookEvent[] = HOOK_EVENTS.filter(
+  (event) => event !== "beforeCompact",
+);
 
 export const HOOK_PLACEHOLDER = JSON.stringify(
   [
@@ -38,16 +34,13 @@ export function hooksProblem(text: string): string | undefined {
   } catch {
     return "Hooks is not valid JSON.";
   }
-  if (!Array.isArray(parsed)) return "Hooks is a JSON array of hooks.";
-  for (const [index, hook] of parsed.entries()) {
-    const entry = hook as Record<string, unknown> | null;
-    const name = typeof entry?.id === "string" && entry.id ? `"${entry.id}"` : `#${index + 1}`;
-    if (!entry || typeof entry !== "object") return `Hook ${name} is not an object.`;
-    if (typeof entry.id !== "string" || !entry.id) return `Hook ${name} needs an id.`;
-    if (typeof entry.tool !== "string" || !entry.tool) return `Hook ${name} needs a tool.`;
-    if (!HOOK_EVENTS.includes(entry.on as (typeof HOOK_EVENTS)[number])) {
-      return `Hook ${name}: "on" is one of ${HOOK_EVENTS.join(", ")}.`;
-    }
-  }
-  return undefined;
+  const [problem] = validateHooks(parsed);
+  if (problem) return problem;
+  // Past `validateHooks` this is an array of hooks, each bound to a real event.
+  const unfired = (parsed as { id: string; on: HookEvent }[]).find(
+    (hook) => !HOOK_EVENTS_FIRED.includes(hook.on),
+  );
+  return unfired
+    ? `hook "${unfired.id}": task-server never fires ${unfired.on}, so it would never run`
+    : undefined;
 }
