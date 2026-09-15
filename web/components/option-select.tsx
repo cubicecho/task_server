@@ -69,7 +69,10 @@ function blocksOf(entries: readonly SelectEntry[]): SelectBlock[] {
   return blocks;
 }
 
-type SelectProps = Omit<ComponentProps<"button">, "value" | "onChange" | "type" | "children"> & {
+type OptionSelectProps = Omit<
+  ComponentProps<"button">,
+  "value" | "onChange" | "type" | "children"
+> & {
   options: readonly SelectEntry[];
   value?: string;
   onValueChange: (value: string) => void;
@@ -97,17 +100,21 @@ type SelectProps = Omit<ComponentProps<"button">, "value" | "onChange" | "type" 
  * <FormField
  *   label="Kind"
  *   control={(wired) => (
- *     <Select {...wired} options={KINDS} value={kind} onValueChange={setKind} />
+ *     <OptionSelect {...wired} options={KINDS} value={kind} onValueChange={setKind} />
  *   )}
  * />
  * ```
  *
- * **This is not shadcn's `Select`.** That one is the primitive at `ui/select` and takes children;
- * this one takes `options`. Both are called Select because both are a select, and the import
- * path is what tells them apart — the mistake is loud, since the props do not typecheck against
- * each other.
+ * **The name is `OptionSelect` because `Select` did not survive an install.** This shipped as
+ * `Select`, on the reasoning that the import path tells it apart from the primitive at
+ * `ui/select` the way it does for shadcn itself. It does not: the shadcn CLI resolves a
+ * cross-item import by the source file's *basename*, so with `control/select.tsx` and
+ * `ui/select.tsx` both in one install it rewrote `app-form`'s import to the primitive. That
+ * compiles as far as the import and fails on the members, three files from the cause — see #36.
+ * A name a human disambiguates by path is not one the CLI does, so no item here may share a
+ * basename with a shadcn primitive.
  */
-export function Select({
+export function OptionSelect({
   options,
   value,
   onValueChange,
@@ -116,7 +123,7 @@ export function Select({
   contentClassName,
   disabled,
   ...props
-}: SelectProps) {
+}: OptionSelectProps) {
   const blocks = useMemo(() => blocksOf(options), [options]);
 
   return (

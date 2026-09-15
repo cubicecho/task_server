@@ -477,12 +477,12 @@ dependency, and an installed file is this repo's to edit. What is here: `PageLay
 route's header, trail, action row and body), `DialogLayout` (title, body, `footer` for a side
 control and `footerActions` for cancel/confirm, and the unsaved-changes guard), `Section`,
 `CardLayout`, `SplitLayout`, `QueryState` with `QueryError`, `DisclosureRow`, `ActionButton`,
-`ConfirmButton`, `FormField`, `FieldRow`, `Select`, `MultiSelect`, `PasswordInput`,
-`ModelSelect`'s field wrapper. **No cubeui component takes `children`** — the body is the `content` prop, and every
-other slot is a prop too, which is what stops a shell from being subclassed by nesting. Never
-hand-write `mx-auto max-w-3xl` or a `<header className="border-b px-6 py-4">`: that is
-`PageLayout` being re-derived, and the point of taking the registry was to stop having four of
-them.
+`ConfirmButton`, `FormField`, `FieldRow`, `OptionSelect`, `MultiSelect`, `PasswordInput`,
+`ModelSelect`'s field wrapper. **No cubeui component takes `children`** — the body is the
+`content` prop, and every other slot is a prop too, which is what stops a shell from being
+subclassed by nesting. Never hand-write `mx-auto max-w-3xl` or a
+`<header className="border-b px-6 py-4">`: that is `PageLayout` being re-derived, and the point
+of taking the registry was to stop having four of them.
 
 `ActionButton` and `ConfirmButton` take a required `label`, which is the accessible name — an
 icon-only button with no `label` does not typecheck. Both default to `type="button"` as of
@@ -497,29 +497,30 @@ handed the dialog's own `close`, which is the one Escape, the overlay and the X 
 `onClose` — which is what all three did — Cancel was the fourth way out of a dialog and the only
 one that skipped the ask, which is also the one people click.
 
-**`Select` takes `options`, and it is not shadcn's `Select`.** The primitive at
-`@/components/ui/select` takes seven parts to assemble; the control at `@/components/select` takes
-a list — `{ value, label }`, plus `{ separator: true }` for a rule and `group` for a heading
-([cubeui#5](https://github.com/cubicecho/cubeui/issues/5),
+**`OptionSelect` takes `options`, and it is not shadcn's `Select`.** The primitive at
+`@/components/ui/select` takes seven parts to assemble; the control at
+`@/components/option-select` takes a list — `{ value, label }`, plus `{ separator: true }` for a
+rule and `group` for a heading ([cubeui#5](https://github.com/cubicecho/cubeui/issues/5),
 [#10](https://github.com/cubicecho/cubeui/issues/10)) — and spreads the rest of its props onto the
 trigger, which is the only element Radix's select root actually renders. That is what `FormField`'s
 function form hands a control, so it drops into one without a wrapper. The runs filter bar and the
 step editor's "Sees" are on it. `ModelSelect` is deliberately not: it fetches `/models` when the
-menu opens and draws a loading and an error row, and the control has neither `onOpenChange` nor a
-non-option entry ([cubeui#37](https://github.com/cubicecho/cubeui/issues/37)).
+menu opens and draws a loading and an error row, and the published control has neither
+`onOpenChange` nor a non-option entry ([cubeui#37](https://github.com/cubicecho/cubeui/issues/37)).
+The fill-on-open menu that would cover it was written in cubeui#39, but that PR merged into an
+already-merged branch and never reached cubeui's `main` or the published registry.
 
-**Updating is `npx shadcn add -o @cubeui/<name>`, and two things have to be put back after it.**
-`app-form.tsx` arrives importing `Select` from `@/components/ui/select` — shadcn's primitive,
-which is a real file with a real `Select` in it, so it resolves and then fails four lines down on
-members it does not have. The cubeui item is *called* `select` and depends on the primitive of the
-same name, so the CLI has two of them in the run and picks the `ui` alias
-([cubeui#36](https://github.com/cubicecho/cubeui/issues/36)); the line above it, `form-field`, is
-the same kind of import and lands correctly, because nothing upstream is called that. And shadcn's
-own primitives import `cn` from the `cn` package rather than from the `utils` alias
+**Updating is `npx shadcn add -o @cubeui/<name>`, and one thing has to be put back after it.**
+The control used to ship as `select`, and the CLI resolves a cross-item import by basename, so
+`app-form.tsx` arrived pointing at shadcn's primitive
+([cubeui#36](https://github.com/cubicecho/cubeui/issues/36)); cubeui#38 renamed it to
+`option-select`, and the import now lands correctly. What is still left to do by hand is `cn`:
+shadcn's own primitives import it from the `cn` package rather than from the `utils` alias
 ([cubeui#24](https://github.com/cubicecho/cubeui/issues/24)), which installs a runtime dependency —
 into `dependencies`, which is the section `npm ci --omit=dev` keeps — and leaves this repo with two
-`cn`s. Both are mechanical: point the two select imports at `@/components/select`, and keep every
-`web/components/ui/*` on `@/lib/utils`, which is what `components.json` says the alias is. The
+`cn`s. Keep every `web/components/ui/*` on `@/lib/utils`, which is what `components.json` says the
+alias is, and `npm pkg delete dependencies.cn`. `-o` also rewrites every shadcn primitive an item
+depends on; when the only difference is import order and a `"use client"`, put them back. The
 linter is off for `web/components/ui/**` in `biome.json` for the same reason it is off upstream —
 the files are vendored, and which of Biome's rules a shadcn update trips is not this repo's
 question to answer per rule, which a narrower override learned the hard way when one more appeared

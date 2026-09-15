@@ -3,8 +3,8 @@ import { createFormHook, createFormHookContexts, useStore } from "@tanstack/reac
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import { useState } from "react";
 import { FormField } from "@/components/form-field";
-import type { SelectEntry, SelectOption, SelectSeparatorEntry } from "@/components/select";
-import { Select } from "@/components/select";
+import type { SelectEntry, SelectOption, SelectSeparatorEntry } from "@/components/option-select";
+import { OptionSelect } from "@/components/option-select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -231,7 +231,7 @@ type SelectFieldProps = FieldProps & {
 };
 
 /**
- * The one that needs `FormField`'s function form, because `Select` is a `Popover`-shaped control
+ * The one that needs `FormField`'s function form, because `OptionSelect` is a `Popover`-shaped control
  * whose root renders no DOM: the id and the aria attributes belong on the trigger, and the
  * control is what knows where that is. Every hand-written select field in these apps puts them
  * on the root instead, silently, leaving a trigger with no `aria-invalid` and an error message
@@ -246,7 +246,7 @@ function BoundSelectField({ options, placeholder, triggerClassName, ...rest }: S
       {...rest}
       error={error}
       control={(wired) => (
-        <Select
+        <OptionSelect
           {...wired}
           options={options}
           value={field.state.value ?? ""}
@@ -615,4 +615,4 @@ export type { SelectEntry, SelectOption, SelectSeparatorEntry };
 // Local bindings rather than `export … from`: the shadcn CLI rewrites import declarations on
 // install and leaves re-export declarations alone, so the `from` form would ship a path into
 // `control/` that does not exist in a consumer's tree. See AGENTS.md.
-export { Select };
+export { OptionSelect };
