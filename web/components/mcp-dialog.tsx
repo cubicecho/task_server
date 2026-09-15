@@ -13,11 +13,11 @@ import {
 import { InputField, SwitchField, TextareaField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { FieldRow } from "@/components/field-row";
+import { FormField } from "@/components/form-field";
 import { McpProbeResult } from "@/components/mcp-probe";
 import { MultiSelectField } from "@/components/multi-select-field";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
@@ -193,19 +193,26 @@ export function McpDialog({
               saved. Most servers arrive as a block of JSON from a README, and typing that out
               again by hand is four fields' worth of chances to get one wrong. */}
           <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
-            <Label htmlFor="mcp-paste">Paste a config</Label>
-            <Textarea
-              id="mcp-paste"
-              rows={3}
-              className="font-mono text-xs"
-              value={paste}
-              onChange={(event) => setPaste(event.target.value)}
-              placeholder={'{ "mcpServers": { "fs": { "command": "npx", "args": ["-y", "…"] } } }'}
+            <FormField
+              label="Paste a config"
+              description={
+                <>
+                  <code>.mcp.json</code> shaped — the whole file, one entry, or just the body.
+                </>
+              }
+              control={
+                <Textarea
+                  rows={3}
+                  className="font-mono text-xs"
+                  value={paste}
+                  onChange={(event) => setPaste(event.target.value)}
+                  placeholder={
+                    '{ "mcpServers": { "fs": { "command": "npx", "args": ["-y", "…"] } } }'
+                  }
+                />
+              }
             />
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-muted-foreground text-xs">
-                <code>.mcp.json</code> shaped — the whole file, one entry, or just the body.
-              </p>
+            <div className="flex justify-end">
               <Button
                 type="button"
                 variant="secondary"
