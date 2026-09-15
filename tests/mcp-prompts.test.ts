@@ -117,7 +117,7 @@ test("names content that has no text rather than dropping it", async () => {
   // An embedded resource carries its text and unwraps to it; an image cannot, and leaving a gap
   // where it was would read as a template that simply said less.
   expect(expansion).toContain("user: A");
-  expect(expansion).toContain("[image content]");
+  expect(expansion).toContain("[image image/png");
 });
 
 test("refuses a server that offers no prompts before dialling it", async () => {
