@@ -183,14 +183,16 @@ test("a beforeTurn hook's result is put in front of each step's prompt, and note
 test("afterTurn, sessionStart and sessionEnd reach the server with what the run did", async () => {
   await echoServer(
     [
-      { id: "start", on: "sessionStart", tool: "ping", args: {} },
+      { id: "start", on: "sessionStart", tool: "add", args: { a: 1, b: 2 } },
       {
         id: "remember",
         on: "afterTurn",
         tool: "echo",
         args: { text: "{{vars.task.id}}|{{session.id}}|{{turn.messages}}" },
       },
-      { id: "end", on: "sessionEnd", tool: "add", args: { a: 1, b: "{{status}}" } },
+      // A string, not `add`'s `b`: the pool checks arguments against the tool's schema, and
+      // `"ok"` is not a number it could coerce.
+      { id: "end", on: "sessionEnd", tool: "echo", args: { text: "{{status}}" } },
     ],
     ["add"],
   );
@@ -202,13 +204,14 @@ test("afterTurn, sessionStart and sessionEnd reach the server with what the run 
   await hooks.hooksSettled();
 
   const log = calls();
-  expect(log.map((call) => call.name)).toEqual(["ping", "echo", "add"]);
+  expect(log.map((call) => call.name)).toEqual(["add", "echo", "echo"]);
+  // `add` is hidden from the model and still callable by the row's own hook.
+  expect(log[0].arguments).toEqual({ a: 1, b: 2 });
   const remembered = String(log[1].arguments.text);
   expect(remembered).toContain(`${taskId}|${run.id}|`);
   expect(remembered).toContain("list the subjects");
   expect(remembered).toContain("one subject");
-  // `add` is hidden from the model and still callable by the row's own hook.
-  expect(log[2].arguments).toEqual({ a: 1, b: "ok" });
+  expect(log[2].arguments).toEqual({ text: "ok" });
   expect(toolNames[0]).not.toContain("echo__add");
   expect(toolNames[0]).toContain("echo__echo");
 });
