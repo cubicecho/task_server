@@ -41,6 +41,6 @@ export function hooksProblem(text: string): string | undefined {
     (hook) => !HOOK_EVENTS_FIRED.includes(hook.on),
   );
   return unfired
-    ? `hook "${unfired.id}": task-server never fires ${unfired.on}, so it would never run`
+    ? `hook "${unfired.id}": task-server never compacts, so ${unfired.on} never fires`
     : undefined;
 }

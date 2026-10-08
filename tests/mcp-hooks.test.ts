@@ -22,6 +22,6 @@ test("reports the pool's first problem", () => {
 
 test("refuses an event this server never fires", () => {
   expect(hooksProblem(JSON.stringify([{ id: "c", on: "beforeCompact", tool: "t" }]))).toMatch(
-    /never fires beforeCompact/,
+    /never compacts, so beforeCompact never fires/,
   );
 });
