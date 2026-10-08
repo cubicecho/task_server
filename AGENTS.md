@@ -429,6 +429,16 @@ later. `afterTurn` and `sessionEnd` are not awaited by the run; `sessionEnd` wai
 `hiddenTools` keeps a tool out of every run's listing and still callable by the row's hooks, and
 both columns are checked on write in `vetMcpServer` with the pool's `validateHooks`: a
 placeholder the event has no value for is a refusal on save, not a silent skip every step.
+
+The rest of the row is checked there too, by the pool's `validateServerConfig` — a stdio server
+with no command, a url that is not http, a slug that cannot namespace a tool. `fieldProblem` in
+`web/lib/mcp-config.ts` asks the same function a field at a time, so the form and the write
+cannot disagree. The check wants a whole row and an update is part of one, so the change is laid
+over each row it lands on, and only what the write *introduces* is refused: a row saved before a
+rule existed can still be disabled or repaired a column at a time. A pasted config is read by
+the pool's `fromMcpServersJson` for the same reason — one reading of that JSON across every
+host — which is why an SSE server is refused on paste
+([agent-mcp-pool#103](https://github.com/cubicecho/agent-mcp-pool/issues/103)).
 `tests/hooks.test.ts` reads what the stdio fixture was called with from `MCP_ECHO_CALL_LOG`,
 because a hook's call never appears in a run's tool calls.
 
