@@ -5,8 +5,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   DeleteTaskDocument,
-  RunTaskDocument,
-  StopTaskDocument,
   type TaskFieldsFragment,
   TasksDocument,
   UpdateTaskDocument,
@@ -29,6 +27,7 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/co
 import { Switch } from "@/components/ui/switch";
 import { request } from "@/lib/gql";
 import { STATUS_VARIANT } from "@/lib/run-status";
+import { useRunTask, useStopTask } from "@/lib/use-task-run";
 
 export function TasksRoute() {
   const queryClient = useQueryClient();
@@ -57,33 +56,14 @@ export function TasksRoute() {
     },
   });
 
-  const stop = useMutation({
-    mutationFn: (taskId: string) => request(StopTaskDocument, { taskId }),
-    onSuccess: (data) => {
-      // False means the run had already finished on its own — nothing was stopped, and the
-      // refresh below is what the user actually wanted to see.
-      if (data.stopTask) toast.success("Stopping…");
-      refresh();
-      queryClient.invalidateQueries({ queryKey: ["runs"] });
-    },
-  });
+  const stop = useStopTask();
 
   // The task a body is being typed for, if any. A task with a webhook is asked for one rather
   // than started outright: its prompt most likely has `{{event}}` in it, and a run with nothing
   // there is a test of half of it.
   const [askFor, setAskFor] = useState<TaskFieldsFragment | null>(null);
 
-  const run = useMutation({
-    mutationFn: ({ taskId, payload }: { taskId: string; payload?: unknown }) =>
-      request(RunTaskDocument, { taskId, payload }),
-    onSuccess: (data) => {
-      const { status, error } = data.runTask;
-      if (status === "error") toast.error(error || "Run failed");
-      else if (status === "stopped") toast.success("Run stopped");
-      else toast.success("Run finished — see Runs for the output");
-      refresh();
-    },
-  });
+  const run = useRunTask();
 
   // The scheduler is the authority on when a trigger next fires; the trigger row only holds
   // the expression it was built from.

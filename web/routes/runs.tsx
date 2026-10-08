@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Play, RefreshCw, Square, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import {
   DeleteRunDocument,
   RunDetailDocument,
@@ -10,8 +9,6 @@ import {
   RunsDocument,
   type RunsQuery,
   RunsStatusEnum,
-  RunTaskDocument,
-  StopTaskDocument,
 } from "@/__generated__/graphql/graphql";
 import { ActionButton } from "@/components/action-button";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -28,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
 import { ANY, buildWhere, type Filters, isFiltered, NO_FILTERS, WINDOWS } from "@/lib/run-filters";
 import { STATUS_VARIANT } from "@/lib/run-status";
+import { useRunTask, useStopTask } from "@/lib/use-task-run";
 
 type Run = RunsQuery["runs"][number];
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
@@ -385,30 +383,8 @@ export function RunsRoute() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runs"] }),
   });
 
-  const start = useMutation({
-    mutationFn: (variables: { taskId: string; payload: unknown }) =>
-      request(RunTaskDocument, variables),
-    onSuccess: (data) => {
-      // `runTask` answers only when the run is over, so by the time this fires there is
-      // something to go and read.
-      const { status, error } = data.runTask;
-      if (status === "error") toast.error(error || "Run failed");
-      else if (status === "stopped") toast.success("Run stopped");
-      else toast.success("Run finished");
-      queryClient.invalidateQueries({ queryKey: ["runs"] });
-    },
-  });
-
-  // A run is stopped through the task that owns it: the runner keys what is in flight by task.
-  const stop = useMutation({
-    mutationFn: (taskId: string) => request(StopTaskDocument, { taskId }),
-    onSuccess: (data) => {
-      // False means it had already finished on its own — the refresh is what shows that.
-      if (data.stopTask) toast.success("Stopping…");
-      queryClient.invalidateQueries({ queryKey: ["runs"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    },
-  });
+  const start = useRunTask();
+  const stop = useStopTask();
 
   return (
     <PageLayout
