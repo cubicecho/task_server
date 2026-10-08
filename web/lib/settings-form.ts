@@ -97,7 +97,7 @@ export const toForm = (row: SettingsFieldsFragment): SettingsForm => ({
 });
 
 /**
- * The form as the `updateSettingSingle` input. The key is not in it: it travels on `setApiKey`,
+ * The form as the `updateSetting` input. The key is not in it: it travels on `setApiKey`,
  * being excluded from the type entirely. A `null` never reaches here past the validator; the
  * fallbacks only satisfy the type, and each is that column's own "off".
  */

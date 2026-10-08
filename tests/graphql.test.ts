@@ -59,9 +59,9 @@ test("a task with a cron trigger lands on the schedule", async () => {
 test("disabling the task takes its triggers off the schedule with it", async () => {
   const { tasks } = await run(`{ tasks { id } }`);
   // The single-row form, which is the only one there is: `permissions.ts` shuts every bulk
-  // write, and `updateTask` with no `where` rewrites the table.
+  // write, and `updateTasks` with no `where` rewrites the table.
   await run(
-    `mutation Off($id: String!) { updateTaskSingle(set: { enabled: false }, where: { id: { eq: $id } }) { id } }`,
+    `mutation Off($id: String!) { updateTask(set: { enabled: false }, where: { id: { eq: $id } }) { id } }`,
     {
       id: tasks[0].id,
     },
@@ -105,9 +105,9 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
      }`,
     { taskId: task.id },
   );
-  const { updateTriggerSingle: renamed } = await run(
+  const { updateTrigger: renamed } = await run(
     `mutation Rename($id: String!) {
-       updateTriggerSingle(set: { event: "released" }, where: { id: { eq: $id } }) { id event }
+       updateTrigger(set: { event: "released" }, where: { id: { eq: $id } }) { id event }
      }`,
     { id: event.id },
   );
@@ -361,8 +361,8 @@ test("a trigger's addresses are stored in the shape they are matched in", async 
   expect(cron.cron).toBe("0 9 * * *");
 
   // An update goes through the same sweep as a create.
-  const { updateTriggerSingle: edited } = await run(
-    `mutation { updateTriggerSingle(where: { id: { eq: "${event.id}" } }, set: { event: " later " })
+  const { updateTrigger: edited } = await run(
+    `mutation { updateTrigger(where: { id: { eq: "${event.id}" } }, set: { event: " later " })
        { event } }`,
   );
   expect(edited.event).toBe("later");

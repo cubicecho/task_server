@@ -55,7 +55,7 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
   while (!runner.runningTaskIds().has(taskId)) await new Promise((r) => setTimeout(r, 5));
 
   const refused = await gql(
-    `mutation D($id: String!) { deleteTaskSingle(where: { id: { eq: $id } }) { id } }`,
+    `mutation D($id: String!) { deleteTask(where: { id: { eq: $id } }) { id } }`,
     {
       id: taskId,
     },
@@ -71,7 +71,7 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
   const runId = inFlight.id;
   expect(inFlight.status).toBe("running");
   const runRefused = await gql(
-    `mutation D($id: String!) { deleteRunSingle(where: { id: { eq: $id } }) { id } }`,
+    `mutation D($id: String!) { deleteRun(where: { id: { eq: $id } }) { id } }`,
     { id: runId },
   );
   expect(runRefused.errors?.[0].message).toMatch(/still going/i);
@@ -93,19 +93,19 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
   expect(runner.runningTaskIds().has(taskId)).toBe(false);
 
   const runDeleted = await gql(
-    `mutation D($id: String!) { deleteRunSingle(where: { id: { eq: $id } }) { id } }`,
+    `mutation D($id: String!) { deleteRun(where: { id: { eq: $id } }) { id } }`,
     { id: runId },
   );
   expect(runDeleted.errors).toBeUndefined();
 
   const deleted = await gql(
-    `mutation D($id: String!) { deleteTaskSingle(where: { id: { eq: $id } }) { id } }`,
+    `mutation D($id: String!) { deleteTask(where: { id: { eq: $id } }) { id } }`,
     {
       id: taskId,
     },
   );
   expect(deleted.errors).toBeUndefined();
-  expect(deleted.data?.deleteTaskSingle).toMatchObject({ id: taskId });
+  expect(deleted.data?.deleteTask).toMatchObject({ id: taskId });
 });
 
 test("stopping a task that is not running says so rather than failing", async () => {

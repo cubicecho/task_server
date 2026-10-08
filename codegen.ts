@@ -19,8 +19,8 @@ const config: CodegenConfig = {
       plugins: ["@cubicecho/graphql-codegen-field-descriptions"],
     },
     "./web/__generated__/graphql/graphql.ts": {
-      plugins: ["typescript", "typescript-operations", "typed-document-node"],
-      config: { scalars, useTypeImports: true, skipTypename: true },
+      plugins: ["typescript-operations", "typed-document-node"],
+      config: { scalars, useTypeImports: true, skipTypename: true, enumType: "native" },
     },
   },
 };

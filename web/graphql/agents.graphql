@@ -51,13 +51,13 @@ mutation CreateAgent($values: CreateAgentInput!) {
 }
 
 mutation UpdateAgent($id: String!, $set: UpdateAgentInput!) {
-  updateAgentSingle(where: { id: { eq: $id } }, set: $set) {
+  updateAgent(where: { id: { eq: $id } }, set: $set) {
     id
   }
 }
 
 mutation DeleteAgent($id: String!) {
-  deleteAgentSingle(where: { id: { eq: $id } }) {
+  deleteAgent(where: { id: { eq: $id } }) {
     id
   }
 }

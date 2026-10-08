@@ -18,7 +18,7 @@ import { schema } from "./graphql/schema.ts";
  *
  * Left out on purpose: `settings`/`setApiKey` (the server's own credentials are the operator's
  * business, not a visiting agent's), the MCP-server rows (same), and every bulk mutation — a
- * `deleteTask` with no `where` empties the table, and `deleteTaskSingle` cannot.
+ * `deleteTasks` with no `where` empties the table, and `deleteTask` cannot.
  */
 export const TOOLS = [
   "Query.tasks",
@@ -30,12 +30,12 @@ export const TOOLS = [
   "Query.schedule",
   "Query.models",
   "Mutation.createTask",
-  "Mutation.updateTaskSingle",
-  "Mutation.deleteTaskSingle",
+  "Mutation.updateTask",
+  "Mutation.deleteTask",
   "Mutation.setTaskSteps",
   "Mutation.createTrigger",
-  "Mutation.updateTriggerSingle",
-  "Mutation.deleteTriggerSingle",
+  "Mutation.updateTrigger",
+  "Mutation.deleteTrigger",
   "Mutation.runTask",
   "Mutation.stopTask",
 ];
@@ -159,26 +159,21 @@ const TOOL_NAMES = new Map(
 /**
  * The tool name for a root field, and the one place that spelling is decided.
  *
- * drizzle-graphql calls the single-row update `updateTaskSingle`, and the qualifier is there to
- * keep it apart from the bulk `updateTask` — which this surface does not expose at all. So the
- * name distinguishes a tool from one an agent cannot see, and every arm that met it read it as
- * a variant to pick between rather than as the update. `Single` comes off here.
- *
- * The rename belongs at this layer rather than in `buildSchema`: the web app has both forms and
- * needs to tell them apart, so the schema keeps the qualifier and only the agent loses it. It
- * could not be done there in any case — `suffixes.single` renames the single *insert* and is
- * ignored by update and delete.
+ * The single-row update is `updateTask` and the bulk one, which this surface does not expose, is
+ * `updateTasks`. Before drizzle-graphql 13 they were `updateTaskSingle` and `updateTask`, and
+ * this function took the `Single` off: the qualifier told a tool apart from one an agent could
+ * not see, and every arm that met it read it as a variant to pick between rather than as the
+ * update. The schema now says what the tool always did, so only the casing is left to decide.
  *
  * `TOOL_NAMES` and the driver's `toolName` both come through here, so a name written in prose
  * and the tool it names cannot drift apart.
  */
 function toolNameFor(field: string): string {
-  const base = field.endsWith("Single") ? field.slice(0, -"Single".length) : field;
   // The driver's own casing rather than a hand-rolled one. They agree on every name here and
   // would keep agreeing until a field split an acronym — `parseURLFilter` is the example the
   // package gives — and a tool the prose names by a spelling the listing does not use is the
   // failure this whole function exists to prevent.
-  return applyNameCase(base);
+  return applyNameCase(field);
 }
 
 /** Where the driver's generated footer starts — everything above it is prose. */
@@ -248,7 +243,7 @@ export const mcpHandler = createHttpHandler({
   version: pkg.version,
   include: TOOLS,
   // `include` names GraphQL fields and this names tools, so the two are spelled differently on
-  // purpose — `Mutation.updateTaskSingle` above becomes `update_task` here.
+  // purpose — `Mutation.updateTask` above becomes `update_task` here.
   toolName: (field) => toolNameFor(field.name),
   // One level: the leaf fields of what a tool returns. Two would pull every run — output and
   // all — into a listing of tasks, which is a lot of context for a question about names.

@@ -4958,70 +4958,70 @@ type RunEvent {
 type Mutation {
   createAgents(values: [CreateAgentInput!]!): [Agent!]!
   createAgent(values: CreateAgentInput!): Agent!
-  updateAgent(set: UpdateAgentInput!, where: AgentFilters): [Agent!]!
+  updateAgents(set: UpdateAgentInput!, where: AgentFilters): [Agent!]!
 
   """
   Each entry's updated rows, in entry order. An entry whose `where` matched no rows contributes `null` in its slot; an entry that matched several contributes each of its rows.
   """
   updateAgentsMany(updates: [UpdateAgentManyInput!]!): [Agent]!
-  updateAgentSingle(set: UpdateAgentInput!, where: AgentFilters!): Agent
-  deleteAgent(where: AgentFilters): [Agent!]!
-  deleteAgentSingle(where: AgentFilters!): Agent
+  updateAgent(set: UpdateAgentInput!, where: AgentFilters!): Agent
+  deleteAgents(where: AgentFilters): [Agent!]!
+  deleteAgent(where: AgentFilters!): Agent
   createTasks(values: [CreateTaskInput!]!): [Task!]!
   createTask(values: CreateTaskInput!): Task!
-  updateTask(set: UpdateTaskInput!, where: TaskFilters): [Task!]!
+  updateTasks(set: UpdateTaskInput!, where: TaskFilters): [Task!]!
 
   """
   Each entry's updated rows, in entry order. An entry whose `where` matched no rows contributes `null` in its slot; an entry that matched several contributes each of its rows.
   """
   updateTasksMany(updates: [UpdateTaskManyInput!]!): [Task]!
-  updateTaskSingle(set: UpdateTaskInput!, where: TaskFilters!): Task
-  deleteTask(where: TaskFilters): [Task!]!
-  deleteTaskSingle(where: TaskFilters!): Task
+  updateTask(set: UpdateTaskInput!, where: TaskFilters!): Task
+  deleteTasks(where: TaskFilters): [Task!]!
+  deleteTask(where: TaskFilters!): Task
   createTriggers(values: [CreateTriggerInput!]!): [Trigger!]!
   createTrigger(values: CreateTriggerInput!): Trigger!
-  updateTrigger(set: UpdateTriggerInput!, where: TriggerFilters): [Trigger!]!
+  updateTriggers(set: UpdateTriggerInput!, where: TriggerFilters): [Trigger!]!
 
   """
   Each entry's updated rows, in entry order. An entry whose `where` matched no rows contributes `null` in its slot; an entry that matched several contributes each of its rows.
   """
   updateTriggersMany(updates: [UpdateTriggerManyInput!]!): [Trigger]!
-  updateTriggerSingle(set: UpdateTriggerInput!, where: TriggerFilters!): Trigger
-  deleteTrigger(where: TriggerFilters): [Trigger!]!
-  deleteTriggerSingle(where: TriggerFilters!): Trigger
+  updateTrigger(set: UpdateTriggerInput!, where: TriggerFilters!): Trigger
+  deleteTriggers(where: TriggerFilters): [Trigger!]!
+  deleteTrigger(where: TriggerFilters!): Trigger
   createSteps(values: [CreateStepInput!]!): [Step!]!
   createStep(values: CreateStepInput!): Step!
-  updateStep(set: UpdateStepInput!, where: StepFilters): [Step!]!
+  updateSteps(set: UpdateStepInput!, where: StepFilters): [Step!]!
 
   """
   Each entry's updated rows, in entry order. An entry whose `where` matched no rows contributes `null` in its slot; an entry that matched several contributes each of its rows.
   """
   updateStepsMany(updates: [UpdateStepManyInput!]!): [Step]!
-  updateStepSingle(set: UpdateStepInput!, where: StepFilters!): Step
-  deleteStep(where: StepFilters): [Step!]!
-  deleteStepSingle(where: StepFilters!): Step
-  deleteRun(where: RunFilters): [Run!]!
-  deleteRunSingle(where: RunFilters!): Run
-  deleteRunStep(where: RunStepFilters): [RunStep!]!
-  deleteRunStepSingle(where: RunStepFilters!): RunStep
+  updateStep(set: UpdateStepInput!, where: StepFilters!): Step
+  deleteSteps(where: StepFilters): [Step!]!
+  deleteStep(where: StepFilters!): Step
+  deleteRuns(where: RunFilters): [Run!]!
+  deleteRun(where: RunFilters!): Run
+  deleteRunSteps(where: RunStepFilters): [RunStep!]!
+  deleteRunStep(where: RunStepFilters!): RunStep
   createMcpServers(values: [CreateMcpServerInput!]!): [McpServer!]!
   createMcpServer(values: CreateMcpServerInput!): McpServer!
-  updateMcpServer(set: UpdateMcpServerInput!, where: McpServerFilters): [McpServer!]!
+  updateMcpServers(set: UpdateMcpServerInput!, where: McpServerFilters): [McpServer!]!
 
   """
   Each entry's updated rows, in entry order. An entry whose `where` matched no rows contributes `null` in its slot; an entry that matched several contributes each of its rows.
   """
   updateMcpServersMany(updates: [UpdateMcpServerManyInput!]!): [McpServer]!
-  updateMcpServerSingle(set: UpdateMcpServerInput!, where: McpServerFilters!): McpServer
-  deleteMcpServer(where: McpServerFilters): [McpServer!]!
-  deleteMcpServerSingle(where: McpServerFilters!): McpServer
-  updateSetting(set: UpdateSettingInput!, where: SettingFilters): [Setting!]!
+  updateMcpServer(set: UpdateMcpServerInput!, where: McpServerFilters!): McpServer
+  deleteMcpServers(where: McpServerFilters): [McpServer!]!
+  deleteMcpServer(where: McpServerFilters!): McpServer
+  updateSettings(set: UpdateSettingInput!, where: SettingFilters): [Setting!]!
 
   """
   Each entry's updated rows, in entry order. An entry whose `where` matched no rows contributes `null` in its slot; an entry that matched several contributes each of its rows.
   """
   updateSettingsMany(updates: [UpdateSettingManyInput!]!): [Setting]!
-  updateSettingSingle(set: UpdateSettingInput!, where: SettingFilters!): Setting
+  updateSetting(set: UpdateSettingInput!, where: SettingFilters!): Setting
 
   """
   Runs a task immediately and resolves with the finished run — which means it does not answer until the run is over, and a long task is a long call. Read `runEvents` meanwhile to watch it, or `stopTask` to call it off.

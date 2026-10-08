@@ -34,13 +34,13 @@ mutation CreateMcpServer($values: CreateMcpServerInput!) {
 }
 
 mutation UpdateMcpServer($id: String!, $set: UpdateMcpServerInput!) {
-  updateMcpServerSingle(where: { id: { eq: $id } }, set: $set) {
+  updateMcpServer(where: { id: { eq: $id } }, set: $set) {
     id
   }
 }
 
 mutation DeleteMcpServer($id: String!) {
-  deleteMcpServerSingle(where: { id: { eq: $id } }) {
+  deleteMcpServer(where: { id: { eq: $id } }) {
     id
   }
 }

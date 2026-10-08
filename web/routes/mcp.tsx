@@ -4,7 +4,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   DeleteMcpServerDocument,
-  type McpProbe,
   McpServersDocument,
   type McpServersQuery,
   ReconnectMcpDocument,
@@ -14,7 +13,7 @@ import {
 import { ActionButton } from "@/components/action-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { McpDialog } from "@/components/mcp-dialog";
-import { McpProbeResult } from "@/components/mcp-probe";
+import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { Badge } from "@/components/ui/badge";

@@ -52,7 +52,7 @@ test("an agent may write and run the things it is given tools for", async () => 
   const [task] = (data as { tasks: { id: string }[] }).tasks;
 
   await allowed(
-    `mutation { updateTaskSingle(set: { enabled: false }, where: { id: { eq: "${task.id}" } }) { id } }`,
+    `mutation { updateTask(set: { enabled: false }, where: { id: { eq: "${task.id}" } }) { id } }`,
     "agent",
   );
   await allowed(
@@ -75,7 +75,7 @@ test("the settings row is the operator's, whichever way it is asked for", async 
     `{ settingsAggregate { max { baseUrl } } }`,
     `{ settingsGroupBy(groupBy: [baseUrl]) { group { baseUrl } } }`,
     `mutation { setApiKey(apiKey: "sk-agent") }`,
-    `mutation { updateSettingSingle(set: { baseUrl: "https://elsewhere" }, where: { id: { eq: "default" } }) { id } }`,
+    `mutation { updateSetting(set: { baseUrl: "https://elsewhere" }, where: { id: { eq: "default" } }) { id } }`,
   ]) {
     expect(await refused(source, "agent"), source).toEqual(["FORBIDDEN"]);
     expect(await refused(source, "operator"), source).toEqual([]);
@@ -111,8 +111,8 @@ test("agent profiles are the settings row again, and just as shut", async () => 
     `{ agentsAggregate { max { baseUrl } } }`,
     `{ agentsGroupBy(groupBy: [baseUrl]) { group { baseUrl } } }`,
     `mutation { createAgent(values: { name: "mine" }) { id } }`,
-    `mutation { updateAgentSingle(set: { baseUrl: "https://elsewhere" }, where: { id: { eq: "x" } }) { id } }`,
-    `mutation { deleteAgentSingle(where: { id: { eq: "x" } }) { id } }`,
+    `mutation { updateAgent(set: { baseUrl: "https://elsewhere" }, where: { id: { eq: "x" } }) { id } }`,
+    `mutation { deleteAgent(where: { id: { eq: "x" } }) { id } }`,
     `mutation { setAgentApiKey(agentId: "x", apiKey: "sk-agent") }`,
   ]) {
     expect(await refused(source, "agent"), source).toEqual(["FORBIDDEN"]);
@@ -140,22 +140,22 @@ test("a task's profile is not readable through the task", async () => {
 // recorded what it did is the one edit nobody can audit afterwards.
 test("an agent does not delete the history", async () => {
   expect(
-    await refused(`mutation { deleteRunSingle(where: { id: { eq: "x" } }) { id } }`, "agent"),
+    await refused(`mutation { deleteRun(where: { id: { eq: "x" } }) { id } }`, "agent"),
   ).toEqual(["FORBIDDEN"]);
   expect(
-    await refused(`mutation { deleteRunStepSingle(where: { id: { eq: "x" } }) { id } }`, "agent"),
+    await refused(`mutation { deleteRunStep(where: { id: { eq: "x" } }) { id } }`, "agent"),
   ).toEqual(["FORBIDDEN"]);
 });
 
 // The one call on this schema that can lose a table, shut for every caller — the web app has
-// never sent one, and `deleteTaskSingle` cannot empty anything.
+// never sent one, and `deleteTask` cannot empty anything.
 test("a bulk write is nobody's, the operator included", async () => {
   for (const source of [
-    `mutation { deleteTask { id } }`,
+    `mutation { deleteTasks { id } }`,
     `mutation { createTasks(values: [{ name: "bulk", prompt: "go" }]) { id } }`,
-    `mutation { updateTask(set: { enabled: false }) { id } }`,
-    `mutation { deleteTrigger { id } }`,
-    `mutation { deleteMcpServer { id } }`,
+    `mutation { updateTasks(set: { enabled: false }) { id } }`,
+    `mutation { deleteTriggers { id } }`,
+    `mutation { deleteMcpServers { id } }`,
   ]) {
     expect(await refused(source, "operator"), source).toEqual(["FORBIDDEN"]);
     expect(await refused(source, "agent"), source).toEqual(["FORBIDDEN"]);
