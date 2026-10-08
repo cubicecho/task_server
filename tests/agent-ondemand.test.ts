@@ -197,6 +197,16 @@ test("a catalogued tool called without loading is run, not refused", async () =>
   expect(result.output).toBe("said hi");
 });
 
+test("a call the model wrote out as text is run, not handed back as the answer", async () => {
+  const written = JSON.stringify({ name: "echo__echo", arguments: { text: "hi" } });
+  replies = [text(`<tool_call>\n${written}\n</tool_call>`), text("said hi")];
+
+  const result = await run({ toolDiscovery: "eager" });
+
+  expect(result.toolCalls).toEqual([{ name: "echo__echo", ok: true }]);
+  expect(result.output).toBe("said hi");
+});
+
 test("eager mode sends every schema and asks no one which tools to use", async () => {
   replies = [text("done")];
 

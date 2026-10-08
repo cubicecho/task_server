@@ -88,12 +88,11 @@ export async function runAgent({
     tools: mcp.tools({ servers }),
     catalog,
     preselected,
-    // Each of these changes what a run sends or how often a tool is called, and none has been
-    // decided for this server yet. As they were: tools in the order the pool lists them, every
-    // call made, and a call the model wrote as prose left as prose.
+    // Each of these changes what a run sends or how often a tool is called, and neither has been
+    // decided for this server yet. As they were: tools in the order the pool lists them, and
+    // every call made.
     toolOrder: false,
     dedupeToolCalls: false,
-    recoverToolCalls: false,
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {
