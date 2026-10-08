@@ -3,6 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { RunEventInput } from "@cubicecho/agent-core";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { McpServerRow, Settings } from "../server/db/schema.ts";
 import { replyWith } from "./fixtures/sse.ts";
@@ -106,14 +107,19 @@ const config = (over: Partial<Settings> = {}) =>
     ...over,
   }) as Settings;
 
+/** What the last run told its watcher, in order. */
+let events: RunEventInput[] = [];
+
 const run = async (over: Partial<Settings> = {}) => {
   sent = [];
+  events = [];
   const { runAgent } = await import("../server/runner/agent.ts");
   return runAgent({
     config: config(over),
     model: "fake",
     systemPrompt: "be brief",
     prompt: "say hello",
+    onEvent: (event) => events.push(event),
   });
 };
 
@@ -199,4 +205,50 @@ test("eager mode sends every schema and asks no one which tools to use", async (
   expect(sent).toHaveLength(1);
   expect(namesOf(sent[0]).sort()).toEqual(["echo__add", "echo__echo", "echo__ping"]);
   expect(sent[0].messages[0].content).toBe("be brief");
+});
+
+test("a run tells its watcher each turn, call and result, in order and in these words", async () => {
+  replies = [
+    text('["echo__add"]'),
+    toolCall("echo__add", JSON.stringify({ a: 1, b: 2 })),
+    toolCall("load_tools", JSON.stringify({ names: ["echo__ping", "echo__nope"] }), "call-2"),
+    toolCall("echo__ping", "{}", "call-3"),
+    text("3, and pong"),
+  ];
+
+  const result = await run();
+
+  expect(result.output).toBe("3, and pong");
+  expect(result.toolCalls).toEqual([
+    { name: "echo__add", ok: true },
+    { name: "load_tools", ok: true },
+    { name: "echo__ping", ok: true },
+  ]);
+  // Token counts are a second stream beside this one, and how an answer is cut into deltas is the
+  // endpoint's business, so neither is part of what is held here.
+  const told = events
+    .filter((event) => event.kind !== "usage" && event.kind !== "output")
+    .map(({ kind, name, ok, text }) => [kind, name, ok, text].filter((part) => part !== undefined));
+  expect(told).toEqual([
+    ["notice", "tools picked before the run: echo__add"],
+    ["turn", "turn 1"],
+    ["tool-call", "echo__add", '{"a":1,"b":2}'],
+    ["tool-result", "echo__add", true, 'add({"a":1,"b":2})'],
+    ["turn", "turn 2"],
+    ["tool-call", "load_tools", '{"names":["echo__ping","echo__nope"]}'],
+    [
+      "tool-result",
+      "load_tools",
+      true,
+      "Loaded 1 tool(s); they are callable on your next step.\n\n" +
+        "echo__ping: replies pong\n\n" +
+        "Not in the catalogue: echo__nope. Check the names and try again.",
+    ],
+    ["turn", "turn 3"],
+    ["tool-call", "echo__ping", "{}"],
+    ["tool-result", "echo__ping", true, "ping({})"],
+    ["turn", "turn 4"],
+  ]);
+  const answer = events.flatMap((event) => (event.kind === "output" ? [event.text] : []));
+  expect(answer.join("")).toBe("3, and pong");
 });
