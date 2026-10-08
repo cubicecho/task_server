@@ -111,6 +111,8 @@ function PromptDialog({
   const expand = useMutation({
     mutationFn: (prompt: McpPrompt) =>
       request(McpPromptDocument, { server: prompt.server, name: prompt.name, args: values }),
+    // Said in the dialog, below — see there.
+    meta: { quiet: true },
     onSuccess: ({ mcpPrompt }) => {
       onInsert(mcpPrompt);
       onClose();

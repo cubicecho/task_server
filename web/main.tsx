@@ -7,13 +7,22 @@ import { Toaster } from "@/components/ui/sonner";
 import { router } from "@/router";
 import "./index.css";
 
+declare module "@tanstack/react-query" {
+  interface Register {
+    mutationMeta: { quiet?: boolean };
+  }
+}
+
 const queryClient = new QueryClient({
   // Every mutation in the app answers a failure the same way — say what went wrong, and leave
   // the form as the user left it — and each one used to say so itself, in the same line written
-  // fourteen times. A mutation that ever wants a different answer adds its own `onError`, which
-  // runs after this one rather than instead of it.
+  // fourteen times. A mutation's own `onError` runs after this one rather than instead of it, so
+  // one that says its failure somewhere better — beside the field it is about — sets
+  // `meta: { quiet: true }` to keep it from being said twice.
   mutationCache: new MutationCache({
-    onError: (error) => toast.error(error.message),
+    onError: (error, _variables, _context, mutation) => {
+      if (!mutation.meta?.quiet) toast.error(error.message);
+    },
   }),
   defaultOptions: {
     queries: {
