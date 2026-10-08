@@ -148,33 +148,16 @@ const HINTS: Record<string, string> = {
  *
  * Only names that are actually tools here are touched, so a result field keeps its own
  * spelling: `startedAt` and `blockedBy` are columns an agent will read back in JSON, not tools.
+ *
+ * Spelled with the driver's own `applyNameCase`, as the `toolName` option below is, so a name
+ * written in prose and the tool it names cannot drift apart.
  */
 const TOOL_NAMES = new Map(
   TOOLS.map((path) => {
     const field = path.slice(path.indexOf(".") + 1);
-    return [field, toolNameFor(field)];
+    return [field, applyNameCase(field)];
   }),
 );
-
-/**
- * The tool name for a root field, and the one place that spelling is decided.
- *
- * The single-row update is `updateTask` and the bulk one, which this surface does not expose, is
- * `updateTasks`. Before drizzle-graphql 13 they were `updateTaskSingle` and `updateTask`, and
- * this function took the `Single` off: the qualifier told a tool apart from one an agent could
- * not see, and every arm that met it read it as a variant to pick between rather than as the
- * update. The schema now says what the tool always did, so only the casing is left to decide.
- *
- * `TOOL_NAMES` and the driver's `toolName` both come through here, so a name written in prose
- * and the tool it names cannot drift apart.
- */
-function toolNameFor(field: string): string {
-  // The driver's own casing rather than a hand-rolled one. They agree on every name here and
-  // would keep agreeing until a field split an acronym — `parseURLFilter` is the example the
-  // package gives — and a tool the prose names by a spelling the listing does not use is the
-  // failure this whole function exists to prevent.
-  return applyNameCase(field);
-}
 
 /** Where the driver's generated footer starts — everything above it is prose. */
 const FOOTER = /\n\nGraphQL (query|mutation): /;
@@ -244,7 +227,7 @@ export const mcpHandler = createHttpHandler({
   include: TOOLS,
   // `include` names GraphQL fields and this names tools, so the two are spelled differently on
   // purpose — `Mutation.updateTask` above becomes `update_task` here.
-  toolName: (field) => toolNameFor(field.name),
+  toolName: (field) => applyNameCase(field.name),
   // One level: the leaf fields of what a tool returns. Two would pull every run — output and
   // all — into a listing of tasks, which is a lot of context for a question about names.
   selectionDepth: 1,
