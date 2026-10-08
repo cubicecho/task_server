@@ -35,5 +35,20 @@ test("env and headers survive the round trip", () => {
 
 test("says so when the paste is not JSON, or holds no server", () => {
   expect(() => parseMcpJson("not json")).toThrow(/valid JSON/);
-  expect(() => parseMcpJson("{}")).toThrow(/No server/);
+  expect(() => parseMcpJson("{}")).toThrow(/no server/);
+});
+
+test("refuses an SSE server by name rather than filling the form in as http", () => {
+  const paste = JSON.stringify({ old: { type: "sse", url: "https://example.com/sse" } });
+  expect(() => parseMcpJson(paste)).toThrow(/"old" is an SSE server/);
+});
+
+test("a disabled server unticks Enabled, and nothing else touches it", () => {
+  expect(parseMcpJson(JSON.stringify({ fs: { ...stdio, disabled: true } })).enabled).toBe(false);
+  expect(parseMcpJson(JSON.stringify({ fs: stdio }))).not.toHaveProperty("enabled");
+});
+
+test("a placeholder with no default stays as written, for the operator to fill in", () => {
+  const paste = JSON.stringify({ gh: { command: "gh", env: { A: "${HOME}", B: "${NOPE:-x}" } } });
+  expect(JSON.parse(parseMcpJson(paste).env)).toEqual({ A: "${HOME}", B: "x" });
 });
