@@ -350,15 +350,21 @@ export function drainQueue(): Promise<void> {
 let draining: Promise<void> = Promise.resolve();
 
 /**
- * A drain after the write that made it possible has landed.
+ * How long past a write its `onWrite` hook waits before reading the table back.
  *
- * The 50ms is the same debounce the scheduler uses and for the same reason: `onWrite` hooks run
- * inside the mutation's transaction, so a drain called from one reads the settings row as it
- * stood before the write that raised the limit.
+ * A hook runs inside the mutation's transaction, so a read made from one sees the row as it stood
+ * before the write. The scheduler's rebuild and the queue's drain both wait this out, and a batch
+ * of edits inside it is one rebuild.
+ */
+export const AFTER_COMMIT_MS = 50;
+
+/**
+ * A drain after the write that made it possible has landed: called from a hook, it would read the
+ * limit as it stood before the write that raised it.
  */
 export function drainSoon() {
   clearTimeout(pendingDrain);
-  pendingDrain = setTimeout(() => void drainQueue(), 50);
+  pendingDrain = setTimeout(() => void drainQueue(), AFTER_COMMIT_MS);
 }
 
 let pendingDrain: ReturnType<typeof setTimeout>;
