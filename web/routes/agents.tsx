@@ -55,6 +55,8 @@ export function AgentsRoute() {
     // A deleted profile unsets `agentId` on every task that named it, and both task views show
     // which profile a task runs on.
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    // A profile's model list is its endpoint's, and a save may have just moved the endpoint.
+    queryClient.invalidateQueries({ queryKey: ["models"] });
   };
 
   const remove = useMutation({
