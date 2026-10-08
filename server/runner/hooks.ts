@@ -84,6 +84,9 @@ export interface HookStep {
   prompt: string;
 }
 
+/** How a run that started came to an end, as `sessionEnd` is told it. */
+type RunEnding = "ok" | "stopped" | "error";
+
 export interface HookSessionOptions {
   runId: string;
   task: Pick<Task, "id" | "name">;
@@ -171,7 +174,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
      * what failed on the run row. Never rejects: it is called once the run's outcome is already
      * written, and nobody is waiting on it.
      */
-    end(status: "ok" | "stopped" | "error", reply: string): Promise<void> {
+    end(status: RunEnding, reply: string): Promise<void> {
       const ending = finishing(status, reply);
       ends.add(ending);
       return ending.finally(() => ends.delete(ending));
@@ -194,7 +197,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
     return turnMessages(runId, transcript, at);
   }
 
-  async function finishing(status: "ok" | "stopped" | "error", reply: string) {
+  async function finishing(status: RunEnding, reply: string) {
     try {
       await Promise.all(pending);
       const notes = await notify(run, "sessionEnd", { ...contextFor(), status, reply });

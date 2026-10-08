@@ -1,7 +1,7 @@
-import { emit, errorMessage } from "@cubicecho/agent-core";
+import { emit, errorMessage, type RunEventInput } from "@cubicecho/agent-core";
 import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
-import { type Run, runs, steps, tasks } from "../db/schema.ts";
+import { type Run, runs, type Step, steps, type Task, tasks } from "../db/schema.ts";
 import { runFlow } from "./flow.ts";
 import { type HookSession, hookSession } from "./hooks.ts";
 import { loadSettings } from "./llm.ts";
@@ -12,7 +12,13 @@ import { configForTask } from "./profile.ts";
  * called off. The controller is the only handle on a run once it has started: the loop is
  * inside `runAgent`, and nothing else can reach it.
  */
-const inFlight = new Map<string, { runId: string; controller: AbortController }>();
+const inFlight = new Map<string, Slot>();
+
+/** A task's claim on a run. `runId` is empty for the width of the insert that makes the run. */
+interface Slot {
+  runId: string;
+  controller: AbortController;
+}
 
 /**
  * A start that was refused because something was already running — not because anything is
@@ -97,7 +103,7 @@ function claim(taskId: string, name: string, limit: number) {
   if (limit > 0 && inFlight.size >= limit) {
     throw new AtCapacityError(`${inFlight.size} runs already going, and the limit is ${limit}`);
   }
-  const entry = { runId: "", controller: new AbortController() };
+  const entry: Slot = { runId: "", controller: new AbortController() };
   inFlight.set(taskId, entry);
   return entry;
 }
@@ -420,7 +426,7 @@ async function startQueued(waiting: Run): Promise<boolean> {
     return true;
   }
 
-  let entry: { runId: string; controller: AbortController };
+  let entry: Slot;
   try {
     entry = claim(task.id, task.name, await capacity());
   } catch (error) {
@@ -469,13 +475,13 @@ async function execute({
   controller,
 }: {
   run: Run;
-  task: typeof tasks.$inferSelect;
-  flow: (typeof steps.$inferSelect)[];
+  task: Task;
+  flow: Step[];
   payload?: unknown;
   controller: AbortController;
 }): Promise<Run> {
   // Everything the run says as it goes, for anyone watching it — see the event bus in `@cubicecho/agent-core`.
-  const onEvent = (event: Parameters<typeof emit>[1]) => emit(run.id, event);
+  const onEvent = (event: RunEventInput) => emit(run.id, event);
   onEvent({ kind: "notice", text: `${task.name} started` });
   // Made once the run's scope is known, and ended — not awaited — once its outcome is written:
   // a memory server filing the last step is no reason for the slot to stay taken.
