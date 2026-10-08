@@ -105,7 +105,6 @@ function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
       queryClient.invalidateQueries({ queryKey: ["status"] });
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   return (

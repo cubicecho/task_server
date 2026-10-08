@@ -112,7 +112,6 @@ export function McpDialog({
       onSaved();
       onClose();
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const form = useAppForm({
@@ -129,7 +128,6 @@ export function McpDialog({
       return testMcpServer;
     },
     onSuccess: setProbe,
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const applyPaste = () => {

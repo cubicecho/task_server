@@ -122,7 +122,6 @@ export function AgentDialog({
       onSaved();
       onClose();
     },
-    onError: (error: Error) => toast.error(error.message),
   });
 
   const form = useAppForm({

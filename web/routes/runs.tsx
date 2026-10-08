@@ -397,7 +397,6 @@ export function RunsRoute() {
       else toast.success("Run finished");
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     },
-    onError: (error) => toast.error((error as Error).message),
   });
 
   // A run is stopped through the task that owns it: the runner keys what is in flight by task.
