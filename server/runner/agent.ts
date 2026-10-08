@@ -88,9 +88,10 @@ export async function runAgent({
     tools: mcp.tools({ servers }),
     catalog,
     preselected,
-    // Each of these changes what a run sends or how often a tool is called, and neither has been
-    // decided for this server yet. As they were: tools in the order the pool lists them, and
-    // every call made.
+    // Both are decisions, not defaults nobody looked at. Sorted by name, a tool loaded on demand
+    // lands mid-array and moves every definition after it, where unsorted it is appended and the
+    // prefix an endpoint cached still matches. And two identical calls in one step are two
+    // calls: a counter or a "next page" is meant to answer differently the second time.
     toolOrder: false,
     dedupeToolCalls: false,
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),

@@ -455,10 +455,13 @@ unexplained pause wants to be told either way. The step loop, the request body, 
 watchdog and the endpoint's latched refusals were all written here once and are not to be
 written here again — see [Future work](#future-work).
 
-Two of the loop's defaults are held off, each because it changes what a run sends or how often
-a tool is called and neither has been decided for this server: `toolOrder: false` (tools go in
-the order the pool lists them, not by name) and `dedupeToolCalls: false` (two identical calls in
-one step are two calls). Recovery is on: a call the model wrote into its reply as text — a
+Two of the loop's defaults are turned off, and both were decided rather than left.
+`toolOrder: false` sends tools in the order the pool lists them: sorted by name, a tool loaded on
+demand lands mid-array and moves every definition after it, where unsorted it is appended and
+the prefix an endpoint cached still matches — and the pool's order is configuration order, so
+there is no shuffle for a sort to undo. Reopen it with evidence that the order moves between
+requests. `dedupeToolCalls: false` leaves two identical calls in one step as two calls, since a
+counter or a "next page" is meant to answer differently the second time. Recovery is on: a call the model wrote into its reply as text — a
 server whose parser misses the model's template streams it as content — is run as a call rather
 than stored as the step's answer, and the watcher is told in a notice.
 `firstTokenSeconds` is set to `requestTimeoutSeconds`, where the loop would otherwise give the
