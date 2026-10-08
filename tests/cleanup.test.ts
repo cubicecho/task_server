@@ -37,7 +37,7 @@ const retention = (days: number) =>
     .set({ runRetentionDays: days })
     .where(eq(tables.settings.id, "default"));
 
-const run = (age: number, status: "ok" | "running" = "ok") =>
+const run = (age: number, status: "ok" | "running" | "queued" = "ok") =>
   db.insert(tables.runs).values({ taskId, status, startedAt: daysAgo(age) });
 
 const remaining = async () => (await db.select().from(tables.runs)).length;
@@ -64,6 +64,14 @@ test("runs past the window go and runs inside it stay", async () => {
 test("a run still going is never pruned, however old it looks", async () => {
   await retention(1);
   await run(90, "running");
+
+  expect(await prune()).toBe(0);
+  expect(await remaining()).toBe(1);
+});
+
+test("a run still waiting for a slot is never pruned either", async () => {
+  await retention(1);
+  await run(90, "queued");
 
   expect(await prune()).toBe(0);
   expect(await remaining()).toBe(1);

@@ -1,4 +1,4 @@
-import { and, lt, ne } from "drizzle-orm";
+import { and, lt, notInArray } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { runs } from "../db/schema.ts";
 import { runsDeleted } from "../runner/hooks.ts";
@@ -19,7 +19,10 @@ let timer: NodeJS.Timeout | undefined;
  *
  * A run still going is never deleted however old it looks: `startedAt` is when it began, and a
  * long run that outlived the window has a row someone is still watching and a `finish` still to
- * come. Its steps go with it — `run_steps.runId` cascades — and the run's trigger and task do
+ * come. Nor is one still waiting for a slot: a `queued` row is a firing that has not run yet, and
+ * deleting it is dropping the firing.
+ *
+ * A deleted run's steps go with it — `run_steps.runId` cascades — and its trigger and task do
  * not, being on the other end of the foreign key.
  */
 export async function prune(): Promise<number> {
@@ -29,7 +32,7 @@ export async function prune(): Promise<number> {
   const cutoff = new Date(Date.now() - runRetentionDays * 24 * 60 * 60 * 1000);
   const gone = await db
     .delete(runs)
-    .where(and(lt(runs.startedAt, cutoff), ne(runs.status, "running")))
+    .where(and(lt(runs.startedAt, cutoff), notInArray(runs.status, ["running", "queued"])))
     .returning({ id: runs.id });
 
   // The same `sessionDelete` a run deleted by hand sends: retention is a delete like any other,
