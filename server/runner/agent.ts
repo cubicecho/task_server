@@ -3,6 +3,7 @@ import type { Settings } from "../db/schema.ts";
 import { HOOK_PREFACE } from "./hooks.ts";
 import { mcp } from "./mcp.ts";
 
+/** What a step produced and what it cost — and, summed over its steps, what a whole flow did. */
 export interface AgentResult {
   output: string;
   toolCalls: { name: string; ok: boolean }[];
