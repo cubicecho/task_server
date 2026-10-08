@@ -235,15 +235,15 @@ generated description does not say enough. The driver renames after it filters, 
 list names GraphQL fields in camelCase while `HINTS` — and the client — sees the snake_case tool
 name: `Mutation.createTask` is the tool `create_task`.
 
-`toolNameFor` is that spelling, and nothing else since drizzle-graphql 13: under a
-`typeNameMapper` the single-row writes are `updateTask` and `deleteTask`, and the bulk forms take
-the plural, `updateTasks` and `deleteTasks`. Before that the single-row form was
-`updateTaskSingle` and this function took the qualifier off, because agents read it as a variant
-to choose between rather than as the update; the tool was `update_task` then and is now. The
-rename moved the dangerous name — `deleteTask` used to be the one that empties a table — which is
-what the whitelist is for: the bulk forms are new names, and a name the map does not hold is
-denied. `TOOL_NAMES` runs through the same function, so a name written in prose and the tool it
-names cannot drift.
+The spelling is the driver's own `applyNameCase` and nothing else. Since drizzle-graphql 13,
+under a `typeNameMapper`, the single-row writes are `updateTask` and `deleteTask`, and the bulk
+forms take the plural, `updateTasks` and `deleteTasks`. Before that the single-row form was
+`updateTaskSingle` and a function here took the qualifier off, because agents read it as a
+variant to choose between rather than as the update; the tool was `update_task` then and is now.
+The rename moved the dangerous name — `deleteTask` used to be the one that empties a table —
+which is what the whitelist is for: the bulk forms are new names, and a name the map does not
+hold is denied. `TOOL_NAMES` and the handler's `toolName` both call `applyNameCase`, so a name
+written in prose and the tool it names cannot drift.
 
 Descriptions are written once and read twice, so a cross-reference between fields is respelled
 on the way out: `useToolNames` rewrites a backticked root-field name to its tool name in the
