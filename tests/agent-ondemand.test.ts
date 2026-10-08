@@ -165,9 +165,10 @@ test("on demand, only load_tools goes up front and the schemas follow", async ()
   expect(sent[1].messages[0].content).toContain("# Tool catalogue");
   expect(sent[1].messages[0].content).toContain("  echo__add");
 
-  // Second step: the one loaded schema, and the catalogue marks it so it is not loaded twice.
+  // Second step: the one loaded schema. The system prompt is the same text as before the load,
+  // so loading a tool does not cost the endpoint its cache of everything after it.
   expect(namesOf(sent[2]).sort()).toEqual(["echo__ping", "load_tools"]);
-  expect(sent[2].messages[0].content).toContain("echo__ping (loaded)");
+  expect(sent[2].messages[0].content).toBe(sent[1].messages[0].content);
 });
 
 test("a preselection skips the catalogue for the first step", async () => {

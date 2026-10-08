@@ -155,12 +155,13 @@ claimed entry has no run id for the width of the insert.
 **The runner's generic half is `@cubicecho/agent-core`'s, and it does not come back.** The
 pooled OpenAI client, the retry rules and their backoff, one streamed turn read back into a
 message, the negotiation that answers an endpoint refusing part of a request, the tool-schema
-compatibility pass, on-demand tool loading, the one-shot side tasks and the run-event bus all
-live there;
+compatibility pass, on-demand tool loading, the step loop that drives all of them
+(`runAgentLoop`), the one-shot side tasks and the run-event bus all live there;
 `@cubicecho/agent-mcp-pool` holds the MCP pool that offers a run its tools as
 `<slug>__<tool name>`. What stays under `server/runner/` is what is *this* server's: `llm.ts`
 reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
-`profile.ts` lays an agent profile over settings, `agent.ts` and `flow.ts` drive the loop.
+`profile.ts` lays an agent profile over settings, `agent.ts` maps one step onto `runAgentLoop`
+and `flow.ts` drives the steps.
 `mcp-prompts.ts` is the one thing here that reaches past tools into the rest of the protocol —
 see below.
 `mcp.ts` also says who this process is — `clientName` and `clientVersion` are the `clientInfo` of
@@ -436,32 +437,38 @@ rule, not the OpenAI SDK, whose own retries are off: once a chunk has arrived th
 unrepeatable, so a failure after that propagates. `requestTimeoutSeconds` is a silence watchdog
 that rearms on every chunk, not a deadline on the request.
 
-`agent.ts` calls `runTurn` and reads none of that back. It hands over a `request` callback —
-the body has to be rebuilt per attempt, since `relaxTools` applies to whatever the last refusal
-latched off — plus `onThinking`, `onOutput` and `onNotice`, which are the three places a turn
-reaches the run-event bus. A retry and a capability downgrade both arrive on `onNotice`, because
-a watcher reading an unexplained pause wants to be told either way. The loop, the silence
+`agent.ts` sends no request of its own. It hands `runAgentLoop` the settings row with the step's
+model laid over it, the pool's tools and catalogue, a `dispatch` that is `mcp.call` under the
+profile's scope, and an `onEvent` that forwards to the run-event bus and copies notices to the
+log. A retry and a capability downgrade both arrive as notices, because a watcher reading an
+unexplained pause wants to be told either way. The step loop, the request body, the silence
 watchdog and the endpoint's latched refusals were all written here once and are not to be
 written here again — see [Future work](#future-work).
+
+Three of the loop's defaults are held off, each because it changes what a run sends or how often
+a tool is called and none has been decided for this server: `toolOrder: false` (tools go in the
+order the pool lists them, not by name), `dedupeToolCalls: false` (two identical calls in one
+step are two calls), `recoverToolCalls: false` (a call the model wrote as prose stays prose).
+`firstTokenSeconds` is set to `requestTimeoutSeconds`, where the loop would otherwise give the
+first token five times the silence it gives the rest. Tool preselection is done here rather than
+by the loop, so it reads the prompt before the hooks' context is put in front of it and the
+watcher is told what was picked
+([agent-core#150](https://github.com/cubicecho/agent-core/issues/150)).
+
+The catalogue in the system prompt does not mark what is loaded. It used to, and the loop
+deliberately does not: the system prompt is then the same text on every step, so a load does not
+cost the endpoint its cache of the whole transcript. A repeat load is answered "already loaded"
+in the `load_tools` result instead.
 
 **Some of what a request is refused over is the model's, not the endpoint's.** `strictSchemas`
 and `usageInStream` are facts about a server and latch on its base URL. A ceiling spelled
 `max_completion_tokens` and a temperature that is not ours to pick are facts about one *model*,
 and they cannot latch on the endpoint: one key reaches every model a provider offers, so the
 first turn on a chat model would otherwise stop a reasoning model on the same key ever being
-sent the right spelling. agent-core 2.1.0 keys those at `(baseUrl, model)`, `agent.ts` passes
-`runTurn` the `model` option, and the `request` callback rebuilds `max_tokens` and `temperature`
-from the second argument it is now handed. This server lets an operator pick any name the
-endpoint lists, so it is one selection away from meeting both — which is why it opts in.
+sent the right spelling. agent-core keys those at `(baseUrl, model)`, and `runAgentLoop` builds
+each attempt's `max_tokens` and `temperature` from what that model has refused. This server lets
+an operator pick any name the endpoint lists, so it is one selection away from meeting both.
 `reasoningEffort` is the third and goes unread here: there is no column for an effort to send.
-
-The guard is `=== false` rather than a truthiness test, because a model that was never named
-is `undefined` here and has refused nothing — read truthily, that reads `max_completion_tokens`
-out of an *absent* model as well as out of a refusing one, and dropping the `model` option later
-would silently change the spelling for every endpoint. agent-core 2.2.0 says the same on
-`legacyTokenLimit` itself, after its README example was fixed
-([agent-core#40](https://github.com/cubicecho/agent-core/issues/40)); this is no longer a place
-this server departs from upstream.
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
