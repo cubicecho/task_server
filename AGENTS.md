@@ -365,7 +365,11 @@ there is one path a payload travels, and the argument only decides where it ente
 **An agent profile is a settings row, not a second config.** A task may name one
 (`tasks.agentId`, null for the settings row, which is every task until somebody makes a profile),
 and `server/runner/profile.ts` lays the profile over the settings row and hands the run the
-result. Nothing downstream branches: `agent.ts`, `flow.ts` and `llm.ts` read one `Settings`
+result. The laying-over is agent-core's `resolveAgentSpec`: each row is projected to a spec
+layer, a column at its inherit sentinel becoming a field the layer does not have, and only the
+settings columns are copied back. `tests/agents.test.ts` holds the whole sentinel matrix as a
+table of rows; the one thing the resolver does that the old merge did not is trim the server's
+system prompt when a profile is in play. Nothing downstream branches: `agent.ts`, `flow.ts` and `llm.ts` read one `Settings`
 exactly as they always did, which is why per-task endpoints cost the agent loop nothing. Blank
 is inherit, and the sentinel differs by column because zero is a real answer for most of them —
 `""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`.
@@ -420,7 +424,8 @@ never fires — a step starts from nothing — so the write refuses a hook bound
 leave it waiting forever. `{{vars.task.id}}` is the key for memory that should outlast one run.
 
 The host side is agent-core's: `gather` before a step, `notify` after, and `withContext` putting
-what was gathered on the step's question with this server's preface. What stays here is the
+what was gathered on the step's question with this server's preface, which `hooks.ts` sets once
+with `configureHooks` rather than passing at each call. What stays here is the
 mapping and the persistence — each hook that injected or failed leaves a note on
 `run_steps.hooks`, and a failed `sessionEnd` on `runs.hooks`, since run events are gone a minute
 later. `afterTurn` and `sessionEnd` are not awaited by the run; `sessionEnd` waits for the steps'
@@ -485,6 +490,17 @@ each attempt's `max_tokens` and `temperature` from what that model has refused. 
 an operator pick any name the endpoint lists, so it is one selection away from meeting both.
 `reasoningEffort` is the third and goes unread here: there is no column for an effort to send.
 
+**Three more of the loop's answers are taken rather than rebuilt.** A reply cut off at the
+ceiling (`finish_reason: "length"`) is carried on, up to `MAX_CONTINUATIONS` times, instead of
+being stored as the step's answer with its last sentence missing. A request the model cannot
+read is refused before it is sent: `windowFor` in `agent.ts` asks `contextLimitFor` what the
+model's window is and hands it to the loop as `contextLength`, and the run fails with
+`ContextOverflow` and no request made. That lookup takes no signal upstream and waits as long as
+the request timeout, so here it is raced against the run's stop and given five seconds — an
+endpoint that will not say gets no guard, which is what every run had before. And a decision
+step answered in prose is read back with `askJson` against a schema whose only field is an enum
+of the step's arms, so the second opinion cannot name a case that does not exist.
+
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
 
@@ -527,11 +543,18 @@ rule and `group` for a heading ([cubeui#5](https://github.com/cubicecho/cubeui/i
 [#10](https://github.com/cubicecho/cubeui/issues/10)) — and spreads the rest of its props onto the
 trigger, which is the only element Radix's select root actually renders. That is what `FormField`'s
 function form hands a control, so it drops into one without a wrapper. The runs filter bar and the
-step editor's "Sees" are on it. `ModelSelect` is deliberately not: it fetches `/models` when the
-menu opens and draws a loading and an error row, and the published control has neither
-`onOpenChange` nor a non-option entry ([cubeui#37](https://github.com/cubicecho/cubeui/issues/37)).
-The fill-on-open menu that would cover it was written in cubeui#39, but that PR merged into an
-already-merged branch and never reached cubeui's `main` or the published registry.
+step editor's "Sees" are on it. So is `ModelSelect`, which fetches `/models` when the menu opens
+and says "Loading…" or the endpoint's error in it: `onOpenChange` is how it hears the opening, and
+a `{ note }` entry is a row that is not a choice — hidden from the listbox and announced from a
+status region beside the trigger, rather than a disabled option the keyboard walks onto
+([cubeui#37](https://github.com/cubicecho/cubeui/issues/37)). An option's `className` is the
+row's, which is how a model id is `font-mono`.
+
+The local `option-select.tsx` is behind the published one on purpose. `open`/`onOpenChange`,
+notes and the option `className` were ported by hand; `searchable` was not, because it draws a
+popover over cubeui's own `Button` and `Command`, and `npx shadcn add -o @cubeui/option-select`
+brings those with it over the shadcn primitives every other file here is written against. Taking
+the registry's copy is a refresh of the whole set, not of one control.
 
 **Updating is `npx shadcn add -o @cubeui/<name>`, and one thing has to be put back after it.**
 The control used to ship as `select`, and the CLI resolves a cross-item import by basename, so
