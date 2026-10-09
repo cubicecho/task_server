@@ -6,7 +6,6 @@ import {
   withContext,
 } from "@cubicecho/agent-core";
 import type { Settings } from "../db/schema.ts";
-import { HOOK_PREFACE } from "./hooks.ts";
 import { mcp } from "./mcp.ts";
 
 /** What a step produced and what it cost — and, summed over its steps, what a whole flow did. */
@@ -140,8 +139,9 @@ export async function runAgent({
     },
     system: systemPrompt,
     // The context goes on the step's one question and stays there for the step's whole loop: a
-    // run keeps no transcript, so there is no stored message it could leak into.
-    messages: withContext([{ role: "user", content: prompt }], 0, context, HOOK_PREFACE),
+    // run keeps no transcript, so there is no stored message it could leak into. What is said
+    // above it is set once in `hooks.ts`, which is the only place a context comes from.
+    messages: withContext([{ role: "user", content: prompt }], 0, context),
     tools: mcp.tools({ servers }),
     catalog,
     preselected,

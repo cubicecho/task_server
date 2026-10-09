@@ -159,6 +159,9 @@ test("a beforeTurn hook's result is put in front of each step's prompt, and note
 
   expect(prompts[0]).toContain('<context source="Echo"');
   expect(prompts[0]).toContain("memories of digest step 0");
+  // Said in this server's words, not the library's: agent-core's own preface names a user, and
+  // nobody is here.
+  expect(prompts[0].startsWith(hooks.HOOK_PREFACE)).toBe(true);
   // The prompt still ends the message: context goes ahead of it, never in place of it.
   expect(prompts[0].endsWith("list the subjects")).toBe(true);
   expect(prompts[1]).toContain("memories of digest step 1");
