@@ -393,16 +393,8 @@ export const relations = defineRelations(schema, (r) => ({
   },
 }));
 
-/**
- * What one MCP hook did that is worth keeping: the context it added to a prompt, or why it added
- * none. agent-core's shape, stored as it is handed over; `source` is the server's label, so the
- * note still reads after the row is renamed away.
- */
-export type { HookNote };
-
 export type Agent = typeof agents.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
-export type Trigger = typeof triggers.$inferSelect;
 export type Step = typeof steps.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type RunStep = typeof runSteps.$inferSelect;

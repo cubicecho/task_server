@@ -32,7 +32,7 @@ type ColumnDocs = {
   [T in keyof Tables]?: { [C in keyof Tables[T]["_"]["columns"]]?: string };
 };
 
-export const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
+const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
   agents:
     "A named set of overrides for the settings row — endpoint, model, ceilings, which MCP " +
     "servers to attach — that a task can point at. Empty on every column means the server " +

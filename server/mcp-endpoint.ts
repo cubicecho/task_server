@@ -280,6 +280,6 @@ export const mcpHandler = createHttpHandler({
  * answers all three, in JSON-RPC, including when the request is wrong. Mounted on `post`
  * alone, the other two met Express's 404 page instead, which reads as "wrong URL".
  */
-export function mountMcp(app: express.Application, route = "/mcp") {
-  app.all(route, express.json(), mcpHandler);
+export function mountMcp(app: express.Application) {
+  app.all("/mcp", express.json(), mcpHandler);
 }

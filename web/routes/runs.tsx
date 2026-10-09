@@ -1,3 +1,4 @@
+import type { HookNote } from "@cubicecho/agent-core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Play, RefreshCw, Square, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -65,16 +66,6 @@ function ToolChips({ calls }: { calls: unknown }) {
       ))}
     </div>
   );
-}
-
-/** A hook's note, as `server/runner/hooks.ts` writes it. */
-interface HookNote {
-  event: string;
-  source: string;
-  hookId: string;
-  tokens?: number;
-  text?: string;
-  error?: string;
 }
 
 /**

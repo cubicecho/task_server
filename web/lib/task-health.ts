@@ -53,7 +53,7 @@ export function taskHealth(task: StatusTask): Health {
 }
 
 /** Every heap at nought, which is what a server holding no tasks has to say. */
-export const noneYet = (): Record<Health, number> =>
+const noneYet = (): Record<Health, number> =>
   Object.fromEntries(HEALTH.map((health) => [health, 0])) as Record<Health, number>;
 
 export function tally(tasks: StatusTask[]): Record<Health, number> {
