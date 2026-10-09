@@ -1,4 +1,10 @@
-import { ask, errorMessage, parseJson, type RunEventInput, tryAsk } from "@cubicecho/agent-core";
+import {
+  askJson,
+  errorMessage,
+  parseJson,
+  type RunEventInput,
+  tryAsk,
+} from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
@@ -375,16 +381,27 @@ export async function runFlow({
     const direct = parseCase(output, plan.cases);
     if (direct) return direct;
 
+    // Asked with the arms as a schema, so an endpoint that can hold a reply to one does: the answer
+    // to "which did it mean" cannot itself come back as prose.
     const extracted = await tryAsk("decision", () =>
-      ask(
+      askJson<{ case?: unknown }>(
         config,
         config.toolSelectModel || plan.model || task.model || config.model,
-        `Which of these did the following answer choose? Reply with exactly one of: ${plan.cases.join(", ")}. Nothing else.`,
+        `Which of these did the following answer choose? Reply with exactly one of: ${plan.cases.join(", ")}.`,
         output,
-        { maxTokens: 32, signal },
+        {
+          type: "object",
+          properties: { case: { type: "string", enum: plan.cases } },
+          required: ["case"],
+          additionalProperties: false,
+        },
+        { name: "decision", maxTokens: 32, signal },
       ),
     );
-    const guessed = extracted ? parseCase(extracted, plan.cases) : undefined;
+    const guessed =
+      typeof extracted?.case === "string"
+        ? plan.cases.find((option) => sameName(option, extracted.case as string))
+        : undefined;
     if (guessed) {
       emit({ kind: "notice", text: `decision "${plan.name}" read back as ${guessed}` });
       return guessed;

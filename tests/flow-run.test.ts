@@ -3,7 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { replyWith } from "./fixtures/sse.ts";
+import { notChat, replyWith } from "./fixtures/sse.ts";
 
 // The schema and the runner are built against the live tables at import time, so the database
 // has to be pointed somewhere disposable before anything under server/ is loaded.
@@ -14,6 +14,8 @@ process.env.TASK_SERVER_DATA_DIR = dir;
 let replies: string[] = [];
 /** The user message of every request it received, so a test can see what a step was shown. */
 let prompts: string[] = [];
+/** The `response_format` of every request, so a test can see which ones were held to a schema. */
+let formats: unknown[] = [];
 /** Requests to leave unanswered, so a run can be caught mid-flow and stopped. */
 let hangAfter = Number.POSITIVE_INFINITY;
 let received = 0;
@@ -35,6 +37,7 @@ const completion = (content: string) => ({
 
 beforeAll(async () => {
   server = http.createServer((request, response) => {
+    if (notChat(request, response)) return;
     let body = "";
     request.on("data", (chunk) => {
       body += chunk;
@@ -43,7 +46,9 @@ beforeAll(async () => {
       const sent = JSON.parse(body) as {
         messages: { role: string; content: string }[];
         stream?: boolean;
+        response_format?: unknown;
       };
+      formats.push(sent.response_format);
       prompts.push(sent.messages.find((message) => message.role === "user")?.content ?? "");
       // Accepted and never answered: the run stays in flight until it is stopped.
       if (++received > hangAfter) return;
@@ -77,6 +82,7 @@ afterAll(async () => {
 beforeEach(() => {
   replies = [];
   prompts = [];
+  formats = [];
   hangAfter = Number.POSITIVE_INFINITY;
   received = 0;
 });
@@ -186,6 +192,41 @@ test("a disabled step is recorded as skipped, and the run carries on", async () 
   ]);
   // The skipped step said nothing, so it is not part of what the next one was shown.
   expect(prompts[1]).not.toContain("never");
+});
+
+test("a decision answered in prose is read back against a schema of its arms", async () => {
+  const { id: taskId } = await task("wordy", "look");
+  const decision = await addStep({
+    taskId,
+    name: "pick",
+    kind: "decision",
+    prompt: "which is it?",
+    cases: ["error", "clean"],
+    position: 0,
+  });
+  await addStep({
+    taskId,
+    parentId: decision.id,
+    branch: "clean",
+    name: "tidy",
+    prompt: "tidy up",
+  });
+  // The decision never names an arm on a line of its own, so the read-back is what settles it.
+  replies = ["looked", "Nothing in there worries me.", '{"case": "clean"}', "tidied"];
+
+  const run = await runner.runTask(taskId);
+  expect(run.status).toBe("ok");
+  expect(run.output).toBe("tidied");
+
+  // Only the read-back is held to a schema, and the schema offers the arms and nothing else.
+  expect(formats.map(Boolean)).toEqual([false, false, true, false]);
+  expect(formats[2]).toMatchObject({
+    type: "json_schema",
+    json_schema: {
+      name: "decision",
+      schema: { properties: { case: { enum: ["error", "clean"] } } },
+    },
+  });
 });
 
 test("a decision that answers with nothing on offer fails the run, loudly", async () => {

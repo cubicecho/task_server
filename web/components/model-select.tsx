@@ -3,15 +3,8 @@ import { List } from "lucide-react";
 import { useState } from "react";
 import { ModelsDocument } from "@/__generated__/graphql/graphql";
 import { ActionButton } from "@/components/action-button";
+import { OptionSelect, type SelectEntry } from "@/components/option-select";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { request } from "@/lib/gql";
 
 // Radix refuses an empty item value, so the two non-model choices carry sentinels.
@@ -90,36 +83,30 @@ export function ModelSelect({
 
   // A model saved before the server offered it still has to show as the current choice.
   const listed = models.data?.models ?? [];
-  const options = value && !listed.includes(value) ? [value, ...listed] : listed;
+  const names = value && !listed.includes(value) ? [value, ...listed] : listed;
+
+  const options: SelectEntry[] = [
+    ...(defaultLabel ? [{ value: DEFAULT, label: defaultLabel }] : []),
+    ...names.map((name) => ({ value: name, label: name, className: "font-mono" })),
+    ...(models.isFetching && names.length === 0 ? [{ note: "Loading…" }] : []),
+    ...(models.error
+      ? [{ note: (models.error as Error).message, className: "text-destructive text-xs" }]
+      : []),
+    { separator: true },
+    { value: CUSTOM, label: "Type a name…" },
+  ];
 
   return (
-    <Select
+    <OptionSelect
+      {...wired}
+      options={options}
       value={value || (defaultLabel ? DEFAULT : "")}
       onValueChange={(next) => {
         if (next === CUSTOM) setTyping(true);
         else onChange(next === DEFAULT ? "" : next);
       }}
       onOpenChange={(open) => open && setOpened(true)}
-    >
-      <SelectTrigger {...wired} className="w-full">
-        <SelectValue placeholder="Select a model" />
-      </SelectTrigger>
-      <SelectContent>
-        {defaultLabel ? <SelectItem value={DEFAULT}>{defaultLabel}</SelectItem> : null}
-        {options.map((name) => (
-          <SelectItem key={name} value={name} className="font-mono">
-            {name}
-          </SelectItem>
-        ))}
-        {models.isFetching && options.length === 0 ? (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">Loading…</p>
-        ) : null}
-        {models.error ? (
-          <p className="px-2 py-1.5 text-xs text-destructive">{(models.error as Error).message}</p>
-        ) : null}
-        <SelectSeparator />
-        <SelectItem value={CUSTOM}>Type a name…</SelectItem>
-      </SelectContent>
-    </Select>
+      placeholder="Select a model"
+    />
   );
 }

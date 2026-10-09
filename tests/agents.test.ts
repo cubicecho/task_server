@@ -125,6 +125,169 @@ test("a profile with an endpoint of its own never inherits the server's key", as
   expect(same.apiKey).toBe("server-key");
 });
 
+/**
+ * The whole sentinel matrix, held as rows rather than as a rule restated. Each case names what
+ * the profile and the settings row say and the columns that should differ from the settings row;
+ * the comparison is of the whole row, so a column that leaks in or goes missing fails too.
+ */
+const GOLDEN: {
+  name: string;
+  settings?: Partial<Settings>;
+  agent: Partial<Agent>;
+  expected: Partial<Settings>;
+}[] = [
+  {
+    name: "every column filled in",
+    agent: {
+      model: "gpt-5",
+      systemPrompt: "profile prompt",
+      maxTokens: 4000,
+      temperature: 1.5,
+      maxToolIterations: 3,
+      toolDiscovery: "ondemand",
+      toolSelectModel: "tiny",
+      requestTimeoutSeconds: 30,
+      maxRetries: 5,
+    },
+    expected: {
+      model: "gpt-5",
+      systemPrompt: "profile prompt",
+      maxTokens: 4000,
+      temperature: 1.5,
+      maxToolIterations: 3,
+      toolDiscovery: "ondemand",
+      toolSelectModel: "tiny",
+      requestTimeoutSeconds: 30,
+      maxRetries: 5,
+    },
+  },
+  {
+    name: "every number at zero",
+    agent: {
+      maxTokens: 0,
+      temperature: 0,
+      maxToolIterations: 0,
+      requestTimeoutSeconds: 0,
+      maxRetries: 0,
+    },
+    expected: {
+      maxTokens: 0,
+      temperature: 0,
+      maxToolIterations: 0,
+      requestTimeoutSeconds: 0,
+      maxRetries: 0,
+    },
+  },
+  {
+    name: "any negative number inherits, not only -1",
+    agent: {
+      maxTokens: -5,
+      temperature: -0.5,
+      maxToolIterations: -2,
+      requestTimeoutSeconds: -100,
+      maxRetries: -3,
+    },
+    expected: {},
+  },
+  {
+    name: "a zero in settings survives a profile that inherits it",
+    settings: { maxTokens: 0, temperature: 0, maxToolIterations: 0, maxRetries: 0 },
+    agent: { model: "gpt-5" },
+    expected: { model: "gpt-5" },
+  },
+  {
+    name: "whitespace in every string column",
+    agent: { baseUrl: "  ", model: " \t", systemPrompt: "\n\n", toolSelectModel: " " },
+    expected: {},
+  },
+  {
+    name: "a padded string is trimmed on the way in",
+    agent: { model: "  gpt-5 ", systemPrompt: "\n  be brief\n", toolSelectModel: " tiny " },
+    expected: { model: "gpt-5", systemPrompt: "be brief", toolSelectModel: "tiny" },
+  },
+  {
+    name: "an empty string in settings stays empty under a profile that inherits it",
+    settings: { toolSelectModel: "", systemPrompt: "" },
+    agent: { model: "gpt-5" },
+    expected: { model: "gpt-5" },
+  },
+  {
+    // The one row that moved when the merge became agent-core's: the resolver joins prompt
+    // parts and trims the result, so the server's prompt loses its padding once a profile is in
+    // play. With no profile the settings row is returned untouched, padding and all.
+    name: "a settings prompt with space around it, under a profile that inherits it",
+    settings: { systemPrompt: "  server prompt\n" },
+    agent: { model: "gpt-5" },
+    expected: { model: "gpt-5", systemPrompt: "server prompt" },
+  },
+  {
+    name: "inherit over ondemand",
+    settings: { toolDiscovery: "ondemand" },
+    agent: { toolDiscovery: "inherit" },
+    expected: {},
+  },
+  {
+    name: "eager over ondemand",
+    settings: { toolDiscovery: "ondemand" },
+    agent: { toolDiscovery: "eager" },
+    expected: { toolDiscovery: "eager" },
+  },
+  {
+    name: "another endpoint and no key",
+    agent: { baseUrl: "http://friend/v1" },
+    expected: { baseUrl: "http://friend/v1", apiKey: NO_KEY },
+  },
+  {
+    name: "another endpoint, padded, and no key",
+    agent: { baseUrl: "  http://friend/v1 " },
+    expected: { baseUrl: "http://friend/v1", apiKey: NO_KEY },
+  },
+  {
+    name: "another endpoint with its own key",
+    agent: { baseUrl: "http://friend/v1", apiKey: "friend-key" },
+    expected: { baseUrl: "http://friend/v1", apiKey: "friend-key" },
+  },
+  {
+    name: "another endpoint when the server has no key either",
+    settings: { apiKey: "" },
+    agent: { baseUrl: "http://friend/v1" },
+    expected: { baseUrl: "http://friend/v1", apiKey: NO_KEY },
+  },
+  {
+    name: "the same endpoint written out again",
+    agent: { baseUrl: " http://server:11434/v1 " },
+    expected: {},
+  },
+  {
+    name: "the same endpoint with a key of its own",
+    agent: { apiKey: "other-key" },
+    expected: { apiKey: "other-key" },
+  },
+  {
+    name: "the same endpoint when the server has no key",
+    settings: { apiKey: "" },
+    agent: { model: "gpt-5" },
+    expected: { model: "gpt-5" },
+  },
+  {
+    // Spelled differently is a different endpoint: the comparison is of the strings, and the
+    // cost of being wrong in the other direction is a key posted somewhere it was not issued for.
+    name: "the same endpoint with a trailing slash",
+    agent: { baseUrl: "http://server:11434/v1/" },
+    expected: { baseUrl: "http://server:11434/v1/", apiKey: NO_KEY },
+  },
+  {
+    name: "a server scope changes nothing in the row",
+    agent: { mcpServerIds: ["a", "b"] },
+    expected: {},
+  },
+];
+
+test.each(GOLDEN)("profile over settings: $name", ({ settings: base, agent: over, expected }) => {
+  const row = settings(base);
+  expect(profile.resolveConfig(row, agent(over))).toEqual({ ...row, ...expected });
+});
+
 test("an empty server list is every server, not none", () => {
   expect(profile.resolveServers(null)).toBeUndefined();
   expect(profile.resolveServers(agent())).toBeUndefined();
