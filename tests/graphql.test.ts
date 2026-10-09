@@ -97,8 +97,8 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
   );
   expect(triggers).toEqual([]);
 
-  // An update that names no kind still says nothing about the row it lands on, so it is left
-  // alone: an event trigger's `cron` column is legitimately empty.
+  // An update that names no kind is judged as the row it lands on: an event trigger's `cron`
+  // column is legitimately empty, and its address is not.
   const { createTrigger: event } = await run(
     `mutation Create($taskId: String!) {
        createTrigger(values: { taskId: $taskId, kind: event, event: "deploy" }) { id }
@@ -112,6 +112,27 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
     { id: event.id },
   );
   expect(renamed.event).toBe("released");
+
+  const update = (id: string, set: string) =>
+    graphql({
+      schema,
+      source: `mutation { updateTrigger(set: ${set}, where: { id: { eq: "${id}" } }) { id } }`,
+    });
+  const emptied = await update(event.id, `{ event: " " }`);
+  expect(emptied.errors?.[0].message).toMatch(/needs a webhook id/);
+  // Saying the kind it already is, and nothing else, is not a write with no address.
+  expect((await update(event.id, `{ kind: event }`)).errors).toBeUndefined();
+  expect((await update(event.id, `{ cron: "" }`)).errors).toBeUndefined();
+
+  const { createTrigger: timed } = await run(
+    `mutation Create($taskId: String!) {
+       createTrigger(values: { taskId: $taskId, cron: "0 9 * * *" }) { id }
+     }`,
+    { taskId: task.id },
+  );
+  expect((await update(timed.id, `{ cron: "" }`)).errors?.[0].message).toMatch(/needs an expr/);
+  expect((await update(timed.id, `{ kind: event }`)).errors?.[0].message).toMatch(/webhook id/);
+  expect((await update(timed.id, `{ enabled: false }`)).errors).toBeUndefined();
 });
 
 test("a broken MCP config is reported, not thrown", async () => {
