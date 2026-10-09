@@ -214,7 +214,8 @@ export const RunEventType = new GraphQLObjectType({
     kind: {
       type: new GraphQLNonNull(GraphQLString),
       description:
-        "step | decision | turn | thinking | output | tool-call | tool-result | notice | done.",
+        "step | decision | turn | thinking | output | tool-call | tool-result | notice | usage | " +
+        "done.",
     },
     text: { type: new GraphQLNonNull(GraphQLString) },
     name: {

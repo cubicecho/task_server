@@ -1,4 +1,5 @@
 import { fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
+import { validateServerConfig } from "@cubicecho/agent-mcp-pool";
 import { buildSchema, extractFilters, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import { applyPermissions } from "@vantreeseba/graphql-casl";
 import { eq, inArray } from "drizzle-orm";
@@ -15,7 +16,7 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
-import { agents, runs, settings, steps, tasks } from "../db/schema.ts";
+import { agents, mcpServers, runs, settings, steps, tasks, triggers } from "../db/schema.ts";
 import { hookProblems, runsDeleted } from "../runner/hooks.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
@@ -122,13 +123,13 @@ const { entities } = buildSchema(db, {
     triggers: {
       // A trigger nothing can fire — a bad expression, or a webhook with no address — is
       // caught here rather than becoming a row that looks armed and silently never runs.
-      before: ({ operation, args }) => vetTrigger(operation, args),
+      before: ({ args, tx }) => vetTrigger(tx, args),
       after: () => syncSoon(),
     },
     // Debounced past the commit, like the schedule above: this hook runs inside the mutation's
     // transaction, so reconnecting from here read the table as it was before the write.
     mcpServers: {
-      before: ({ args }) => vetMcpServer(args),
+      before: ({ args, tx }) => vetMcpServer(tx, args),
       after: () => mcp.syncSoon(),
     },
     // Raising `maxConcurrentRuns` is the one edit that can start work on its own — whatever is
@@ -148,63 +149,79 @@ const { entities } = buildSchema(db, {
  * matches on the id, so a `kind: "event"` trigger with no id is an address nobody can reach.
  * Caught here, at the write, both are a message the client can act on.
  *
- * Every mutation shape the generated CRUD offers puts the values somewhere different, hence the
- * sweep: `values` for a create, `set` for an update, and `updates[].set` for the many-row form.
- *
  * The sweep also trims, so that the value judged here is the value stored. Both columns are
  * matched against exactly — a webhook id against the URL path, an expression against the
  * scheduler's parser — and a padded one is unfireable in the same silent way an empty one is,
  * while looking far more plausible in the table. Judging a trimmed copy and storing the padded
  * original is what let `" deploy "` through a guard whose whole purpose is to stop it.
  *
- * Each kind is only held to its own column when the write says which kind it is. An update that
- * touches one other column says nothing about the row it lands on, and an empty `cron` is what
- * an event trigger's unused column holds — so neither is read as a mistake on its own. A create
- * always says: `kind` defaults to `cron`, so values with no `kind` are a cron trigger, and one
- * with no expression is the same silent nothing as an event trigger with no address.
+ * Which column a trigger is held to depends on its kind, and an update need not say the kind, so
+ * the change is laid over each row it lands on and the result is what is judged. Judged alone,
+ * `set: { event: "" }` on an event trigger said nothing about a kind and was let through. Only
+ * what the write introduces is refused, as for an MCP server below.
  */
-function vetTrigger(operation: string, args: unknown) {
-  const arg = args as
-    | { values?: unknown; set?: unknown; updates?: { set?: unknown }[] }
-    | undefined;
-  const candidates = [
-    ...(Array.isArray(arg?.values) ? arg.values : [arg?.values]),
-    arg?.set,
-    ...(arg?.updates ?? []).map((update) => update?.set),
-  ];
-
-  for (const raw of candidates) {
-    const candidate = raw as { cron?: unknown; kind?: unknown; event?: unknown } | undefined;
-    if (!candidate) continue;
-
-    for (const column of ["cron", "event"] as const) {
-      const value = candidate[column];
-      if (typeof value === "string") candidate[column] = value.trim();
-    }
-
-    const { cron } = candidate;
-    if (typeof cron === "string" && cron.trim() && !isValidCron(cron)) {
-      throw new GraphQLError(`"${cron}" is not a cron expression this scheduler can read.`, {
-        extensions: { code: "BAD_CRON" },
-      });
-    }
-
-    // On a create the column's default settles it; on an update, silence about `kind` says
-    // nothing about the row being written to.
-    const kind = candidate.kind ?? (operation === "insert" ? "cron" : undefined);
-
-    if (kind === "cron" && !String(cron ?? "").trim()) {
-      throw new GraphQLError("A cron trigger needs an expression — without one it never fires.", {
-        extensions: { code: "BAD_CRON" },
-      });
-    }
-
-    if (kind === "event" && !String(candidate.event ?? "").trim()) {
-      throw new GraphQLError("An event trigger needs a webhook id — it is the whole address.", {
-        extensions: { code: "BAD_EVENT" },
-      });
+async function vetTrigger(tx: typeof db, args: unknown) {
+  const { created, changed } = writesOf(args);
+  for (const written of [...created, ...changed.map(({ set }) => set)]) {
+    for (const column of ["cron", "event"]) {
+      const value = written[column];
+      if (typeof value === "string") written[column] = value.trim();
     }
   }
+
+  for (const values of created) refuseTrigger({ ...NEW_TRIGGER, ...values });
+  for (const { where, set } of changed) {
+    const filter = where
+      ? extractFilters(triggers, "triggers", where as Parameters<typeof extractFilters>[2])
+      : undefined;
+    for (const stored of await tx.select().from(triggers).where(filter)) {
+      refuseTrigger({ ...stored, ...set }, stored);
+    }
+  }
+}
+
+/** The columns' own defaults, which a create that leaves them out is going to get. */
+const NEW_TRIGGER = { kind: "cron", cron: "", event: "" };
+
+/** Why nothing could ever fire this trigger, if nothing could. */
+function triggerProblem(row: Record<string, unknown>): GraphQLError | undefined {
+  const cron = String(row.cron ?? "");
+  if (cron && !isValidCron(cron)) {
+    return new GraphQLError(`"${cron}" is not a cron expression this scheduler can read.`, {
+      extensions: { code: "BAD_CRON" },
+    });
+  }
+  if (row.kind === "cron" && !cron) {
+    return new GraphQLError("A cron trigger needs an expression — without one it never fires.", {
+      extensions: { code: "BAD_CRON" },
+    });
+  }
+  if (row.kind === "event" && !row.event) {
+    return new GraphQLError("An event trigger needs a webhook id — it is the whole address.", {
+      extensions: { code: "BAD_EVENT" },
+    });
+  }
+}
+
+/** Throws for what is wrong with `row` and was not already wrong with the row it replaces. */
+function refuseTrigger(row: Record<string, unknown>, stored?: Record<string, unknown>) {
+  const problem = triggerProblem(row);
+  if (problem && problem.message !== (stored && triggerProblem(stored))?.message) throw problem;
+}
+
+/**
+ * The parts of a generated write, wherever its shape put them: `values` for a create, `where`
+ * and `set` for an update, and `updates[]` for the many-row form of one.
+ */
+function writesOf(args: unknown) {
+  type Row = Record<string, unknown>;
+  type Update = { where?: unknown; set?: Row } | undefined;
+  const arg = (args ?? {}) as { values?: Row | Row[]; updates?: Update[] } & Update;
+  const created = [arg.values].flat().filter((values) => values !== undefined);
+  const changed = [arg, ...(arg.updates ?? [])].flatMap((update) =>
+    update?.set ? [{ where: update.where, set: update.set }] : [],
+  );
+  return { created, changed };
 }
 
 /**
@@ -249,38 +266,53 @@ async function runsOfTasks(tx: typeof db, args: unknown): Promise<string[]> {
   }
 }
 
+/** The columns' own defaults, which a create that leaves them out is going to get. */
+const NEW_MCP_SERVER = { id: "new", label: "", enabled: true, transport: "stdio" };
+
 /**
- * Refuses an MCP server row whose hooks could never run as written, or whose `hiddenTools` is
- * not a list of names. Swept across every shape a write puts its values in, as `vetTrigger` is.
+ * Refuses an MCP server row the pool could not use as written: hooks that could never run, a
+ * `hiddenTools` that is not a list of names, a stdio server with no command, a url that is not
+ * http, a slug that cannot namespace a tool. The shape rules are the pool's own
+ * `validateServerConfig`, the same ones the form reads, so what is refused on save is what was
+ * marked as typed.
+ *
+ * That check wants a whole row and an update is handed part of one, so the change is laid over
+ * each row it is about to land on. Only what the write introduces is refused: a row that was
+ * saved before a rule existed can still be disabled, renamed or repaired a column at a time.
  */
-function vetMcpServer(args: unknown) {
-  const arg = args as
-    | { values?: unknown; set?: unknown; updates?: { set?: unknown }[] }
-    | undefined;
-  const candidates = [
-    ...(Array.isArray(arg?.values) ? arg.values : [arg?.values]),
-    arg?.set,
-    ...(arg?.updates ?? []).map((update) => update?.set),
-  ];
-  for (const raw of candidates) {
-    const candidate = raw as { hooks?: unknown; hiddenTools?: unknown } | undefined;
-    if (!candidate) continue;
-    const { hiddenTools } = candidate;
-    if (
-      hiddenTools !== undefined &&
-      hiddenTools !== null &&
-      !(Array.isArray(hiddenTools) && hiddenTools.every((name) => typeof name === "string"))
-    ) {
-      throw new GraphQLError("hiddenTools must be a JSON array of tool names.", {
-        extensions: { code: "BAD_HIDDEN_TOOLS" },
-      });
+async function vetMcpServer(tx: typeof db, args: unknown) {
+  const { created, changed } = writesOf(args);
+  for (const values of created) refuseMcpServer({ ...NEW_MCP_SERVER, ...values });
+  for (const { where, set } of changed) {
+    const filter = where
+      ? extractFilters(mcpServers, "mcpServers", where as Parameters<typeof extractFilters>[2])
+      : undefined;
+    for (const stored of await tx.select().from(mcpServers).where(filter)) {
+      refuseMcpServer({ ...stored, ...set }, stored);
     }
-    const problems = hookProblems(candidate.hooks);
-    if (problems.length) {
-      throw new GraphQLError(`These hooks cannot run as written: ${problems.join("; ")}`, {
-        extensions: { code: "BAD_HOOKS", problems },
-      });
-    }
+  }
+}
+
+/** Throws for what is wrong with `row` and was not already wrong with the row it replaces. */
+function refuseMcpServer(row: Record<string, unknown>, stored?: Record<string, unknown>) {
+  // The hooks are checked apart from the shape: they have a rule of this host's on top of the
+  // pool's, and their own code for a client that wants the list.
+  const shape = (candidate: Record<string, unknown>) =>
+    validateServerConfig({ ...candidate, hooks: null });
+  const known = stored ? [...shape(stored), ...hookProblems(stored.hooks)] : [];
+  const fresh = (problems: string[]) => problems.filter((problem) => !known.includes(problem));
+
+  const problems = fresh(shape(row));
+  if (problems.length) {
+    throw new GraphQLError(`This server cannot be saved as written: ${problems.join("; ")}`, {
+      extensions: { code: "BAD_MCP_SERVER", problems },
+    });
+  }
+  const hooks = fresh(hookProblems(row.hooks));
+  if (hooks.length) {
+    throw new GraphQLError(`These hooks cannot run as written: ${hooks.join("; ")}`, {
+      extensions: { code: "BAD_HOOKS", problems: hooks },
+    });
   }
 }
 

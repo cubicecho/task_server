@@ -64,13 +64,14 @@ const HINTS: Record<string, string> = {
     "answer lives — for a `cron` trigger. An `event` trigger never appears there, armed or " +
     "not, so its two `enabled` flags are the whole of what can be read back about it.",
   runs:
-    "What happened when tasks ran — `status` is `running`, `ok`, `error`, `stopped` or " +
-    "`skipped`, and a finished run carries its output, its error, the tools it called and what " +
+    "What happened when tasks ran — `status` is `running`, `ok`, `error`, `stopped`, " +
+    "`skipped` or `queued`, and a finished run carries its output, its error, the tools it called and what " +
     "it cost. A `skipped` run never started: its trigger fired while the run named by " +
     "`blockedBy` still held the task, and `attempts` counts how many firings it stands for. " +
     "Such a row spans its whole collision — `startedAt` is the first firing it stands for and " +
     "`finishedAt` moves with the most recent — so its timestamps are a window rather than a " +
-    "duration, and it can outlast the run that blocked it.\n\n" +
+    "duration, and it can outlast the run that blocked it. A `queued` run has not started " +
+    "either, but will: it is waiting for a free slot, and runs in this same row.\n\n" +
     "Filter by `taskId` for one task's history, and order by " +
     "`{ startedAt: { direction: desc, priority: 1 } }` for the latest — every generated " +
     "`orderBy` takes that shape, and `priority` is required rather than defaulted. Where a " +
@@ -148,33 +149,16 @@ const HINTS: Record<string, string> = {
  *
  * Only names that are actually tools here are touched, so a result field keeps its own
  * spelling: `startedAt` and `blockedBy` are columns an agent will read back in JSON, not tools.
+ *
+ * Spelled with the driver's own `applyNameCase`, as the `toolName` option below is, so a name
+ * written in prose and the tool it names cannot drift apart.
  */
 const TOOL_NAMES = new Map(
   TOOLS.map((path) => {
     const field = path.slice(path.indexOf(".") + 1);
-    return [field, toolNameFor(field)];
+    return [field, applyNameCase(field)];
   }),
 );
-
-/**
- * The tool name for a root field, and the one place that spelling is decided.
- *
- * The single-row update is `updateTask` and the bulk one, which this surface does not expose, is
- * `updateTasks`. Before drizzle-graphql 13 they were `updateTaskSingle` and `updateTask`, and
- * this function took the `Single` off: the qualifier told a tool apart from one an agent could
- * not see, and every arm that met it read it as a variant to pick between rather than as the
- * update. The schema now says what the tool always did, so only the casing is left to decide.
- *
- * `TOOL_NAMES` and the driver's `toolName` both come through here, so a name written in prose
- * and the tool it names cannot drift apart.
- */
-function toolNameFor(field: string): string {
-  // The driver's own casing rather than a hand-rolled one. They agree on every name here and
-  // would keep agreeing until a field split an acronym — `parseURLFilter` is the example the
-  // package gives — and a tool the prose names by a spelling the listing does not use is the
-  // failure this whole function exists to prevent.
-  return applyNameCase(field);
-}
 
 /** Where the driver's generated footer starts — everything above it is prose. */
 const FOOTER = /\n\nGraphQL (query|mutation): /;
@@ -234,7 +218,7 @@ const WRITE_HINTS: Record<string, { destructiveHint?: boolean; idempotentHint?: 
  */
 export const mcpHandler = createHttpHandler({
   schema,
-  // Everything arriving here is an agent, whatever it asks for. `TOOLS` below says what one is
+  // Everything arriving here is an agent, whatever it asks for. `TOOLS` above says what one is
   // offered; `permissions.ts` says what one may reach, and this is what tells it apart from the
   // web app — the settings row, the MCP server rows and every bulk write are shut on this door
   // and open on the other.
@@ -244,7 +228,7 @@ export const mcpHandler = createHttpHandler({
   include: TOOLS,
   // `include` names GraphQL fields and this names tools, so the two are spelled differently on
   // purpose — `Mutation.updateTask` above becomes `update_task` here.
-  toolName: (field) => toolNameFor(field.name),
+  toolName: (field) => applyNameCase(field.name),
   // One level: the leaf fields of what a tool returns. Two would pull every run — output and
   // all — into a listing of tasks, which is a lot of context for a question about names.
   selectionDepth: 1,
@@ -267,7 +251,7 @@ export const mcpHandler = createHttpHandler({
   // `triggers`/`steps`/`runs` as list-relation filters, each pulling in the other table's whole
   // filter type, which carries its own relation fields back. Pruning the three fields — nothing
   // else — halves the surface, and across 100 logged calls on it no agent sent one. An agent
-  // that wants a task's triggers reads `list_triggers` and looks at `taskId`, which is the
+  // that wants a task's triggers reads `triggers` and looks at `taskId`, which is the
   // question it was going to ask anyway.
   //
   // This prunes the *projection*: `schema` is the same object yoga serves the web app from, and
@@ -296,6 +280,6 @@ export const mcpHandler = createHttpHandler({
  * answers all three, in JSON-RPC, including when the request is wrong. Mounted on `post`
  * alone, the other two met Express's 404 page instead, which reads as "wrong URL".
  */
-export function mountMcp(app: express.Application, route = "/mcp") {
-  app.all(route, express.json(), mcpHandler);
+export function mountMcp(app: express.Application) {
+  app.all("/mcp", express.json(), mcpHandler);
 }

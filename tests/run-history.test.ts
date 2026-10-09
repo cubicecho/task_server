@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { type GraphQLSchema, graphql, print } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { buildWhere, NO_FILTERS, WINDOWS } from "@/lib/run-filters";
+import { buildWhere, NO_FILTERS, pickWindow } from "@/lib/run-filters";
 import { RunsDocument } from "../web/__generated__/graphql/graphql.ts";
 
 // The schema is built from the live Drizzle tables at import time, so the database has to be
@@ -152,13 +152,14 @@ test("a wildcard in the search term is a character, not a wildcard", async () =>
 });
 
 test("a window cuts the list off at the moment it was chosen", async () => {
-  const hour = WINDOWS.find((option) => option.value === "hour");
-  const day = WINDOWS.find((option) => option.value === "day");
-
-  const within = (ms: number) => new Date(Date.now() - ms).toISOString();
-
-  expect(await ask({ window: "hour", from: within(hour?.ms ?? 0) })).toHaveLength(3);
-  expect(await ask({ window: "day", from: within(day?.ms ?? 0) })).toHaveLength(5);
+  expect(await ask(pickWindow("hour"))).toHaveLength(3);
+  expect(await ask(pickWindow("day"))).toHaveLength(5);
+  expect(pickWindow("any")).toEqual({ window: "any", from: null });
+  // Fixed at the moment given, so the list stands still until it is picked again.
+  expect(pickWindow("hour", Date.UTC(2026, 0, 1, 12))).toEqual({
+    window: "hour",
+    from: "2026-01-01T11:00:00.000Z",
+  });
 });
 
 test("the controls narrow each other rather than replacing each other", async () => {

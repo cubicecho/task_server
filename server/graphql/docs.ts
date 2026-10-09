@@ -32,7 +32,7 @@ type ColumnDocs = {
   [T in keyof Tables]?: { [C in keyof Tables[T]["_"]["columns"]]?: string };
 };
 
-export const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
+const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
   agents:
     "A named set of overrides for the settings row — endpoint, model, ceilings, which MCP " +
     "servers to attach — that a task can point at. Empty on every column means the server " +
@@ -118,7 +118,8 @@ export const COLUMN_DOCS: ColumnDocs = {
       "`error`. `queued` is a firing waiting for a free slot — it has not run yet and will, in " +
       "this same row.",
     payload:
-      "What the trigger handed the run: a webhook's parsed body, and null for everything else. " +
+      "The body the run was started with: a webhook's parsed JSON, or the `payload` given to " +
+      "`runTask`. Null for a cron tick and for a run started with none. " +
       "It is what `{{event}}` interpolated into the prompt.",
     blockedBy: "`skipped` only: the run that was in the way.",
     attempts:

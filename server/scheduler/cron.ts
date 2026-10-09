@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { type ScheduledTask, schedule, validate } from "node-cron";
 import { db } from "../db/client.ts";
 import { tasks, triggers } from "../db/schema.ts";
-import { fireTask } from "../runner/run.ts";
+import { AFTER_COMMIT_MS, fireTask } from "../runner/run.ts";
 
 export const isValidCron = (expression: string) => validate(expression);
 
@@ -114,13 +114,13 @@ async function settle() {
  *
  * Write hooks run inside the mutation's transaction, so reading the table from there would
  * either see pre-commit state or deadlock. Waiting a tick past the commit coalesces a batch of
- * edits into one rebuild, and nothing that fires on a schedule cares which side of 50ms it was
- * armed on.
+ * edits into one rebuild, and nothing that fires on a schedule cares which side of the wait it
+ * was armed on.
  */
 export function syncSoon() {
   owed = true;
   clearTimeout(pending);
-  pending = setTimeout(() => void settle(), 50);
+  pending = setTimeout(() => void settle(), AFTER_COMMIT_MS);
 }
 
 /**

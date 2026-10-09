@@ -27,11 +27,11 @@ import {
  * that explain why a column exists or why it is shaped this way — the part no field description
  * has room for.
  *
- * Triggers are deliberately a separate table rather than a `cron` column on the task. Cron is
- * the only kind that fires today, but the point of the split is that "when a new email arrives"
- * is a second row against the same task, not a second column on every task that will never use
- * it. `kind` discriminates; `cron`/`timezone` belong to cron rows and `event` to event rows,
- * which is why both sets are nullable.
+ * Triggers are deliberately a separate table rather than a `cron` column on the task. The
+ * point of the split is that "when a new email arrives" is a second row against the same task,
+ * not a second column on every task that will never use it. `kind` discriminates;
+ * `cron`/`timezone` belong to cron rows and `event` to event rows, and each set is the empty
+ * string on a row of the other kind.
  *
  * Column names stay camelCase. Postgres folds unquoted identifiers to lower case, so the
  * generated migrations under `drizzle/` quote every one of them. This file is the only
@@ -48,6 +48,8 @@ const createdAt = () =>
   timestamp({ mode: "date", withTimezone: true })
     .notNull()
     .$defaultFn(() => new Date());
+
+const updatedAt = () => createdAt().$onUpdateFn(() => new Date());
 
 /**
  * A named bundle of everything a run needs from a model, so that "the cheap local one, terse,
@@ -100,10 +102,7 @@ export const agents = pgTable("agents", {
    */
   mcpServerIds: jsonb().$type<string[]>(),
   createdAt: createdAt(),
-  updatedAt: timestamp({ mode: "date", withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdateFn(() => new Date()),
+  updatedAt: updatedAt(),
 });
 
 export const tasks = pgTable("tasks", {
@@ -115,10 +114,7 @@ export const tasks = pgTable("tasks", {
   systemPrompt: text().notNull().default(""),
   enabled: boolean().notNull().default(true),
   createdAt: createdAt(),
-  updatedAt: timestamp({ mode: "date", withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdateFn(() => new Date()),
+  updatedAt: updatedAt(),
 });
 
 export const triggers = pgTable(
@@ -212,9 +208,9 @@ export const runs = pgTable(
     finishedAt: timestamp({ mode: "date", withTimezone: true }),
     /**
      * Kept because a run's account of itself is otherwise incomplete — the prompt the agent saw
-     * depended on this. A cron tick carries no information beyond having happened, and neither
-     * does the play button, so only an `event` trigger ever fills it in; a body that would not
-     * parse as JSON is a delivery with no payload, not a failed one.
+     * depended on this. A cron tick carries no information beyond having happened, so it is
+     * filled in by an `event` trigger or by a `runTask` that was handed a body; a body that would
+     * not parse as JSON is a delivery with no payload, not a failed one.
      */
     payload: jsonb().$type<unknown>(),
     /**
@@ -345,7 +341,7 @@ export const settings = pgTable("settings", {
    */
   runRetentionDays: integer().notNull().default(0),
   requestTimeoutSeconds: integer().notNull().default(120),
-  /** Only a failure before the first chunk is safe to retry — see `runner/agent.ts`. */
+  /** Only a failure before the first chunk is safe to retry — the rule is agent-core's `runTurn`. */
   maxRetries: integer().notNull().default(2),
   /**
    * How many runs may be in flight at once, across every task.
@@ -356,8 +352,9 @@ export const settings = pgTable("settings", {
    * getting in the way of a handful of tasks, and it is meant to be changed. Zero lifts the
    * limit entirely, which is what this did before the column existed.
    *
-   * A firing that arrives with no slot free is turned away exactly as one that meets its own
-   * task already running is — a `skipped` run saying so, not a silence. See `runner/run.ts`.
+   * A firing that arrives with no slot free waits as a `queued` run and starts when one comes
+   * back — unlike one that meets its own task already running, which is `skipped`. See
+   * `runner/run.ts`.
    */
   maxConcurrentRuns: integer().notNull().default(4),
 });
@@ -392,16 +389,8 @@ export const relations = defineRelations(schema, (r) => ({
   },
 }));
 
-/**
- * What one MCP hook did that is worth keeping: the context it added to a prompt, or why it added
- * none. agent-core's shape, stored as it is handed over; `source` is the server's label, so the
- * note still reads after the row is renamed away.
- */
-export type { HookNote };
-
 export type Agent = typeof agents.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
-export type Trigger = typeof triggers.$inferSelect;
 export type Step = typeof steps.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type RunStep = typeof runSteps.$inferSelect;

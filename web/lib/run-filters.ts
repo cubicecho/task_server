@@ -27,6 +27,12 @@ export const WINDOWS = [
   { value: "month", label: "Last 30 days", ms: 2_592_000_000 },
 ] as const;
 
+/** A window as the filters hold it, with its cutoff fixed at `now`. */
+export function pickWindow(value: string, now = Date.now()): Pick<Filters, "window" | "from"> {
+  const ms = WINDOWS.find((option) => option.value === value)?.ms;
+  return { window: value, from: ms ? new Date(now - ms).toISOString() : null };
+}
+
 export type Filters = {
   search: string;
   status: string;

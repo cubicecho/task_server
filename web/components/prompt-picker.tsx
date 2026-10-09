@@ -109,8 +109,13 @@ function PromptDialog({
   const [values, setValues] = useState<Record<string, string>>({});
 
   const expand = useMutation({
-    mutationFn: (prompt: McpPrompt) =>
-      request(McpPromptDocument, { server: prompt.server, name: prompt.name, args: values }),
+    // The arguments are handed over rather than read from `values`: a prompt with none is sent
+    // in the same tick that clears them, when this closure still holds the ones typed for the
+    // prompt before it.
+    mutationFn: ({ prompt, args }: { prompt: McpPrompt; args: Record<string, string> }) =>
+      request(McpPromptDocument, { server: prompt.server, name: prompt.name, args }),
+    // Said in the dialog, below — see there.
+    meta: { quiet: true },
     onSuccess: ({ mcpPrompt }) => {
       onInsert(mcpPrompt);
       onClose();
@@ -123,7 +128,7 @@ function PromptDialog({
    */
   const pick = (prompt: McpPrompt) => {
     setValues({});
-    if (prompt.arguments.length === 0) expand.mutate(prompt);
+    if (prompt.arguments.length === 0) expand.mutate({ prompt, args: {} });
     else setChosen(prompt);
   };
 
@@ -197,7 +202,7 @@ function PromptDialog({
           </Button>
           {chosen ? (
             <Button
-              onClick={() => expand.mutate(chosen)}
+              onClick={() => expand.mutate({ prompt: chosen, args: values })}
               disabled={missing || expand.isPending}
               // A required blank is why the button is off, and a disabled button explains
               // nothing on its own.

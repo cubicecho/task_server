@@ -1,4 +1,4 @@
-import { resultText } from "@cubicecho/agent-mcp-pool";
+import { resultText, serversWith } from "@cubicecho/agent-mcp-pool";
 import { mcp } from "./mcp.ts";
 
 /**
@@ -44,11 +44,7 @@ export interface McpPromptRow {
  * refuses the call anyway — so the capability is the filter rather than a `try` around the
  * whole set.
  */
-const promptServers = () =>
-  mcp
-    .state()
-    .filter((server) => server.status === "ready" && server.capabilities?.prompts)
-    .map(({ id, label }) => ({ id, label }));
+const promptServers = () => serversWith(mcp.state(), "prompts");
 
 /** Every prompt every prompt-serving server offers. */
 export async function list(): Promise<McpPromptRow[]> {

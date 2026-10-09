@@ -208,6 +208,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
     onMutate: () => setProbe(null),
     onSuccess: (detail) => setProbe({ ok: true, detail }),
     // The probe line is the answer, so the global toast would only say it twice.
+    meta: { quiet: true },
     onError: (error) => setProbe({ ok: false, detail: error.message }),
   });
 

@@ -53,7 +53,7 @@ export function taskHealth(task: StatusTask): Health {
 }
 
 /** Every heap at nought, which is what a server holding no tasks has to say. */
-export const noneYet = (): Record<Health, number> =>
+const noneYet = (): Record<Health, number> =>
   Object.fromEntries(HEALTH.map((health) => [health, 0])) as Record<Health, number>;
 
 export function tally(tasks: StatusTask[]): Record<Health, number> {
@@ -64,3 +64,31 @@ export function tally(tasks: StatusTask[]): Record<Health, number> {
 
 /** The heaps that mean something is wrong, which is what the page exists to answer. */
 export const WRONG: Health[] = ["refused", "broken"];
+
+/**
+ * The tasks the list holds. With nothing picked it is the tasks something is wrong with, because
+ * that is the question the page was opened to answer. Picking a tile is how you ask a narrower
+ * one — and how you see the heaps that are not problems at all.
+ */
+export const tasksShown = (tasks: StatusTask[], selected: Health | null): StatusTask[] =>
+  tasks.filter((task) => {
+    const health = taskHealth(task);
+    return selected ? health === selected : WRONG.includes(health);
+  });
+
+/**
+ * The failed runs no task in the list already answers for.
+ *
+ * A task standing in `broken` says its own error, so a run listed as well would be the same
+ * fault twice. What is left is the failures nothing else accounts for: a task that has run
+ * successfully since, or one that has been deleted.
+ */
+export function unexplainedFailures(
+  tasks: StatusTask[],
+  failures: StatusQuery["failures"],
+): StatusQuery["failures"] {
+  const accounted = new Set(
+    tasks.filter((task) => taskHealth(task) === "broken").map((task) => task.id),
+  );
+  return failures.filter((failure) => !failure.task || !accounted.has(failure.task.id));
+}

@@ -1,9 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Play, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
-import { RunTaskDocument, StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphql";
+import { StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphql";
 import { PageLayout } from "@/components/page-layout";
 import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
@@ -11,7 +10,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { request } from "@/lib/gql";
-import { HEALTH, type Health, type StatusTask, tally, taskHealth, WRONG } from "@/lib/task-health";
+import {
+  HEALTH,
+  type Health,
+  type StatusTask,
+  tally,
+  taskHealth,
+  tasksShown,
+  unexplainedFailures,
+  WRONG,
+} from "@/lib/task-health";
+import { useRunTask } from "@/lib/use-task-run";
 import { cn } from "@/lib/utils";
 
 type Failure = StatusQuery["failures"][number];
@@ -97,16 +106,7 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
 }
 
 function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
-  const queryClient = useQueryClient();
-  const run = useMutation({
-    mutationFn: () => request(RunTaskDocument, { taskId: task.id }),
-    onSuccess: () => {
-      toast.success(`Started ${task.name}.`);
-      queryClient.invalidateQueries({ queryKey: ["status"] });
-      queryClient.invalidateQueries({ queryKey: ["runs"] });
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+  const run = useRunTask();
 
   return (
     <Item variant="outline">
@@ -128,7 +128,7 @@ function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
           // Nothing is gained by offering to start a task that is already going: `runTask`
           // refuses one, and the refusal would arrive as a toast saying so.
           disabled={health === "running" || run.isPending}
-          onClick={() => run.mutate()}
+          onClick={() => run.mutate({ taskId: task.id })}
         >
           <Play className="size-3.5" />
           Run now
@@ -204,23 +204,8 @@ export function StatusRoute() {
   const tasks = status.data?.tasks ?? [];
   const counts = tally(tasks);
 
-  // With nothing picked the list is the tasks something is wrong with, because that is the
-  // question the page was opened to answer. Picking a tile is how you ask a narrower one — and
-  // how you see the heaps that are not problems at all.
-  const shown = tasks.filter((task) => {
-    const health = taskHealth(task);
-    return selected ? health === selected : WRONG.includes(health);
-  });
-
-  // A task standing in `broken` already says its own error, so a run listed there as well would
-  // be the same fault twice. What is left is the failures nothing else accounts for: a task
-  // that has run successfully since, or one that has been deleted.
-  const accounted = new Set(
-    tasks.filter((task) => taskHealth(task) === "broken").map((task) => task.id),
-  );
-  const unexplained = (status.data?.failures ?? []).filter(
-    (failure) => !failure.task || !accounted.has(failure.task.id),
-  );
+  const shown = tasksShown(tasks, selected);
+  const unexplained = unexplainedFailures(tasks, status.data?.failures ?? []);
 
   const unreachable = (status.data?.mcpStatus ?? []).filter(
     (server: Server) => server.status === "error",

@@ -1074,7 +1074,7 @@ type Run {
   finishedAt: DateTime
 
   """
-  What the trigger handed the run: a webhook's parsed body, and null for everything else. It is what `{{event}}` interpolated into the prompt.
+  The body the run was started with: a webhook's parsed JSON, or the `payload` given to `runTask`. Null for a cron tick and for a run started with none. It is what `{{event}}` interpolated into the prompt.
   """
   payload: JSON
 
@@ -3541,7 +3541,7 @@ input RunFilters {
   finishedAt: DateTimeFilter
 
   """
-  What the trigger handed the run: a webhook's parsed body, and null for everything else. It is what `{{event}}` interpolated into the prompt.
+  The body the run was started with: a webhook's parsed JSON, or the `payload` given to `runTask`. Null for a cron tick and for a run started with none. It is what `{{event}}` interpolated into the prompt.
   """
   payload: JSONFilter
 
@@ -4940,7 +4940,7 @@ type RunEvent {
   at: DateTime!
 
   """
-  step | decision | turn | thinking | output | tool-call | tool-result | notice | done.
+  step | decision | turn | thinking | output | tool-call | tool-result | notice | usage | done.
   """
   kind: String!
   text: String!

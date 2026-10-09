@@ -51,7 +51,7 @@ const nextKey = () => `trigger-${++counter}`;
  */
 const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 
-export function newWebhookId(): string {
+function newWebhookId(): string {
   const bytes = new Uint8Array(26);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => ALPHABET[byte % ALPHABET.length]).join("");

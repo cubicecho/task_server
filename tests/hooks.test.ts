@@ -294,3 +294,32 @@ test("hooks that could never run are refused when the row is saved", async () =>
   );
   expect(fine.errors).toBeUndefined();
 });
+
+test("a save is refused for what it gets wrong, and not for what the row already had wrong", async () => {
+  const create = (values: Record<string, unknown>) =>
+    gql(`mutation ($values: CreateMcpServerInput!) { createMcpServer(values: $values) { id } }`, {
+      values,
+    });
+  const update = (id: string, set: Record<string, unknown>) =>
+    gql(
+      `mutation ($id: String!, $set: UpdateMcpServerInput!) {
+        updateMcpServer(where: { id: { eq: $id } }, set: $set) { id }
+      }`,
+      { id, set },
+    );
+
+  expect((await create({ slug: "nothing" })).errors?.[0]?.message).toContain("needs a command");
+  const ftp = await create({ slug: "ftp", transport: "http", url: "ftp://example.com" });
+  expect(ftp.errors?.[0]?.message).toContain("not an http or https url");
+
+  // A row from before the rule, written past the API as an older version would have left it.
+  await client.db.insert(tables.mcpServers).values({ id: "old", slug: "old", command: "" });
+  expect((await update("old", { enabled: false })).errors).toBeUndefined();
+  expect((await update("old", { command: "true" })).errors).toBeUndefined();
+
+  // An update is judged on the row it lands on: this one is stdio, so a url is not looked at,
+  // and turning it into an http server with no url is the mistake.
+  const turned = await update("old", { transport: "http" });
+  expect(turned.errors?.[0]?.message).toContain("needs a url");
+  expect((await update("old", { command: " " })).errors?.[0]?.message).toContain("needs a command");
+});
