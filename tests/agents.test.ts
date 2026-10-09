@@ -212,10 +212,13 @@ const GOLDEN: {
     expected: { model: "gpt-5" },
   },
   {
+    // The one row that moved when the merge became agent-core's: the resolver joins prompt
+    // parts and trims the result, so the server's prompt loses its padding once a profile is in
+    // play. With no profile the settings row is returned untouched, padding and all.
     name: "a settings prompt with space around it, under a profile that inherits it",
     settings: { systemPrompt: "  server prompt\n" },
     agent: { model: "gpt-5" },
-    expected: { model: "gpt-5" },
+    expected: { model: "gpt-5", systemPrompt: "server prompt" },
   },
   {
     name: "inherit over ondemand",
