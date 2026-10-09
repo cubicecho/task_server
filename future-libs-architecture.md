@@ -167,8 +167,12 @@ argument for depending on the package:
   This server's copy was the one the other two wanted, and it went up as it stood: keyed by
   `baseUrl` rather than a module global, and a loop rather than a single retry.
 - The outer retry loop around both is `runTurn`
-  ([agent-core#18](https://github.com/cubicecho/agent-core/issues/18)), which is what `agent.ts`
-  now calls: one await where a nested loop, a `negotiate` and a `streamStep` used to be.
+  ([agent-core#18](https://github.com/cubicecho/agent-core/issues/18)): one await where a nested
+  loop, a `negotiate` and a `streamStep` used to be.
+- The step loop around `runTurn` — the request body, tool-argument parsing, `load_tools`, the
+  tool events — is `runAgentLoop`
+  ([agent-core#80](https://github.com/cubicecho/agent-core/issues/80)), which is what `agent.ts`
+  now calls. It was the last copy.
 
 What is left under `server/runner/` is this server's own — the flow, the profile overlay, the
 settings row. There is no known copy outstanding; a new one is a bug, not a stage.

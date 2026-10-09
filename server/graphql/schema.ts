@@ -1,4 +1,5 @@
 import { fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
+import { validateServerConfig } from "@cubicecho/agent-mcp-pool";
 import { buildSchema, extractFilters, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import { applyPermissions } from "@vantreeseba/graphql-casl";
 import { eq, inArray } from "drizzle-orm";
@@ -15,7 +16,7 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
-import { agents, runs, settings, steps, tasks } from "../db/schema.ts";
+import { agents, mcpServers, runs, settings, steps, tasks } from "../db/schema.ts";
 import { hookProblems, runsDeleted } from "../runner/hooks.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
@@ -128,7 +129,7 @@ const { entities } = buildSchema(db, {
     // Debounced past the commit, like the schedule above: this hook runs inside the mutation's
     // transaction, so reconnecting from here read the table as it was before the write.
     mcpServers: {
-      before: ({ args }) => vetMcpServer(args),
+      before: ({ args, tx }) => vetMcpServer(tx, args),
       after: () => mcp.syncSoon(),
     },
     // Raising `maxConcurrentRuns` is the one edit that can start work on its own — whatever is
@@ -249,38 +250,63 @@ async function runsOfTasks(tx: typeof db, args: unknown): Promise<string[]> {
   }
 }
 
+/** The columns' own defaults, which a create that leaves them out is going to get. */
+const NEW_MCP_SERVER = { id: "new", label: "", enabled: true, transport: "stdio" };
+
 /**
- * Refuses an MCP server row whose hooks could never run as written, or whose `hiddenTools` is
- * not a list of names. Swept across every shape a write puts its values in, as `vetTrigger` is.
+ * Refuses an MCP server row the pool could not use as written: hooks that could never run, a
+ * `hiddenTools` that is not a list of names, a stdio server with no command, a url that is not
+ * http, a slug that cannot namespace a tool. The shape rules are the pool's own
+ * `validateServerConfig`, the same ones the form reads, so what is refused on save is what was
+ * marked as typed.
+ *
+ * That check wants a whole row and an update is handed part of one, so the change is laid over
+ * each row it is about to land on. Only what the write introduces is refused: a row that was
+ * saved before a rule existed can still be disabled, renamed or repaired a column at a time.
  */
-function vetMcpServer(args: unknown) {
+async function vetMcpServer(tx: typeof db, args: unknown) {
   const arg = args as
-    | { values?: unknown; set?: unknown; updates?: { set?: unknown }[] }
+    | { values?: unknown; where?: unknown; set?: unknown; updates?: { where?: unknown }[] }
     | undefined;
-  const candidates = [
-    ...(Array.isArray(arg?.values) ? arg.values : [arg?.values]),
-    arg?.set,
-    ...(arg?.updates ?? []).map((update) => update?.set),
-  ];
-  for (const raw of candidates) {
-    const candidate = raw as { hooks?: unknown; hiddenTools?: unknown } | undefined;
-    if (!candidate) continue;
-    const { hiddenTools } = candidate;
-    if (
-      hiddenTools !== undefined &&
-      hiddenTools !== null &&
-      !(Array.isArray(hiddenTools) && hiddenTools.every((name) => typeof name === "string"))
-    ) {
-      throw new GraphQLError("hiddenTools must be a JSON array of tool names.", {
-        extensions: { code: "BAD_HIDDEN_TOOLS" },
-      });
+
+  const created = (Array.isArray(arg?.values) ? arg.values : [arg?.values]).filter(Boolean);
+  for (const values of created) refuseMcpServer({ ...NEW_MCP_SERVER, ...values });
+
+  const writes = [arg, ...(arg?.updates ?? [])] as (
+    | { where?: unknown; set?: Record<string, unknown> }
+    | undefined
+  )[];
+  for (const { where, set } of writes.filter((write) => write !== undefined)) {
+    if (!set) continue;
+    const filter = where
+      ? extractFilters(mcpServers, "mcpServers", where as Parameters<typeof extractFilters>[2])
+      : undefined;
+    for (const stored of await tx.select().from(mcpServers).where(filter)) {
+      refuseMcpServer({ ...stored, ...set }, stored);
     }
-    const problems = hookProblems(candidate.hooks);
-    if (problems.length) {
-      throw new GraphQLError(`These hooks cannot run as written: ${problems.join("; ")}`, {
-        extensions: { code: "BAD_HOOKS", problems },
-      });
-    }
+  }
+}
+
+/** Throws for what is wrong with `row` and was not already wrong with the row it replaces. */
+function refuseMcpServer(row: Record<string, unknown>, stored?: Record<string, unknown>) {
+  // The hooks are checked apart from the shape: they have a rule of this host's on top of the
+  // pool's, and their own code for a client that wants the list.
+  const shape = (candidate: Record<string, unknown>) =>
+    validateServerConfig({ ...candidate, hooks: null });
+  const known = stored ? [...shape(stored), ...hookProblems(stored.hooks)] : [];
+  const fresh = (problems: string[]) => problems.filter((problem) => !known.includes(problem));
+
+  const problems = fresh(shape(row));
+  if (problems.length) {
+    throw new GraphQLError(`This server cannot be saved as written: ${problems.join("; ")}`, {
+      extensions: { code: "BAD_MCP_SERVER", problems },
+    });
+  }
+  const hooks = fresh(hookProblems(row.hooks));
+  if (hooks.length) {
+    throw new GraphQLError(`These hooks cannot run as written: ${hooks.join("; ")}`, {
+      extensions: { code: "BAD_HOOKS", problems: hooks },
+    });
   }
 }
 

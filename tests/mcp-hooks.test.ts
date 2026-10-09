@@ -1,6 +1,7 @@
 import { HOOK_EVENTS } from "@cubicecho/agent-mcp-pool/hooks";
 import { expect, test } from "vitest";
-import { HOOK_EVENTS_FIRED, HOOK_PLACEHOLDER, hooksProblem } from "../web/lib/mcp-hooks.ts";
+import { HOOK_EVENTS_FIRED } from "../shared/hooks.ts";
+import { HOOK_PLACEHOLDER, hooksProblem } from "../web/lib/mcp-hooks.ts";
 
 test("fires every pool event but beforeCompact", () => {
   expect(HOOK_EVENTS_FIRED).toEqual(HOOK_EVENTS.filter((event) => event !== "beforeCompact"));
@@ -22,6 +23,6 @@ test("reports the pool's first problem", () => {
 
 test("refuses an event this server never fires", () => {
   expect(hooksProblem(JSON.stringify([{ id: "c", on: "beforeCompact", tool: "t" }]))).toMatch(
-    /never fires beforeCompact/,
+    /never compacts, so beforeCompact never fires/,
   );
 });

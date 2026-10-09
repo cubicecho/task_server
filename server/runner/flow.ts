@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
-import { runAgent } from "./agent.ts";
+import { type AgentResult, runAgent } from "./agent.ts";
 import type { HookSession, HookStep } from "./hooks.ts";
 
 /**
@@ -37,14 +37,6 @@ export interface FlowNode {
 export interface ContextEntry {
   name: string;
   output: string;
-}
-
-export interface FlowResult {
-  output: string;
-  toolCalls: { name: string; ok: boolean }[];
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
 }
 
 /**
@@ -253,9 +245,9 @@ export async function runFlow({
   hooks,
   signal,
   onEvent,
-}: FlowOptions): Promise<FlowResult> {
+}: FlowOptions): Promise<AgentResult> {
   const context: ContextEntry[] = [];
-  const result: FlowResult = {
+  const result: AgentResult = {
     output: "",
     toolCalls: [],
     promptTokens: 0,
@@ -347,29 +339,14 @@ export async function runFlow({
       result.output = agentResult.output;
       context.push({ name: plan.name, output: agentResult.output });
 
-      const tokens = {
-        toolCalls: agentResult.toolCalls,
-        promptTokens: agentResult.promptTokens,
-        completionTokens: agentResult.completionTokens,
-        totalTokens: agentResult.totalTokens,
-      };
-
-      if (plan.kind !== "decision") {
-        await close(row.id, { status: "ok", output: agentResult.output, ...tokens, ...noted });
-        hooks?.after(turn, agentResult.output, row.id, emit);
-        return undefined;
+      const { output, ...tokens } = agentResult;
+      let branch: string | undefined;
+      if (plan.kind === "decision") {
+        branch = await resolveCase(plan, output, emit);
+        emit({ kind: "decision", name: plan.name, text: branch });
       }
-
-      const branch = await resolveCase(plan, agentResult.output, emit);
-      emit({ kind: "decision", name: plan.name, text: branch });
-      await close(row.id, {
-        status: "ok",
-        output: agentResult.output,
-        branch,
-        ...tokens,
-        ...noted,
-      });
-      hooks?.after(turn, agentResult.output, row.id, emit);
+      await close(row.id, { status: "ok", output, branch, ...tokens, ...noted });
+      hooks?.after(turn, output, row.id, emit);
       return branch;
     } catch (error) {
       const stopped = signal?.aborted === true;

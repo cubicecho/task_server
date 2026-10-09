@@ -155,12 +155,13 @@ claimed entry has no run id for the width of the insert.
 **The runner's generic half is `@cubicecho/agent-core`'s, and it does not come back.** The
 pooled OpenAI client, the retry rules and their backoff, one streamed turn read back into a
 message, the negotiation that answers an endpoint refusing part of a request, the tool-schema
-compatibility pass, on-demand tool loading, the one-shot side tasks and the run-event bus all
-live there;
+compatibility pass, on-demand tool loading, the step loop that drives all of them
+(`runAgentLoop`), the one-shot side tasks and the run-event bus all live there;
 `@cubicecho/agent-mcp-pool` holds the MCP pool that offers a run its tools as
 `<slug>__<tool name>`. What stays under `server/runner/` is what is *this* server's: `llm.ts`
 reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
-`profile.ts` lays an agent profile over settings, `agent.ts` and `flow.ts` drive the loop.
+`profile.ts` lays an agent profile over settings, `agent.ts` maps one step onto `runAgentLoop`
+and `flow.ts` drives the steps.
 `mcp-prompts.ts` is the one thing here that reaches past tools into the rest of the protocol —
 see below.
 `mcp.ts` also says who this process is — `clientName` and `clientVersion` are the `clientInfo` of
@@ -234,15 +235,15 @@ generated description does not say enough. The driver renames after it filters, 
 list names GraphQL fields in camelCase while `HINTS` — and the client — sees the snake_case tool
 name: `Mutation.createTask` is the tool `create_task`.
 
-`toolNameFor` is that spelling, and nothing else since drizzle-graphql 13: under a
-`typeNameMapper` the single-row writes are `updateTask` and `deleteTask`, and the bulk forms take
-the plural, `updateTasks` and `deleteTasks`. Before that the single-row form was
-`updateTaskSingle` and this function took the qualifier off, because agents read it as a variant
-to choose between rather than as the update; the tool was `update_task` then and is now. The
-rename moved the dangerous name — `deleteTask` used to be the one that empties a table — which is
-what the whitelist is for: the bulk forms are new names, and a name the map does not hold is
-denied. `TOOL_NAMES` runs through the same function, so a name written in prose and the tool it
-names cannot drift.
+The spelling is the driver's own `applyNameCase` and nothing else. Since drizzle-graphql 13,
+under a `typeNameMapper`, the single-row writes are `updateTask` and `deleteTask`, and the bulk
+forms take the plural, `updateTasks` and `deleteTasks`. Before that the single-row form was
+`updateTaskSingle` and a function here took the qualifier off, because agents read it as a
+variant to choose between rather than as the update; the tool was `update_task` then and is now.
+The rename moved the dangerous name — `deleteTask` used to be the one that empties a table —
+which is what the whitelist is for: the bulk forms are new names, and a name the map does not
+hold is denied. `TOOL_NAMES` and the handler's `toolName` both call `applyNameCase`, so a name
+written in prose and the tool it names cannot drift.
 
 Descriptions are written once and read twice, so a cross-reference between fields is respelled
 on the way out: `useToolNames` rewrites a backticked root-field name to its tool name in the
@@ -428,6 +429,16 @@ later. `afterTurn` and `sessionEnd` are not awaited by the run; `sessionEnd` wai
 `hiddenTools` keeps a tool out of every run's listing and still callable by the row's hooks, and
 both columns are checked on write in `vetMcpServer` with the pool's `validateHooks`: a
 placeholder the event has no value for is a refusal on save, not a silent skip every step.
+
+The rest of the row is checked there too, by the pool's `validateServerConfig` — a stdio server
+with no command, a url that is not http, a slug that cannot namespace a tool. `fieldProblem` in
+`web/lib/mcp-config.ts` asks the same function a field at a time, so the form and the write
+cannot disagree. The check wants a whole row and an update is part of one, so the change is laid
+over each row it lands on, and only what the write *introduces* is refused: a row saved before a
+rule existed can still be disabled or repaired a column at a time. A pasted config is read by
+the pool's `fromMcpServersJson` for the same reason — one reading of that JSON across every
+host — which is why an SSE server is refused on paste
+([agent-mcp-pool#103](https://github.com/cubicecho/agent-mcp-pool/issues/103)).
 `tests/hooks.test.ts` reads what the stdio fixture was called with from `MCP_ECHO_CALL_LOG`,
 because a hook's call never appears in a run's tool calls.
 
@@ -436,32 +447,43 @@ rule, not the OpenAI SDK, whose own retries are off: once a chunk has arrived th
 unrepeatable, so a failure after that propagates. `requestTimeoutSeconds` is a silence watchdog
 that rearms on every chunk, not a deadline on the request.
 
-`agent.ts` calls `runTurn` and reads none of that back. It hands over a `request` callback —
-the body has to be rebuilt per attempt, since `relaxTools` applies to whatever the last refusal
-latched off — plus `onThinking`, `onOutput` and `onNotice`, which are the three places a turn
-reaches the run-event bus. A retry and a capability downgrade both arrive on `onNotice`, because
-a watcher reading an unexplained pause wants to be told either way. The loop, the silence
+`agent.ts` sends no request of its own. It hands `runAgentLoop` the settings row with the step's
+model laid over it, the pool's tools and catalogue, a `dispatch` that is `mcp.call` under the
+profile's scope, and an `onEvent` that forwards to the run-event bus and copies notices to the
+log. A retry and a capability downgrade both arrive as notices, because a watcher reading an
+unexplained pause wants to be told either way. The step loop, the request body, the silence
 watchdog and the endpoint's latched refusals were all written here once and are not to be
 written here again — see [Future work](#future-work).
+
+Two of the loop's defaults are turned off, and both were decided rather than left.
+`toolOrder: false` sends tools in the order the pool lists them: sorted by name, a tool loaded on
+demand lands mid-array and moves every definition after it, where unsorted it is appended and
+the prefix an endpoint cached still matches — and the pool's order is configuration order, so
+there is no shuffle for a sort to undo. Reopen it with evidence that the order moves between
+requests. `dedupeToolCalls: false` leaves two identical calls in one step as two calls, since a
+counter or a "next page" is meant to answer differently the second time. Recovery is on: a call the model wrote into its reply as text — a
+server whose parser misses the model's template streams it as content — is run as a call rather
+than stored as the step's answer, and the watcher is told in a notice.
+`firstTokenSeconds` is set to `requestTimeoutSeconds`, where the loop would otherwise give the
+first token five times the silence it gives the rest. Tool preselection is done here rather than
+by the loop, so it reads the prompt before the hooks' context is put in front of it and the
+watcher is told what was picked
+([agent-core#150](https://github.com/cubicecho/agent-core/issues/150)).
+
+The catalogue in the system prompt does not mark what is loaded. It used to, and the loop
+deliberately does not: the system prompt is then the same text on every step, so a load does not
+cost the endpoint its cache of the whole transcript. A repeat load is answered "already loaded"
+in the `load_tools` result instead.
 
 **Some of what a request is refused over is the model's, not the endpoint's.** `strictSchemas`
 and `usageInStream` are facts about a server and latch on its base URL. A ceiling spelled
 `max_completion_tokens` and a temperature that is not ours to pick are facts about one *model*,
 and they cannot latch on the endpoint: one key reaches every model a provider offers, so the
 first turn on a chat model would otherwise stop a reasoning model on the same key ever being
-sent the right spelling. agent-core 2.1.0 keys those at `(baseUrl, model)`, `agent.ts` passes
-`runTurn` the `model` option, and the `request` callback rebuilds `max_tokens` and `temperature`
-from the second argument it is now handed. This server lets an operator pick any name the
-endpoint lists, so it is one selection away from meeting both — which is why it opts in.
+sent the right spelling. agent-core keys those at `(baseUrl, model)`, and `runAgentLoop` builds
+each attempt's `max_tokens` and `temperature` from what that model has refused. This server lets
+an operator pick any name the endpoint lists, so it is one selection away from meeting both.
 `reasoningEffort` is the third and goes unread here: there is no column for an effort to send.
-
-The guard is `=== false` rather than a truthiness test, because a model that was never named
-is `undefined` here and has refused nothing — read truthily, that reads `max_completion_tokens`
-out of an *absent* model as well as out of a refusing one, and dropping the `model` option later
-would silently change the spelling for every endpoint. agent-core 2.2.0 says the same on
-`legacyTokenLimit` itself, after its README example was fixed
-([agent-core#40](https://github.com/cubicecho/agent-core/issues/40)); this is no longer a place
-this server departs from upstream.
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.

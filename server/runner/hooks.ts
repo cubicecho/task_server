@@ -11,6 +11,7 @@ import {
 } from "@cubicecho/agent-core";
 import { type ToolHook, validateHooks } from "@cubicecho/agent-mcp-pool";
 import { eq, sql } from "drizzle-orm";
+import { unfiredProblems } from "../../shared/hooks.ts";
 import { db } from "../db/client.ts";
 import { runSteps, runs, type Task } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
@@ -41,33 +42,18 @@ import { mcp } from "./mcp.ts";
 /** Every hook's `{{host}}`, so a server shared with min-agent can tell the two apart. */
 export const HOST = "task-server";
 
-/** The events this server fires, in the order a run meets them. For the form that edits hooks. */
-export const EVENTS_FIRED: readonly HookEvent[] = [
-  "sessionStart",
-  "beforeTurn",
-  "afterTurn",
-  "sessionEnd",
-  "sessionDelete",
-];
-
 /** Where the pool's notices go. The pool prints nothing itself. */
 const log = (message: string) => console.warn(`[hooks] ${message}`);
 
 /**
  * What is wrong with a row's hooks, for the write that saves them.
  *
- * The pool's own check, plus the one thing it cannot know: that this host never compacts.
+ * The pool's own check, plus the one thing it cannot know: which events this host fires.
  */
 export function hookProblems(hooks: unknown): string[] {
   if (hooks === null || hooks === undefined) return [];
   if (!Array.isArray(hooks)) return ["hooks must be a JSON array"];
-  const problems = validateHooks(hooks as ToolHook[]);
-  for (const hook of hooks as Partial<ToolHook>[]) {
-    if (hook?.on === "beforeCompact") {
-      problems.push(`hook "${hook.id}": task-server never compacts, so beforeCompact never fires`);
-    }
-  }
-  return problems;
+  return [...validateHooks(hooks as ToolHook[]), ...unfiredProblems(hooks as Partial<ToolHook>[])];
 }
 
 /**
@@ -97,6 +83,9 @@ export interface HookStep {
   /** The prompt as the step was sent it, before any context. */
   prompt: string;
 }
+
+/** How a run that started came to an end, as `sessionEnd` is told it. */
+type RunEnding = "ok" | "stopped" | "error";
 
 export interface HookSessionOptions {
   runId: string;
@@ -185,7 +174,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
      * what failed on the run row. Never rejects: it is called once the run's outcome is already
      * written, and nobody is waiting on it.
      */
-    end(status: "ok" | "stopped" | "error", reply: string): Promise<void> {
+    end(status: RunEnding, reply: string): Promise<void> {
       const ending = finishing(status, reply);
       ends.add(ending);
       return ending.finally(() => ends.delete(ending));
@@ -208,7 +197,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
     return turnMessages(runId, transcript, at);
   }
 
-  async function finishing(status: "ok" | "stopped" | "error", reply: string) {
+  async function finishing(status: RunEnding, reply: string) {
     try {
       await Promise.all(pending);
       const notes = await notify(run, "sessionEnd", { ...contextFor(), status, reply });

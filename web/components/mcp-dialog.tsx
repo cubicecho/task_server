@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 import { parseJson } from "@/lib/json";
-import { parseMcpJson } from "@/lib/mcp-config";
+import { fieldProblem, parseMcpJson } from "@/lib/mcp-config";
 import { HOOK_PLACEHOLDER, hooksProblem } from "@/lib/mcp-hooks";
 
 type McpServer = McpServersQuery["mcpServers"][number];
@@ -64,26 +64,9 @@ const toDraft = (server?: McpServer): Draft => ({
   hooks: server?.hooks ? JSON.stringify(server.hooks, null, 2) : "",
 });
 
-/**
- * A field that has to parse, checked as it is typed.
- *
- * These three columns are jsonb and are edited here as text, so the only moment the text is
- * known to be an object is when something parses it. That used to be `save`, which meant a
- * missing bracket was a toast on the way out naming a field that was no longer on screen.
- */
-const parses = (what: string, fallback: unknown) => ({
-  onChange: ({ value }: { value: string }) => {
-    try {
-      parseJson(value, what, fallback);
-      return undefined;
-    } catch (error) {
-      return (error as Error).message;
-    }
-  },
-});
-
-const required = (what: string) => ({
-  onChange: ({ value }: { value: string }) => (value.trim() ? undefined : what),
+/** A connection field's validator: the pool's own answer, as the field is typed. */
+const checks = (field: Parameters<typeof fieldProblem>[0]) => ({
+  onChange: ({ value }: { value: string }) => fieldProblem(field, value),
 });
 
 export function McpDialog({
@@ -236,7 +219,7 @@ export function McpDialog({
                   required
                   className="font-mono"
                   placeholder="filesystem"
-                  validators={required("A server needs a slug — its tools are named after it.")}
+                  validators={checks("slug")}
                 />
                 <InputField form={form} name="label" label="Label" placeholder="Local files" />
               </>
@@ -274,7 +257,7 @@ export function McpDialog({
                     required
                     className="font-mono"
                     placeholder="npx"
-                    validators={required("A stdio server needs a command.")}
+                    validators={checks("command")}
                   />
                   <InputField
                     form={form}
@@ -283,7 +266,7 @@ export function McpDialog({
                     description={doc("args")}
                     className="font-mono text-xs"
                     placeholder='["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]'
-                    validators={parses("Args", [])}
+                    validators={checks("args")}
                   />
                   <InputField
                     form={form}
@@ -292,7 +275,7 @@ export function McpDialog({
                     description={doc("env")}
                     className="font-mono text-xs"
                     placeholder='{ "API_TOKEN": "…" }'
-                    validators={parses("Env", {})}
+                    validators={checks("env")}
                   />
                 </>
               ) : (
@@ -305,7 +288,7 @@ export function McpDialog({
                     required
                     className="font-mono"
                     placeholder="https://example.com/mcp"
-                    validators={required("An http server needs a url.")}
+                    validators={checks("url")}
                   />
                   <InputField
                     form={form}
@@ -314,7 +297,7 @@ export function McpDialog({
                     description={doc("headers")}
                     className="font-mono text-xs"
                     placeholder='{ "Authorization": "Bearer …" }'
-                    validators={parses("Headers", {})}
+                    validators={checks("headers")}
                   />
                 </>
               )
