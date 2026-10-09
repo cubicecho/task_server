@@ -4,10 +4,6 @@ import { ROOT } from "../paths.ts";
 import { db, runMigrations } from "./client.ts";
 import { runSteps, runs, settings } from "./schema.ts";
 
-const DEFAULT_SYSTEM_PROMPT =
-  "You are a task runner. Carry out the instruction using the tools available to you, " +
-  "then report what you did and what you found. Say plainly when something failed.";
-
 /**
  * Brings the database up to the current schema on boot, so a fresh clone — or a fresh postgres
  * — runs with no migration step of its own.
@@ -24,10 +20,7 @@ export async function ensureSchema() {
 
   // The settings row is a singleton the UI edits in place, so it has to exist before the UI
   // can load. Column defaults fill the rest in.
-  await db
-    .insert(settings)
-    .values({ id: "default", systemPrompt: DEFAULT_SYSTEM_PROMPT })
-    .onConflictDoNothing();
+  await db.insert(settings).values({ id: "default" }).onConflictDoNothing();
 
   // A run left `running` by a crash is never going to finish; nothing would ever clear it. The
   // step it died inside is in the same position, and a run whose steps still say `running`

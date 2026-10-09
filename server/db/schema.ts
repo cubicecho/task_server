@@ -49,6 +49,8 @@ const createdAt = () =>
     .notNull()
     .$defaultFn(() => new Date());
 
+const updatedAt = () => createdAt().$onUpdateFn(() => new Date());
+
 /**
  * A named bundle of everything a run needs from a model, so that "the cheap local one, terse,
  * with only the calendar attached" is said once and pointed at, rather than retyped into every
@@ -100,10 +102,7 @@ export const agents = pgTable("agents", {
    */
   mcpServerIds: jsonb().$type<string[]>(),
   createdAt: createdAt(),
-  updatedAt: timestamp({ mode: "date", withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdateFn(() => new Date()),
+  updatedAt: updatedAt(),
 });
 
 export const tasks = pgTable("tasks", {
@@ -115,10 +114,7 @@ export const tasks = pgTable("tasks", {
   systemPrompt: text().notNull().default(""),
   enabled: boolean().notNull().default(true),
   createdAt: createdAt(),
-  updatedAt: timestamp({ mode: "date", withTimezone: true })
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdateFn(() => new Date()),
+  updatedAt: updatedAt(),
 });
 
 export const triggers = pgTable(
