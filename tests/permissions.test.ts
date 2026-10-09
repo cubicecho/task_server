@@ -114,6 +114,12 @@ test("agent profiles are the settings row again, and just as shut", async () => 
     `mutation { updateAgent(set: { baseUrl: "https://elsewhere" }, where: { id: { eq: "x" } }) { id } }`,
     `mutation { deleteAgent(where: { id: { eq: "x" } }) { id } }`,
     `mutation { setAgentApiKey(agentId: "x", apiKey: "sk-agent") }`,
+    // The same row as a document, with the command line of every server it reaches beside it.
+    `{ agentSpec(agentId: "x") }`,
+    // And a document as the row: the write, and the dry run of it, which answers which slugs
+    // are servers here. The bundle it may create from is a stdio command this host would spawn.
+    `{ agentSpecPreview(document: { spec: "cubicecho.agent/1", name: "mine" }) { refusals } }`,
+    `mutation { importAgentSpec(document: { spec: "cubicecho.agent/1", name: "mine" }) { id } }`,
   ]) {
     expect(await refused(source, "agent"), source).toEqual(["FORBIDDEN"]);
   }

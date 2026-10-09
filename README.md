@@ -93,6 +93,37 @@ task runs on one — `agentId` is a column like any other — but cannot read a 
 or point a task at a different one. They carry an endpoint, a key and the tool scope, which is
 the settings row's own argument. See **Permissions**.
 
+### Moving a profile between servers
+
+**Export** on a profile's row saves it as `<name>.agent.json`, a `cubicecho.agent/1` document —
+the format [`@cubicecho/agent-core`](https://github.com/cubicecho/agent-core) defines, so the
+file is one any host on that library reads. It holds what the profile overrides and nothing it
+inherits, the slugs of the MCP servers it is narrowed to, and those servers' configs in a
+`bundle` beside it. It holds no API key, and the bundled servers come without their `env` and
+`headers`. A secret written into a server's `args` or `url` is not found and does travel, so
+read a file before sending it.
+
+**Import** takes a pasted document or a chosen file and shows what it would do before anything
+is saved: the profile, what was dropped and why, and each bundled server with the command it
+would run or the url it would dial.
+
+- A profile here is its columns. Anything the document says that has no column is listed under
+  *Not kept*, and will not be in a later export.
+- A bundled server is created only if its box is ticked — remote ones arrive ticked, a command
+  to run on this machine does not. Created servers are enabled, and are checked like any server
+  saved by hand.
+- Ticking a server whose slug is already here refuses the import; untick it and the profile
+  uses the one that exists. Nothing is overwritten.
+- A server the profile is narrowed to that is not here is dropped with a warning. If that would
+  leave none, the import is refused rather than saved: a profile with no servers listed reaches
+  every one, which is the opposite of what the file said.
+- The imported profile has no key. One that names an endpoint of its own sends none until a key
+  is set on it.
+
+Over the API these are `agentSpec(agentId:)`, `agentSpecPreview(document:, createServers:,
+name:)` and `importAgentSpec` with the same three arguments. `createServers` is the slugs to
+create and defaults to none. All three are the operator's, and none is a tool on `/mcp`.
+
 ## Flows
 
 A task's prompt runs first. What follows it is a tree of steps, run depth-first and strictly in
@@ -405,8 +436,9 @@ page. `hiddenTools` hides a server's tools from the model while its hooks can st
 The API is generated from the Drizzle tables by
 [`@vantreeseba/drizzle-graphql`](https://github.com/vantreeseba/drizzle-graphql), so a new
 column is queryable as soon as it exists. Hand-written fields fill the gaps that CRUD cannot
-express: `models`, `mcpStatus`, `schedule` and `runEvents` on the query side, `runTask`,
-`stopTask`, `reconnectMcp`, `setApiKey` and `setAgentApiKey` on the mutation side.
+express: `models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec` and `agentSpecPreview` on
+the query side, `runTask`, `stopTask`, `reconnectMcp`, `setApiKey`, `setAgentApiKey` and
+`importAgentSpec` on the mutation side.
 
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
 - **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,
