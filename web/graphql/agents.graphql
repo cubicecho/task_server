@@ -50,6 +50,55 @@ query AgentSpec($agentId: String!) {
   agentSpec(agentId: $agentId)
 }
 
+# What importing a document would do, asked before it is done. The same three arguments as the
+# write below, so what the dialog shows is what the button saves.
+query AgentSpecPreview($document: JSON!, $createServers: [String!], $name: String) {
+  agentSpecPreview(document: $document, createServers: $createServers, name: $name) {
+    refusals
+    warnings
+    dropped
+    agent {
+      name
+      description
+      baseUrl
+      model
+      systemPrompt
+      maxTokens
+      temperature
+      maxToolIterations
+      toolDiscovery
+      toolSelectModel
+      requestTimeoutSeconds
+      maxRetries
+    }
+    servers {
+      slug
+      label
+      created
+    }
+    bundled {
+      slug
+      label
+      transport
+      target
+      envNames
+      headerNames
+      exists
+      create
+      createByDefault
+      problems
+      notes
+    }
+  }
+}
+
+mutation ImportAgentSpec($document: JSON!, $createServers: [String!], $name: String) {
+  importAgentSpec(document: $document, createServers: $createServers, name: $name) {
+    id
+    name
+  }
+}
+
 mutation CreateAgent($values: CreateAgentInput!) {
   createAgent(values: $values) {
     id

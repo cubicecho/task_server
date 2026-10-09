@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Download, Pencil, Plus, Trash2 } from "lucide-react";
+import { Bot, Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import {
   type AgentFieldsFragment,
@@ -9,6 +9,7 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { ActionButton } from "@/components/action-button";
 import { AgentDialog } from "@/components/agent-dialog";
+import { AgentImportDialog } from "@/components/agent-import-dialog";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
@@ -22,34 +23,14 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
-import { saveFile, specFileName, specText } from "@/lib/agent-spec";
+import { overrides, saveFile, specFileName, specText } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
-
-/**
- * What this profile changes, said in the badges rather than in a second form.
- *
- * A profile is mostly inherit, so listing what it *is* would be listing the settings page. The
- * card says only where it differs, which is the whole reason the row exists.
- */
-function overrides(agent: AgentFieldsFragment): string[] {
-  const said: string[] = [];
-  if (agent.baseUrl) said.push(agent.baseUrl);
-  if (agent.model) said.push(agent.model);
-  if (agent.systemPrompt) said.push("system prompt");
-  if (agent.maxTokens >= 0) said.push(`${agent.maxTokens} tokens`);
-  if (agent.temperature >= 0) said.push(`temp ${agent.temperature}`);
-  if (agent.maxToolIterations >= 0) said.push(`${agent.maxToolIterations} tool steps`);
-  if (agent.toolDiscovery !== "inherit") said.push(agent.toolDiscovery);
-  if (agent.toolSelectModel) said.push(`picks tools with ${agent.toolSelectModel}`);
-  if (agent.requestTimeoutSeconds >= 0) said.push(`${agent.requestTimeoutSeconds}s of silence`);
-  if (agent.maxRetries >= 0) said.push(`${agent.maxRetries} retries`);
-  return said;
-}
 
 export function AgentsRoute() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AgentFieldsFragment | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const agents = useQuery({ queryKey: ["agents"], queryFn: () => request(AgentsDocument) });
   const refresh = () => {
@@ -84,10 +65,16 @@ export function AgentsRoute() {
       title="Agent profiles"
       description="A named set of overrides for Settings, that a task can be pointed at."
       action={
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" />
-          New profile
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImporting(true)}>
+            <Upload className="size-4" />
+            Import
+          </Button>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" />
+            New profile
+          </Button>
+        </div>
       }
       content={
         <>
@@ -188,7 +175,16 @@ export function AgentsRoute() {
             );
           })}
 
-          {creating ? (
+          {importing ? (
+            <AgentImportDialog
+              onClose={() => setImporting(false)}
+              onSaved={() => {
+                refresh();
+                // An import may have created the servers the document bundled.
+                queryClient.invalidateQueries({ queryKey: ["mcp"] });
+              }}
+            />
+          ) : creating ? (
             <AgentDialog servers={servers} onClose={() => setCreating(false)} onSaved={refresh} />
           ) : editing ? (
             <AgentDialog

@@ -1,5 +1,4 @@
 import { fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
-import { validateServerConfig } from "@cubicecho/agent-mcp-pool";
 import { buildSchema, extractFilters, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import { applyPermissions } from "@vantreeseba/graphql-casl";
 import { eq, inArray } from "drizzle-orm";
@@ -24,11 +23,13 @@ import * as mcpPrompts from "../runner/mcp-prompts.ts";
 import { resolveConfig } from "../runner/profile.ts";
 import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
-import { exportAgent } from "./agent-spec.ts";
+import { exportAgent, type ImportOptions, importAgent, previewImport } from "./agent-spec.ts";
 import { describeColumn, describeTable } from "./docs.ts";
+import { NEW_MCP_SERVER, shapeProblems } from "./mcp-server.ts";
 import { permissions } from "./permissions.ts";
 import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
 import {
+  AgentSpecPreviewType,
   McpConnectionInput,
   McpProbeType,
   McpPromptType,
@@ -267,9 +268,6 @@ async function runsOfTasks(tx: typeof db, args: unknown): Promise<string[]> {
   }
 }
 
-/** The columns' own defaults, which a create that leaves them out is going to get. */
-const NEW_MCP_SERVER = { id: "new", label: "", enabled: true, transport: "stdio" };
-
 /**
  * Refuses an MCP server row the pool could not use as written: hooks that could never run, a
  * `hiddenTools` that is not a list of names, a stdio server with no command, a url that is not
@@ -296,14 +294,10 @@ async function vetMcpServer(tx: typeof db, args: unknown) {
 
 /** Throws for what is wrong with `row` and was not already wrong with the row it replaces. */
 function refuseMcpServer(row: Record<string, unknown>, stored?: Record<string, unknown>) {
-  // The hooks are checked apart from the shape: they have a rule of this host's on top of the
-  // pool's, and their own code for a client that wants the list.
-  const shape = (candidate: Record<string, unknown>) =>
-    validateServerConfig({ ...candidate, hooks: null });
-  const known = stored ? [...shape(stored), ...hookProblems(stored.hooks)] : [];
+  const known = stored ? [...shapeProblems(stored), ...hookProblems(stored.hooks)] : [];
   const fresh = (problems: string[]) => problems.filter((problem) => !known.includes(problem));
 
-  const problems = fresh(shape(row));
+  const problems = fresh(shapeProblems(row));
   if (problems.length) {
     throw new GraphQLError(`This server cannot be saved as written: ${problems.join("; ")}`, {
       extensions: { code: "BAD_MCP_SERVER", problems },
@@ -327,6 +321,29 @@ function generatedType(name: string): GraphQLOutputType {
   }
   return type as GraphQLOutputType;
 }
+
+/**
+ * The preview and the write take the same arguments, declared once: a preview that could be
+ * asked a different question from the import it stands for is not a preview of it.
+ */
+const IMPORT_ARGS = {
+  document: {
+    type: new GraphQLNonNull(GraphQLJSON),
+    description: "The agent spec, as parsed JSON.",
+  },
+  createServers: {
+    type: new GraphQLList(new GraphQLNonNull(GraphQLString)),
+    description:
+      "The bundled MCP servers to create, by slug. Absent or empty creates none, and a slug " +
+      "in the document then means the server of that name already here.",
+  },
+  name: {
+    type: GraphQLString,
+    description: "Save the profile under this name instead of the document's own.",
+  },
+};
+
+type ImportArgs = ImportOptions & { document: unknown };
 
 const baseSchema = new GraphQLSchema({
   query: new GraphQLObjectType({
@@ -365,6 +382,17 @@ const baseSchema = new GraphQLSchema({
           "not the profile's API key, and not a bundled server's `env` or `headers`.",
         args: { agentId: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: (_source, args: { agentId: string }) => exportAgent(args.agentId),
+      },
+      agentSpecPreview: {
+        type: new GraphQLNonNull(AgentSpecPreviewType),
+        description:
+          "What `importAgentSpec` would do with the same arguments, without writing anything: " +
+          "the profile it would save, each thing dropped on the way, the MCP servers the " +
+          "document bundles, and any reason the import would be refused. Read this before " +
+          "importing — a bundled server is a command line somebody else wrote.",
+        args: IMPORT_ARGS,
+        resolve: (_source, { document, ...options }: ImportArgs) =>
+          previewImport(document, options),
       },
       mcpStatus: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpServerStatusType))),
@@ -559,6 +587,20 @@ const baseSchema = new GraphQLSchema({
           await mcp.sync();
           return mcp.state();
         },
+      },
+      importAgentSpec: {
+        type: new GraphQLNonNull(generatedType("Agent")),
+        description:
+          "Saves an agent spec (`cubicecho.agent/1`) as a new agent profile, and answers with " +
+          "it. A field the document leaves out is left to inherit, and one a profile has no " +
+          "column for is dropped — `agentSpecPreview` lists which. The profile has no API key " +
+          "until `setAgentApiKey` gives it one.\n\n" +
+          "Refused whole, with nothing written, when the document is not a spec; when " +
+          "`createServers` names a slug that is already an MCP server here; or when none of " +
+          "the servers the agent is narrowed to exist here, since a profile with none listed " +
+          "reaches every server. A slug that is merely missing is dropped from the list.",
+        args: IMPORT_ARGS,
+        resolve: (_source, { document, ...options }: ImportArgs) => importAgent(document, options),
       },
       setAgentApiKey: {
         type: new GraphQLNonNull(GraphQLBoolean),

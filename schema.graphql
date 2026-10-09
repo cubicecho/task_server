@@ -4651,6 +4651,22 @@ type Query {
   agentSpec(agentId: String!): JSON!
 
   """
+  What `importAgentSpec` would do with the same arguments, without writing anything: the profile it would save, each thing dropped on the way, the MCP servers the document bundles, and any reason the import would be refused. Read this before importing — a bundled server is a command line somebody else wrote.
+  """
+  agentSpecPreview(
+    """The agent spec, as parsed JSON."""
+    document: JSON!
+
+    """
+    The bundled MCP servers to create, by slug. Absent or empty creates none, and a slug in the document then means the server of that name already here.
+    """
+    createServers: [String!]
+
+    """Save the profile under this name instead of the document's own."""
+    name: String
+  ): AgentSpecPreview!
+
+  """
   Which of the configured MCP servers this one actually reached, and the tools it found on each. A server that is enabled but absent here failed to connect, and its tools are not offered to any run.
   """
   mcpStatus: [McpServerStatus!]!
@@ -4871,6 +4887,111 @@ enum SettingGroupByColumn {
 }
 
 """
+What importing an agent spec would do, without doing it. `importAgentSpec` with the same arguments writes exactly this, or refuses for exactly `refusals`.
+"""
+type AgentSpecPreview {
+  """
+  Why nothing would be written. Empty means the import would go ahead. A document that is not a spec is refused in the parser's own words.
+  """
+  refusals: [String!]!
+
+  """
+  What was dropped from the document because it could not be used, and what is worth knowing before saving — a server slug that is not here, a profile that will have no key.
+  """
+  warnings: [String!]!
+
+  """
+  What the document says that a profile here has no column for. It is not kept, and will not be in a later export.
+  """
+  dropped: [String!]!
+
+  """
+  The profile as it would be saved. Null when the document is not a spec.
+  """
+  agent: AgentSpecProfile
+
+  """
+  The MCP servers the profile would be narrowed to. Null is every enabled server, which is what a document that names none means.
+  """
+  servers: [AgentSpecScope!]
+
+  """The servers the document bundles, in its order."""
+  bundled: [AgentSpecBundled!]!
+}
+
+"""
+The profile an agent spec would be saved as, column by column. A value at its inherit sentinel — `""`, `-1`, or the word `inherit` — is a field the document did not have. There is no key: a spec carries none.
+"""
+type AgentSpecProfile {
+  name: String!
+  description: String!
+  baseUrl: String!
+  model: String!
+  systemPrompt: String!
+  maxTokens: Int!
+  temperature: Float!
+  maxToolIterations: Int!
+  toolDiscovery: String!
+  toolSelectModel: String!
+  requestTimeoutSeconds: Int!
+  maxRetries: Int!
+}
+
+"""One MCP server an imported profile would be narrowed to."""
+type AgentSpecScope {
+  slug: String!
+  label: String!
+
+  """
+  Made by this import from the document's bundle, rather than found here.
+  """
+  created: Boolean!
+}
+
+"""
+One MCP server an agent spec bundles, and what an import would do about it. Nothing is created unless `createServers` names its slug.
+"""
+type AgentSpecBundled {
+  slug: String!
+  label: String!
+
+  """stdio | http"""
+  transport: String!
+
+  """
+  What creating it would run or dial: the whole command line for stdio, the url for http. Shown so it can be read before it is agreed to.
+  """
+  target: String!
+
+  """
+  The names of the environment variables the document sets. Never the values.
+  """
+  envNames: [String!]!
+
+  """The names of the headers the document sets. Never the values."""
+  headerNames: [String!]!
+
+  """
+  A server with this slug is here already. Left out of `createServers`, the profile uses that one; named in it, the import is refused.
+  """
+  exists: Boolean!
+
+  """`createServers` named it, so the import would create it, enabled."""
+  create: Boolean!
+
+  """
+  Whether a form should offer it ticked: true for an http server that is not here yet and can be saved. Never true for stdio — a command line out of a file is run only when somebody chose to.
+  """
+  createByDefault: Boolean!
+
+  """Why it could not be saved as written. Naming it refuses the import."""
+  problems: [String!]!
+
+  """What is worth knowing about it that stops nothing."""
+  notes: [String!]!
+}
+
+"""
 Live connection state for a configured MCP server, and the tools it offers.
 """
 type McpServerStatus {
@@ -5054,6 +5175,24 @@ type Mutation {
 
   """Tears down and rebuilds every MCP connection."""
   reconnectMcp: [McpServerStatus!]!
+
+  """
+  Saves an agent spec (`cubicecho.agent/1`) as a new agent profile, and answers with it. A field the document leaves out is left to inherit, and one a profile has no column for is dropped — `agentSpecPreview` lists which. The profile has no API key until `setAgentApiKey` gives it one.
+  
+  Refused whole, with nothing written, when the document is not a spec; when `createServers` names a slug that is already an MCP server here; or when none of the servers the agent is narrowed to exist here, since a profile with none listed reaches every server. A slug that is merely missing is dropped from the list.
+  """
+  importAgentSpec(
+    """The agent spec, as parsed JSON."""
+    document: JSON!
+
+    """
+    The bundled MCP servers to create, by slug. Absent or empty creates none, and a slug in the document then means the server of that name already here.
+    """
+    createServers: [String!]
+
+    """Save the profile under this name instead of the document's own."""
+    name: String
+  ): Agent!
 
   """
   Writes one agent profile's API key. Separate from updateAgent for the reason `setApiKey` is separate from updateSetting: the key is write-only, excluded from the Agent type so it can never be read back out. An empty string clears it, which puts the profile back on the server's key — unless it has an endpoint of its own, which is never sent the server's key.
