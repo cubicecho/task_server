@@ -44,6 +44,12 @@ query AgentOptions {
   }
 }
 
+# One profile as a `cubicecho.agent/1` document, to save as a file. Asked for when the button
+# is pressed rather than with the list: it reads every MCP server row to write the bundle.
+query AgentSpec($agentId: String!) {
+  agentSpec(agentId: $agentId)
+}
+
 mutation CreateAgent($values: CreateAgentInput!) {
   createAgent(values: $values) {
     id

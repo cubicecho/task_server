@@ -114,6 +114,8 @@ test("agent profiles are the settings row again, and just as shut", async () => 
     `mutation { updateAgent(set: { baseUrl: "https://elsewhere" }, where: { id: { eq: "x" } }) { id } }`,
     `mutation { deleteAgent(where: { id: { eq: "x" } }) { id } }`,
     `mutation { setAgentApiKey(agentId: "x", apiKey: "sk-agent") }`,
+    // The same row as a document, with the command line of every server it reaches beside it.
+    `{ agentSpec(agentId: "x") }`,
   ]) {
     expect(await refused(source, "agent"), source).toEqual(["FORBIDDEN"]);
   }

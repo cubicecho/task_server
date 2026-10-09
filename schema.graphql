@@ -4646,6 +4646,11 @@ type Query {
   ): [String!]!
 
   """
+  One agent profile as an agent spec (`cubicecho.agent/1`), the document another host reads a profile from. A column left to inherit is a field the document does not have. The MCP servers the profile is narrowed to are named by slug under `tools.servers` and defined under `bundle.mcpServers`. It carries no credential: not the profile's API key, and not a bundled server's `env` or `headers`.
+  """
+  agentSpec(agentId: String!): JSON!
+
+  """
   Which of the configured MCP servers this one actually reached, and the tools it found on each. A server that is enabled but absent here failed to connect, and its tools are not offered to any run.
   """
   mcpStatus: [McpServerStatus!]!

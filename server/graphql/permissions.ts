@@ -212,6 +212,9 @@ export const permissions: PermissionsMap = {
     // And the profiles, which are the settings row per task: an endpoint, a key, and which of
     // those MCP servers a task on the profile may reach.
     ...tableReads("agent", "agents", "Agent"),
+    // A profile written down as a document is the profile, and the bundle beside it is the
+    // command line of every MCP server it reaches — both tables above, in one answer.
+    agentSpec: canUser(Actions.read, "Agent"),
     // The same servers, answered from the live pool instead of the table. It carries no
     // credentials, but it is the same list of what this server dials and with which tools.
     mcpStatus: canUser(Actions.read, "McpServer"),

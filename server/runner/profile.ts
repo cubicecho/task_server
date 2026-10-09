@@ -67,8 +67,12 @@ const settingsLayer = (settings: Settings): AgentSpec => ({
  *
  * `mcpServerIds` is not in it. The scope is a set of this server's row ids, which a spec has no
  * field for, and `resolveServers` answers it from the row.
+ *
+ * Exported because it is also the first half of what `agentSpec` hands out: a profile written
+ * down for another host is this same layer with its slugs put back, and a second projection of
+ * the sentinels would be a second opinion on what "inherit" is.
  */
-const agentLayer = (agent: Agent): AgentSpec => {
+export const agentLayer = (agent: Agent): AgentSpec => {
   const prompt = str(agent.systemPrompt);
   const toolSelect = str(agent.toolSelectModel);
   return {

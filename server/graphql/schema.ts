@@ -24,6 +24,7 @@ import * as mcpPrompts from "../runner/mcp-prompts.ts";
 import { resolveConfig } from "../runner/profile.ts";
 import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
+import { exportAgent } from "./agent-spec.ts";
 import { describeColumn, describeTable } from "./docs.ts";
 import { permissions } from "./permissions.ts";
 import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
@@ -353,6 +354,17 @@ const baseSchema = new GraphQLSchema({
             .limit(1);
           return listModels(resolveConfig(await loadSettings(), agent));
         },
+      },
+      agentSpec: {
+        type: new GraphQLNonNull(GraphQLJSON),
+        description:
+          "One agent profile as an agent spec (`cubicecho.agent/1`), the document another host " +
+          "reads a profile from. A column left to inherit is a field the document does not " +
+          "have. The MCP servers the profile is narrowed to are named by slug under " +
+          "`tools.servers` and defined under `bundle.mcpServers`. It carries no credential: " +
+          "not the profile's API key, and not a bundled server's `env` or `headers`.",
+        args: { agentId: { type: new GraphQLNonNull(GraphQLString) } },
+        resolve: (_source, args: { agentId: string }) => exportAgent(args.agentId),
       },
       mcpStatus: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpServerStatusType))),

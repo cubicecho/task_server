@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
+import { Bot, Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
   type AgentFieldsFragment,
+  AgentSpecDocument,
   AgentsDocument,
   DeleteAgentDocument,
 } from "@/__generated__/graphql/graphql";
@@ -21,6 +22,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { saveFile, specFileName, specText } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
 
 /**
@@ -62,6 +64,16 @@ export function AgentsRoute() {
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteAgentDocument, { id }),
     onSuccess: refresh,
+  });
+
+  // A read, but one made because a button was pressed and whose answer is a file rather than
+  // something to show, so it is a mutation to the cache: nothing to keep, and a failure is
+  // reported the way every other pressed button's is.
+  const exportSpec = useMutation({
+    mutationFn: async (agent: AgentFieldsFragment) => {
+      const { agentSpec } = await request(AgentSpecDocument, { agentId: agent.id });
+      saveFile(specFileName(agent.name), specText(agentSpec));
+    },
   });
 
   const servers = agents.data?.mcpServers ?? [];
@@ -128,6 +140,16 @@ export function AgentsRoute() {
                       onClick={() => setEditing(agent)}
                     >
                       <Pencil />
+                    </ActionButton>
+                    <ActionButton
+                      label="Export"
+                      hint="Save as an agent spec file. It carries no API key."
+                      variant="ghost"
+                      size="icon"
+                      disabled={exportSpec.isPending}
+                      onClick={() => exportSpec.mutate(agent)}
+                    >
+                      <Download />
                     </ActionButton>
                     <ConfirmButton
                       label="Delete"
