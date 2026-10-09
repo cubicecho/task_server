@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { type GraphQLSchema, graphql, print } from "graphql";
 import { beforeAll, expect, test } from "vitest";
-import { type Health, tally, taskHealth } from "@/lib/task-health";
+import { type Health, tally, taskHealth, tasksShown, unexplainedFailures } from "@/lib/task-health";
 import { StatusDocument, type StatusQuery } from "../web/__generated__/graphql/graphql.ts";
 
 // The schema is built from the live Drizzle tables at import time, so the database has to be
@@ -177,4 +177,23 @@ test("a task disabled after a clean run is off, not broken", async () => {
   const data = await ask();
   const task = data.tasks.find((row) => row.name === "off");
   expect(taskHealth(task as StatusQuery["tasks"][number])).toBe("off");
+});
+
+test("the list is what is wrong until a tile asks for one heap", async () => {
+  const { tasks } = await ask();
+  const names = (selected: Health | null) => tasksShown(tasks, selected).map((task) => task.name);
+
+  expect(names(null).sort()).toEqual(["broken", "refused"]);
+  expect(names("fine").sort()).toEqual(["fine", "recovered"]);
+  expect(names("waiting")).toEqual(["waiting"]);
+});
+
+test("a failure its task already answers for is not listed a second time", async () => {
+  const { tasks, failures } = await ask();
+  // The one failed run belongs to the task standing in `broken`, which says the error itself.
+  expect(unexplainedFailures(tasks, failures)).toEqual([]);
+
+  // Once that task is no longer standing in `broken`, nothing else accounts for the failure.
+  const since = tasks.filter((task) => task.name !== "broken");
+  expect(unexplainedFailures(since, failures)).toEqual(failures);
 });

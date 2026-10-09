@@ -24,7 +24,15 @@ import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
-import { ANY, buildWhere, type Filters, isFiltered, NO_FILTERS, WINDOWS } from "@/lib/run-filters";
+import {
+  ANY,
+  buildWhere,
+  type Filters,
+  isFiltered,
+  NO_FILTERS,
+  pickWindow,
+  WINDOWS,
+} from "@/lib/run-filters";
 import { STATUS_VARIANT } from "@/lib/run-status";
 import { useRunTask, useStopTask } from "@/lib/use-task-run";
 
@@ -292,13 +300,7 @@ function FilterBar({
         aria-label="Time window"
         className="w-40"
         value={filters.window}
-        onValueChange={(value) => {
-          const chosen = WINDOWS.find((option) => option.value === value);
-          onChange({
-            window: value,
-            from: chosen?.ms ? new Date(Date.now() - chosen.ms).toISOString() : null,
-          });
-        }}
+        onValueChange={(value) => onChange(pickWindow(value))}
         options={[
           // Same rule, and `WINDOWS` already leads with "Any time", so it is sliced rather than
           // written out twice.
