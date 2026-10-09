@@ -64,13 +64,14 @@ const HINTS: Record<string, string> = {
     "answer lives — for a `cron` trigger. An `event` trigger never appears there, armed or " +
     "not, so its two `enabled` flags are the whole of what can be read back about it.",
   runs:
-    "What happened when tasks ran — `status` is `running`, `ok`, `error`, `stopped` or " +
-    "`skipped`, and a finished run carries its output, its error, the tools it called and what " +
+    "What happened when tasks ran — `status` is `running`, `ok`, `error`, `stopped`, " +
+    "`skipped` or `queued`, and a finished run carries its output, its error, the tools it called and what " +
     "it cost. A `skipped` run never started: its trigger fired while the run named by " +
     "`blockedBy` still held the task, and `attempts` counts how many firings it stands for. " +
     "Such a row spans its whole collision — `startedAt` is the first firing it stands for and " +
     "`finishedAt` moves with the most recent — so its timestamps are a window rather than a " +
-    "duration, and it can outlast the run that blocked it.\n\n" +
+    "duration, and it can outlast the run that blocked it. A `queued` run has not started " +
+    "either, but will: it is waiting for a free slot, and runs in this same row.\n\n" +
     "Filter by `taskId` for one task's history, and order by " +
     "`{ startedAt: { direction: desc, priority: 1 } }` for the latest — every generated " +
     "`orderBy` takes that shape, and `priority` is required rather than defaulted. Where a " +
@@ -217,7 +218,7 @@ const WRITE_HINTS: Record<string, { destructiveHint?: boolean; idempotentHint?: 
  */
 export const mcpHandler = createHttpHandler({
   schema,
-  // Everything arriving here is an agent, whatever it asks for. `TOOLS` below says what one is
+  // Everything arriving here is an agent, whatever it asks for. `TOOLS` above says what one is
   // offered; `permissions.ts` says what one may reach, and this is what tells it apart from the
   // web app — the settings row, the MCP server rows and every bulk write are shut on this door
   // and open on the other.
@@ -250,7 +251,7 @@ export const mcpHandler = createHttpHandler({
   // `triggers`/`steps`/`runs` as list-relation filters, each pulling in the other table's whole
   // filter type, which carries its own relation fields back. Pruning the three fields — nothing
   // else — halves the surface, and across 100 logged calls on it no agent sent one. An agent
-  // that wants a task's triggers reads `list_triggers` and looks at `taskId`, which is the
+  // that wants a task's triggers reads `triggers` and looks at `taskId`, which is the
   // question it was going to ask anyway.
   //
   // This prunes the *projection*: `schema` is the same object yoga serves the web app from, and

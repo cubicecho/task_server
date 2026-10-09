@@ -31,7 +31,7 @@ const CONTEXT_LABELS: Record<StepContext, string> = {
  * A sequence of steps, and the sequences nested inside its decisions.
  *
  * The whole flow is one tree held by the page; every control here hands a new tree upward
- * rather than mutating in place, which is what lets the Text tab re-serialise the same state.
+ * rather than mutating in place.
  */
 export function StepList({
   steps,

@@ -118,7 +118,8 @@ export const COLUMN_DOCS: ColumnDocs = {
       "`error`. `queued` is a firing waiting for a free slot — it has not run yet and will, in " +
       "this same row.",
     payload:
-      "What the trigger handed the run: a webhook's parsed body, and null for everything else. " +
+      "The body the run was started with: a webhook's parsed JSON, or the `payload` given to " +
+      "`runTask`. Null for a cron tick and for a run started with none. " +
       "It is what `{{event}}` interpolated into the prompt.",
     blockedBy: "`skipped` only: the run that was in the way.",
     attempts:

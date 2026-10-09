@@ -35,7 +35,7 @@ import {
  *
  * Named as a type rather than inferred from generated resolvers, which this repo does not emit
  * — `typescript-resolvers` over the whole generated surface is a build of its own for a list of
- * seven names, and the web app's codegen is client documents only. A subject the schema has not
+ * eight names, and the web app's codegen is client documents only. A subject the schema has not
  * got is caught when the map is applied, which is as the server is built rather than on the
  * request that would have needed it.
  */
@@ -202,7 +202,7 @@ export const permissions: PermissionsMap = {
   "*": accept,
   Query: {
     "*": accept,
-    // The two tables an agent is not shown. The settings row is the operator's account of their
+    // The tables an agent is not shown. The settings row is the operator's account of their
     // own server — which endpoint, which model, what it costs. The MCP servers are how this
     // server is wired rather than what it is working on, and `env` and `headers` on one of
     // those rows are credentials in all but name: an agent reading them has read somebody's
