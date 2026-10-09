@@ -1,4 +1,10 @@
-import { preselect, type RunEventInput, runAgentLoop, withContext } from "@cubicecho/agent-core";
+import {
+  contextLimitFor,
+  preselect,
+  type RunEventInput,
+  runAgentLoop,
+  withContext,
+} from "@cubicecho/agent-core";
 import type { Settings } from "../db/schema.ts";
 import { HOOK_PREFACE } from "./hooks.ts";
 import { mcp } from "./mcp.ts";
@@ -39,6 +45,42 @@ export interface AgentOptions {
  * stops spend a run's budget on the ceiling.
  */
 const MAX_CONTINUATIONS = 2;
+
+/**
+ * How long a step waits to be told its model's window. The lookup is a courtesy to the run — it
+ * buys an early, legible refusal — so an endpoint slow to list its models is not worth holding
+ * the step for; it goes ahead unguarded and the answer is remembered for the next one.
+ */
+const WINDOW_LOOKUP_MS = 5_000;
+
+/**
+ * What the model will read, in tokens, so a request that cannot fit is refused here with its
+ * size rather than by the endpoint a round trip later, in whatever words it has for that.
+ *
+ * Zero where the endpoint does not say or did not say in time, which guards nothing. agent-core's
+ * lookup takes no signal and waits as long as a request may, so both the bound and the stop are
+ * raced here: a run stopped while its endpoint sat on `/models` has to end now.
+ */
+function windowFor(
+  endpoint: Parameters<typeof contextLimitFor>[0],
+  signal?: AbortSignal,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const settle = (window: number) => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", stop);
+      resolve(window);
+    };
+    const stop = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => settle(0), WINDOW_LOOKUP_MS);
+    if (signal?.aborted) return stop();
+    signal?.addEventListener("abort", stop, { once: true });
+    void contextLimitFor(endpoint).then(settle);
+  });
+}
 
 /**
  * Runs one task to completion: send the prompt, execute whatever MCP tools the model asks
@@ -85,10 +127,17 @@ export async function runAgent({
       : [];
   if (preselected.length) notice(`tools picked before the run: ${preselected.join(", ")}`);
 
+  const contextLength = await windowFor({ ...config, model }, signal);
+
   const { turn, toolCalls, usage } = await runAgentLoop({
     // A step may run on a model other than the settings row's. The first token gets the same
     // patience as every one after it, where the loop would otherwise wait five times as long.
-    config: { ...config, model, firstTokenSeconds: config.requestTimeoutSeconds },
+    config: {
+      ...config,
+      model,
+      contextLength,
+      firstTokenSeconds: config.requestTimeoutSeconds,
+    },
     system: systemPrompt,
     // The context goes on the step's one question and stays there for the step's whole loop: a
     // run keeps no transcript, so there is no stored message it could leak into.

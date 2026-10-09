@@ -3,7 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { replyWith } from "./fixtures/sse.ts";
+import { notChat, replyWith } from "./fixtures/sse.ts";
 
 // The schema and the runner are built against the live tables at import time, so the database
 // has to be pointed somewhere disposable before anything under server/ is loaded.
@@ -37,6 +37,7 @@ const completion = (content: string) => ({
 
 beforeAll(async () => {
   server = http.createServer((request, response) => {
+    if (notChat(request, response)) return;
     let body = "";
     request.on("data", (chunk) => {
       body += chunk;

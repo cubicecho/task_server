@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
-import { replyWith } from "./fixtures/sse.ts";
+import { notChat, replyWith } from "./fixtures/sse.ts";
 
 // Loading the runner pulls in the database module, so give it somewhere disposable first.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-agent-"));
@@ -30,6 +30,7 @@ const completion = (message: {
 
 beforeAll(async () => {
   server = http.createServer((request, response) => {
+    if (notChat(request, response)) return;
     let body = "";
     request.on("data", (chunk) => {
       body += chunk;

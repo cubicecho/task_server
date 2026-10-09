@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
-import { sseFrom } from "./fixtures/sse.ts";
+import { notChat, sseFrom } from "./fixtures/sse.ts";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-resilience-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
@@ -22,6 +22,8 @@ type Reply =
 
 let replies: Reply[] = [];
 let requests = 0;
+/** The window `/models` reports for the fake model, or zero for a server with no listing. */
+let window = 0;
 /** The messages of every request, so a test can see what a later one was sent. */
 let sent: { role: string; content: string }[][] = [];
 let server: http.Server;
@@ -37,6 +39,12 @@ const completion = (content: string) => ({
 
 beforeAll(async () => {
   server = http.createServer((request, response) => {
+    if (window && request.url?.endsWith("/models")) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ data: [{ id: "fake", context_length: window }] }));
+      return;
+    }
+    if (notChat(request, response)) return;
     let body = "";
     request.on("data", (chunk) => {
       body += chunk;
@@ -87,6 +95,7 @@ beforeAll(async () => {
 beforeEach(() => {
   replies = [];
   requests = 0;
+  window = 0;
   sent = [];
   while (open.length) open.pop()?.destroy();
 });
@@ -183,4 +192,22 @@ test("an answer cut off at the reply ceiling is carried on, not kept as half an 
   expect(requests).toBe(2);
   // The second request is the first with the answer so far on the end, for the model to continue.
   expect(sent[1].at(-1)).toEqual({ role: "assistant", content: "The answer is " });
+});
+
+test("a prompt the model cannot read is refused before it is sent", async () => {
+  // The listing is remembered per endpoint, and the tests above taught it this one has none.
+  const { resetClients } = await import("@cubicecho/agent-core");
+  resetClients();
+  window = 16_384;
+
+  const { runAgent } = await import("../server/runner/agent.ts");
+  const refused = runAgent({
+    config: config(),
+    model: "fake",
+    systemPrompt: "",
+    prompt: "word ".repeat(40_000),
+  });
+  await expect(refused).rejects.toMatchObject({ name: "ContextOverflow" });
+  await expect(refused).rejects.toThrow(/over this model's/);
+  expect(requests).toBe(0);
 });

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
-import { replyWith } from "./fixtures/sse.ts";
+import { notChat, replyWith } from "./fixtures/sse.ts";
 
 /**
  * The MCP servers' hooks, fired around a real run against a real stdio server.
@@ -81,6 +81,7 @@ async function gql(source: string, variableValues?: Record<string, unknown>) {
 
 beforeAll(async () => {
   server = http.createServer((request, response) => {
+    if (notChat(request, response)) return;
     let body = "";
     request.on("data", (chunk) => {
       body += chunk;
