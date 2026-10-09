@@ -251,12 +251,12 @@ test("deleting a run, or the task it belongs to, sends sessionDelete for each ru
   await hooks.hooksSettled();
 
   const deleted = await gql(
-    `mutation ($id: String!) { deleteRunSingle(where: { id: { eq: $id } }) { id } }`,
+    `mutation ($id: String!) { deleteRun(where: { id: { eq: $id } }) { id } }`,
     { id: first.id },
   );
   expect(deleted.errors).toBeUndefined();
   const gone = await gql(
-    `mutation ($id: String!) { deleteTaskSingle(where: { id: { eq: $id } }) { id } }`,
+    `mutation ($id: String!) { deleteTask(where: { id: { eq: $id } }) { id } }`,
     { id: taskId },
   );
   expect(gone.errors).toBeUndefined();

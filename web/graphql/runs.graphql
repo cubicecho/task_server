@@ -57,7 +57,7 @@ query RunDetail($id: String!) {
 }
 
 mutation DeleteRun($id: String!) {
-  deleteRunSingle(where: { id: { eq: $id } }) {
+  deleteRun(where: { id: { eq: $id } }) {
     id
   }
 }

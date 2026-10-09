@@ -1,6 +1,12 @@
 import { CheckCircle2, XCircle } from "lucide-react";
-import type { McpProbe } from "@/__generated__/graphql/graphql";
+import type { TestMcpServerMutation } from "@/__generated__/graphql/graphql";
 import { cn } from "@/lib/utils";
+
+/**
+ * The probe as the document selects it. graphql-codegen 7 emits types for operations only, so
+ * there is no schema-wide `McpProbe` to import, and this is the shape the two callers hold.
+ */
+export type McpProbe = TestMcpServerMutation["testMcpServer"];
 
 /**
  * What `testMcpServer` came back with.

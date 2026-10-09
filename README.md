@@ -572,8 +572,8 @@ the one a client must not retry blind — running a task twice runs it twice.
 
 The schema has forty-odd root fields, and the rest are left out on purpose: the settings row and
 `setApiKey` (the server's own credentials are the operator's business, not a visiting agent's),
-the MCP-server rows, the aggregates and group-bys, and every bulk mutation — `deleteTask` with
-no `where` empties the table, where `deleteTaskSingle` cannot. Each tool selects one level of
+the MCP-server rows, the aggregates and group-bys, and every bulk mutation — `deleteTasks` with
+no `where` empties the table, where `deleteTask` cannot. Each tool selects one level of
 fields, so a listing of tasks does not drag every run's output along with it.
 
 The whole listing is about 155 kB, which is worth saying because it very nearly was not. The
@@ -687,7 +687,7 @@ them, and reads what happened. Four things it may not touch:
 
 Mutations are a whitelist — `"*": deny` at the head of the map — so a write added by a new table
 ships shut rather than open, and so does every bulk form. That last part holds for the operator
-too: `deleteTask` with no `where` empties the table where `deleteTaskSingle` cannot, and every
+too: `deleteTasks` with no `where` empties the table where `deleteTask` cannot, and every
 document under `web/graphql/` already uses a single-row form, so shutting them costs no caller
 anything.
 

@@ -165,10 +165,10 @@ test("offers the task tools, and only those", async () => {
   // guard has to say which field is behind it instead. The footer is the driver's own claim
   // about the schema, which is why it still spells the GraphQL name.
   for (const [tool, field] of [
-    ["delete_task", "deleteTaskSingle"],
-    ["delete_trigger", "deleteTriggerSingle"],
-    ["update_task", "updateTaskSingle"],
-    ["update_trigger", "updateTriggerSingle"],
+    ["delete_task", "deleteTask"],
+    ["delete_trigger", "deleteTrigger"],
+    ["update_task", "updateTask"],
+    ["update_trigger", "updateTrigger"],
   ]) {
     const description = tools.find((each) => each.name === tool)?.description ?? "";
     expect(description).toContain(`GraphQL mutation: \`${field}\``);

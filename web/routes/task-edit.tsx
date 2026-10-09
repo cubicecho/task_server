@@ -142,7 +142,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       };
 
       const taskId = task
-        ? ((await request(UpdateTaskDocument, { id: task.id, set: values })).updateTaskSingle?.id ??
+        ? ((await request(UpdateTaskDocument, { id: task.id, set: values })).updateTask?.id ??
           task.id)
         : (await request(CreateTaskDocument, { values })).createTask.id;
 

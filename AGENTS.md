@@ -215,8 +215,8 @@ authentication, so today the split is defence in depth over `/mcp`; a shared tok
 make a `Bearer` on `/graphql` an agent too.
 
 Mutations are a whitelist — `"*": deny` heads the map — so a write a new table generates ships
-shut. Every bulk form is shut for *everyone*, the operator included: `deleteTask` with no
-`where` empties the table where `deleteTaskSingle` cannot, and every document under
+shut. Every bulk form is shut for *everyone*, the operator included: `deleteTasks` with no
+`where` empties the table where `deleteTask` cannot, and every document under
 `web/graphql/` uses a single-row form already. Reads are the other way round, `"*": accept` with
 the three guarded tables named, each in all four generated spellings (`x`, `xs`, `xsAggregate`,
 `xsGroupBy`) — guarding the plural alone guards the front door of a room with two. A rule on the
@@ -234,14 +234,15 @@ generated description does not say enough. The driver renames after it filters, 
 list names GraphQL fields in camelCase while `HINTS` — and the client — sees the snake_case tool
 name: `Mutation.createTask` is the tool `create_task`.
 
-`toolNameFor` is that spelling, and it also drops the `Single` off the single-row writes:
-`Mutation.updateTaskSingle` is the tool `update_task`. drizzle-graphql needs the qualifier
-because it generates a bulk `updateTask` beside it; this surface excludes the bulk form
-entirely, so the qualifier only distinguished a tool from one that is not here, and agents read
-it as a variant to choose between rather than as the update. It cannot be renamed upstream —
-`suffixes.single` reaches the single *insert* and is ignored by update and delete — and it
-should not be, since the web app has both forms and needs to tell them apart. `TOOL_NAMES` runs
-through the same function, so a name written in prose and the tool it names cannot drift.
+`toolNameFor` is that spelling, and nothing else since drizzle-graphql 13: under a
+`typeNameMapper` the single-row writes are `updateTask` and `deleteTask`, and the bulk forms take
+the plural, `updateTasks` and `deleteTasks`. Before that the single-row form was
+`updateTaskSingle` and this function took the qualifier off, because agents read it as a variant
+to choose between rather than as the update; the tool was `update_task` then and is now. The
+rename moved the dangerous name — `deleteTask` used to be the one that empties a table — which is
+what the whitelist is for: the bulk forms are new names, and a name the map does not hold is
+denied. `TOOL_NAMES` runs through the same function, so a name written in prose and the tool it
+names cannot drift.
 
 Descriptions are written once and read twice, so a cross-reference between fields is respelled
 on the way out: `useToolNames` rewrites a backticked root-field name to its tool name in the

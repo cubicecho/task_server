@@ -4,7 +4,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   CreateMcpServerDocument,
-  type McpProbe,
   type McpServersQuery,
   McpServersTransportEnum,
   TestMcpServerDocument,
@@ -14,7 +13,7 @@ import { InputField, SwitchField, TextareaField, useAppForm } from "@/components
 import { DialogLayout } from "@/components/dialog-layout";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
-import { McpProbeResult } from "@/components/mcp-probe";
+import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
 import { MultiSelectField } from "@/components/multi-select-field";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";

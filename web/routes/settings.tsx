@@ -153,12 +153,12 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
 
   const save = useMutation({
     mutationFn: async (values: SettingsForm) => {
-      const { updateSettingSingle } = await request(UpdateSettingsDocument, { set: toRow(values) });
+      const { updateSetting } = await request(UpdateSettingsDocument, { set: toRow(values) });
       // The key travels on its own mutation because it is write-only — it is excluded from
       // the Setting type, so it can never be read back out of the API.
       if (values.apiKey) await request(SetApiKeyDocument, { apiKey: values.apiKey });
-      if (!updateSettingSingle) throw new Error("There is no settings row to save to.");
-      return updateSettingSingle;
+      if (!updateSetting) throw new Error("There is no settings row to save to.");
+      return updateSetting;
     },
     onSuccess: (fresh) => {
       // Reseeded from what the save read back. Left to a refetch, the form spent the gap being
@@ -193,9 +193,9 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
    */
   const applyEndpoint = useMutation({
     mutationFn: async ({ baseUrl, apiKey }: Pick<SettingsForm, "baseUrl" | "apiKey">) => {
-      const { updateSettingSingle } = await request(UpdateSettingsDocument, { set: { baseUrl } });
+      const { updateSetting } = await request(UpdateSettingsDocument, { set: { baseUrl } });
       if (apiKey) await request(SetApiKeyDocument, { apiKey });
-      if (updateSettingSingle) store(updateSettingSingle);
+      if (updateSetting) store(updateSetting);
       form.setFieldValue("apiKey", "");
       await queryClient.invalidateQueries({ queryKey: ["models"], refetchType: "none" });
       const { models } = await queryClient.fetchQuery({

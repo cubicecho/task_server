@@ -108,8 +108,8 @@ export function AgentDialog({
     mutationFn: async (draft: Draft) => {
       const values = toValues(draft);
       const id = agent
-        ? ((await request(UpdateAgentDocument, { id: agent.id, set: values })).updateAgentSingle
-            ?.id ?? agent.id)
+        ? ((await request(UpdateAgentDocument, { id: agent.id, set: values })).updateAgent?.id ??
+          agent.id)
         : (await request(CreateAgentDocument, { values })).createAgent.id;
 
       // The key travels on its own mutation because it is write-only, exactly as the server's

@@ -15,7 +15,7 @@ import {
  * seventeen fields a visiting agent is offered — deliberately not the settings row, not the MCP
  * server rows, and not a bulk write — but a listing is not a lock. Both endpoints are one
  * schema in one process, so an agent handed those seventeen tools could also post to `/graphql`
- * and call `deleteTask` with no `where`, which empties the table, or `setApiKey`, or
+ * and call `deleteTasks` with no `where`, which empties the table, or `setApiKey`, or
  * `testMcpServer`, which spawns whatever command it is handed. The tool list decided what an
  * agent was *told about*; nothing decided what it could *reach*.
  *
@@ -127,8 +127,8 @@ const canUser = createCan<Partial<GraphContext> | undefined, Subjects>(
 /**
  * The mutations that are allowed at all, each with what it does and to what.
  *
- * A bulk write is in none of them, which is the point. `deleteTask` with no `where` empties the
- * table and `deleteTaskSingle` cannot; `updateTask` with no `where` rewrites every row. They
+ * A bulk write is in none of them, which is the point. `deleteTasks` with no `where` empties the
+ * table and `deleteTask` cannot; `updateTasks` with no `where` rewrites every row. They
  * were already left out of the tool listing, and the web app has never called one — every
  * document under `web/graphql/` uses a single-row form — so shutting them costs no caller
  * anything and closes the one call on this schema that can lose a table.
@@ -139,16 +139,16 @@ const MUTATIONS: Record<string, Rule> = {
   "*": deny,
 
   createTask: canUser(Actions.create, "Task"),
-  updateTaskSingle: canUser(Actions.update, "Task"),
-  deleteTaskSingle: canUser(Actions.delete, "Task"),
+  updateTask: canUser(Actions.update, "Task"),
+  deleteTask: canUser(Actions.delete, "Task"),
 
   createTrigger: canUser(Actions.create, "Trigger"),
-  updateTriggerSingle: canUser(Actions.update, "Trigger"),
-  deleteTriggerSingle: canUser(Actions.delete, "Trigger"),
+  updateTrigger: canUser(Actions.update, "Trigger"),
+  deleteTrigger: canUser(Actions.delete, "Trigger"),
 
   createStep: canUser(Actions.create, "Step"),
-  updateStepSingle: canUser(Actions.update, "Step"),
-  deleteStepSingle: canUser(Actions.delete, "Step"),
+  updateStep: canUser(Actions.update, "Step"),
+  deleteStep: canUser(Actions.delete, "Step"),
 
   // A task being run, stopped, or given a new flow, rather than a row being edited — which is
   // why all three are hand-written, and why all three ask after the task.
@@ -156,23 +156,23 @@ const MUTATIONS: Record<string, Rule> = {
   stopTask: canUser(Actions.update, "Task"),
   setTaskSteps: canUser(Actions.update, "Task"),
 
-  deleteRunSingle: canUser(Actions.delete, "Run"),
-  deleteRunStepSingle: canUser(Actions.delete, "RunStep"),
+  deleteRun: canUser(Actions.delete, "Run"),
+  deleteRunStep: canUser(Actions.delete, "RunStep"),
 
   createMcpServer: canUser(Actions.create, "McpServer"),
-  updateMcpServerSingle: canUser(Actions.update, "McpServer"),
-  deleteMcpServerSingle: canUser(Actions.delete, "McpServer"),
+  updateMcpServer: canUser(Actions.update, "McpServer"),
+  deleteMcpServer: canUser(Actions.delete, "McpServer"),
   // Neither writes a row, and both are the pool rather than the table: one dials a config that
   // need not be saved yet, the other tears every connection down and rebuilds it.
   testMcpServer: canUser(Actions.update, "McpServer"),
   reconnectMcp: canUser(Actions.update, "McpServer"),
 
-  updateSettingSingle: canUser(Actions.update, "Setting"),
+  updateSetting: canUser(Actions.update, "Setting"),
   setApiKey: canUser(Actions.update, "Setting"),
 
   createAgent: canUser(Actions.create, "Agent"),
-  updateAgentSingle: canUser(Actions.update, "Agent"),
-  deleteAgentSingle: canUser(Actions.delete, "Agent"),
+  updateAgent: canUser(Actions.update, "Agent"),
+  deleteAgent: canUser(Actions.delete, "Agent"),
   // Write-only, exactly as `setApiKey` is, and for the same reason.
   setAgentApiKey: canUser(Actions.update, "Agent"),
 };
