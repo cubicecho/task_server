@@ -1,0 +1,64 @@
+---
+layout: base.njk
+---
+<section class="hero project-hero">
+  <h1>{{ site.name }}</h1>
+  <p>{{ site.tagline }}</p>
+  <p class="cta">
+    <a class="button" href="#start">Get started</a>
+    <a class="button secondary" href="{{ site.repo }}" rel="noopener">GitHub ↗</a>
+  </p>
+</section>
+
+<section class="section">
+  <h2>What it does</h2>
+  <p class="section-intro">
+    A task is a prompt. Give it a trigger and the server runs it by itself,
+    against any OpenAI-compatible model, with the tools of every MCP server you
+    have connected. There is no conversation here, only tasks that fire on their
+    own, and a record of what each one did. One process serves the web app, a
+    GraphQL API, and the same API as MCP tools for other agents.
+  </p>
+
+  <ul class="card-grid">
+    <li>
+      <article class="card">
+        <h3>Cron and webhooks</h3>
+        <p>A task fires on a schedule, or when a <code>POST</code> arrives at its webhook, and the JSON body of that request can be placed in the prompt.</p>
+      </article>
+    </li>
+    <li>
+      <article class="card">
+        <h3>Your model, your tools</h3>
+        <p>Point it at Ollama, LM Studio, OpenAI or OpenRouter, add stdio or HTTP MCP servers, and every run can reach their tools.</p>
+      </article>
+    </li>
+    <li>
+      <article class="card">
+        <h3>Every run kept</h3>
+        <p>Status, output, tool calls and token counts are stored for each run, and a run in flight can be watched as it happens.</p>
+      </article>
+    </li>
+  </ul>
+</section>
+
+<section class="section" id="start">
+  <h2>Get started</h2>
+  <div class="prose">
+    <pre class="code"><code>git clone https://github.com/cubicecho/task_server.git
+cd task_server
+docker compose up --build</code></pre>
+    <p>
+      Open <a href="http://localhost:8787">http://localhost:8787</a>, go to
+      <strong>Settings</strong>, point the base URL at an OpenAI-compatible
+      server and pick a model. Then create a task, give it a cron expression,
+      and press <strong>Run now</strong>. The database is embedded, so there is
+      nothing else to install.
+    </p>
+  </div>
+
+  <p class="readme-link">
+    Full documentation lives in the project README:
+    <a href="{{ site.repo }}#readme" rel="noopener">{{ site.repo }}</a>
+  </p>
+</section>

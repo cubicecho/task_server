@@ -1,5 +1,8 @@
 # task-server
 
+**[cubicecho.github.io/task_server](https://cubicecho.github.io/task_server/)** — the one-page
+version of this file.
+
 Scheduled AI tasks. You write a prompt, attach a cron trigger, and the server runs it against
 an OpenAI-compatible model with your MCP servers' tools attached — keeping the output of every
 run.
