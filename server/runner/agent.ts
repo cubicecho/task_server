@@ -33,6 +33,14 @@ export interface AgentOptions {
 }
 
 /**
+ * How many more requests an answer cut off at `maxTokens` is given to finish. Half an answer
+ * stored as the answer reads exactly like a whole one, so a step is worth the extra request —
+ * and two is enough to finish a reply that ran a little long without letting a model that never
+ * stops spend a run's budget on the ceiling.
+ */
+const MAX_CONTINUATIONS = 2;
+
+/**
  * Runs one task to completion: send the prompt, execute whatever MCP tools the model asks
  * for, loop until it stops asking, and return its final reply.
  *
@@ -94,6 +102,7 @@ export async function runAgent({
     // calls: a counter or a "next page" is meant to answer differently the second time.
     toolOrder: false,
     dedupeToolCalls: false,
+    maxContinuations: MAX_CONTINUATIONS,
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {
