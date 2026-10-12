@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useRef } from "react";
 import { toast } from "sonner";
 import {
   type AgentFieldsFragment,
@@ -104,13 +105,16 @@ export function AgentDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // Kept across attempts: a save is two requests, and when the key's fails the profile has
+  // still been created. Without this a second press of Save created it again.
+  const saved = useRef(agent?.id);
+
   const save = useMutation({
     mutationFn: async (draft: Draft) => {
       const values = toValues(draft);
-      const id = agent
-        ? ((await request(UpdateAgentDocument, { id: agent.id, set: values })).updateAgent?.id ??
-          agent.id)
-        : (await request(CreateAgentDocument, { values })).createAgent.id;
+      if (saved.current) await request(UpdateAgentDocument, { id: saved.current, set: values });
+      else saved.current = (await request(CreateAgentDocument, { values })).createAgent.id;
+      const id = saved.current;
 
       // The key travels on its own mutation because it is write-only, exactly as the server's
       // own key does — it is excluded from the Agent type and can never be read back.
