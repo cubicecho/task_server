@@ -6,7 +6,7 @@ import {
   tryAsk,
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
-import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
+import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
 import { type AgentResult, runAgent } from "./agent.ts";
@@ -101,8 +101,6 @@ export function buildTree(rows: Step[]): FlowNode[] {
 /** What a prompt can ask for by hand: `{{previous}}`, `{{steps.<name>}}` and `{{event}}`. */
 const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?)\s*\}\}/gi;
 
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-
 /**
  * The webhook body as a prompt reads it.
  *
@@ -142,7 +140,7 @@ export function renderPrompt(
     placed = true;
     if (key === "previous") return context[context.length - 1]?.output ?? "";
     const wanted = token.slice("steps.".length);
-    const entry = context.find((item) => sameName(item.name, wanted));
+    const entry = context.find((item) => sameCase(item.name, wanted));
     // Saying so beats substituting an empty string and leaving the model to invent the rest.
     return entry ? entry.output : `(no step named "${wanted.trim()}" has run)`;
   });
@@ -166,6 +164,10 @@ export function decisionInstruction(cases: string[]): string {
   );
 }
 
+/** The declared case a label names, spelled as it was declared. */
+const caseNamed = (cases: string[], label: string) =>
+  cases.find((option) => sameCase(option, label));
+
 /**
  * Reads the arm out of a decision's reply.
  *
@@ -175,7 +177,7 @@ export function decisionInstruction(cases: string[]): string {
  * cannot be talked out of answering in prose still tend to end on the answer.
  */
 export function parseCase(output: string, cases: string[]): string | undefined {
-  const match = (value: string) => cases.find((option) => sameName(option, value));
+  const match = (value: string) => caseNamed(cases, value);
 
   const objects = output.match(/\{[^{}]*"case"[^{}]*\}/g);
   for (const candidate of objects?.reverse() ?? []) {
@@ -399,15 +401,13 @@ export async function runFlow({
       ),
     );
     const guessed =
-      typeof extracted?.case === "string"
-        ? plan.cases.find((option) => sameName(option, extracted.case as string))
-        : undefined;
+      typeof extracted?.case === "string" ? caseNamed(plan.cases, extracted.case) : undefined;
     if (guessed) {
       emit({ kind: "notice", text: `decision "${plan.name}" read back as ${guessed}` });
       return guessed;
     }
 
-    if (plan.cases.some((option) => sameName(option, DEFAULT_BRANCH))) {
+    if (caseNamed(plan.cases, DEFAULT_BRANCH)) {
       emit({ kind: "notice", text: `decision "${plan.name}" fell through to ${DEFAULT_BRANCH}` });
       return DEFAULT_BRANCH;
     }
