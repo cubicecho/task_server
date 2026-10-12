@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AgentOptionsDocument,
@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { describeFor } from "@/lib/docs";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
+import { isBlank, triggerProblem } from "@/lib/triggers";
 
 /**
  * The page behind `/tasks/new` and `/tasks/$taskId`.
@@ -130,8 +131,19 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     queryFn: () => request(AgentOptionsDocument),
   });
 
+  // What a save has already written, kept across attempts. A save is several requests, and one
+  // that fails part-way has still created whatever came before it: without this a second press
+  // of Save created the task again, and every trigger the first attempt had got to.
+  const progress = useRef({
+    taskId: task?.id,
+    /** Draft key to the id the server gave it. */
+    triggers: new Map<string, string>(),
+    deleted: new Set<string>(),
+  });
+
   const save = useMutation({
     mutationFn: async (form: Form) => {
+      const done = progress.current;
       // Null rather than "": the column is a foreign key, and an empty string is not a profile.
       const values = {
         name: form.name.trim(),
@@ -141,25 +153,29 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         systemPrompt: form.systemPrompt,
       };
 
-      const taskId = task
-        ? ((await request(UpdateTaskDocument, { id: task.id, set: values })).updateTask?.id ??
-          task.id)
-        : (await request(CreateTaskDocument, { values })).createTask.id;
+      if (done.taskId) await request(UpdateTaskDocument, { id: done.taskId, set: values });
+      else done.taskId = (await request(CreateTaskDocument, { values })).createTask.id;
+      const taskId = done.taskId;
 
       // Triggers are saved one by one because `nestedWrites` is off (see
       // `server/graphql/schema.ts`). The flow is not: `setTaskSteps` writes the tree in one
       // transaction, so a flow either lands whole or not at all.
-      for (const id of removed) await request(DeleteTriggerDocument, { id });
+      for (const id of removed) {
+        if (done.deleted.has(id)) continue;
+        await request(DeleteTriggerDocument, { id });
+        done.deleted.add(id);
+      }
       const saved: DraftTrigger[] = [];
       for (const trigger of form.triggers) {
         // A row left blank is one that was added and never filled in, which is not an edit to
-        // save. A webhook with no id would be worse than nothing: no address reaches it.
-        const cron = trigger.cron.trim();
-        const event = trigger.event.trim();
-        if (trigger.kind === "cron" ? !cron : !event) {
+        // save. A webhook with no id would be worse than nothing: no address reaches it. A
+        // *saved* row left blank never gets this far — the field's validator refuses it.
+        if (isBlank(trigger)) {
           saved.push(trigger);
           continue;
         }
+        const cron = trigger.cron.trim();
+        const event = trigger.event.trim();
 
         const kind = trigger.kind === "cron" ? TriggersKindEnum.Cron : TriggersKindEnum.Event;
         const set = {
@@ -169,12 +185,13 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
           event,
           enabled: trigger.enabled,
         };
-        let id = trigger.id;
+        let id = trigger.id ?? done.triggers.get(trigger.key);
         if (id) {
           await request(UpdateTriggerDocument, { id, set });
         } else {
           id = (await request(CreateTriggerDocument, { values: { taskId, ...set } })).createTrigger
             .id;
+          done.triggers.set(trigger.key, id);
         }
         // The trimmed values go back too, so the row reads as what was actually stored.
         saved.push({ ...trigger, id, cron, event, timezone: set.timezone });
@@ -214,6 +231,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       // nothing, because the draft still had no id to delete by.
       formApi.reset({ ...value, triggers: written.triggers, steps: written.steps });
       setRemoved([]);
+      progress.current.deleted.clear();
       if (!task) navigate({ to: "/tasks/$taskId", params: { taskId: written.taskId } });
     },
   });
@@ -345,7 +363,13 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
             )}
           </form.Subscribe>
 
-          <form.Field name="triggers">
+          <form.Field
+            name="triggers"
+            validators={{
+              // The rows say which one and why; this is what holds the Save button.
+              onChange: ({ value }) => value.map(triggerProblem).find(Boolean),
+            }}
+          >
             {(field) => (
               <TriggerEditor
                 triggers={field.state.value}
