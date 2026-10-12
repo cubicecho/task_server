@@ -190,7 +190,7 @@ function PromptDialog({
               arguments that may be wrong are. */}
           {expand.error ? (
             <p className="text-destructive text-sm">
-              {(expand.error as Error).message || "That prompt could not be expanded."}
+              {expand.error.message || "That prompt could not be expanded."}
             </p>
           ) : null}
         </div>

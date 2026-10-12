@@ -90,7 +90,7 @@ export function ModelSelect({
     ...names.map((name) => ({ value: name, label: name, className: "font-mono" })),
     ...(models.isFetching && names.length === 0 ? [{ note: "Loading…" }] : []),
     ...(models.error
-      ? [{ note: (models.error as Error).message, className: "text-destructive text-xs" }]
+      ? [{ note: models.error.message, className: "text-destructive text-xs" }]
       : []),
     { separator: true },
     { value: CUSTOM, label: "Type a name…" },

@@ -3,6 +3,7 @@ import { LastPayloadDocument } from "@/__generated__/graphql/graphql";
 import { TextareaField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { Button } from "@/components/ui/button";
+import { errorMessage } from "@/lib/errors";
 import { request } from "@/lib/gql";
 import { parseJson } from "@/lib/json";
 
@@ -124,7 +125,7 @@ function BodyForm({
                   parseJson<unknown>(value, "The body", null);
                   return undefined;
                 } catch (error) {
-                  return (error as Error).message;
+                  return errorMessage(error);
                 }
               },
             }}

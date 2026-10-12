@@ -74,7 +74,7 @@ export function TaskEditRoute() {
             <QueryError
               // A task that is simply not there is not a failed request, and saying "try again"
               // about it would be a lie — so the absence is phrased as the error it is.
-              error={(task.error as Error | null) ?? new Error("There is no task with that id.")}
+              error={task.error ?? new Error("There is no task with that id.")}
               onRetry={() => task.refetch()}
               what="that task"
             />

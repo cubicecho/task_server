@@ -200,7 +200,7 @@ function RunDetail({
 
   if (!found) {
     return detail.error ? (
-      <p className="text-destructive text-sm">{(detail.error as Error).message}</p>
+      <p className="text-destructive text-sm">{detail.error.message}</p>
     ) : (
       <p className="text-muted-foreground text-sm">Loading…</p>
     );
