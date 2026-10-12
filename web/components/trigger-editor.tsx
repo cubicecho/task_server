@@ -59,6 +59,15 @@ function newWebhookId(): string {
   return Array.from(bytes, (byte) => ALPHABET[byte % ALPHABET.length]).join("");
 }
 
+/** A trigger of this kind with nothing filled in, armed. */
+const emptyTrigger = (kind: DraftTrigger["kind"]): Omit<DraftTrigger, "key"> => ({
+  kind,
+  cron: "",
+  timezone: "",
+  event: "",
+  enabled: true,
+});
+
 /** The saved rows, as the editor holds them. */
 export const toDraftTriggers = (rows: TaskFieldsFragment["triggers"]): DraftTrigger[] =>
   rows.map((row) => ({
@@ -106,12 +115,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
       <Section
         title="Schedule"
         action={
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => add({ kind: "cron", cron: "", timezone: "", event: "", enabled: true })}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={() => add(emptyTrigger("cron"))}>
             <Plus className="size-4" />
             Add
           </Button>
@@ -168,15 +172,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
                   key={example.cron}
                   type="button"
                   className="rounded-md border px-2 py-1 hover:bg-accent"
-                  onClick={() =>
-                    add({
-                      kind: "cron",
-                      cron: example.cron,
-                      timezone: "",
-                      event: "",
-                      enabled: true,
-                    })
-                  }
+                  onClick={() => add({ ...emptyTrigger("cron"), cron: example.cron })}
                 >
                   {example.label} <span className="font-mono">{example.cron}</span>
                 </button>
@@ -193,9 +189,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() =>
-              add({ kind: "event", cron: "", timezone: "", event: newWebhookId(), enabled: true })
-            }
+            onClick={() => add({ ...emptyTrigger("event"), event: newWebhookId() })}
           >
             <Plus className="size-4" />
             Add
