@@ -32,8 +32,8 @@ export async function loadSettings(): Promise<Settings> {
  * The models an endpoint offers, by name.
  *
  * Pass a resolved config to ask an agent profile's endpoint instead of the server's own. The
- * context length agent-core reports alongside each name is dropped: nothing here sizes a window
- * from it, and the picker this feeds shows names.
+ * context length agent-core reports alongside each name is dropped: the picker this feeds shows
+ * names, and a run sizes its window through `contextLimitFor` in `agent.ts`.
  */
 export async function listModels(config?: Settings): Promise<string[]> {
   const models = await listEndpointModels(config ?? (await loadSettings()));

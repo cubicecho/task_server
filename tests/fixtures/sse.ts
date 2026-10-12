@@ -68,3 +68,19 @@ export function replyWith(
   response.writeHead(200, { "content-type": "text/event-stream" });
   response.end(sseFrom(completion, !!body.stream_options?.include_usage));
 }
+
+/**
+ * Answers 404 to anything that is not a chat request, and says whether it did.
+ *
+ * A run asks its endpoint what it serves before it sends a turn — `/models`, then the native
+ * routes — and a fake that treats every request as a chat would spend a scripted reply on each.
+ */
+export function notChat(
+  request: import("node:http").IncomingMessage,
+  response: import("node:http").ServerResponse,
+): boolean {
+  if (request.method === "POST" && request.url?.endsWith("/chat/completions")) return false;
+  request.resume();
+  response.writeHead(404, { "content-type": "application/json" }).end("{}");
+  return true;
+}

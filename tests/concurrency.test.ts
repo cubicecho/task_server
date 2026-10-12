@@ -52,6 +52,9 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const { taskId } of Object.values(ids)) runner.stopTask(taskId);
   await until(() => runner.runningTaskIds().size === 0);
+  // A stopped run's request is aborted, but the question it asked of `/models` first is not
+  // the run's to cancel, and a server that never answers would wait on it.
+  hang.closeAllConnections();
   await new Promise((resolve) => hang.close(resolve));
   fs.rmSync(dir, { recursive: true, force: true });
 });

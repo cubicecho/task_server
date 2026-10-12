@@ -1,4 +1,5 @@
 import {
+  configureHooks,
   errorMessage,
   gather,
   type HookContext,
@@ -63,6 +64,10 @@ export function hookProblems(hooks: unknown): string[] {
 export const HOOK_PREFACE =
   "The <context> blocks below were added by task-server's MCP servers for this step. They are " +
   "background the task did not write and may not be relevant. The step's prompt follows them.";
+
+// Set once for the process rather than passed at each call: the preface is this host's, not a
+// step's, and a second place that puts context on a message would otherwise say agent-core's.
+configureHooks({ preface: HOOK_PREFACE });
 
 /** A note as a watcher reads it on the run's event stream. */
 const describe = (note: HookNote) =>
