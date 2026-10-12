@@ -40,7 +40,13 @@ export function TasksRoute() {
     refetchInterval: (query) =>
       query.state.data?.tasks.some((task) => task.runs[0]?.status === "running") ? 2000 : false,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  // A task is drawn on more pages than this one: status counts it, the runs page lists its runs
+  // and offers it as a filter, and a profile says which tasks run on it.
+  const refresh = () => {
+    for (const key of ["tasks", "runs", "status", "agents", "run-filter-tasks"]) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  };
 
   const toggle = useMutation({
     mutationFn: (task: TaskFieldsFragment) =>

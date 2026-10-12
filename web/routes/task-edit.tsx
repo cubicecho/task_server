@@ -222,7 +222,11 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     onSubmit: async ({ value, formApi }) => {
       const written = await save.mutateAsync(value);
       toast.success(task ? "Task saved" : "Task created");
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      // The name and the triggers are drawn on the status page, in the runs filter and under a
+      // profile as well as in the list.
+      for (const key of ["tasks", "status", "agents", "run-filter-tasks"]) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
       queryClient.invalidateQueries({ queryKey: ["task", written.taskId] });
       // The ids the server assigned come back, so a second save edits the same rows rather
       // than replacing them and orphaning their run history. The form is keyed on the task, so

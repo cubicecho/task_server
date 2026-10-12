@@ -34,7 +34,7 @@ import {
   WINDOWS,
 } from "@/lib/run-filters";
 import { STATUS_VARIANT } from "@/lib/run-status";
-import { useRunTask, useStopTask } from "@/lib/use-task-run";
+import { useRefreshRuns, useRunTask, useStopTask } from "@/lib/use-task-run";
 
 type Run = RunsQuery["runs"][number];
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
@@ -371,9 +371,11 @@ export function RunsRoute() {
     setLimit(PAGE);
   };
 
+  const refresh = useRefreshRuns();
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteRunDocument, { id }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runs"] }),
+    // Not this list alone: the tasks page and the status page each show a task's last run.
+    onSuccess: refresh,
   });
 
   const start = useRunTask();
