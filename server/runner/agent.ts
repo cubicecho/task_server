@@ -1,5 +1,6 @@
 import {
   contextLimitFor,
+  type Endpoint,
   preselect,
   type RunEventInput,
   runAgentLoop,
@@ -60,10 +61,7 @@ const WINDOW_LOOKUP_MS = 5_000;
  * lookup takes no signal and waits as long as a request may, so both the bound and the stop are
  * raced here: a run stopped while its endpoint sat on `/models` has to end now.
  */
-function windowFor(
-  endpoint: Parameters<typeof contextLimitFor>[0],
-  signal?: AbortSignal,
-): Promise<number> {
+function windowFor(endpoint: Endpoint & { model: string }, signal?: AbortSignal): Promise<number> {
   return new Promise((resolve, reject) => {
     const settle = (window: number) => {
       clearTimeout(timer);

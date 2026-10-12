@@ -1,6 +1,5 @@
 import { and, eq, getTableColumns, inArray, notInArray, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
-import { GraphQLError } from "graphql";
 import {
   CONTEXTS,
   DEFAULT_BRANCH,
@@ -11,6 +10,7 @@ import {
 } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { steps, tasks } from "../db/schema.ts";
+import { refusal } from "./errors.ts";
 
 /**
  * Writing a task's flow: one call that replaces the whole tree.
@@ -44,11 +44,11 @@ export interface StepInput {
 
 type NewStep = typeof steps.$inferInsert & { id: string };
 
-const reject = (message: string): never => {
-  // A plain Error reaches the client as "Internal server error"; every one of these is
-  // something the client got wrong and can fix.
-  throw new GraphQLError(message, { extensions: { code: "BAD_STEPS" } });
-};
+// A declaration, not an arrow: TypeScript only narrows past a call that returns `never` when
+// the callee is declared with that type, and the checks below rely on it.
+function reject(message: string): never {
+  throw refusal("BAD_STEPS", message);
+}
 
 /**
  * Flattens the nested input into rows, assigning `parentId`, `branch` and `position`.
@@ -105,7 +105,7 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
         cases: kind === "decision" ? cases : null,
         model: (item.model ?? "").trim(),
         systemPrompt: item.systemPrompt ?? "",
-        context: context as (typeof CONTEXTS)[number],
+        context,
         enabled: item.enabled ?? true,
       });
 
@@ -122,9 +122,9 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
               `(${cases.join(", ")}) or "${DEFAULT_BRANCH}".`,
           );
         }
-        if (taken.has(resolved as string)) reject(`${label} has two branches for "${arm.case}".`);
-        taken.add(resolved as string);
-        walk(arm.steps ?? [], id, resolved as string, depth + 1);
+        if (taken.has(resolved)) reject(`${label} has two branches for "${arm.case}".`);
+        taken.add(resolved);
+        walk(arm.steps ?? [], id, resolved, depth + 1);
       }
     });
   };
