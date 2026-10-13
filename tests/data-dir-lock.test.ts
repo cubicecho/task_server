@@ -8,9 +8,20 @@ import { afterEach, expect, test } from "vitest";
 const FIXTURE = fileURLToPath(new URL("./fixtures/hold-data-dir.mjs", import.meta.url));
 
 const running: ChildProcess[] = [];
+const made: string[] = [];
 
-afterEach(() => {
-  for (const child of running.splice(0)) child.kill("SIGKILL");
+afterEach(async () => {
+  // Killed and then waited for: a server still writing into a directory is what stops it
+  // being removed.
+  await Promise.all(
+    running.splice(0).map((child) => {
+      if (child.exitCode !== null || child.signalCode !== null) return undefined;
+      const gone = new Promise((resolve) => child.once("exit", resolve));
+      child.kill("SIGKILL");
+      return gone;
+    }),
+  );
+  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
 /**
@@ -41,7 +52,11 @@ function boot(dir: string): Promise<{ line: string; child: ChildProcess }> {
   });
 }
 
-const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), "task-server-lock-"));
+function temp() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-lock-"));
+  made.push(dir);
+  return dir;
+}
 
 test("a second server refuses the data directory the first one holds", async () => {
   const dir = temp();
