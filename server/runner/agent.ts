@@ -86,12 +86,9 @@ function windowFor(endpoint: Endpoint & { model: string }, signal?: AbortSignal)
  * Runs one task to completion: send the prompt, execute whatever MCP tools the model asks
  * for, loop until it stops asking, and return its final reply.
  *
- * The loop itself is agent-core's `runAgentLoop`. What is here is what is this server's: which
- * model, which MCP servers, and what a watcher is told.
- *
- * A run keeps no history — it starts from nothing every time, so the only state is the messages
- * built up inside this call. That also means nothing is learned between runs: whatever the model
- * loads, it loads again next time.
+ * The loop is agent-core's `runAgentLoop`; what is here is which model, which MCP servers, and
+ * what a watcher is told. A run keeps no history, so nothing is learned between runs: whatever
+ * the model loads, it loads again next time.
  */
 export async function runAgent({
   config,

@@ -19,26 +19,14 @@ import { runSteps, runs, type Step, type Task } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
 
 /**
- * The MCP servers' hooks, fired at a run's points.
+ * The MCP servers' hooks, fired at a run's points, in the session vocabulary min-agent and
+ * kanban_server fire them in.
  *
- * The pool runs them and never lets one fail a step. This is the half that knows what a run of
- * this server looks like, mapped onto the session vocabulary the hooks are written in — the
- * same vocabulary min-agent and kanban_server fire them in, so one memory server's documented
- * config works on all three:
- *
- * - A **run** is the session: `{{session.id}}` is the run id.
- * - A **step** is a turn: `beforeTurn` before each step that executes, `afterTurn` once it has
- *   its output. The task's own prompt is turn 0, and `sessionStart` fires ahead of it too.
- * - `sessionEnd` fires once the run has finished, with its status and final output.
- * - `sessionDelete` fires for a run deleted by hand, by retention, or with its task.
- * - `beforeCompact` never fires. A step starts from nothing and nothing is ever compacted, so a
- *   hook bound to it is refused when the row is saved rather than left to wait forever.
- *
- * A skipped or queued run never started, and fires nothing. A step that is disabled is not a turn.
- *
- * Each run starts from nothing, so a memory server keyed by `{{session.id}}` remembers nothing
- * the next run can use. `{{vars.task.id}}` is what to key on for memory that should outlast the
- * run — see `vars` below.
+ * A run is the session (`{{session.id}}` is the run id) and each executed step is a turn, the
+ * task's own prompt being turn 0 with `sessionStart` ahead of it. `sessionEnd` fires once the
+ * run has finished, `sessionDelete` for a run deleted by hand, by retention or with its task,
+ * and `beforeCompact` never, so a hook bound to it is refused on save. A skipped or queued run
+ * fires nothing, and `{{vars.task.id}}` is the key for memory that should outlast one run.
  */
 
 /** Every hook's `{{host}}`, so a server shared with min-agent can tell the two apart. */

@@ -11,17 +11,10 @@ import { mcpServers } from "../db/schema.ts";
  * This server's MCP pool: one long-lived client per configured server, offering their tools to
  * a run as `<slug>__<tool name>`.
  *
- * The pool itself is `@cubicecho/agent-mcp-pool`'s. What is this server's is what is below — where
- * the configured servers come from, and what this process calls itself when it connects.
- * `load` is the seam that used to be an `import { db }` inside the pool: it is called whenever
- * `sync()` reconciles without being handed rows, which is the boot path and every `onWrite`
- * hook on the table.
- *
- * The name and the version are one thing — the `clientInfo` of the handshake, and the whole of
- * what a dialled server can log or gate on. Left to itself the pool reports its own version, so
- * a server would be told this process is `task-server` at whatever agent-mcp-pool happens to be;
- * it is the same string `/mcp` already answers with, so a server this one dials and a client that
- * dials it read one version.
+ * The pool is `@cubicecho/agent-mcp-pool`'s; what is this server's is below. `load` is called
+ * whenever `sync()` reconciles without being handed rows, which is boot and every `onWrite`
+ * hook on the table. The name and version are the handshake's `clientInfo`, set here because
+ * the pool would otherwise report its own version under this server's name.
  */
 export const mcp = new McpPool({
   load: () => db.select().from(mcpServers),

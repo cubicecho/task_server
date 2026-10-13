@@ -16,18 +16,11 @@ import type { HookSession, HookStep } from "./hooks.ts";
 /**
  * A task as a flow: its prompt, then a tree of steps under it.
  *
- * One prompt is enough to summarise a build. It is not enough for the thing people actually
- * want from an automation — *do something, look at what came back, then do one of several
- * things* — and that is what this adds. A **sequence** is steps one after another, each shown
- * what the ones before it produced. A **decision** is a step that also picks which of its arms
- * runs next, and an arm is itself a sequence, so the whole thing nests.
- *
- * A decision is a full agent run, tools and all: deciding whether the last five emails contain
- * an application error may well mean going and reading them. What separates it from an ordinary
- * step is only that its final answer has to land on one of the arms it declared.
- *
- * Nothing here loops: the flow is a tree, walked depth-first, and each step's own tool loop is
- * bounded by `settings.maxToolIterations` as before.
+ * A **sequence** is steps one after another, each shown what the ones before it produced. A
+ * **decision** is a full agent run, tools and all, whose final answer has to land on one of the
+ * arms it declared, and an arm is itself a sequence, so the whole thing nests. Nothing loops:
+ * the flow is a tree walked depth-first, and each step's own tool loop is bounded by
+ * `settings.maxToolIterations`.
  */
 
 // The editor enforces the same three, so they live where both halves can read them, and are
@@ -143,13 +136,10 @@ function visibleTo(mode: Step["context"], context: ContextEntry[]): ContextEntry
  * The user message a step is sent: what came before it, then what it was asked to do.
  *
  * By default the earlier outputs are a preamble above the prompt, as much of them as the step's
- * `context` mode allows. A prompt that names what it wants — "write an md file containing
- * {{previous}}" — gets the substitution instead and no preamble, because it has said where the
- * data belongs and repeating it above would only be a second copy for the model to reconcile.
- *
- * `{{event}}` is the exception to that: it is the webhook body, which is not step context at
- * all, so placing it says nothing about where the earlier outputs go and does not suppress the
- * preamble. A prompt can ask for both and get both.
+ * `context` mode allows. A prompt that places them itself with `{{previous}}` or
+ * `{{steps.<name>}}` gets the substitution and no preamble, since a second copy would only be
+ * something for the model to reconcile. `{{event}}` is the webhook body, not step context, so
+ * placing it does not suppress the preamble.
  */
 export function renderPrompt(
   step: Pick<Step, "prompt" | "context">,
