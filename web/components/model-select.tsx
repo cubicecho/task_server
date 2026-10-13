@@ -13,8 +13,9 @@ const CUSTOM = "__custom__";
 
 /**
  * The props a `FormField` hands its control, which this passes to whichever of its two
- * controls is on screen. Its root renders no DOM of its own, so callers inside a field reach
- * it through the function form of `control` — see `ModelSelectField`.
+ * controls is on screen: the select's trigger, or the text input "Type a name…" swaps in.
+ * Callers inside a field hand them over with the function form of `control` — see
+ * `ModelSelectField`.
  */
 type Wired = {
   id?: string;

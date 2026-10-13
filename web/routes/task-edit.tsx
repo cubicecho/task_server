@@ -30,12 +30,6 @@ import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
 import { isBlank, triggerProblem } from "@/lib/triggers";
 
-/**
- * The page behind `/tasks/new` and `/tasks/$taskId`.
- *
- * An existing task is fetched whole — triggers and flow included — before the form is built,
- * so the form is initialised once from real data rather than patched into shape afterwards.
- */
 /** The notes under this form's fields are the columns' own descriptions. */
 const doc = describeFor("Task");
 
@@ -52,6 +46,12 @@ const Breadcrumbs = () => (
   </Link>
 );
 
+/**
+ * The page behind `/tasks/new` and `/tasks/$taskId`.
+ *
+ * An existing task is fetched whole — triggers and flow included — before the form is built,
+ * so the form is initialised once from real data rather than patched into shape afterwards.
+ */
 export function TaskEditRoute() {
   const { taskId } = useParams({ strict: false });
 

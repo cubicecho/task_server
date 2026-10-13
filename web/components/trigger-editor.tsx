@@ -40,6 +40,12 @@ let counter = 0;
 const nextKey = () => `trigger-${++counter}`;
 
 /**
+ * 32 letters exactly, so that `% 32` over a byte stays uniform, and without `i`, `l`, `o` and
+ * `u`, so an id read off a screen cannot be transcribed into a different one.
+ */
+const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+
+/**
  * An unguessable webhook id.
  *
  * The id is the whole of the address and the whole of the authentication — there is no secret
@@ -48,11 +54,7 @@ const nextKey = () => `trigger-${++counter}`;
  *
  * `crypto.randomUUID` is not used: it is unavailable outside a secure context, and this server
  * is very often reached over plain http at a LAN address. `getRandomValues` is always there.
- * The alphabet is 32 letters exactly so that `% 32` over a byte stays uniform, and it drops
- * `i`, `l`, `o` and `u` so an id read off a screen cannot be transcribed into a different one.
  */
-const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
-
 function newWebhookId(): string {
   const bytes = new Uint8Array(26);
   crypto.getRandomValues(bytes);
