@@ -3,11 +3,12 @@ import {
   errorMessage,
   gather,
   type HookContext,
-  type HookEvent,
+  HookEvent,
   type HookNote,
   type HookRunner,
   notify,
   type RunEventInput,
+  RunEventKind,
   turnMessages,
 } from "@cubicecho/agent-core";
 import { type ToolHook, validateHooks } from "@cubicecho/agent-mcp-pool";
@@ -141,7 +142,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
      */
     before(step: HookStep, signal?: AbortSignal, onEvent?: (event: RunEventInput) => void) {
       const events: HookEvent[] =
-        step.index === 0 ? ["sessionStart", "beforeTurn"] : ["beforeTurn"];
+        step.index === 0 ? [HookEvent.SessionStart, HookEvent.BeforeTurn] : [HookEvent.BeforeTurn];
       const context: HookContext = {
         ...contextFor(step),
         prompt: step.prompt,
@@ -149,7 +150,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
       };
       return gather(run, events, context, {
         signal,
-        onNote: (note) => onEvent?.({ kind: "notice", text: describe(note) }),
+        onNote: (note) => onEvent?.({ kind: RunEventKind.Notice, text: describe(note) }),
       });
     },
 
@@ -166,8 +167,8 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
         reply,
         turn: { index: step.index, messages: exchange(step, reply) },
       };
-      const done = notify(run, "afterTurn", context, (note) =>
-        onEvent?.({ kind: "notice", text: describe(note) }),
+      const done = notify(run, HookEvent.AfterTurn, context, (note) =>
+        onEvent?.({ kind: RunEventKind.Notice, text: describe(note) }),
       ).then(async (notes) => {
         if (!notes.length) {
           return;
@@ -211,7 +212,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
   async function finishing(status: RunEnding, reply: string) {
     try {
       await Promise.all(pending);
-      const notes = await notify(run, "sessionEnd", { ...contextFor(), status, reply });
+      const notes = await notify(run, HookEvent.SessionEnd, { ...contextFor(), status, reply });
       if (!notes.length) {
         return;
       }
@@ -246,6 +247,6 @@ export type HookSession = ReturnType<typeof hookSession>;
 export function runsDeleted(ids: readonly string[]) {
   const run: HookRunner = (event, context) => mcp.runHooks(event, context, { onNotice: log });
   for (const id of ids) {
-    void notify(run, "sessionDelete", { session: { id }, host: HOST });
+    void notify(run, HookEvent.SessionDelete, { session: { id }, host: HOST });
   }
 }

@@ -3,6 +3,7 @@ import {
   errorMessage,
   parseJson,
   type RunEventInput,
+  RunEventKind,
   tryAsk,
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
@@ -353,7 +354,7 @@ export async function runFlow({
       kind: plan.kind,
       prompt: renderPrompt(plan, context, payload),
     };
-    emit({ kind: "step", name: plan.name, text: plan.kind });
+    emit({ kind: RunEventKind.Step, name: plan.name, text: plan.kind });
 
     const systemPrompt = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
     // Kept on the row whether the step works or not: a recall that failed is as much a part of
@@ -391,7 +392,7 @@ export async function runFlow({
       let branch: string | undefined;
       if (plan.kind === "decision") {
         branch = await resolveCase(plan, output, emit);
-        emit({ kind: "decision", name: plan.name, text: branch });
+        emit({ kind: RunEventKind.Decision, name: plan.name, text: branch });
       }
       await close(row.id, { status: "ok", output, branch, ...tokens, ...noted });
       hooks?.after(turn, output, row.id, emit);
@@ -445,12 +446,15 @@ export async function runFlow({
     const guessed =
       typeof extracted?.case === "string" ? caseNamed(plan.cases, extracted.case) : undefined;
     if (guessed) {
-      emit({ kind: "notice", text: `decision "${plan.name}" read back as ${guessed}` });
+      emit({ kind: RunEventKind.Notice, text: `decision "${plan.name}" read back as ${guessed}` });
       return guessed;
     }
 
     if (caseNamed(plan.cases, DEFAULT_BRANCH)) {
-      emit({ kind: "notice", text: `decision "${plan.name}" fell through to ${DEFAULT_BRANCH}` });
+      emit({
+        kind: RunEventKind.Notice,
+        text: `decision "${plan.name}" fell through to ${DEFAULT_BRANCH}`,
+      });
       return DEFAULT_BRANCH;
     }
     throw new Error(

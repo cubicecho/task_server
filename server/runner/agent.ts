@@ -3,6 +3,7 @@ import {
   type Endpoint,
   preselect,
   type RunEventInput,
+  RunEventKind,
   runAgentLoop,
   withContext,
 } from "@cubicecho/agent-core";
@@ -110,7 +111,7 @@ export async function runAgent({
   // so a watcher and the log are told about a downgrade and a retry alike.
   const notice = (text: string) => {
     console.warn(`[agent] ${text}`);
-    onEvent?.({ kind: "notice", text });
+    onEvent?.({ kind: RunEventKind.Notice, text });
   };
 
   const catalog = mcp.catalog(servers);
@@ -159,7 +160,7 @@ export async function runAgent({
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {
-      if (event.kind === "notice") {
+      if (event.kind === RunEventKind.Notice) {
         console.warn(`[agent] ${event.text}`);
       }
       onEvent?.(event);
