@@ -2,6 +2,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import type { McpServerRow, Settings } from "../server/db/schema.ts";
+import type { Fired } from "../server/runner/run.ts";
 import { type ChatBody, notChat } from "./fixtures/sse.ts";
 
 /**
@@ -111,3 +112,29 @@ export const echoRow = (over: Partial<McpServerRow> = {}): McpServerRow => ({
   hooks: null,
   ...over,
 });
+
+/**
+ * Waits for something another part of the process is about to make true — a run reaching the
+ * map, a debounced drain — and fails by name when it never does, rather than at the suite's
+ * timeout with nothing to say which wait it was.
+ */
+export async function until(ready: () => boolean | Promise<boolean>, ms = 3000) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (await ready()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`timed out after ${ms} ms waiting for: ${ready}`);
+}
+
+/** The firing as one that started a run, or a failure saying why it did not. */
+export function started(fired: Fired): Extract<Fired, { started: true }> {
+  if (!fired.started) throw new Error(`expected the firing to start a run, but: ${fired.reason}`);
+  return fired;
+}
+
+/** The firing as one that was turned away, skipped or queued. */
+export function refused(fired: Fired): Extract<Fired, { started: false }> {
+  if (fired.started) throw new Error("expected the firing to be refused, but it started a run");
+  return fired;
+}

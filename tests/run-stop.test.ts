@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { type FakeModel, hangingModel, useModel } from "./helpers.ts";
+import { type FakeModel, hangingModel, until, useModel } from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
@@ -45,7 +45,7 @@ const gql = (source: string, variableValues?: Record<string, unknown>) =>
 test("a running task cannot be deleted, but it can be stopped and then deleted", async () => {
   const finished = runner.runTask(taskId);
   // The run row is written before the agent starts, so this settles almost at once.
-  while (!runner.runningTaskIds().has(taskId)) await new Promise((r) => setTimeout(r, 5));
+  await until(() => runner.runningTaskIds().has(taskId));
 
   const refused = await gql(
     `mutation D($id: String!) { deleteTask(where: { id: { eq: $id } }) { id } }`,

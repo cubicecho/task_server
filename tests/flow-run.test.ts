@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
-import { type FakeModel, fakeModel, useModel } from "./helpers.ts";
+import { type FakeModel, fakeModel, until, useModel } from "./helpers.ts";
 
 // The schema and the runner are built against the live tables at import time, so the database
 // has to be pointed somewhere disposable before anything under server/ is loaded.
@@ -232,7 +232,7 @@ test("stopping mid-flow ends the run and the step it was in as stopped", async (
   hangAfter = 1;
 
   const finished = runner.runTask(taskId);
-  while (received < 2) await new Promise((resolve) => setTimeout(resolve, 5));
+  await until(() => received >= 2);
   expect(runner.stopTask(taskId)).toBe(true);
 
   const run = await finished;
