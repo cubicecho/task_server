@@ -3,6 +3,7 @@ import {
   type Endpoint,
   preselect,
   type RunEventInput,
+  RunEventKind,
   runAgentLoop,
   withContext,
 } from "@cubicecho/agent-core";
@@ -85,12 +86,9 @@ function windowFor(endpoint: Endpoint & { model: string }, signal?: AbortSignal)
  * Runs one task to completion: send the prompt, execute whatever MCP tools the model asks
  * for, loop until it stops asking, and return its final reply.
  *
- * The loop itself is agent-core's `runAgentLoop`. What is here is what is this server's: which
- * model, which MCP servers, and what a watcher is told.
- *
- * A run keeps no history — it starts from nothing every time, so the only state is the messages
- * built up inside this call. That also means nothing is learned between runs: whatever the model
- * loads, it loads again next time.
+ * The loop is agent-core's `runAgentLoop`; what is here is which model, which MCP servers, and
+ * what a watcher is told. A run keeps no history, so nothing is learned between runs: whatever
+ * the model loads, it loads again next time.
  */
 export async function runAgent({
   config,
@@ -110,7 +108,7 @@ export async function runAgent({
   // so a watcher and the log are told about a downgrade and a retry alike.
   const notice = (text: string) => {
     console.warn(`[agent] ${text}`);
-    onEvent?.({ kind: "notice", text });
+    onEvent?.({ kind: RunEventKind.Notice, text });
   };
 
   const catalog = mcp.catalog(servers);
@@ -159,7 +157,7 @@ export async function runAgent({
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {
-      if (event.kind === "notice") {
+      if (event.kind === RunEventKind.Notice) {
         console.warn(`[agent] ${event.text}`);
       }
       onEvent?.(event);

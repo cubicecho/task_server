@@ -1,4 +1,10 @@
-import { applyNameCase, createHttpHandler } from "@cubicecho/graphql-mcp";
+import {
+  applyNameCase,
+  createHttpHandler,
+  MutationHints,
+  NullBranches,
+  OperationKind,
+} from "@cubicecho/graphql-mcp";
 import express from "express";
 // The version a client is told it is talking to; without it the wrapper library reports its own.
 // Default import, not a named one: Node's own JSON modules only export a default, and the
@@ -232,7 +238,7 @@ export const mcpHandler = createHttpHandler({
   // One level: the leaf fields of what a tool returns. Two would pull every run — output and
   // all — into a listing of tasks, which is a lot of context for a question about names.
   selectionDepth: 1,
-  mutationHints: "byName",
+  mutationHints: MutationHints.byName,
   // Keeps the explicit `null` branch on the write payloads and drops it everywhere else.
   // Dropping it everywhere was tried and reverted: on a mutation input the branch is not only
   // how a caller clears a column, it is how a model says "this optional is absent" — writing
@@ -246,7 +252,8 @@ export const mcpHandler = createHttpHandler({
   // its leaves: `StringFilter.eq` is a `String`, and so is `CreateTaskInput.model`. One name,
   // two answers needed. Keyed that way the write payloads lose their null branches with the
   // filters, which is the regression above, so the per-kind split is what is expressible here.
-  nullBranches: (_field, kind) => (kind === "query" ? "never" : "always"),
+  nullBranches: (_field, kind) =>
+    kind === OperationKind.query ? NullBranches.never : NullBranches.always,
   // Relation filters are the closure that made this listing 92% machinery: `TaskFilters` takes
   // `triggers`/`steps`/`runs` as list-relation filters, each pulling in the other table's whole
   // filter type, which carries its own relation fields back. Pruning the three fields — nothing

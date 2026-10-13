@@ -1,4 +1,4 @@
-import { emit, errorMessage, type RunEventInput } from "@cubicecho/agent-core";
+import { emit, errorMessage, type RunEventInput, RunEventKind } from "@cubicecho/agent-core";
 import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Run, runs, type Step, steps, type Task, tasks } from "../db/schema.ts";
@@ -66,20 +66,13 @@ export function stopTask(taskId: string): boolean {
 }
 
 /**
- * Executes one task and records the run.
+ * Executes one task's flow and records the run.
  *
- * The run row is written *before* the agent starts, so a task that is running right now is
- * visible in the UI rather than appearing only once it finishes — which for a task that hangs
- * is never. The row is then updated in place with the outcome.
- *
- * What actually runs is the task's flow: its prompt, then whatever steps hang off it. A task
- * with no steps is one step, which is the whole of what this used to do.
- *
- * A `payload` here is a body handed over by the caller rather than delivered by a webhook, and
- * is the same thing to everything downstream: stored on the run, rendered as `{{event}}`. It is
- * how a failed delivery is replayed and how an `{{event}}` prompt is tried before a sender
- * exists. `triggerId` stays empty for those, because no trigger fired — the run was started by
- * hand, and a run that claimed a webhook nobody posted to would misread the history.
+ * The run row is written before the agent starts and updated in place, so a task that is
+ * running, or hanging, is visible in the UI. A `payload` is a body handed over by the caller
+ * and is treated exactly as a webhook's: stored on the run, rendered as `{{event}}`.
+ * `triggerId` stays empty for those, because a run that claimed a webhook nobody posted to
+ * would misread the history.
  */
 export async function runTask(taskId: string, triggerId?: string, payload?: unknown): Promise<Run> {
   const { done } = await startTask(taskId, triggerId, payload);
@@ -122,15 +115,10 @@ function claim(taskId: string, name: string, limit: number) {
 /**
  * Starts a task and hands back the run it created, without waiting for it to finish.
  *
- * The split is where the two honest answers are. Everything up to the run row is the refusal —
- * no such task, or one already in flight — and it is known immediately. Everything after it is
- * the run, which may take minutes. A caller that has to say what it started, rather than what it
- * would have liked to start, needs the first without paying for the second: awaiting this
- * settles once the run exists, and `done` carries the outcome to whoever wants it.
- *
- * `done` is a promise nobody is obliged to await, so it is written not to reject: every failure
- * inside the run is recorded on the run row and comes back as a finished `Run`. Only a database
- * that cannot write that row throws, which is why the webhook still attaches a `catch`.
+ * Awaiting this settles once the run row exists, so a refusal is known immediately and a caller
+ * can say what it started without paying for the run. `done` carries the outcome and is written
+ * not to reject: every failure inside the run is recorded on the row and comes back as a
+ * finished `Run`. Only a database that cannot write that row throws.
  */
 export async function startTask(
   taskId: string,
@@ -179,26 +167,11 @@ export type Fired =
 /**
  * Fires a task on behalf of a trigger, and records the firing either way.
  *
- * `startTask` refuses a task that is already running, which is right for a person or an agent
- * asking for a run — they are told so on the spot. Nothing is watching when a cron tick or a
- * webhook delivery meets the same refusal, and it used to leave no trace but a log line: no run
- * row, nothing in the history, and a task that appears simply not to have fired. That is
- * indistinguishable from a trigger that is broken, which is the thing someone opening the Runs
- * page is usually trying to rule out.
- *
- * So the skip is written down as a run of its own — started and finished in the same instant,
- * `status: "skipped"`, with the refusal in `error`. It says the trigger worked and the task did
- * not run, which is neither a success nor a failure and is exactly what happened.
- *
- * Only the busy case becomes a row. A task that does not exist has nothing to hang a run off,
- * and a database that cannot be written to cannot be told about it either; both still throw, and
- * both callers log.
- *
- * One row per collision, not per firing. A webhook posted every second at a task that takes five
- * minutes is one fact repeated three hundred times, and three hundred rows of it would bury the
- * runs someone came to the page to read. So a second firing that meets the same trigger, the same
- * task and the same run in the way finds its row and bumps `attempts` instead. The payload kept
- * on it is the latest one, which is the delivery whoever is asking has just made.
+ * Nothing is watching a cron tick or a webhook delivery, so a refusal becomes a row instead of a
+ * log line: a busy task is a `skipped` run with the reason in `error`, and a full server a
+ * `queued` one. A missing task or an unwritable database still throws, and both callers log.
+ * A skip is one row per collision, not per firing: a second firing that meets the same trigger,
+ * task and blocking run bumps `attempts` and leaves its payload, the latest, on that row.
  */
 export async function fireTask(
   taskId: string,
@@ -236,23 +209,11 @@ export async function fireTask(
 /**
  * Writes the firing down as work still to do, or folds it into the one already waiting.
  *
- * A firing that meets a full server is not a firing that should be lost. Nothing is wrong with
- * it: every slot is spoken for this minute and will not be the next, and the difference between
- * a task that ran late and a task that did not run is the whole of what the queue is for.
- *
- * A task meeting *itself* is a different fact and stays a skip. There the work is already in
- * flight, and queueing a second copy of it behind the first is a way to run a five-minute task
- * twelve times over an hour it was never meant to.
- *
- * The queue is the run table — a `queued` row is the run before it has run, and it becomes
- * `running` in place, so the id a webhook was told is the id that ends up holding the output.
- * That also makes it survive a restart, and makes the wait visible on the Runs page rather than
- * only in this process's memory.
- *
- * One row per waiting trigger, not per firing, for the same reason a skip collapses: a sender
- * posting every second at a busy server would otherwise write a queue it takes an hour to drain,
- * of three hundred copies of one delivery. The row keeps the newest payload, which is the
- * delivery whoever is asking has just made, and `attempts` counts the ones it stands for.
+ * A firing that meets a full server waits, where a task meeting itself stays a skip. The queue
+ * is the run table: a `queued` row becomes `running` in place, so the id a webhook was told is
+ * the id that holds the output, the wait survives a restart, and it shows on the Runs page.
+ * There is one row per waiting trigger, keeping the newest payload and counting the firings it
+ * stands for in `attempts`.
  */
 async function enqueue({
   taskId,
@@ -352,14 +313,10 @@ async function recordSkip({
 /**
  * Starts whatever the server now has room for, oldest firing first.
  *
- * One drain at a time, chained rather than concurrent: two runs finishing in the same tick would
- * otherwise both read the same waiting row and both try to start it, and the second would find
- * its slot taken. The chain is also why this never rejects — a link that threw would take every
- * later drain with it, and a queue that stops draining is worse than a firing that went nowhere.
- *
- * A task already in flight is stepped over rather than waited for: its own run is the reason it
- * cannot start, and the run behind it can go now. A drain that cannot start what it picked stops
- * there and leaves the rest for the next one, which is the next run to finish.
+ * Drains are chained, never concurrent: two runs finishing in the same tick would otherwise
+ * both pick the same waiting row. The chain never rejects, since a link that threw would take
+ * every later drain with it. A task already in flight is stepped over, and a drain that cannot
+ * start what it picked stops there and leaves the rest for the next run to finish.
  */
 export function drainQueue(): Promise<void> {
   draining = draining.then(drainOnce);
@@ -419,17 +376,12 @@ async function drainOnce(): Promise<void> {
 }
 
 /**
- * Turns one waiting row into a running one, in place.
+ * Turns one waiting row into a running one, in place, so the run id a webhook was told is the
+ * id that carries the output.
  *
- * The row is updated rather than replaced, so the run id a webhook was told when the delivery
- * arrived is the id that ends up carrying the output. `startedAt` moves to the real start: the
- * wait is not kept, and a duration that included it would misreport how long the task takes.
- *
- * A task disabled while its run waited does not run. The firing happened at a task that was
- * enabled and the row records that it was accepted, but "stop firing this" is what disabling
- * means, and honouring it minutes late is what the queue would otherwise do.
- *
- * False means the slot went to something else between the pick and here, which ends the drain.
+ * `startedAt` moves to the real start, or the duration would include the wait. A task disabled
+ * while its run waited is finished as `skipped` instead: honouring "stop firing this" minutes
+ * late is not honouring it. False means the slot went to something else, which ends the drain.
  */
 async function startQueued(waiting: Run): Promise<boolean> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, waiting.taskId)).limit(1);
@@ -502,7 +454,7 @@ async function execute({
 }): Promise<Run> {
   // Everything the run says as it goes, for anyone watching it — see the event bus in `@cubicecho/agent-core`.
   const onEvent = (event: RunEventInput) => emit(run.id, event);
-  onEvent({ kind: "notice", text: `${task.name} started` });
+  onEvent({ kind: RunEventKind.Notice, text: `${task.name} started` });
   // Made once the run's scope is known, and ended — not awaited — once its outcome is written:
   // a memory server filing the last step is no reason for the slot to stay taken.
   let hooks: HookSession | undefined;
@@ -522,7 +474,7 @@ async function execute({
       signal: controller.signal,
       onEvent,
     });
-    onEvent({ kind: "done", ok: true, text: "finished" });
+    onEvent({ kind: RunEventKind.Done, ok: true, text: "finished" });
     void hooks.end("ok", result.output);
     return await finish(run.id, {
       status: "ok",
@@ -536,13 +488,13 @@ async function execute({
     // A stopped run is not a failed one: it did what was asked of it, which was to stop.
     if (controller.signal.aborted) {
       console.log(`[run] ${task.name}: stopped`);
-      onEvent({ kind: "done", ok: false, text: "stopped" });
+      onEvent({ kind: RunEventKind.Done, ok: false, text: "stopped" });
       void hooks?.end("stopped", "");
       return await finish(run.id, { status: "stopped" });
     }
     const message = errorMessage(error);
     console.error(`[run] ${task.name}: ${message}`);
-    onEvent({ kind: "done", ok: false, text: message });
+    onEvent({ kind: RunEventKind.Done, ok: false, text: message });
     void hooks?.end("error", "");
     return await finish(run.id, { status: "error", error: message });
   } finally {

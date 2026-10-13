@@ -7,13 +7,9 @@ import { loadSettings } from "./llm.ts";
 /**
  * What a run is configured with: the settings row, with a task's agent laid over it.
  *
- * The runner reads one `Settings` object and always has — endpoint, key, model, the ceilings,
- * how tools are discovered. An agent profile does not add a second thing to read; it produces a
- * different `Settings` for that run and nothing downstream knows the difference. That is the
- * whole trick, and it is why per-task endpoints cost the agent loop no branch.
- *
- * A task with no agent gets the settings row unchanged, which is every task on a server where
- * nobody has made an agent.
+ * An agent profile does not add a second thing to read. It produces a different `Settings` for
+ * that run, which is why per-task endpoints cost the agent loop no branch. A task with no agent
+ * gets the settings row unchanged.
  */
 export interface RunConfig {
   config: Settings;
@@ -60,13 +56,12 @@ const settingsLayer = (settings: Settings): AgentSpec => ({
 });
 
 /**
- * A profile as the layer above it. This is where the sentinels end: a column at its inherit
- * value is a field the layer does not have, which is the only spelling of "inherit" the
- * resolver knows. Nothing here may project a blank to an empty value — an empty `prompt` part
- * would replace the server's prompt with nothing, where a missing one leaves it alone.
+ * A profile as the layer above it. A column at its inherit value is a field the layer does not
+ * have, which is the only spelling of "inherit" the resolver knows; an empty `prompt` part would
+ * replace the server's prompt with nothing, where a missing one leaves it alone.
  *
- * `mcpServerIds` is not in it. The scope is a set of this server's row ids, which a spec has no
- * field for, and `resolveServers` answers it from the row.
+ * `mcpServerIds` is not in it: a spec has no field for this server's row ids, and
+ * `resolveServers` answers it from the row.
  */
 const agentLayer = (agent: Agent): AgentSpec => {
   const prompt = str(agent.systemPrompt);
@@ -95,18 +90,12 @@ const agentLayer = (agent: Agent): AgentSpec => {
 /**
  * The settings row as this agent would have it.
  *
- * The merge is agent-core's: both rows are projected to a spec layer and `resolveAgentSpec`
- * lays one over the other, which is the same rule every host that reads a spec applies. Only
- * the columns come back — the resolver answers with a whole agent, and a run reads a `Settings`.
- *
- * The one column that is not a plain override is the key, and it stays here: a spec carries no
- * credential by design. An agent that names its own `baseUrl` does **not** inherit the
- * operator's key or `$OPENAI_API_KEY`: a credential issued for one endpoint has no business
- * being posted to another, and "I pointed a task at a friend's server and it sent my OpenAI
- * key" is not a mistake worth being able to make. Such an agent uses its own key or none at
- * all, which is what a local server wants anyway. An agent on the *same* endpoint inherits the
- * key as it inherits everything else. agent-core's `resolveApiKey` is a near miss and is not
- * used: it treats a trailing slash as the same endpoint, which errs toward sending the key.
+ * The merge is agent-core's `resolveAgentSpec` over two spec layers, and only the columns come
+ * back. The key stays here, since a spec carries no credential: an agent naming its own
+ * `baseUrl` uses its own key or none, never the operator's or `$OPENAI_API_KEY`, because a
+ * credential issued for one endpoint has no business being posted to another. agent-core's
+ * `resolveApiKey` is not used: it treats a trailing slash as the same endpoint, which errs
+ * toward sending the key.
  */
 export function resolveConfig(settings: Settings, agent?: Agent | null): Settings {
   if (!agent) {
