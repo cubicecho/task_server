@@ -51,7 +51,9 @@ const duration = (from: string, to?: string | null) =>
  * page has no way to tell which. Saying "manual" would be a guess presented as a fact.
  */
 function Provenance({ trigger }: { trigger: Run["trigger"] }) {
-  if (!trigger) return null;
+  if (!trigger) {
+    return null;
+  }
   const label = trigger.kind === "cron" ? trigger.cron : `/webhooks/${trigger.event}`;
   return <span className="shrink-0 font-mono text-muted-foreground text-xs">{label}</span>;
 }
@@ -59,7 +61,9 @@ function Provenance({ trigger }: { trigger: Run["trigger"] }) {
 /** Tool names as chips, red where the call failed. */
 function ToolChips({ calls }: { calls: unknown }) {
   const tools = (calls ?? []) as { name: string; ok: boolean }[];
-  if (tools.length === 0) return null;
+  if (tools.length === 0) {
+    return null;
+  }
   return (
     <div className="flex flex-wrap gap-1">
       {tools.map((tool, index) => (
@@ -85,7 +89,9 @@ function ToolChips({ calls }: { calls: unknown }) {
  */
 function HookNotes({ notes }: { notes: unknown }) {
   const list = (notes ?? []) as HookNote[];
-  if (list.length === 0) return null;
+  if (list.length === 0) {
+    return null;
+  }
   const failed = list.filter((note) => note.error).length;
   return (
     <details className="text-xs">
@@ -130,7 +136,7 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
         <li
           key={step.id}
           className="flex flex-col gap-1 border-l-2 pl-3"
-          style={{ marginLeft: `${step.depth * 1}rem` }}
+          style={{ marginLeft: `${step.depth}rem` }}
         >
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={STATUS_VARIANT[step.status] ?? "secondary"}>{step.status}</Badge>
@@ -164,7 +170,9 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
  * looking for rather than reads in passing.
  */
 function Payload({ payload }: { payload: unknown }) {
-  if (payload === null || payload === undefined) return null;
+  if (payload === null || payload === undefined) {
+    return null;
+  }
   return (
     <details className="text-sm">
       <summary className="cursor-pointer text-muted-foreground">Event payload</summary>
@@ -204,14 +212,24 @@ function RunDetail({
   const found = detail.data?.runs[0];
 
   if (!found) {
-    return detail.error ? (
-      <p className="text-destructive text-sm">{detail.error.message}</p>
-    ) : (
-      <p className="text-muted-foreground text-sm">Loading…</p>
-    );
+    return <QueryState query={detail} what="this run" count={0} rows={1} />;
   }
 
   const payload = found.payload;
+  const result = found.steps.length ? (
+    <>
+      <RunSteps steps={found.steps} />
+      {/* The run failed before or between steps — nothing above says why. */}
+      {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
+    </>
+  ) : (
+    <>
+      <ToolChips calls={found.toolCalls} />
+      <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
+        {run.error || run.output || NO_OUTPUT}
+      </pre>
+    </>
+  );
 
   return (
     <>
@@ -227,25 +245,15 @@ function RunDetail({
         </div>
       )}
       <HookNotes notes={found.hooks} />
-      {!withResult ? null : found.steps.length ? (
-        <>
-          <RunSteps steps={found.steps} />
-          {/* The run failed before or between steps — nothing above says why. */}
-          {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
-        </>
-      ) : (
-        <>
-          <ToolChips calls={found.toolCalls} />
-          <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-            {run.error || run.output || "(no output)"}
-          </pre>
-        </>
-      )}
+      {withResult ? result : null}
     </>
   );
 }
 
 const PAGE = 50;
+
+/** What stands in for a run that ended with nothing to show. */
+const NO_OUTPUT = "(no output)";
 
 /**
  * The bar above the list: what to look for, and how far to look.
@@ -452,7 +460,7 @@ export function RunsRoute() {
                   </>
                 }
                 description={
-                  <span className="line-clamp-2">{run.error || run.output || "(no output)"}</span>
+                  <span className="line-clamp-2">{run.error || run.output || NO_OUTPUT}</span>
                 }
                 action={
                   <>

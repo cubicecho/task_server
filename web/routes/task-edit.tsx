@@ -29,6 +29,7 @@ import { describeFor } from "@/lib/docs";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
 import { isBlank, triggerProblem } from "@/lib/triggers";
+import { required } from "@/lib/validators";
 
 /** The notes under this form's fields are the columns' own descriptions. */
 const doc = describeFor("Task");
@@ -61,7 +62,9 @@ export function TaskEditRoute() {
     enabled: Boolean(taskId),
   });
 
-  if (!taskId) return <TaskForm />;
+  if (!taskId) {
+    return <TaskForm />;
+  }
   if (task.isPending || task.isError || !task.data?.task) {
     return (
       <PageLayout
@@ -113,10 +116,6 @@ interface Form {
   steps: unknown;
 }
 
-const required = (what: string) => ({
-  onChange: ({ value }: { value: string }) => (value.trim() ? undefined : what),
-});
-
 function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -153,15 +152,20 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         systemPrompt: form.systemPrompt,
       };
 
-      if (done.taskId) await request(UpdateTaskDocument, { id: done.taskId, set: values });
-      else done.taskId = (await request(CreateTaskDocument, { values })).createTask.id;
+      if (done.taskId) {
+        await request(UpdateTaskDocument, { id: done.taskId, set: values });
+      } else {
+        done.taskId = (await request(CreateTaskDocument, { values })).createTask.id;
+      }
       const taskId = done.taskId;
 
       // Triggers are saved one by one because `nestedWrites` is off (see
       // `server/graphql/schema.ts`). The flow is not: `setTaskSteps` writes the tree in one
       // transaction, so a flow either lands whole or not at all.
       for (const id of removed) {
-        if (done.deleted.has(id)) continue;
+        if (done.deleted.has(id)) {
+          continue;
+        }
         await request(DeleteTriggerDocument, { id });
         done.deleted.add(id);
       }
@@ -236,7 +240,9 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       formApi.reset({ ...value, triggers: written.triggers, steps: written.steps });
       setRemoved([]);
       progress.current.deleted.clear();
-      if (!task) navigate({ to: "/tasks/$taskId", params: { taskId: written.taskId } });
+      if (!task) {
+        navigate({ to: "/tasks/$taskId", params: { taskId: written.taskId } });
+      }
     },
   });
 

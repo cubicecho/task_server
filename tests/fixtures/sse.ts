@@ -90,7 +90,9 @@ export function sseFrom(completion: Completion, includeUsage: boolean): string {
     frame({ ...base, choices: [{ index: 0, delta: value, finish_reason: finish }] });
 
   let out = delta({ role: "assistant" });
-  for (const piece of pieces(message.content ?? "")) out += delta({ content: piece });
+  for (const piece of pieces(message.content ?? "")) {
+    out += delta({ content: piece });
+  }
 
   for (const [index, call] of (message.tool_calls ?? []).entries()) {
     out += delta({
@@ -105,8 +107,9 @@ export function sseFrom(completion: Completion, includeUsage: boolean): string {
 
   out += delta({}, message.tool_calls?.length ? "tool_calls" : finish_reason);
   // Usage rides in a final choice-less chunk, and only when it was asked for.
-  if (includeUsage && completion.usage)
+  if (includeUsage && completion.usage) {
     out += frame({ ...base, choices: [], usage: completion.usage });
+  }
   return `${out}data: [DONE]\n\n`;
 }
 
@@ -135,7 +138,9 @@ export function notChat(
   request: import("node:http").IncomingMessage,
   response: import("node:http").ServerResponse,
 ): boolean {
-  if (request.method === "POST" && request.url?.endsWith("/chat/completions")) return false;
+  if (request.method === "POST" && request.url?.endsWith("/chat/completions")) {
+    return false;
+  }
   request.resume();
   response.writeHead(404, { "content-type": "application/json" }).end("{}");
   return true;

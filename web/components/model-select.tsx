@@ -34,13 +34,13 @@ type Wired = {
  */
 export function ModelSelect({
   value,
-  onChange,
+  onValueChange,
   defaultLabel,
   agentId,
   ...wired
 }: Wired & {
   value: string;
-  onChange: (model: string) => void;
+  onValueChange: (model: string) => void;
   /** Label for the empty choice. Omitted, a model must be named. */
   defaultLabel?: string;
   /**
@@ -67,7 +67,7 @@ export function ModelSelect({
         <Input
           {...wired}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => onValueChange(event.target.value)}
           placeholder="llama3.1:8b"
         />
         <ActionButton
@@ -103,8 +103,11 @@ export function ModelSelect({
       options={options}
       value={value || (defaultLabel ? DEFAULT : "")}
       onValueChange={(next) => {
-        if (next === CUSTOM) setTyping(true);
-        else onChange(next === DEFAULT ? "" : next);
+        if (next === CUSTOM) {
+          setTyping(true);
+        } else {
+          onValueChange(next === DEFAULT ? "" : next);
+        }
       }}
       onOpenChange={(open) => open && setOpened(true)}
       placeholder="Select a model"

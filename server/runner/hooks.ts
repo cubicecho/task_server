@@ -14,7 +14,7 @@ import { type ToolHook, validateHooks } from "@cubicecho/agent-mcp-pool";
 import { eq, sql } from "drizzle-orm";
 import { unfiredProblems } from "../../shared/hooks.ts";
 import { db } from "../db/client.ts";
-import { runSteps, runs, type Task } from "../db/schema.ts";
+import { runSteps, runs, type Step, type Task } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
 
 /**
@@ -41,7 +41,7 @@ import { mcp } from "./mcp.ts";
  */
 
 /** Every hook's `{{host}}`, so a server shared with min-agent can tell the two apart. */
-export const HOST = "task-server";
+const HOST = "task-server";
 
 /** Where the pool's notices go. The pool prints nothing itself. */
 const log = (message: string) => console.warn(`[hooks] ${message}`);
@@ -52,8 +52,12 @@ const log = (message: string) => console.warn(`[hooks] ${message}`);
  * The pool's own check, plus the one thing it cannot know: which events this host fires.
  */
 export function hookProblems(hooks: unknown): string[] {
-  if (hooks === null || hooks === undefined) return [];
-  if (!Array.isArray(hooks)) return ["hooks must be a JSON array"];
+  if (hooks === null || hooks === undefined) {
+    return [];
+  }
+  if (!Array.isArray(hooks)) {
+    return ["hooks must be a JSON array"];
+  }
   return [...validateHooks(hooks as ToolHook[]), ...unfiredProblems(hooks as Partial<ToolHook>[])];
 }
 
@@ -84,7 +88,7 @@ export interface HookStep {
   /** Which executed step this is, from 0. Skipped steps are not counted. */
   index: number;
   name: string;
-  kind: string;
+  kind: Step["kind"];
   /** The prompt as the step was sent it, before any context. */
   prompt: string;
 }
@@ -165,7 +169,9 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
       const done = notify(run, "afterTurn", context, (note) =>
         onEvent?.({ kind: "notice", text: describe(note) }),
       ).then(async (notes) => {
-        if (!notes.length) return;
+        if (!notes.length) {
+          return;
+        }
         await db
           .update(runSteps)
           .set({ hooks: appended(runSteps.hooks, notes) })
@@ -206,7 +212,9 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
     try {
       await Promise.all(pending);
       const notes = await notify(run, "sessionEnd", { ...contextFor(), status, reply });
-      if (!notes.length) return;
+      if (!notes.length) {
+        return;
+      }
       await db
         .update(runs)
         .set({ hooks: appended(runs.hooks, notes) })
@@ -237,5 +245,7 @@ export type HookSession = ReturnType<typeof hookSession>;
  */
 export function runsDeleted(ids: readonly string[]) {
   const run: HookRunner = (event, context) => mcp.runHooks(event, context, { onNotice: log });
-  for (const id of ids) void notify(run, "sessionDelete", { session: { id }, host: HOST });
+  for (const id of ids) {
+    void notify(run, "sessionDelete", { session: { id }, host: HOST });
+  }
 }

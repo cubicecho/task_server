@@ -45,7 +45,9 @@ export function useCopy() {
     } catch {
       // A clipboard that exists can still refuse — an unfocused document, a denied permission.
     }
-    if (!ok) ok = copyTheOldWay(text);
+    if (!ok) {
+      ok = copyTheOldWay(text);
+    }
 
     if (!ok) {
       toast.error("Could not copy. Select the text and copy it by hand.");

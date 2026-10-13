@@ -48,7 +48,9 @@ export function StepList({
 
   const move = (index: number, by: number) => {
     const to = index + by;
-    if (to < 0 || to >= steps.length) return;
+    if (to < 0 || to >= steps.length) {
+      return;
+    }
     const next = [...steps];
     [next[index], next[to]] = [next[to], next[index]];
     onChange(next);
@@ -314,7 +316,7 @@ function StepCard({
                     <ModelSelect
                       {...wired}
                       value={step.model}
-                      onChange={(model) => patch({ model })}
+                      onValueChange={(model) => patch({ model })}
                       defaultLabel="Same as the task"
                     />
                   )}

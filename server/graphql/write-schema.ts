@@ -20,7 +20,9 @@ export const SCHEMA_FILE = path.join(ROOT, "schema.graphql");
 export function writeSchemaFile(): boolean {
   const sdl = printSchema(schema);
   const current = fs.existsSync(SCHEMA_FILE) ? fs.readFileSync(SCHEMA_FILE, "utf8") : null;
-  if (current === sdl) return false;
+  if (current === sdl) {
+    return false;
+  }
   fs.writeFileSync(SCHEMA_FILE, sdl, "utf8");
   return true;
 }

@@ -27,7 +27,8 @@
       "preset": "recommended",
       "style": {
         "useConst": "error",
-        "noNonNullAssertion": "error"
+        "noNonNullAssertion": "error",
+        "useBlockStatements": "error"
       },
       "suspicious": {
         "noExplicitAny": "error"
@@ -45,6 +46,31 @@
     {
       "includes": ["web/components/ui/**"],
       "linter": { "enabled": false }
+    },
+    {
+      "includes": [
+        "web/components/action-button.tsx",
+        "web/components/app-form.tsx",
+        "web/components/card-layout.tsx",
+        "web/components/confirm-button.tsx",
+        "web/components/dialog-layout.tsx",
+        "web/components/disclosure-row.tsx",
+        "web/components/field-row.tsx",
+        "web/components/form-field.tsx",
+        "web/components/header-content-footer.tsx",
+        "web/components/multi-select-field.tsx",
+        "web/components/multi-select.tsx",
+        "web/components/option-select.tsx",
+        "web/components/page-header.tsx",
+        "web/components/page-layout.tsx",
+        "web/components/password-field.tsx",
+        "web/components/password-input.tsx",
+        "web/components/query-state.tsx",
+        "web/components/radio-group-field.tsx",
+        "web/components/section.tsx",
+        "web/components/split-layout.tsx"
+      ],
+      "linter": { "rules": { "style": { "useBlockStatements": "off" } } }
     }
   ]
 }

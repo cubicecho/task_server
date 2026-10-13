@@ -616,6 +616,9 @@ screenshot settles.
 - Files `kebab-case.ts(x)`; components `PascalCase`; vars and functions `camelCase`; true
   constants `SCREAMING_SNAKE_CASE`
 - Prefix an unused parameter with `_`; `unknown` over `any`, which is an error
+- Every `if`, `else`, `for` and `while` body is braced, one-liners included — Biome's
+  `useBlockStatements`, an error. It is off for the cubeui shells listed in `biome.json`, which
+  are vendored and arrive unbraced; a shell installed later goes on that list
 - Comments explain why, not what. A comment that restates the line below it is noise
 - Tests are `tests/*.test.ts`, flat Vitest `test`/`expect` with a sentence for a title that says
   what holds ("a blanked saved trigger is refused"), against a temp `TASK_SERVER_DATA_DIR` — no mocks of the database, and MCP tests drive a real stdio fixture

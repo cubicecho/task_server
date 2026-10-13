@@ -27,7 +27,9 @@ beforeAll(async () => {
     formats.push(body.response_format);
     prompts.push(userPrompt(body));
     // Accepted and never answered: the run stays in flight until it is stopped.
-    if (++received > hangAfter) return;
+    if (++received > hangAfter) {
+      return;
+    }
     replyWith(response, completion(replies.shift() ?? ""), body);
   });
 

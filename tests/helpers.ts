@@ -64,7 +64,9 @@ export const fakeModel = (
 ): Promise<FakeModel> =>
   listen(
     http.createServer((request, response) => {
-      if (elsewhere(request, response)) return;
+      if (elsewhere(request, response)) {
+        return;
+      }
       let body = "";
       request.on("data", (chunk) => {
         body += chunk;
@@ -140,7 +142,9 @@ export const echoRow = (over: Partial<McpServerRow> = {}): McpServerRow => ({
 export async function until(ready: () => boolean | Promise<boolean>, ms = 3000) {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
-    if (await ready()) return;
+    if (await ready()) {
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error(`timed out after ${ms} ms waiting for: ${ready}`);
@@ -148,13 +152,17 @@ export async function until(ready: () => boolean | Promise<boolean>, ms = 3000) 
 
 /** The firing as one that started a run, or a failure saying why it did not. */
 export function started(fired: Fired): Extract<Fired, { started: true }> {
-  if (!fired.started) throw new Error(`expected the firing to start a run, but: ${fired.reason}`);
+  if (!fired.started) {
+    throw new Error(`expected the firing to start a run, but: ${fired.reason}`);
+  }
   return fired;
 }
 
 /** The firing as one that was turned away, skipped or queued. */
 export function refused(fired: Fired): Extract<Fired, { started: false }> {
-  if (fired.started) throw new Error("expected the firing to be refused, but it started a run");
+  if (fired.started) {
+    throw new Error("expected the firing to be refused, but it started a run");
+  }
   return fired;
 }
 

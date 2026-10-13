@@ -10,7 +10,7 @@ import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
 
 type ModelSelectFieldProps = FieldProps &
-  Omit<ComponentProps<typeof ModelSelect>, "id" | "value" | "onChange">;
+  Omit<ComponentProps<typeof ModelSelect>, "id" | "value" | "onValueChange">;
 
 /**
  * `ModelSelect` as a bound field.
@@ -32,7 +32,7 @@ function BoundModelSelectField(props: ModelSelectFieldProps) {
           {...control}
           {...wired}
           value={field.state.value ?? ""}
-          onChange={field.handleChange}
+          onValueChange={field.handleChange}
         />
       )}
     />

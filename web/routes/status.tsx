@@ -26,6 +26,9 @@ import { cn } from "@/lib/utils";
 type Failure = StatusQuery["failures"][number];
 type Server = StatusQuery["mcpStatus"][number];
 
+/** A failed run whose `error` is empty still has to say something. */
+const NO_REASON = "It broke without saying why.";
+
 const when = (iso: string) => new Date(iso).toLocaleString();
 
 /**
@@ -82,7 +85,7 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
   if (health === "broken" && last) {
     return (
       <ItemDescription className="line-clamp-3 text-destructive">
-        {last.error || "It broke without saying why."}
+        {last.error || NO_REASON}
       </ItemDescription>
     );
   }
@@ -155,7 +158,7 @@ function FailureRow({ failure }: { failure: Failure }) {
           </span>
         </ItemTitle>
         <ItemDescription className="line-clamp-2 text-destructive">
-          {failure.error || "It broke without saying why."}
+          {failure.error || NO_REASON}
         </ItemDescription>
       </ItemContent>
     </Item>
@@ -210,6 +213,17 @@ export function StatusRoute() {
   const unreachable = (status.data?.mcpStatus ?? []).filter(
     (server: Server) => server.status === "error",
   );
+
+  /** What an empty list means: nothing in the chosen heap, no tasks at all, or all is well. */
+  const emptyNote = () => {
+    if (selected) {
+      return `Nothing is ${LABELS[selected].label.toLowerCase()}.`;
+    }
+    if (tasks.length === 0) {
+      return "No tasks yet.";
+    }
+    return `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`;
+  };
 
   return (
     <PageLayout
@@ -282,13 +296,7 @@ export function StatusRoute() {
           ))}
 
           {!status.isPending && shown.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              {selected
-                ? `Nothing is ${LABELS[selected].label.toLowerCase()}.`
-                : tasks.length === 0
-                  ? "No tasks yet."
-                  : `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`}
-            </p>
+            <p className="text-muted-foreground text-sm">{emptyNote()}</p>
           ) : null}
 
           {unexplained.length > 0 ? (

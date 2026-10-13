@@ -105,8 +105,11 @@ export function McpDialog({
         hiddenTools: draft.hiddenTools.length ? draft.hiddenTools : null,
         hooks: parseJson<unknown>(draft.hooks, "Hooks", null),
       };
-      if (server) await request(UpdateMcpServerDocument, { id: server.id, set: values });
-      else await request(CreateMcpServerDocument, { values });
+      if (server) {
+        await request(UpdateMcpServerDocument, { id: server.id, set: values });
+      } else {
+        await request(CreateMcpServerDocument, { values });
+      }
     },
     onSuccess: () => {
       toast.success(server ? "Server saved" : "Server added");

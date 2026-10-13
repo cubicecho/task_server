@@ -181,7 +181,9 @@ test("the tool listing and the permissions map agree", async () => {
   for (const path of TOOLS) {
     const [type, field] = path.split(".");
     const rule = ruleFor(type, field);
-    if (!rule) continue;
+    if (!rule) {
+      continue;
+    }
     const info = { parentType: { name: type }, fieldName: field } as GraphQLResolveInfo;
     // A rule that allows the field calls the resolver it was handed; one that denies it throws,
     // and the refusal is what the assertion below reports under the tool's own name.

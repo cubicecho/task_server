@@ -35,7 +35,9 @@ const store = DATABASE_URL || path.join(DATA_DIR, "pg");
 
 // PGlite creates its own directory but not the parent, and `data/` is gitignored — so a fresh
 // clone has none to create it in. A scheme is not a path and is left alone.
-if (!server && !store.includes("://")) fs.mkdirSync(store, { recursive: true });
+if (!server && !store.includes("://")) {
+  fs.mkdirSync(store, { recursive: true });
+}
 
 /**
  * Whether a pid is a process that still exists. Signal 0 checks without delivering anything;
@@ -87,7 +89,9 @@ function claim(lock: string): void {
       fs.writeFileSync(lock, `${process.pid}\n`, { flag: "wx" });
       return;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
 
       const held = Number(fs.readFileSync(lock, "utf8").trim());
       if (held && held !== process.pid && alive(held)) {
@@ -112,7 +116,9 @@ if (!server && !store.includes("://")) {
   claim(lock);
   process.on("exit", () => {
     try {
-      if (Number(fs.readFileSync(lock, "utf8").trim()) === process.pid) fs.rmSync(lock);
+      if (Number(fs.readFileSync(lock, "utf8").trim()) === process.pid) {
+        fs.rmSync(lock);
+      }
     } catch {
       // Already gone, or never ours to remove. Either way there is nothing to release.
     }

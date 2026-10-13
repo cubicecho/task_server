@@ -10,7 +10,9 @@ const SHOWN_IN = ["tasks", "runs", "status"];
 export function useRefreshRuns() {
   const queryClient = useQueryClient();
   return () => {
-    for (const key of SHOWN_IN) queryClient.invalidateQueries({ queryKey: [key] });
+    for (const key of SHOWN_IN) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
   };
 }
 
@@ -27,9 +29,13 @@ export function useRunTask() {
     mutationFn: (variables: { taskId: string; payload?: unknown }) =>
       request(RunTaskDocument, variables),
     onSuccess: ({ runTask: { status, error } }) => {
-      if (status === "error") toast.error(error || "Run failed");
-      else if (status === "stopped") toast.success("Run stopped");
-      else toast.success("Run finished");
+      if (status === "error") {
+        toast.error(error || "Run failed");
+      } else if (status === "stopped") {
+        toast.success("Run stopped");
+      } else {
+        toast.success("Run finished");
+      }
       refresh();
     },
   });
@@ -43,7 +49,9 @@ export function useStopTask() {
     onSuccess: ({ stopTask }) => {
       // False means the run had already finished on its own — nothing was stopped, and the
       // refresh is what shows that.
-      if (stopTask) toast.success("Stopping…");
+      if (stopTask) {
+        toast.success("Stopping…");
+      }
       refresh();
     },
   });

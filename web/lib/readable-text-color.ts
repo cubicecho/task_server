@@ -26,7 +26,9 @@ const HEX = /^#?(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
  * wrong in dark mode, which is where a translucent chip is hardest to read.
  */
 function channels(hex: string): [number, number, number] | undefined {
-  if (!HEX.test(hex)) return undefined;
+  if (!HEX.test(hex)) {
+    return undefined;
+  }
 
   const digits = hex.replace("#", "");
   // Shorthand doubles each digit — `#f80` is `#ff8800`, not `#0f0800`. auto-cal's version slices
@@ -87,10 +89,14 @@ export function readableTextColor(
   color: string | null | undefined,
   ink: Ink = INK,
 ): string | undefined {
-  if (!color) return undefined;
+  if (!color) {
+    return undefined;
+  }
 
   const rgb = channels(color);
-  if (!rgb) return undefined;
+  if (!rgb) {
+    return undefined;
+  }
 
   const backdrop = luminance(rgb);
   return contrast(backdrop, 0) >= contrast(backdrop, 1) ? ink.dark : ink.light;

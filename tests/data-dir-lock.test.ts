@@ -15,13 +15,17 @@ afterEach(async () => {
   // being removed.
   await Promise.all(
     running.splice(0).map((child) => {
-      if (child.exitCode !== null || child.signalCode !== null) return undefined;
+      if (child.exitCode !== null || child.signalCode !== null) {
+        return undefined;
+      }
       const gone = new Promise((resolve) => child.once("exit", resolve));
       child.kill("SIGKILL");
       return gone;
     }),
   );
-  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of made.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /**
@@ -45,7 +49,9 @@ function boot(dir: string): Promise<{ line: string; child: ChildProcess }> {
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk;
       const line = out.split("\n").find((candidate) => /^(HELD|REFUSED)/.test(candidate));
-      if (line) resolve({ line, child });
+      if (line) {
+        resolve({ line, child });
+      }
     });
     child.on("error", reject);
     child.on("exit", () => reject(new Error(`exited without a verdict: ${out}`)));

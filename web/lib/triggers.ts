@@ -20,7 +20,9 @@ export const isBlank = (trigger: TriggerDraft) =>
  * so it is refused, and says which of the two the person has to choose.
  */
 export function triggerProblem(trigger: TriggerDraft): string | undefined {
-  if (!trigger.id || !isBlank(trigger)) return undefined;
+  if (!trigger.id || !isBlank(trigger)) {
+    return undefined;
+  }
   return trigger.kind === "cron"
     ? "A saved schedule needs a cron expression. Remove it to stop it firing."
     : "A saved webhook needs an id. Remove it to stop it firing.";

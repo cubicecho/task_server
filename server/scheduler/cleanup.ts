@@ -27,7 +27,9 @@ let timer: NodeJS.Timeout | undefined;
  */
 export async function prune(): Promise<number> {
   const { runRetentionDays } = await loadSettings();
-  if (runRetentionDays <= 0) return 0;
+  if (runRetentionDays <= 0) {
+    return 0;
+  }
 
   const cutoff = new Date(Date.now() - runRetentionDays * 24 * 60 * 60 * 1000);
   const gone = await db

@@ -32,16 +32,36 @@ import { stringList } from "@/lib/json";
  */
 function overrides(agent: AgentFieldsFragment): string[] {
   const said: string[] = [];
-  if (agent.baseUrl) said.push(agent.baseUrl);
-  if (agent.model) said.push(agent.model);
-  if (agent.systemPrompt) said.push("system prompt");
-  if (agent.maxTokens >= 0) said.push(`${agent.maxTokens} tokens`);
-  if (agent.temperature >= 0) said.push(`temp ${agent.temperature}`);
-  if (agent.maxToolIterations >= 0) said.push(`${agent.maxToolIterations} tool steps`);
-  if (agent.toolDiscovery !== "inherit") said.push(agent.toolDiscovery);
-  if (agent.toolSelectModel) said.push(`picks tools with ${agent.toolSelectModel}`);
-  if (agent.requestTimeoutSeconds >= 0) said.push(`${agent.requestTimeoutSeconds}s of silence`);
-  if (agent.maxRetries >= 0) said.push(`${agent.maxRetries} retries`);
+  if (agent.baseUrl) {
+    said.push(agent.baseUrl);
+  }
+  if (agent.model) {
+    said.push(agent.model);
+  }
+  if (agent.systemPrompt) {
+    said.push("system prompt");
+  }
+  if (agent.maxTokens >= 0) {
+    said.push(`${agent.maxTokens} tokens`);
+  }
+  if (agent.temperature >= 0) {
+    said.push(`temp ${agent.temperature}`);
+  }
+  if (agent.maxToolIterations >= 0) {
+    said.push(`${agent.maxToolIterations} tool steps`);
+  }
+  if (agent.toolDiscovery !== "inherit") {
+    said.push(agent.toolDiscovery);
+  }
+  if (agent.toolSelectModel) {
+    said.push(`picks tools with ${agent.toolSelectModel}`);
+  }
+  if (agent.requestTimeoutSeconds >= 0) {
+    said.push(`${agent.requestTimeoutSeconds}s of silence`);
+  }
+  if (agent.maxRetries >= 0) {
+    said.push(`${agent.maxRetries} retries`);
+  }
   return said;
 }
 
@@ -169,7 +189,8 @@ export function AgentsRoute() {
 
           {creating ? (
             <AgentDialog servers={servers} onClose={() => setCreating(false)} onSaved={refresh} />
-          ) : editing ? (
+          ) : null}
+          {editing && !creating ? (
             <AgentDialog
               agent={editing}
               servers={servers}
