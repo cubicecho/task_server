@@ -6,6 +6,7 @@
  */
 import { type ToolHook, validateHooks } from "@cubicecho/agent-mcp-pool/hooks";
 import { unfiredProblems } from "../../shared/hooks.ts";
+import { jsonProblem } from "./json.ts";
 
 export const HOOK_PLACEHOLDER = JSON.stringify(
   [
@@ -24,12 +25,9 @@ export const HOOK_PLACEHOLDER = JSON.stringify(
 /** The first thing wrong with the text, or undefined when it could be saved. */
 export function hooksProblem(text: string): string | undefined {
   if (!text.trim()) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return "Hooks is not valid JSON.";
-  }
+  const unparsed = jsonProblem(text, "Hooks");
+  if (unparsed) return unparsed;
+  const parsed: unknown = JSON.parse(text);
   const [problem] = validateHooks(parsed);
   if (problem) return problem;
   // Past `validateHooks` this is an array of hooks, each bound to a real event.

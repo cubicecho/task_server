@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 import { stringList } from "@/lib/json";
+import { required } from "@/lib/validators";
 
 type Server = AgentsQuery["mcpServers"][number];
 
@@ -161,10 +162,7 @@ export function AgentDialog({
                   description={doc("name")}
                   required
                   placeholder="Local Qwen"
-                  validators={{
-                    onChange: ({ value }: { value: string }) =>
-                      value.trim() ? undefined : "A profile needs a name.",
-                  }}
+                  validators={required("A profile needs a name.")}
                 />
                 <InputField
                   form={form}

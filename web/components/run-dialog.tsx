@@ -3,9 +3,8 @@ import { LastPayloadDocument } from "@/__generated__/graphql/graphql";
 import { TextareaField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { Button } from "@/components/ui/button";
-import { errorMessage } from "@/lib/errors";
 import { request } from "@/lib/gql";
-import { parseJson } from "@/lib/json";
+import { jsonProblem, parseJson } from "@/lib/json";
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
 
@@ -120,14 +119,7 @@ function BodyForm({
             validators={{
               // Malformed JSON used to be a toast on the way out, which arrived after the dialog
               // was already gone and said nothing about where in the box the fault was.
-              onChange: ({ value }: { value: string }) => {
-                try {
-                  parseJson<unknown>(value, "The body", null);
-                  return undefined;
-                } catch (error) {
-                  return errorMessage(error);
-                }
-              },
+              onChange: ({ value }: { value: string }) => jsonProblem(value, "The body"),
             }}
           />
         </form>

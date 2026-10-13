@@ -1,3 +1,5 @@
+import { errorMessage } from "@/lib/errors";
+
 /**
  * Parses a JSON field from a form, naming the field when it will not parse.
  *
@@ -11,6 +13,16 @@ export function parseJson<T>(text: string, field: string, fallback: T): T {
     return JSON.parse(text) as T;
   } catch {
     throw new Error(`${field} is not valid JSON.`);
+  }
+}
+
+/** What is wrong with a JSON field as it stands, or undefined when it would parse. */
+export function jsonProblem(text: string, field: string): string | undefined {
+  try {
+    parseJson<unknown>(text, field, null);
+    return undefined;
+  } catch (error) {
+    return errorMessage(error);
   }
 }
 

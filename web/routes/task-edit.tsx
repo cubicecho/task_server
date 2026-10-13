@@ -29,6 +29,7 @@ import { describeFor } from "@/lib/docs";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
 import { isBlank, triggerProblem } from "@/lib/triggers";
+import { required } from "@/lib/validators";
 
 /** The notes under this form's fields are the columns' own descriptions. */
 const doc = describeFor("Task");
@@ -112,10 +113,6 @@ interface Form {
    */
   steps: unknown;
 }
-
-const required = (what: string) => ({
-  onChange: ({ value }: { value: string }) => (value.trim() ? undefined : what),
-});
 
 function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
   const navigate = useNavigate();
