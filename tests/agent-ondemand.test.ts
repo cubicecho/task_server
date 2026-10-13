@@ -1,15 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import type { RunEventInput } from "@cubicecho/agent-core";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
 import { type ChatBody, type Completion, completion, replyWith, toolCall } from "./fixtures/sse.ts";
-import { echoRow, type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
+import { dataDir, echoRow, type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
 
 // Loading the runner pulls in the database module, so give it somewhere disposable first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-ondemand-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("ondemand");
 
 /** Chat completions the fake model server hands back, one per request, in order. */
 let replies: Completion[] = [];
@@ -32,7 +28,6 @@ afterAll(async () => {
   const { mcp } = await import("../server/runner/mcp.ts");
   await mcp.shutdown();
   await model.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const config = (over: Partial<Settings> = {}) =>

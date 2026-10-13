@@ -1,13 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, afterEach, beforeAll, expect, test } from "vitest";
+import { afterEach, beforeAll, expect, test } from "vitest";
 import type { McpServerRow } from "../server/db/schema.ts";
-import { echoRow } from "./helpers.ts";
+import { dataDir, echoRow } from "./helpers.ts";
 
 // Loading the pool pulls in the database module, so give it somewhere disposable first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-mcp-prompts-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("mcp-prompts");
 
 /**
  * What a server offers a picker, read off a real connection.
@@ -39,10 +35,6 @@ beforeAll(async () => {
 afterEach(async () => {
   await mcp.shutdown();
   await db.delete(mcpServers);
-});
-
-afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("lists what a connected server offers, carrying the server on every row", async () => {

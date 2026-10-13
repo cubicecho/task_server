@@ -1,11 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
 import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
-import { ECHO_FIXTURE, type FakeModel, fakeModel, useModel } from "./helpers.ts";
+import { dataDir, ECHO_FIXTURE, type FakeModel, fakeModel, useModel } from "./helpers.ts";
 
 /**
  * The MCP servers' hooks, fired around a real run against a real stdio server.
@@ -16,8 +15,7 @@ import { ECHO_FIXTURE, type FakeModel, fakeModel, useModel } from "./helpers.ts"
  * which is where injected context has to land.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-hooks-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+const dir = dataDir("hooks");
 
 const callLog = path.join(dir, "calls.log");
 
@@ -104,7 +102,6 @@ afterEach(async () => {
 afterAll(async () => {
   cron.stop();
   await model.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("a beforeTurn hook's result is put in front of each step's prompt, and noted", async () => {

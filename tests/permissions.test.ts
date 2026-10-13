@@ -1,14 +1,11 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { resolvePermissions } from "@vantreeseba/graphql-casl";
 import { type GraphQLResolveInfo, type GraphQLSchema, graphql } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { dataDir } from "./helpers.ts";
 
 // The schema is built from the live Drizzle tables at import time, so the database has to be
 // pointed somewhere disposable before anything under server/ is loaded.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-perms-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("perms");
 
 let schema: GraphQLSchema;
 let cron: typeof import("../server/scheduler/cron.ts");
@@ -26,7 +23,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cron.stop();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 /** The same schema both doors serve, asked as one caller or the other. */

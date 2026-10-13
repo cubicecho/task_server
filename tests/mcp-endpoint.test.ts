@@ -1,8 +1,5 @@
-import fs from "node:fs";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import os from "node:os";
-import path from "node:path";
 import * as events from "@cubicecho/agent-core";
 import type { McpHttpHandler } from "@cubicecho/graphql-mcp";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -11,10 +8,10 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import type { GraphQLInputObjectType } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { dataDir } from "./helpers.ts";
 
 // The endpoint serves the real schema, which is built against the live tables.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-mcp-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("mcp");
 
 let server: Server;
 let endpoint: URL;
@@ -66,7 +63,6 @@ afterAll(async () => {
   await probeHandler.close();
   await client.close();
   await new Promise((resolve) => server.close(resolve));
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 /** Tools answer with the GraphQL envelope as JSON text; this is the `data` half of it. */

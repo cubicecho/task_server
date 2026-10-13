@@ -1,12 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import express from "express";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { beforeAll, beforeEach, expect, test } from "vitest";
+import { dataDir } from "./helpers.ts";
 
 // Importing the schema builds it against the live tables, so give the database a home first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-webhooks-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("webhooks");
 
 let db: typeof import("../server/db/client.ts").db;
 let tables: typeof import("../server/db/schema.ts");
@@ -57,8 +54,6 @@ beforeEach(async () => {
   await db.delete(tables.triggers);
   await db.delete(tables.tasks);
 });
-
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /**
  * Drives the router over a real socket, so the route matching is the real thing too.

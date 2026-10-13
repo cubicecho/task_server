@@ -1,14 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { type FakeModel, hangingModel, refusalCode, until, useModel } from "./helpers.ts";
+import { dataDir, type FakeModel, hangingModel, refusalCode, until, useModel } from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-stop-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("stop");
 
 let schema: GraphQLSchema;
 let runner: typeof import("../server/runner/run.ts");
@@ -36,7 +32,6 @@ beforeAll(async () => {
 afterAll(async () => {
   cron.stop();
   await hang.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const gql = (source: string, variableValues?: Record<string, unknown>) =>

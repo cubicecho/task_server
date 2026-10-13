@@ -1,14 +1,18 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
-import { type FakeModel, hangingModel, refused, started, until, useModel } from "./helpers.ts";
+import {
+  dataDir,
+  type FakeModel,
+  hangingModel,
+  refused,
+  started,
+  until,
+  useModel,
+} from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-capacity-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("capacity");
 
 let runner: typeof import("../server/runner/run.ts");
 let db: typeof import("../server/db/client.ts").db;
@@ -54,7 +58,6 @@ afterEach(async () => {
 
 afterAll(async () => {
   await hang.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const limit = (maxConcurrentRuns: number) =>

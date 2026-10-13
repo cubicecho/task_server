@@ -1,14 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
-import { type FakeModel, fakeModel, until, useModel } from "./helpers.ts";
+import { dataDir, type FakeModel, fakeModel, until, useModel } from "./helpers.ts";
 
 // The schema and the runner are built against the live tables at import time, so the database
 // has to be pointed somewhere disposable before anything under server/ is loaded.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-flow-run-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("flow-run");
 
 /** Replies the fake model server hands back, one per request, in order. */
 let replies: string[] = [];
@@ -47,7 +43,6 @@ beforeAll(async () => {
 afterAll(async () => {
   cron.stop();
   await model.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 beforeEach(() => {

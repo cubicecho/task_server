@@ -1,15 +1,11 @@
-import fs from "node:fs";
 import type http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { resetClients } from "@cubicecho/agent-core";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
 import { completion, notChat, sseFrom } from "./fixtures/sse.ts";
-import { type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
+import { dataDir, type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-resilience-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("resilience");
 
 /** What the fake model server does with the next request, in order. */
 type Reply =
@@ -88,7 +84,6 @@ beforeEach(() => {
 afterAll(async () => {
   while (open.length) open.pop()?.destroy();
   await model.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const config = (over: Partial<Settings> = {}) => settingsRow({ baseUrl: model.baseUrl, ...over });

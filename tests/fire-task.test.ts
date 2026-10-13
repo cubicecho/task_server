@@ -1,14 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { Fired } from "../server/runner/run.ts";
-import { type FakeModel, hangingModel, refused, started, useModel } from "./helpers.ts";
+import { dataDir, type FakeModel, hangingModel, refused, started, useModel } from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-fire-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("fire");
 
 let runner: typeof import("../server/runner/run.ts");
 let db: typeof import("../server/db/client.ts").db;
@@ -40,7 +36,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await hang.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const runsFor = async (task: string) => {

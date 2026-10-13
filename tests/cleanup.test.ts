@@ -1,11 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { beforeAll, beforeEach, expect, test } from "vitest";
+import { dataDir } from "./helpers.ts";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-cleanup-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("cleanup");
 
 let db: typeof import("../server/db/client.ts").db;
 let tables: typeof import("../server/db/schema.ts");
@@ -28,8 +25,6 @@ beforeEach(async () => {
   const [task] = await db.insert(tables.tasks).values({ name: "t", prompt: "p" }).returning();
   taskId = task.id;
 });
-
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const retention = (days: number) =>
   db

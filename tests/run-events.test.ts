@@ -1,13 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import * as events from "@cubicecho/agent-core";
 import { type ExecutionResult, parse, subscribe } from "graphql";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { beforeAll, beforeEach, expect, test } from "vitest";
+import { dataDir } from "./helpers.ts";
 
 // Importing the schema builds it against the live tables, so give the database a home first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-events-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("events");
 
 let schema: import("graphql").GraphQLSchema;
 
@@ -18,8 +15,6 @@ beforeAll(async () => {
 });
 
 beforeEach(() => events.resetEvents());
-
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** Reads `count` events off a subscription, so a test never waits on one that will not come. */
 async function take<T>(iterator: AsyncIterator<T>, count: number): Promise<T[]> {

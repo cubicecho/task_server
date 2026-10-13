@@ -1,7 +1,11 @@
+import fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExecutionResult } from "graphql";
+import { afterAll } from "vitest";
 import type { McpServerRow, Settings } from "../server/db/schema.ts";
 import type { Fired } from "../server/runner/run.ts";
 import { type ChatBody, notChat } from "./fixtures/sse.ts";
@@ -11,6 +15,20 @@ import { type ChatBody, notChat } from "./fixtures/sse.ts";
  * out. Nothing under `server/` is imported at the top: a suite sets `TASK_SERVER_DATA_DIR`
  * before it loads any of that, and a static import here would load it first.
  */
+
+/**
+ * Gives the suite a data directory of its own and removes it when the suite is done.
+ *
+ * Called at the top of the file, before anything under `server/` is imported: the database
+ * module reads the variable as it loads. The removal is registered first and so runs last,
+ * after whatever the suite's own `afterAll` still had open in there.
+ */
+export function dataDir(name: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `task-server-${name}-`));
+  process.env.TASK_SERVER_DATA_DIR = dir;
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
 
 export interface FakeModel {
   /** What `settings.baseUrl` is set to. */

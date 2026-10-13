@@ -1,14 +1,12 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, expect, test } from "vitest";
+import { afterEach, beforeAll, expect, test } from "vitest";
 import pkg from "../package.json" with { type: "json" };
 import type { McpServerRow } from "../server/db/schema.ts";
-import { echoRow } from "./helpers.ts";
+import { dataDir, echoRow } from "./helpers.ts";
 
 // Loading the pool pulls in the database module, so give it somewhere disposable first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-mcp-pool-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+const dir = dataDir("mcp-pool");
 
 const spawnLog = path.join(dir, "spawns.log");
 
@@ -66,10 +64,6 @@ afterEach(async () => {
   await mcp.shutdown();
   await db.delete(mcpServers);
   fs.rmSync(spawnLog, { force: true });
-});
-
-afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("connects a configured server and offers its tools qualified by slug", async () => {

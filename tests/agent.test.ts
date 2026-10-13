@@ -1,13 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { type Completion, completion, replyWith, toolCall } from "./fixtures/sse.ts";
-import { type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
+import { dataDir, type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
 
 // Loading the runner pulls in the database module, so give it somewhere disposable first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-agent-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("agent");
 
 /** Chat completions the fake model server hands back, one per request, in order. */
 let replies: Completion[] = [];
@@ -21,7 +17,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await model.close();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const config = () => settingsRow({ baseUrl: model.baseUrl });
