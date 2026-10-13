@@ -1,7 +1,8 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Activity, Bot, History, ListChecks, Plug, SlidersHorizontal, Zap } from "lucide-react";
+import { createLink, Outlet, useRouterState } from "@tanstack/react-router";
+import { Activity, Bot, History, ListChecks, SlidersHorizontal, Zap } from "lucide-react";
+import { BarNavItem, Sidebar, SidebarNavItem, SidebarSection } from "@/components/sidebar";
 import { SidebarLayout } from "@/components/split-layout";
-import { cn } from "@/lib/utils";
+import { Plug } from "@/components/ui/icons";
 
 const NAV = [
   { to: "/status", label: "Status", icon: Activity },
@@ -12,38 +13,61 @@ const NAV = [
   { to: "/settings", label: "Settings", icon: SlidersHorizontal },
 ] as const;
 
+// The row and the bar's icon name no router; the router supplies the `href` and the click.
+const SidebarLink = createLink(SidebarNavItem);
+const BarLink = createLink(BarNavItem);
+
+function Brand() {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1 font-semibold text-sm tracking-tight">
+      <Zap className="size-4" />
+      task-server
+    </div>
+  );
+}
+
 export function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   return (
     <SidebarLayout
-      className="h-screen w-screen overflow-hidden bg-background text-foreground"
+      className="h-svh w-screen overflow-hidden bg-background text-foreground"
       sidebarPosition="start"
-      sidebarWidth="sm"
-      stackBelow="md"
-      divider="line"
-      sidebarClassName="bg-sidebar"
+      sidebarWidth="auto"
+      divider="none"
+      sidebarHideBelow="md"
       sidebarSlot={
-        <nav className="flex flex-col gap-1 px-2">
-          <div className="flex items-center gap-2 px-3 py-4 font-semibold text-sm tracking-tight">
-            <Zap className="size-4" />
-            task-server
-          </div>
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-muted-foreground text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                pathname.startsWith(to) && "bg-accent font-medium text-accent-foreground",
-              )}
-            >
-              <Icon className="size-4" />
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <Sidebar
+          label="Main"
+          headerSlot={<Brand />}
+          contentSlot={
+            <SidebarSection
+              as="nav"
+              label="Main"
+              contentSlot={NAV.map(({ to, label, icon: Icon }) => (
+                <SidebarLink
+                  key={to}
+                  to={to}
+                  label={label}
+                  iconSlot={<Icon />}
+                  active={pathname.startsWith(to)}
+                />
+              ))}
+            />
+          }
+        />
       }
+      brandSlot={<Zap className="size-4" aria-label="task-server" />}
+      navSlot={NAV.map(({ to, label, icon: Icon }) => (
+        <BarLink
+          key={to}
+          to={to}
+          label={label}
+          iconSlot={<Icon />}
+          active={pathname.startsWith(to)}
+        />
+      ))}
+      navLabel="Main"
       contentSlot={<Outlet />}
     />
   );

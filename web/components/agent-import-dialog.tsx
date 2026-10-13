@@ -2,7 +2,6 @@ import { useStore } from "@tanstack/react-form";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { FileUp, ScanSearch } from "lucide-react";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 import {
   AgentSpecPreviewDocument,
   type AgentSpecPreviewQuery,
@@ -14,6 +13,7 @@ import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { initialTicks, mayImport, overrides, readSpec, tickedSlugs } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
 
@@ -98,6 +98,7 @@ export function AgentImportDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const toast = useToast();
   const [read, setRead] = useState<Read | null>(null);
   const picker = useRef<HTMLInputElement>(null);
 
@@ -113,7 +114,7 @@ export function AgentImportDialog({
       });
     },
     onSuccess: ({ importAgentSpec }) => {
-      toast.success(`Imported ${importAgentSpec.name}`);
+      toast(`Imported ${importAgentSpec.name}`, "positive");
       onSaved();
       onClose();
     },
@@ -228,14 +229,14 @@ export function AgentImportDialog({
               }}
             />
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => picker.current?.click()}
               iconSlot={<FileUp />}
               content="Choose a file"
             />
             <Button
-              variant="secondary"
+              variant="outline"
               size="sm"
               disabled={
                 reading.isPending || Boolean(current) || readSpec(values.text).problem !== undefined
@@ -363,9 +364,10 @@ export function AgentImportDialog({
       // document the same as Escape is.
       footerActionsSlot={(close) => (
         <>
-          <Button variant="ghost" onClick={close} content="Cancel" />
+          <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
             <form.SubmitButton
+              variant="positive"
               form="agent-import"
               pendingLabel="Importing…"
               disabled={!mayImport(shown, settled)}

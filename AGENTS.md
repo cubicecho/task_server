@@ -579,6 +579,34 @@ button reaches nobody. `type` defaults to `button`, so a row action inside a `<f
 submit it. `ConfirmButton` is a `Button` with `title`, `description` and `onConfirm` in place of
 `onClick`.
 
+**A button's variant says what pressing it does, and the table is cubeui's.** `info` makes
+something (New task, New server, New profile) and `info-outline` adds a row to what is already
+open (Add, Add step, Add case); `positive` saves — every `form.SubmitButton` but the run
+dialog's, which starts a run rather than keeping anything; `destructive-outline` deletes or
+removes, `ConfirmButton` included; `outline` is everything quiet — Cancel, a row's edit and play
+icons, Test connection, Import. `default` is for the one emphasis nothing else names. `ghost`,
+`link` and `secondary` are not picked here: the first two exist for porting, and the third is
+for an icon inside a field's own border.
+
+**Icons come from `@/components/ui/icons`, and the rest straight from `lucide-react`.** The
+registry ships a set and its own controls draw from it, so a glyph in the set is imported from
+there and is the same `Trash2` a shell draws. One outside it (`Bot`, `History`, `Zap`…) is
+imported from `lucide-react` directly — there is no local wrapper file, which is for apps that
+render off the DOM.
+
+**The shell is cubeui's `Sidebar`, and the links are `createLink` over its rows.**
+`app-shell.tsx` hands `SidebarLayout` a `Sidebar` of `SidebarNavItem`s and, for under `md`, the
+same list as `BarNavItem`s in `navSlot` — the sidebar is hidden there and the bar takes its
+place, which is why `NAV` is one array read twice. Neither row knows a router: TanStack's
+`createLink` wraps each, so `to` is typed against the route tree and `active` is this file's to
+say.
+
+**A toast is `useToast()`, and it is a hook.** `ToastProvider` wraps the app in `main.tsx`;
+`const toast = useToast()` gives `toast(message, tone?)`, where the tone defaults to `error` and
+a success says `"positive"`. The query client is made inside the provider for that reason — its
+`MutationCache.onError` is where every failed mutation is said, and it needs the hook. There is
+no imperative `toast.success` to import, so nothing outside a component or a hook can raise one.
+
 `DialogLayout`'s `footerActionsSlot` takes a function, and every dialog here uses that form: it
 is handed the dialog's own `close`, which is the one Escape, the overlay and the X go through, so
 `hasUnsavedChanges` asks on the way out of Cancel too

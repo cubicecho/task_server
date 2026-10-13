@@ -144,7 +144,7 @@ function BodyForm({
       // way out — the one people actually click — going around the ask.
       footerActionsSlot={(close) => (
         <>
-          <Button variant="ghost" onClick={close} content="Cancel" />
+          <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
             <form.SubmitButton form="run-body" pendingLabel="Starting…" content="Run" />
           </form.AppForm>

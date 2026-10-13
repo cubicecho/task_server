@@ -1,5 +1,6 @@
-import { CheckCircle2, XCircle } from "lucide-react";
+import { XCircle } from "lucide-react";
 import type { TestMcpServerMutation } from "@/__generated__/graphql/graphql";
+import { CircleCheck } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,7 +27,7 @@ export function McpProbeResult({ probe, className }: { probe: McpProbe; classNam
     >
       <div className="flex items-center gap-2 font-medium">
         {probe.ok ? (
-          <CheckCircle2 className="size-4" aria-hidden />
+          <CircleCheck className="size-4" aria-hidden />
         ) : (
           <XCircle className="size-4 text-destructive" aria-hidden />
         )}

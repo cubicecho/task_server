@@ -72,7 +72,7 @@ export function ModelSelect({
         />
         <Button
           aria-label="Pick from the list"
-          variant="ghost"
+          variant="outline"
           size="icon"
           onClick={() => setTyping(false)}
           iconSlot={<List />}

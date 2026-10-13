@@ -1,6 +1,5 @@
 import type { HookNote } from "@cubicecho/agent-core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Play, RefreshCw, Square, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   DeleteRunDocument,
@@ -21,6 +20,7 @@ import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Play, RefreshCw, Square, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
 import {
@@ -328,7 +328,7 @@ function FilterBar({
       {dirty ? (
         <Button
           aria-label="Clear filters"
-          variant="ghost"
+          variant="outline"
           size="icon"
           onClick={() => onChange(NO_FILTERS)}
           iconSlot={<X />}
@@ -467,7 +467,7 @@ export function RunsRoute() {
                     {running ? (
                       <Button
                         aria-label="Stop this run"
-                        variant="ghost"
+                        variant="outline"
                         size="icon"
                         // Only this row's button: `isPending` alone disabled every other running
                         // run's Stop while one of them was being stopped.
@@ -478,7 +478,7 @@ export function RunsRoute() {
                     ) : null}
                     <ConfirmButton
                       aria-label="Delete"
-                      variant="ghost"
+                      variant="destructive-outline"
                       size="icon"
                       hint={running ? "Stop the run before deleting" : undefined}
                       disabled={running}

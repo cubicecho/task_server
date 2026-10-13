@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plug, PlugZap, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { PlugZap } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import {
   DeleteMcpServerDocument,
   McpServersDocument,
@@ -24,8 +23,10 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Pencil, Plug, Plus, RefreshCw, Trash2 } from "@/components/ui/icons";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
 import { toConnection } from "@/lib/mcp-config";
 import { uptime } from "@/lib/uptime";
@@ -33,6 +34,7 @@ import { uptime } from "@/lib/uptime";
 type McpServer = McpServersQuery["mcpServers"][number];
 
 export function McpRoute() {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<McpServer | null>(null);
   const [creating, setCreating] = useState(false);
@@ -54,7 +56,7 @@ export function McpRoute() {
   const reconnect = useMutation({
     mutationFn: () => request(ReconnectMcpDocument),
     onSuccess: () => {
-      toast.success("Reconnecting");
+      toast("Reconnecting", "info");
       refresh();
     },
   });
@@ -91,13 +93,18 @@ export function McpRoute() {
       actionSlot={
         <div className="flex gap-2">
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={() => reconnect.mutate()}
             disabled={reconnect.isPending}
             iconSlot={<RefreshCw />}
             content="Reconnect all"
           />
-          <Button onClick={() => setCreating(true)} iconSlot={<Plus />} content="New server" />
+          <Button
+            variant="info"
+            onClick={() => setCreating(true)}
+            iconSlot={<Plus />}
+            content="New server"
+          />
         </div>
       }
       contentSlot={
@@ -165,7 +172,7 @@ export function McpRoute() {
                     />
                     <Button
                       aria-label="Test connection"
-                      variant="ghost"
+                      variant="outline"
                       size="icon"
                       onClick={() => test.mutate(server)}
                       disabled={test.isPending && test.variables?.id === server.id}
@@ -173,14 +180,14 @@ export function McpRoute() {
                     />
                     <Button
                       aria-label="Edit"
-                      variant="ghost"
+                      variant="outline"
                       size="icon"
                       onClick={() => setEditing(server)}
                       iconSlot={<Pencil />}
                     />
                     <ConfirmButton
                       aria-label="Delete"
-                      variant="ghost"
+                      variant="destructive-outline"
                       size="icon"
                       title={`Delete ${server.slug}?`}
                       description="Every task loses its tools, and any profile scoped to it falls back to the servers that are left."

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { Bot } from "lucide-react";
 import { useState } from "react";
 import {
   type AgentFieldsFragment,
@@ -21,6 +21,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Download, Pencil, Plus, Trash2, Upload } from "@/components/ui/icons";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { overrides, saveFile, specFileName, specText } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
@@ -72,7 +73,12 @@ export function AgentsRoute() {
             iconSlot={<Upload />}
             content="Import"
           />
-          <Button onClick={() => setCreating(true)} iconSlot={<Plus />} content="New profile" />
+          <Button
+            variant="info"
+            onClick={() => setCreating(true)}
+            iconSlot={<Plus />}
+            content="New profile"
+          />
         </div>
       }
       contentSlot={
@@ -121,7 +127,7 @@ export function AgentsRoute() {
                   <ItemActions className="gap-1">
                     <Button
                       aria-label="Edit"
-                      variant="ghost"
+                      variant="outline"
                       size="icon"
                       onClick={() => setEditing(agent)}
                       iconSlot={<Pencil />}
@@ -129,7 +135,7 @@ export function AgentsRoute() {
                     <Button
                       aria-label="Export"
                       hint="Save as an agent spec file. It carries no API key."
-                      variant="ghost"
+                      variant="outline"
                       size="icon"
                       disabled={exportSpec.isPending}
                       onClick={() => exportSpec.mutate(agent)}
@@ -137,7 +143,7 @@ export function AgentsRoute() {
                     />
                     <ConfirmButton
                       aria-label="Delete"
-                      variant="ghost"
+                      variant="destructive-outline"
                       size="icon"
                       title={`Delete ${agent.name}?`}
                       description={

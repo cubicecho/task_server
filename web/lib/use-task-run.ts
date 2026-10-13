@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { RunTaskDocument, StopTaskDocument } from "@/__generated__/graphql/graphql";
+import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
 
 /** Every list a run starting, ending, being stopped or being deleted is drawn in. */
@@ -24,17 +24,18 @@ export function useRefreshRuns() {
  * as a success.
  */
 export function useRunTask() {
+  const toast = useToast();
   const refresh = useRefreshRuns();
   return useMutation({
     mutationFn: (variables: { taskId: string; payload?: unknown }) =>
       request(RunTaskDocument, variables),
     onSuccess: ({ runTask: { status, error } }) => {
       if (status === "error") {
-        toast.error(error || "Run failed");
+        toast(error || "Run failed");
       } else if (status === "stopped") {
-        toast.success("Run stopped");
+        toast("Run stopped", "positive");
       } else {
-        toast.success("Run finished");
+        toast("Run finished", "positive");
       }
       refresh();
     },
@@ -43,6 +44,7 @@ export function useRunTask() {
 
 /** Stops a task's run. A run is stopped through its task: the runner keys what is in flight by task. */
 export function useStopTask() {
+  const toast = useToast();
   const refresh = useRefreshRuns();
   return useMutation({
     mutationFn: (taskId: string) => request(StopTaskDocument, { taskId }),
@@ -50,7 +52,7 @@ export function useStopTask() {
       // False means the run had already finished on its own — nothing was stopped, and the
       // refresh is what shows that.
       if (stopTask) {
-        toast.success("Stopping…");
+        toast("Stopping…", "info");
       }
       refresh();
     },

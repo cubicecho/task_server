@@ -1,7 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { ClipboardPaste, PlugZap } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import {
   CreateMcpServerDocument,
   type McpServersQuery,
@@ -18,6 +17,7 @@ import { MultiSelectField } from "@/components/multi-select-field";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 import { describeFor } from "@/lib/docs";
 import { errorMessage } from "@/lib/errors";
 import { request } from "@/lib/gql";
@@ -82,6 +82,7 @@ export function McpDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const toast = useToast();
   const [paste, setPaste] = useState("");
   const [probe, setProbe] = useState<McpProbe | null>(null);
 
@@ -112,7 +113,7 @@ export function McpDialog({
       }
     },
     onSuccess: () => {
-      toast.success(server ? "Server saved" : "Server added");
+      toast(server ? "Server saved" : "Server added", "positive");
       onSaved();
       onClose();
     },
@@ -142,9 +143,9 @@ export function McpDialog({
         form.setFieldValue(key as keyof Draft, value as never);
       }
       setPaste("");
-      toast.success("Config applied");
+      toast("Config applied", "positive");
     } catch (error) {
-      toast.error(errorMessage(error));
+      toast(errorMessage(error));
     }
   };
 
@@ -198,7 +199,7 @@ export function McpDialog({
             />
             <div className="flex justify-end">
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 onClick={applyPaste}
                 disabled={!paste.trim()}
@@ -347,7 +348,7 @@ export function McpDialog({
       }
       footerSlot={
         <Button
-          variant="secondary"
+          variant="outline"
           onClick={() => test.mutate()}
           disabled={test.isPending}
           iconSlot={<PlugZap />}
@@ -359,12 +360,14 @@ export function McpDialog({
       // way out — the one people actually click — going around the ask.
       footerActionsSlot={(close) => (
         <>
-          <Button variant="ghost" onClick={close} content="Cancel" />
+          <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
             {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
                 server would refuse. Passing `disabled` tightens the store's own two reasons. */}
             <form.Subscribe selector={(state) => state.isDefaultValue}>
-              {(untouched) => <form.SubmitButton form="mcp-server" disabled={untouched} />}
+              {(untouched) => (
+                <form.SubmitButton variant="positive" form="mcp-server" disabled={untouched} />
+              )}
             </form.Subscribe>
           </form.AppForm>
         </>
