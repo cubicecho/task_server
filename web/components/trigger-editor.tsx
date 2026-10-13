@@ -40,6 +40,12 @@ let counter = 0;
 const nextKey = () => `trigger-${++counter}`;
 
 /**
+ * 32 letters exactly, so that `% 32` over a byte stays uniform, and without `i`, `l`, `o` and
+ * `u`, so an id read off a screen cannot be transcribed into a different one.
+ */
+const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+
+/**
  * An unguessable webhook id.
  *
  * The id is the whole of the address and the whole of the authentication — there is no secret
@@ -48,16 +54,21 @@ const nextKey = () => `trigger-${++counter}`;
  *
  * `crypto.randomUUID` is not used: it is unavailable outside a secure context, and this server
  * is very often reached over plain http at a LAN address. `getRandomValues` is always there.
- * The alphabet is 32 letters exactly so that `% 32` over a byte stays uniform, and it drops
- * `i`, `l`, `o` and `u` so an id read off a screen cannot be transcribed into a different one.
  */
-const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
-
 function newWebhookId(): string {
   const bytes = new Uint8Array(26);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => ALPHABET[byte % ALPHABET.length]).join("");
 }
+
+/** A trigger of this kind with nothing filled in, armed. */
+const emptyTrigger = (kind: DraftTrigger["kind"]): Omit<DraftTrigger, "key"> => ({
+  kind,
+  cron: "",
+  timezone: "",
+  event: "",
+  enabled: true,
+});
 
 /** The saved rows, as the editor holds them. */
 export const toDraftTriggers = (rows: TaskFieldsFragment["triggers"]): DraftTrigger[] =>
@@ -106,12 +117,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
       <Section
         title="Schedule"
         action={
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => add({ kind: "cron", cron: "", timezone: "", event: "", enabled: true })}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={() => add(emptyTrigger("cron"))}>
             <Plus className="size-4" />
             Add
           </Button>
@@ -168,15 +174,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
                   key={example.cron}
                   type="button"
                   className="rounded-md border px-2 py-1 hover:bg-accent"
-                  onClick={() =>
-                    add({
-                      kind: "cron",
-                      cron: example.cron,
-                      timezone: "",
-                      event: "",
-                      enabled: true,
-                    })
-                  }
+                  onClick={() => add({ ...emptyTrigger("cron"), cron: example.cron })}
                 >
                   {example.label} <span className="font-mono">{example.cron}</span>
                 </button>
@@ -193,9 +191,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() =>
-              add({ kind: "event", cron: "", timezone: "", event: newWebhookId(), enabled: true })
-            }
+            onClick={() => add({ ...emptyTrigger("event"), event: newWebhookId() })}
           >
             <Plus className="size-4" />
             Add

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/empty";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { request } from "@/lib/gql";
+import { stringList } from "@/lib/json";
 
 /**
  * What this profile changes, said in the badges rather than in a second form.
@@ -99,7 +100,7 @@ export function AgentsRoute() {
           />
 
           {rows.map((agent) => {
-            const scoped = (agent.mcpServerIds as string[] | null) ?? [];
+            const scoped = stringList(agent.mcpServerIds);
             const said = overrides(agent);
             return (
               <Item key={agent.id} variant="outline" className="flex-col items-stretch gap-3">

@@ -1,18 +1,12 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { NO_KEY } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import type { Agent, McpServerRow, Settings } from "../server/db/schema.ts";
+import type { Agent, Settings } from "../server/db/schema.ts";
+import { dataDir, echoRow, settingsRow } from "./helpers.ts";
 
 // The profile module reaches the database as soon as it is imported, so point it somewhere
 // disposable before anything under server/ loads.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-agents-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
-
-const FIXTURE = fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url));
+dataDir("agents");
 
 let db: typeof import("../server/db/client.ts")["db"];
 let schema: typeof import("../server/db/schema.ts");
@@ -30,26 +24,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await mcp.shutdown();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const settings = (over: Partial<Settings> = {}): Settings => ({
-  id: "default",
-  baseUrl: "http://server:11434/v1",
-  apiKey: "server-key",
-  model: "server-model",
-  systemPrompt: "server prompt",
-  maxTokens: 1000,
-  temperature: 0.5,
-  maxToolIterations: 8,
-  toolDiscovery: "eager",
-  toolSelectModel: "small",
-  runRetentionDays: 30,
-  requestTimeoutSeconds: 120,
-  maxRetries: 2,
-  maxConcurrentRuns: 4,
-  ...over,
-});
+const settings = (over: Partial<Settings> = {}) =>
+  settingsRow({
+    baseUrl: "http://server:11434/v1",
+    apiKey: "server-key",
+    model: "server-model",
+    systemPrompt: "server prompt",
+    maxTokens: 1000,
+    temperature: 0.5,
+    maxToolIterations: 8,
+    toolSelectModel: "small",
+    requestTimeoutSeconds: 120,
+    maxRetries: 2,
+    ...over,
+  });
 
 /** A profile as the table hands one over: every column at its inherit sentinel. */
 const agent = (over: Partial<Agent> = {}): Agent => ({
@@ -321,23 +311,10 @@ test("a task reads its own profile, and a task with none reads settings", async 
 });
 
 test("a run scoped to one server cannot see or call another's tools", async () => {
-  const server = (over: Partial<McpServerRow>): McpServerRow => ({
-    id: "",
-    slug: "",
-    label: "",
-    enabled: true,
-    transport: "stdio",
-    command: process.execPath,
-    args: [FIXTURE],
-    env: null,
-    url: "",
-    headers: null,
-    hiddenTools: null,
-    hooks: null,
-    ...over,
-  });
-
-  await mcp.sync([server({ id: "mine", slug: "mine" }), server({ id: "theirs", slug: "theirs" })]);
+  await mcp.sync([
+    echoRow({ id: "mine", slug: "mine" }),
+    echoRow({ id: "theirs", slug: "theirs" }),
+  ]);
 
   const names = (servers?: ReadonlySet<string>) =>
     mcp

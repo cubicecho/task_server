@@ -1,22 +1,15 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { beforeAll, expect, test } from "vitest";
 import type { Step } from "../server/db/schema.ts";
+import { dataDir } from "./helpers.ts";
 
 // The flow module imports the database client to write its run steps, so point the database
 // somewhere disposable before anything under server/ is loaded. Nothing here touches it.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-flow-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("flow");
 
 let flow: typeof import("../server/runner/flow.ts");
 
 beforeAll(async () => {
   flow = await import("../server/runner/flow.ts");
-});
-
-afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 let clock = 0;

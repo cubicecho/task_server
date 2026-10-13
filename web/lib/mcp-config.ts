@@ -1,7 +1,8 @@
 import { fromMcpServersJson, validateServerConfig } from "@cubicecho/agent-mcp-pool/servers";
 import type { McpConnectionInput, McpServersQuery } from "@/__generated__/graphql/graphql";
 import { McpServersTransportEnum } from "@/__generated__/graphql/graphql";
-import { parseJson } from "@/lib/json";
+import { errorMessage } from "@/lib/errors";
+import { parseJson, stringList } from "@/lib/json";
 
 /** What a pasted config can fill in: the connection fields, a slug if the paste named one. */
 export interface PastedConfig {
@@ -58,7 +59,7 @@ export function toConnection(server: McpServersQuery["mcpServers"][number]): Mcp
   return {
     transport: server.transport,
     command: server.command,
-    args: (server.args as string[] | null) ?? [],
+    args: stringList(server.args),
     env: server.env ?? {},
     url: server.url,
     headers: server.headers ?? {},
@@ -99,6 +100,6 @@ export function fieldProblem(field: keyof typeof AS_ROW, text: string): string |
   try {
     return validateServerConfig(AS_ROW[field](text))[0];
   } catch (error) {
-    return (error as Error).message;
+    return errorMessage(error);
   }
 }

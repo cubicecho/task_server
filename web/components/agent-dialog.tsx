@@ -19,6 +19,7 @@ import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
+import { stringList } from "@/lib/json";
 
 type Server = AgentsQuery["mcpServers"][number];
 
@@ -72,7 +73,7 @@ const toDraft = (agent?: AgentFieldsFragment): Draft => ({
   requestTimeoutSeconds: shown(agent?.requestTimeoutSeconds ?? -1),
   maxRetries: shown(agent?.maxRetries ?? -1),
   // The JSON scalar carries no shape, so this is where it is said what the column holds.
-  mcpServerIds: (agent?.mcpServerIds as string[] | null) ?? [],
+  mcpServerIds: stringList(agent?.mcpServerIds),
 });
 
 /** The draft as the row wants it — sentinels back in, and the key left behind. */

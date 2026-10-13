@@ -4,17 +4,73 @@
  * token at a time, with tool call arguments arriving in pieces.
  */
 
-interface Completion {
+interface Message {
+  role: string;
+  content?: string | null;
+  tool_calls?: ToolCall[];
+}
+
+export interface Completion {
   id: string;
+  object: string;
+  created: number;
   model: string;
-  choices: { message: { content?: string | null; tool_calls?: ToolCall[] } }[];
+  choices: { index: number; message: Message; finish_reason: FinishReason }[];
   usage?: Record<string, number>;
 }
 
 interface ToolCall {
   id: string;
+  type: string;
   function: { name: string; arguments: string };
 }
+
+/** `length` is a reply cut off at the ceiling, which the runner carries on from. */
+type FinishReason = "stop" | "length";
+
+/** What a fake model is sent, as far as any test reads it. */
+export interface ChatBody {
+  messages: { role: string; content: string }[];
+  tools?: { function: { name: string; parameters?: unknown } }[];
+  response_format?: unknown;
+  stream?: boolean;
+  stream_options?: { include_usage?: boolean };
+}
+
+/**
+ * One whole reply from the model: text, or a message for anything text cannot say.
+ *
+ * Every reply costs fifteen tokens, so a test that sums usage across turns can count them.
+ */
+export const completion = (
+  message: string | Message,
+  finishReason: FinishReason = "stop",
+): Completion => ({
+  id: "chatcmpl-test",
+  object: "chat.completion",
+  created: 0,
+  model: "fake",
+  choices: [
+    {
+      index: 0,
+      message: typeof message === "string" ? { role: "assistant", content: message } : message,
+      finish_reason: finishReason,
+    },
+  ],
+  usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+});
+
+/** A reply that is one tool call and nothing else. */
+export const toolCall = (name: string, args = "{}", id = "call-1") =>
+  completion({
+    role: "assistant",
+    content: null,
+    tool_calls: [{ id, type: "function", function: { name, arguments: args } }],
+  });
+
+/** The user message of a request, which is where a step's prompt and its context land. */
+export const userPrompt = (body: ChatBody) =>
+  body.messages.find((message) => message.role === "user")?.content ?? "";
 
 const frame = (payload: unknown) => `data: ${JSON.stringify(payload)}\n\n`;
 
@@ -23,7 +79,7 @@ const pieces = (text: string, size = 4) =>
   text ? (text.match(new RegExp(`.{1,${size}}`, "gs") as RegExp) ?? []) : [];
 
 export function sseFrom(completion: Completion, includeUsage: boolean): string {
-  const message = completion.choices[0].message;
+  const { message, finish_reason } = completion.choices[0];
   const base = {
     id: completion.id,
     object: "chat.completion.chunk",
@@ -47,7 +103,7 @@ export function sseFrom(completion: Completion, includeUsage: boolean): string {
     }
   }
 
-  out += delta({}, message.tool_calls?.length ? "tool_calls" : "stop");
+  out += delta({}, message.tool_calls?.length ? "tool_calls" : finish_reason);
   // Usage rides in a final choice-less chunk, and only when it was asked for.
   if (includeUsage && completion.usage)
     out += frame({ ...base, choices: [], usage: completion.usage });

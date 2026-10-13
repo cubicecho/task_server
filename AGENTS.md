@@ -375,10 +375,10 @@ is inherit, and the sentinel differs by column because zero is a real answer for
 `""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`.
 
 The key is the one column that is not a plain override. A profile naming a `baseUrl` of its own
-never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`, the
-constant `llm.ts` exports for "there is no key here, do not fall through to the environment".
+never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`,
+agent-core's constant for "there is no key here, do not fall through to the environment".
 A credential issued for one endpoint has no business being posted to another. A profile on the
-*same* endpoint inherits it like anything else. `llm.ts` caches a client per endpoint for the
+*same* endpoint inherits it like anything else. agent-core caches a client per endpoint for the
 same reason: two profiles on two servers would otherwise evict each other's connection pool on
 every request.
 
@@ -593,7 +593,7 @@ computed.
 One thing the driver cannot do: it types a field's `name` by walking the whole store's shape,
 with no depth limit, so a value that contains itself is `TS2589` — reported at the *first* field
 in the form, not at the recursive one. `task-edit.tsx` holds the flow as `unknown` for that
-reason (a step has branches, and a branch has steps) and casts at the one place it is read.
+reason (a step has branches, and a branch has steps) and casts at the two places it is read.
 
 **A `where` a person assembles goes in `web/lib/`, not in the route.** `run-filters.ts` builds
 the runs page's filter, and `tests/run-history.test.ts` runs what it builds — with the printed
@@ -617,8 +617,8 @@ screenshot settles.
   constants `SCREAMING_SNAKE_CASE`
 - Prefix an unused parameter with `_`; `unknown` over `any`, which is an error
 - Comments explain why, not what. A comment that restates the line below it is noise
-- Tests are `tests/*.test.ts`, Vitest `describe`/`it`/`expect`, against a temp
-  `TASK_SERVER_DATA_DIR` — no mocks of the database, and MCP tests drive a real stdio fixture
+- Tests are `tests/*.test.ts`, flat Vitest `test`/`expect` with a sentence for a title that says
+  what holds ("a blanked saved trigger is refused"), against a temp `TASK_SERVER_DATA_DIR` — no mocks of the database, and MCP tests drive a real stdio fixture
 
 ## Git
 

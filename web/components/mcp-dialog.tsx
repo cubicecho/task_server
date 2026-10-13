@@ -19,8 +19,9 @@ import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
+import { errorMessage } from "@/lib/errors";
 import { request } from "@/lib/gql";
-import { parseJson } from "@/lib/json";
+import { parseJson, stringList } from "@/lib/json";
 import { fieldProblem, parseMcpJson } from "@/lib/mcp-config";
 import { HOOK_PLACEHOLDER, hooksProblem } from "@/lib/mcp-hooks";
 
@@ -58,7 +59,7 @@ const toDraft = (server?: McpServer): Draft => ({
   env: json(server?.env, "{}"),
   url: server?.url ?? "",
   headers: json(server?.headers, "{}"),
-  hiddenTools: (server?.hiddenTools as string[] | null | undefined) ?? [],
+  hiddenTools: stringList(server?.hiddenTools),
   // Pretty-printed, unlike the one-line fields above: a hook is several keys deep and read more
   // often than it is written.
   hooks: server?.hooks ? JSON.stringify(server.hooks, null, 2) : "",
@@ -140,7 +141,7 @@ export function McpDialog({
       setPaste("");
       toast.success("Config applied");
     } catch (error) {
-      toast.error((error as Error).message);
+      toast.error(errorMessage(error));
     }
   };
 
@@ -335,7 +336,7 @@ export function McpDialog({
             form={form}
             name="enabled"
             label="Enabled"
-            description="A disabled server stays configured but offers no tools."
+            description={doc("enabled")}
             orientation="horizontal"
             className="rounded-md border p-3"
           />

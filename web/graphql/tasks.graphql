@@ -6,7 +6,6 @@ fragment TaskFields on Task {
   model
   systemPrompt
   enabled
-  updatedAt
   triggers(orderBy: { createdAt: { direction: asc, priority: 1 } }) {
     id
     kind
@@ -33,7 +32,6 @@ fragment StepFields on Step {
   id
   parentId
   branch
-  position
   kind
   name
   prompt
@@ -71,13 +69,13 @@ query Task($id: String!) {
 
 mutation CreateTask($values: CreateTaskInput!) {
   createTask(values: $values) {
-    ...TaskFields
+    id
   }
 }
 
 mutation UpdateTask($id: String!, $set: UpdateTaskInput!) {
   updateTask(where: { id: { eq: $id } }, set: $set) {
-    ...TaskFields
+    id
   }
 }
 

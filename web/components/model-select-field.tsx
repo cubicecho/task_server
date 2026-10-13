@@ -15,9 +15,8 @@ type ModelSelectFieldProps = FieldProps &
 /**
  * `ModelSelect` as a bound field.
  *
- * Written with `bindToForm` rather than as a `ModelSelect` inside a `FormField`: its root is a
- * Radix `Select`, which renders no DOM, so the id and the `aria-*` props have to reach the
- * trigger through the function form of `control` — the same reason `SelectField` exists.
+ * The id and the `aria-*` props go in through the function form of `control`, and
+ * `ModelSelect` puts them on whichever of its two controls is on screen.
  */
 function BoundModelSelectField(props: ModelSelectFieldProps) {
   const [fieldProps, control] = splitProps(props);
