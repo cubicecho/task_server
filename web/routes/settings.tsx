@@ -1,9 +1,8 @@
 import { useStore } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { Check, CheckCircle2, Copy, XCircle } from "lucide-react";
+import { XCircle } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import {
   ModelsDocument,
   SetApiKeyDocument,
@@ -22,7 +21,9 @@ import { PasswordField } from "@/components/password-field";
 import { QueryError } from "@/components/query-state";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
+import { Check, CircleCheck, Copy } from "@/components/ui/icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/toast";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 import {
@@ -75,7 +76,7 @@ function Snippet({ label, text }: { label: string; text: string }) {
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-sm">{label}</h3>
         <Button
-          variant="ghost"
+          variant="outline"
           size="xs"
           onClick={() => void copy(text)}
           iconSlot={copied ? <Check /> : <Copy />}
@@ -153,6 +154,7 @@ export function SettingsRoute() {
  * typed on one tab is still there, and still counted, when you are on another.
  */
 function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { tab = "model" } = useSearch({ from: "/settings" });
@@ -183,7 +185,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
       store(fresh);
       // A model list belongs to an endpoint, and profiles that inherit this one inherit its list.
       queryClient.invalidateQueries({ queryKey: ["models"] });
-      toast.success("Settings saved");
+      toast("Settings saved", "positive");
     },
   });
 
@@ -245,7 +247,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
           Unsaved changes on {dirty.map(sectionLabel).join(", ")}
         </p>
         <Button
-          variant="ghost"
+          variant="outline"
           disabled={save.isPending}
           onClick={() => {
             form.reset(toForm(row));
@@ -254,7 +256,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
           content="Revert"
         />
         <form.AppForm>
-          <form.SubmitButton form={FORM_ID} />
+          <form.SubmitButton variant="positive" form={FORM_ID} />
         </form.AppForm>
       </div>
     ) : null;
@@ -345,7 +347,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                     {probe ? (
                       <div className="flex items-start gap-2 text-sm">
                         {probe.ok ? (
-                          <CheckCircle2
+                          <CircleCheck
                             className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                             aria-hidden
                           />

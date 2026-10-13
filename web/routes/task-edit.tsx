@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 import {
   AgentOptionsDocument,
   CreateTaskDocument,
@@ -25,6 +23,8 @@ import { Section } from "@/components/section";
 import { StepList } from "@/components/step-editor";
 import { type DraftTrigger, TriggerEditor, toDraftTriggers } from "@/components/trigger-editor";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "@/components/ui/icons";
+import { useToast } from "@/components/ui/toast";
 import { describeFor } from "@/lib/docs";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
@@ -117,6 +117,7 @@ interface Form {
 }
 
 function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
+  const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -225,7 +226,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     defaultValues: defaults,
     onSubmit: async ({ value, formApi }) => {
       const written = await save.mutateAsync(value);
-      toast.success(task ? "Task saved" : "Task created");
+      toast(task ? "Task saved" : "Task created", "positive");
       // The name and the triggers are drawn on the status page, in the runs filter and under a
       // profile as well as in the list.
       for (const key of ["tasks", "status", "agents", "run-filter-tasks"]) {
@@ -253,9 +254,9 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       breadcrumbsSlot={<Breadcrumbs />}
       actionSlot={
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => navigate({ to: "/tasks" })} content="Cancel" />
+          <Button variant="outline" onClick={() => navigate({ to: "/tasks" })} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton form="task" />
+            <form.SubmitButton variant="positive" form="task" />
           </form.AppForm>
         </div>
       }

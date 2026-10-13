@@ -1,6 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
-import { toast } from "sonner";
 import {
   type AgentFieldsFragment,
   type AgentsQuery,
@@ -17,6 +16,7 @@ import { MultiSelectField } from "@/components/multi-select-field";
 import { PasswordField } from "@/components/password-field";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 import { stringList } from "@/lib/json";
@@ -107,6 +107,7 @@ export function AgentDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const toast = useToast();
   // Kept across attempts: a save is two requests, and when the key's fails the profile has
   // still been created. Without this a second press of Save created it again.
   const saved = useRef(agent?.id);
@@ -128,7 +129,7 @@ export function AgentDialog({
       }
     },
     onSuccess: () => {
-      toast.success(agent ? "Profile saved" : "Profile created");
+      toast(agent ? "Profile saved" : "Profile created", "positive");
       onSaved();
       onClose();
     },
@@ -323,12 +324,14 @@ export function AgentDialog({
       // way out — the one people actually click — going around the ask.
       footerActionsSlot={(close) => (
         <>
-          <Button variant="ghost" onClick={close} content="Cancel" />
+          <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
             {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
                 server would refuse. Passing `disabled` tightens the store's own two reasons. */}
             <form.Subscribe selector={(state) => state.isDefaultValue}>
-              {(untouched) => <form.SubmitButton form="agent-profile" disabled={untouched} />}
+              {(untouched) => (
+                <form.SubmitButton variant="positive" form="agent-profile" disabled={untouched} />
+              )}
             </form.Subscribe>
           </form.AppForm>
         </>

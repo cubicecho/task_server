@@ -78,7 +78,7 @@ export function McpPromptButton({
   return (
     <>
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
         className={className}
         onClick={() => setOpen(true)}
@@ -201,7 +201,7 @@ function PromptDialog({
       footerActionsSlot={(close) => (
         <>
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={chosen ? () => setChosen(null) : close}
             content={chosen ? "Back" : "Cancel"}
           />

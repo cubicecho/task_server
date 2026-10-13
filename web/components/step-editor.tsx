@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, GitBranch, Plus, Trash2, X } from "lucide-react";
+import { GitBranch } from "lucide-react";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
@@ -6,6 +6,7 @@ import { OptionSelect } from "@/components/option-select";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
+import { ChevronDown, ChevronUp, Plus, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,14 +73,14 @@ export function StepList({
 
       <div className="flex gap-2">
         <Button
-          variant="outline"
+          variant="info-outline"
           size="sm"
           onClick={() => onChange([...steps, emptyStep("agent")])}
           iconSlot={<Plus />}
           content="Add step"
         />
         <Button
-          variant="outline"
+          variant="info-outline"
           size="sm"
           // A decision's arms sit one level deeper, and the server refuses past MAX_DEPTH.
           disabled={depth >= MAX_DEPTH}
@@ -191,7 +192,7 @@ function StepCard({
         />
         <Button
           aria-label="Move up"
-          variant="ghost"
+          variant="outline"
           size="icon"
           disabled={first}
           onClick={() => onMove(-1)}
@@ -199,7 +200,7 @@ function StepCard({
         />
         <Button
           aria-label="Move down"
-          variant="ghost"
+          variant="outline"
           size="icon"
           disabled={last}
           onClick={() => onMove(1)}
@@ -207,7 +208,7 @@ function StepCard({
         />
         <Button
           aria-label={decision ? "Remove this decision" : "Remove this step"}
-          variant="ghost"
+          variant="destructive-outline"
           size="icon"
           onClick={onRemove}
           iconSlot={<Trash2 />}
@@ -240,7 +241,7 @@ function StepCard({
             title="Cases"
             actionSlot={
               <Button
-                variant="ghost"
+                variant="info-outline"
                 size="sm"
                 onClick={() => patch({ cases: [...step.cases, ""] })}
                 iconSlot={<Plus />}
@@ -267,7 +268,7 @@ function StepCard({
                       />
                       <Button
                         aria-label="Remove this case"
-                        variant="ghost"
+                        variant="destructive-outline"
                         size="icon"
                         onClick={() => dropCase(index)}
                         iconSlot={<X />}

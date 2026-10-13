@@ -1,8 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import {
   DeleteTaskDocument,
   type TaskFieldsFragment,
@@ -22,13 +20,16 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Pencil, Play, Plus, Square, Trash2 } from "@/components/ui/icons";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
 import { STATUS_VARIANT } from "@/lib/run-status";
 import { useRunTask, useStopTask } from "@/lib/use-task-run";
 
 export function TasksRoute() {
+  const toast = useToast();
   const queryClient = useQueryClient();
 
   const tasks = useQuery({
@@ -56,7 +57,7 @@ export function TasksRoute() {
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteTaskDocument, { id }),
     onSuccess: () => {
-      toast.success("Task deleted");
+      toast("Task deleted", "positive");
       refresh();
     },
   });
@@ -86,7 +87,12 @@ export function TasksRoute() {
 
   // Offered twice: in the header always, and in the empty state where it is the only thing to do.
   const newTask = (
-    <Button linkSlot={<Link to="/tasks/new" />} iconSlot={<Plus />} content="New task" />
+    <Button
+      variant="info"
+      linkSlot={<Link to="/tasks/new" />}
+      iconSlot={<Plus />}
+      content="New task"
+    />
   );
 
   return (
@@ -146,7 +152,7 @@ export function TasksRoute() {
                     {running ? (
                       <Button
                         aria-label="Stop this run"
-                        variant="ghost"
+                        variant="outline"
                         size="icon"
                         // Only this card's button. `isPending` alone is true for the whole list
                         // while any one task is being started or stopped, which greyed out every
@@ -158,7 +164,7 @@ export function TasksRoute() {
                     ) : (
                       <Button
                         aria-label="Run now"
-                        variant="ghost"
+                        variant="outline"
                         size="icon"
                         disabled={run.isPending && run.variables?.taskId === task.id}
                         onClick={() => press(task)}
@@ -167,14 +173,14 @@ export function TasksRoute() {
                     )}
                     <Button
                       aria-label="Edit"
-                      variant="ghost"
+                      variant="outline"
                       size="icon"
                       linkSlot={<Link to="/tasks/$taskId" params={{ taskId: task.id }} />}
                       iconSlot={<Pencil />}
                     />
                     <ConfirmButton
                       aria-label="Delete"
-                      variant="ghost"
+                      variant="destructive-outline"
                       size="icon"
                       hint={running ? "Stop the run before deleting" : undefined}
                       disabled={running}

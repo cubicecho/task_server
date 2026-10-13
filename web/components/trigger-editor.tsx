@@ -1,8 +1,8 @@
-import { Check, Copy, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
+import { Check, Copy, Plus, Trash2 } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { triggerProblem } from "@/lib/triggers";
@@ -119,7 +119,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
         title="Schedule"
         actionSlot={
           <Button
-            variant="ghost"
+            variant="info-outline"
             size="sm"
             onClick={() => add(emptyTrigger("cron"))}
             iconSlot={<Plus />}
@@ -161,7 +161,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
                     />
                     <Button
                       aria-label="Remove this schedule"
-                      variant="ghost"
+                      variant="destructive-outline"
                       size="icon"
                       onClick={() => drop(trigger)}
                       iconSlot={<Trash2 />}
@@ -191,7 +191,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
         title="Webhooks"
         actionSlot={
           <Button
-            variant="ghost"
+            variant="info-outline"
             size="sm"
             onClick={() => add({ ...emptyTrigger("event"), event: newWebhookId() })}
             iconSlot={<Plus />}
@@ -324,18 +324,18 @@ function WebhookRow({
           </div>
           <Button
             aria-label={copied ? "Copied" : "Copy the URL"}
-            variant="ghost"
+            variant="outline"
             size="icon"
             disabled={!trigger.event}
             hint={trigger.event ? undefined : "Give the webhook an id first"}
             onClick={() => void copy(webhookUrl(trigger.event))}
             iconSlot={copied ? <Check /> : <Copy />}
           />
-          <Button variant="ghost" size="sm" onClick={onRegenerate} content="New id" />
+          <Button variant="outline" size="sm" onClick={onRegenerate} content="New id" />
           <TriggerSwitch trigger={trigger} onChange={onToggle} />
           <Button
             aria-label="Remove this webhook"
-            variant="ghost"
+            variant="destructive-outline"
             size="icon"
             onClick={onRemove}
             iconSlot={<Trash2 />}

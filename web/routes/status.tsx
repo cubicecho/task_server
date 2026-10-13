@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Play, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphql";
 import { PageLayout } from "@/components/page-layout";
@@ -8,6 +7,7 @@ import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Play, RefreshCw } from "@/components/ui/icons";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { request } from "@/lib/gql";
 import {

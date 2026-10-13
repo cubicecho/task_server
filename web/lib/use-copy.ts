@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "sonner";
+import { useToast } from "@/components/ui/toast";
 
 /**
  * The old way to copy, for the pages that are not allowed to use the new one.
@@ -33,6 +33,7 @@ function copyTheOldWay(text: string): boolean {
  * `copied` is the button's own "done" state, and clears itself after a moment.
  */
 export function useCopy() {
+  const toast = useToast();
   const [copied, setCopied] = useState(false);
 
   const copy = async (text: string) => {
@@ -50,7 +51,7 @@ export function useCopy() {
     }
 
     if (!ok) {
-      toast.error("Could not copy. Select the text and copy it by hand.");
+      toast("Could not copy. Select the text and copy it by hand.");
       return;
     }
     setCopied(true);
