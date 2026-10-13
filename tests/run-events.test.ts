@@ -27,34 +27,9 @@ async function take<T>(iterator: AsyncIterator<T>, count: number): Promise<T[]> 
   return taken;
 }
 
-test("a watcher joining late is told everything it missed, then follows along", async () => {
-  events.emit("run-1", { kind: "turn", text: "turn 1" });
-  events.emit("run-1", { kind: "thinking", text: "hmm" });
-
-  const watcher = events.watch("run-1");
-  const backlog = await take(watcher, 2);
-  expect(backlog.map((event) => event.text)).toEqual(["turn 1", "hmm"]);
-  // Numbered from one, so a client can order and de-duplicate what it is handed.
-  expect(backlog.map((event) => event.seq)).toEqual([1, 2]);
-
-  events.emit("run-1", { kind: "output", text: "hello" });
-  const [live] = await take(watcher, 1);
-  expect(live).toMatchObject({ kind: "output", text: "hello", seq: 3 });
-
-  await watcher.return(undefined as never);
-});
-
-test("`done` ends the stream rather than leaving it open forever", async () => {
-  const watcher = events.watch("run-2");
-  events.emit("run-2", { kind: "output", text: "bye" });
-  events.emit("run-2", { kind: "done", ok: true, text: "finished" });
-
-  const seen = await take(watcher, 5);
-  expect(seen.map((event) => event.kind)).toEqual(["output", "done"]);
-  // The generator returned on its own; nothing is waiting on a run that has ended.
-  expect((await watcher.next()).done).toBe(true);
-});
-
+// The bus is agent-core's and its own suite holds it: numbering, the backlog a late watcher is
+// handed, the stream ending at `done`, folding. What is tested here is the one case that suite
+// does not ask of a live watcher, and the subscription that is this server's.
 test("events for one run are never handed to a watcher of another", async () => {
   const watcher = events.watch("run-3");
   events.emit("other", { kind: "output", text: "not yours" });
@@ -81,22 +56,4 @@ test("the subscription carries a run over GraphQL", async () => {
     { seq: 2, kind: "done", text: "finished", name: "", ok: true },
   ]);
   expect((await stream.next()).done).toBe(true);
-});
-
-test("consecutive tokens fold into one entry, but never across a step boundary", () => {
-  events.emit("run-5", { kind: "output", text: "he", step: "read" });
-  events.emit("run-5", { kind: "output", text: "llo", step: "read" });
-  events.emit("run-5", { kind: "step", name: "write", text: "agent" });
-  events.emit("run-5", { kind: "output", text: "by", step: "write" });
-  events.emit("run-5", { kind: "output", text: "e", step: "write" });
-
-  const folded = events.fold(events.history("run-5"));
-  expect(folded.map((event) => [event.kind, event.step, event.text])).toEqual([
-    ["output", "read", "hello"],
-    ["step", "", "agent"],
-    ["output", "write", "bye"],
-  ]);
-  // Each block carries the seq of its last event, so a client that asks for what came after
-  // one block picks up exactly where it left off.
-  expect(folded.map((event) => event.seq)).toEqual([2, 3, 5]);
 });
