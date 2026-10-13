@@ -114,6 +114,13 @@ function renderPayload(payload: unknown): string {
   return JSON.stringify(payload, null, 2);
 }
 
+/** The earlier steps a step is shown under its `context` mode. */
+function visibleTo(mode: Step["context"], context: ContextEntry[]): ContextEntry[] {
+  if (mode === "none") return [];
+  if (mode === "previous") return context.slice(-1);
+  return context;
+}
+
 /**
  * The user message a step is sent: what came before it, then what it was asked to do.
  *
@@ -148,8 +155,7 @@ export function renderPrompt(
 
   // `substituted` from here down, not `step.prompt`: `{{event}}` leaves the preamble standing
   // but has still been replaced, and putting the raw prompt back would undo it.
-  const visible =
-    step.context === "none" ? [] : step.context === "previous" ? context.slice(-1) : context;
+  const visible = visibleTo(step.context, context);
   if (visible.length === 0) return substituted;
 
   const earlier = visible.map((entry) => `### ${entry.name}\n\n${entry.output}`).join("\n\n");

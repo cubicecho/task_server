@@ -212,6 +212,20 @@ function RunDetail({
   }
 
   const payload = found.payload;
+  const result = found.steps.length ? (
+    <>
+      <RunSteps steps={found.steps} />
+      {/* The run failed before or between steps — nothing above says why. */}
+      {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
+    </>
+  ) : (
+    <>
+      <ToolChips calls={found.toolCalls} />
+      <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
+        {run.error || run.output || "(no output)"}
+      </pre>
+    </>
+  );
 
   return (
     <>
@@ -227,20 +241,7 @@ function RunDetail({
         </div>
       )}
       <HookNotes notes={found.hooks} />
-      {!withResult ? null : found.steps.length ? (
-        <>
-          <RunSteps steps={found.steps} />
-          {/* The run failed before or between steps — nothing above says why. */}
-          {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
-        </>
-      ) : (
-        <>
-          <ToolChips calls={found.toolCalls} />
-          <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-            {run.error || run.output || "(no output)"}
-          </pre>
-        </>
-      )}
+      {withResult ? result : null}
     </>
   );
 }

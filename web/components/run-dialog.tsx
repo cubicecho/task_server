@@ -45,24 +45,37 @@ export function RunDialog({
   // it takes: the query is one row by id, and only runs when there is no body to start from.
   if (body === undefined && last.isPending) return null;
 
-  const found = last.data?.runs[0];
-  const prefill = body !== undefined ? pretty(body) : found ? pretty(found.payload) : "";
+  const { prefill, description } = startingBody(body, last.data?.runs[0]);
 
   return (
     <BodyForm
       taskName={taskName}
       prefill={prefill}
-      description={
-        body !== undefined
-          ? "The body this run was given. Edit it to try something else."
-          : found
-            ? "The last body this task saw. Edit it, or empty the box to run with none."
-            : "JSON. Empty runs the task with no body, as pressing play does."
-      }
+      description={description}
       onClose={onClose}
       onRun={onRun}
     />
   );
+}
+
+/** What the box opens holding, and the line under it that says where that came from. */
+function startingBody(body: unknown, lastRun?: { payload?: unknown }) {
+  if (body !== undefined) {
+    return {
+      prefill: pretty(body),
+      description: "The body this run was given. Edit it to try something else.",
+    };
+  }
+  if (lastRun) {
+    return {
+      prefill: pretty(lastRun.payload),
+      description: "The last body this task saw. Edit it, or empty the box to run with none.",
+    };
+  }
+  return {
+    prefill: "",
+    description: "JSON. Empty runs the task with no body, as pressing play does.",
+  };
 }
 
 function BodyForm({

@@ -101,6 +101,12 @@ const number = {
     value == null ? "A number is required." : undefined,
 };
 
+/** What the endpoint button says: mid-flight, about to change the endpoint, or just asking again. */
+function endpointAction(connecting: boolean, unapplied: boolean): string {
+  if (connecting) return "Connecting…";
+  return unapplied ? "Apply and load models" : "Reload models";
+}
+
 /** How the endpoint button last went: what the server answered, or why it did not. */
 type Probe = { ok: boolean; detail: string } | null;
 
@@ -319,11 +325,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                           applyEndpoint.mutate({ baseUrl: values.baseUrl, apiKey: values.apiKey })
                         }
                       >
-                        {applyEndpoint.isPending
-                          ? "Connecting…"
-                          : endpointPending
-                            ? "Apply and load models"
-                            : "Reload models"}
+                        {endpointAction(applyEndpoint.isPending, endpointPending)}
                       </Button>
                       {endpointPending ? (
                         <p className="text-xs text-muted-foreground">

@@ -169,7 +169,8 @@ export function AgentsRoute() {
 
           {creating ? (
             <AgentDialog servers={servers} onClose={() => setCreating(false)} onSaved={refresh} />
-          ) : editing ? (
+          ) : null}
+          {editing && !creating ? (
             <AgentDialog
               agent={editing}
               servers={servers}

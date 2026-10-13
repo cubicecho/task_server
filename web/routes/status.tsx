@@ -211,6 +211,13 @@ export function StatusRoute() {
     (server: Server) => server.status === "error",
   );
 
+  /** What an empty list means: nothing in the chosen heap, no tasks at all, or all is well. */
+  const emptyNote = () => {
+    if (selected) return `Nothing is ${LABELS[selected].label.toLowerCase()}.`;
+    if (tasks.length === 0) return "No tasks yet.";
+    return `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`;
+  };
+
   return (
     <PageLayout
       title="Status"
@@ -282,13 +289,7 @@ export function StatusRoute() {
           ))}
 
           {!status.isPending && shown.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              {selected
-                ? `Nothing is ${LABELS[selected].label.toLowerCase()}.`
-                : tasks.length === 0
-                  ? "No tasks yet."
-                  : `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`}
-            </p>
+            <p className="text-muted-foreground text-sm">{emptyNote()}</p>
           ) : null}
 
           {unexplained.length > 0 ? (
