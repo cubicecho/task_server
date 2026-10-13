@@ -4,7 +4,7 @@ import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
 import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
-import { dataDir, ECHO_FIXTURE, type FakeModel, fakeModel, useModel } from "./helpers.ts";
+import { dataDir, ECHO_FIXTURE, type FakeModel, fakeModel, until, useModel } from "./helpers.ts";
 
 /**
  * The MCP servers' hooks, fired around a real run against a real stdio server.
@@ -239,6 +239,39 @@ test("deleting a run, or the task it belongs to, sends sessionDelete for each ru
     expect.arrayContaining([first.id, second.id, third.id]),
   );
   expect(calls()).toHaveLength(3);
+});
+
+test("a run removed by retention sends sessionDelete, like one deleted by hand", async () => {
+  await echoServer([
+    { id: "forget", on: "sessionDelete", tool: "echo", args: { text: "{{session.id}}" } },
+  ]);
+  const { id: taskId } = await task("old", "p");
+  const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const [old] = await client.db
+    .insert(tables.runs)
+    .values({ taskId, status: "ok", startedAt: yearAgo })
+    .returning();
+  const [recent] = await client.db.insert(tables.runs).values({ taskId, status: "ok" }).returning();
+
+  const { eq } = await import("drizzle-orm");
+  const retention = (runRetentionDays: number) =>
+    client.db
+      .update(tables.settings)
+      .set({ runRetentionDays })
+      .where(eq(tables.settings.id, "default"));
+  const { prune } = await import("../server/scheduler/cleanup.ts");
+  await retention(30);
+  try {
+    expect(await prune()).toBe(1);
+  } finally {
+    await retention(0);
+  }
+
+  await until(() => calls().length > 0);
+  await hooks.hooksSettled();
+  // The run inside the window is still a session, and is not told otherwise.
+  expect(calls().map((call) => call.arguments.text)).toEqual([old.id]);
+  expect(recent.id).not.toBe(old.id);
 });
 
 test("hooks that could never run are refused when the row is saved", async () => {

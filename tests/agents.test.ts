@@ -336,3 +336,23 @@ test("a run scoped to one server cannot see or call another's tools", async () =
   // Loading a schema by name is the same door, so it is held to the same scope.
   expect(mcp.tools({ names: ["theirs__echo"], servers: new Set(["mine"]) })).toEqual([]);
 });
+
+test("$OPENAI_API_KEY is the key when the settings row has none, and only then", async () => {
+  const { loadSettings } = await import("../server/runner/llm.ts");
+  const key = (apiKey: string) =>
+    db.update(schema.settings).set({ apiKey }).where(eq(schema.settings.id, "default"));
+  const before = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "from-the-environment";
+  try {
+    await key("");
+    // Folded in where the row is read, so the turns and the side tasks cannot disagree about it.
+    expect((await loadSettings()).apiKey).toBe("from-the-environment");
+
+    await key("from-the-row");
+    expect((await loadSettings()).apiKey).toBe("from-the-row");
+  } finally {
+    await key("");
+    if (before === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = before;
+  }
+});
