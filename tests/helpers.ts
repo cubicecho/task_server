@@ -1,5 +1,7 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { fileURLToPath } from "node:url";
+import type { McpServerRow, Settings } from "../server/db/schema.ts";
 import { type ChatBody, notChat } from "./fixtures/sse.ts";
 
 /**
@@ -64,3 +66,48 @@ export async function useModel(model: FakeModel) {
     .set({ baseUrl: model.baseUrl, model: "fake" })
     .where(eq(settings.id, "default"));
 }
+
+/**
+ * A settings row for a run handed its config directly, with nothing left to chance: no retries
+ * and no watchdog, so a test that wants either says so.
+ */
+export const settingsRow = (over: Partial<Settings> = {}): Settings => ({
+  id: "default",
+  baseUrl: "",
+  apiKey: "",
+  model: "fake",
+  systemPrompt: "",
+  maxTokens: 256,
+  temperature: 0,
+  maxToolIterations: 3,
+  toolDiscovery: "eager",
+  toolSelectModel: "",
+  runRetentionDays: 30,
+  requestTimeoutSeconds: 0,
+  maxRetries: 0,
+  maxConcurrentRuns: 4,
+  ...over,
+});
+
+/** The stdio MCP server the suites dial: real protocol, real child process, tools that echo. */
+export const ECHO_FIXTURE = fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url));
+
+/**
+ * The echo fixture as the table hands a server over — both transports' columns and all, since
+ * that is what `load()` returns and what `mcp.sync` is given.
+ */
+export const echoRow = (over: Partial<McpServerRow> = {}): McpServerRow => ({
+  id: "echo-1",
+  slug: "echo",
+  label: "Echo",
+  enabled: true,
+  transport: "stdio",
+  command: process.execPath,
+  args: [ECHO_FIXTURE],
+  env: null,
+  url: "",
+  headers: null,
+  hiddenTools: null,
+  hooks: null,
+  ...over,
+});

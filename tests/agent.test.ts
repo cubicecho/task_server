@@ -2,9 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import type { Settings } from "../server/db/schema.ts";
 import { type Completion, completion, replyWith, toolCall } from "./fixtures/sse.ts";
-import { type FakeModel, fakeModel } from "./helpers.ts";
+import { type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
 
 // Loading the runner pulls in the database module, so give it somewhere disposable first.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-agent-"));
@@ -25,17 +24,7 @@ afterAll(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const config = () =>
-  ({
-    id: "default",
-    baseUrl: model.baseUrl,
-    apiKey: "",
-    model: "fake",
-    systemPrompt: "",
-    maxTokens: 256,
-    temperature: 0,
-    maxToolIterations: 3,
-  }) as Settings;
+const config = () => settingsRow({ baseUrl: model.baseUrl });
 
 test("returns the reply and sums usage across turns", async () => {
   const { runAgent } = await import("../server/runner/agent.ts");

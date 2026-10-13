@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
 import { completion, notChat, sseFrom } from "./fixtures/sse.ts";
-import { type FakeModel, fakeModel } from "./helpers.ts";
+import { type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-resilience-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
@@ -87,20 +87,7 @@ afterAll(async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const config = (over: Partial<Settings> = {}) =>
-  ({
-    id: "default",
-    baseUrl: model.baseUrl,
-    apiKey: "",
-    model: "fake",
-    systemPrompt: "",
-    maxTokens: 256,
-    temperature: 0,
-    maxToolIterations: 3,
-    requestTimeoutSeconds: 0,
-    maxRetries: 0,
-    ...over,
-  }) as Settings;
+const config = (over: Partial<Settings> = {}) => settingsRow({ baseUrl: model.baseUrl, ...over });
 
 const run = async (over: Partial<Settings> = {}) => {
   const { runAgent } = await import("../server/runner/agent.ts");

@@ -1,12 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { RunEventInput } from "@cubicecho/agent-core";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import type { McpServerRow, Settings } from "../server/db/schema.ts";
+import type { Settings } from "../server/db/schema.ts";
 import { type ChatBody, type Completion, completion, replyWith, toolCall } from "./fixtures/sse.ts";
-import { type FakeModel, fakeModel } from "./helpers.ts";
+import { echoRow, type FakeModel, fakeModel, settingsRow } from "./helpers.ts";
 
 // Loading the runner pulls in the database module, so give it somewhere disposable first.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-ondemand-"));
@@ -26,23 +25,7 @@ beforeAll(async () => {
 
   // One real stdio MCP server, so the catalogue and the tool calls are the genuine article.
   const { mcp } = await import("../server/runner/mcp.ts");
-  // A table row, both arms' columns and all, handed over as `load()` hands one — a variable rather
-  // than a literal at the call, which excess-property checking would hold to the stdio arm alone.
-  const echo = {
-    id: "echo-1",
-    slug: "echo",
-    label: "Echo",
-    enabled: true,
-    transport: "stdio",
-    command: process.execPath,
-    args: [fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url))],
-    env: null,
-    url: "",
-    headers: null,
-    hiddenTools: null,
-    hooks: null,
-  } satisfies McpServerRow;
-  await mcp.sync([echo]);
+  await mcp.sync([echoRow()]);
 });
 
 afterAll(async () => {
@@ -53,19 +36,12 @@ afterAll(async () => {
 });
 
 const config = (over: Partial<Settings> = {}) =>
-  ({
-    id: "default",
+  settingsRow({
     baseUrl: model.baseUrl,
-    apiKey: "",
-    model: "fake",
-    systemPrompt: "",
-    maxTokens: 256,
-    temperature: 0,
     maxToolIterations: 5,
     toolDiscovery: "ondemand",
-    toolSelectModel: "",
     ...over,
-  }) as Settings;
+  });
 
 /** What the last run told its watcher, in order. */
 let events: RunEventInput[] = [];

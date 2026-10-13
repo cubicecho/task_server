@@ -1,12 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
 import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
-import { type FakeModel, fakeModel, useModel } from "./helpers.ts";
+import { ECHO_FIXTURE, type FakeModel, fakeModel, useModel } from "./helpers.ts";
 
 /**
  * The MCP servers' hooks, fired around a real run against a real stdio server.
@@ -20,7 +19,6 @@ import { type FakeModel, fakeModel, useModel } from "./helpers.ts";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-hooks-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url));
 const callLog = path.join(dir, "calls.log");
 
 let replies: string[] = [];
@@ -53,7 +51,7 @@ async function echoServer(rowHooks: ToolHook[], hiddenTools: string[] = []) {
     slug: "echo",
     label: "Echo",
     command: process.execPath,
-    args: [FIXTURE],
+    args: [ECHO_FIXTURE],
     env: { MCP_ECHO_CALL_LOG: callLog },
     hooks: rowHooks,
     hiddenTools,
