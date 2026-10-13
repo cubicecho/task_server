@@ -1,12 +1,12 @@
 import fs from "node:fs";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
-import { notChat, replyWith } from "./fixtures/sse.ts";
+import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
+import { type FakeModel, fakeModel, useModel } from "./helpers.ts";
 
 /**
  * The MCP servers' hooks, fired around a real run against a real stdio server.
@@ -26,7 +26,7 @@ const callLog = path.join(dir, "calls.log");
 let replies: string[] = [];
 let prompts: string[] = [];
 let toolNames: string[][] = [];
-let server: http.Server;
+let model: FakeModel;
 
 let client: typeof import("../server/db/client.ts");
 let tables: typeof import("../server/db/schema.ts");
@@ -35,15 +35,6 @@ let hooks: typeof import("../server/runner/hooks.ts");
 let mcp: typeof import("../server/runner/mcp.ts")["mcp"];
 let cron: typeof import("../server/scheduler/cron.ts");
 let schema: GraphQLSchema;
-
-const completion = (content: string) => ({
-  id: "chatcmpl-test",
-  object: "chat.completion",
-  created: 0,
-  model: "fake",
-  choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
-  usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-});
 
 /** Every call the fixture received, in order. */
 const calls = (): { name: string; arguments: Record<string, unknown> }[] =>
@@ -80,26 +71,11 @@ async function gql(source: string, variableValues?: Record<string, unknown>) {
 }
 
 beforeAll(async () => {
-  server = http.createServer((request, response) => {
-    if (notChat(request, response)) return;
-    let body = "";
-    request.on("data", (chunk) => {
-      body += chunk;
-    });
-    request.on("end", () => {
-      const sent = JSON.parse(body) as {
-        messages: { role: string; content: string }[];
-        tools?: { function: { name: string } }[];
-        stream?: boolean;
-      };
-      prompts.push(sent.messages.find((message) => message.role === "user")?.content ?? "");
-      toolNames.push((sent.tools ?? []).map((tool) => tool.function.name));
-      replyWith(response, completion(replies.shift() ?? ""), sent);
-    });
+  model = await fakeModel((body, response) => {
+    prompts.push(userPrompt(body));
+    toolNames.push((body.tools ?? []).map((tool) => tool.function.name));
+    replyWith(response, completion(replies.shift() ?? ""), body);
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  const port = typeof address === "object" && address ? address.port : 0;
 
   const { ensureSchema } = await import("../server/db/migrate.ts");
   await ensureSchema();
@@ -110,12 +86,7 @@ beforeAll(async () => {
   ({ mcp } = await import("../server/runner/mcp.ts"));
   cron = await import("../server/scheduler/cron.ts");
   ({ schema } = await import("../server/graphql/schema.ts"));
-
-  const { eq } = await import("drizzle-orm");
-  await client.db
-    .update(tables.settings)
-    .set({ baseUrl: `http://127.0.0.1:${port}/v1`, model: "fake" })
-    .where(eq(tables.settings.id, "default"));
+  await useModel(model);
 });
 
 beforeEach(() => {
@@ -134,7 +105,7 @@ afterEach(async () => {
 
 afterAll(async () => {
   cron.stop();
-  await new Promise((resolve) => server.close(resolve));
+  await model.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

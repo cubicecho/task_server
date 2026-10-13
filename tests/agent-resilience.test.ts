@@ -1,10 +1,11 @@
 import fs from "node:fs";
-import http from "node:http";
+import type http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
-import { notChat, sseFrom } from "./fixtures/sse.ts";
+import { completion, notChat, sseFrom } from "./fixtures/sse.ts";
+import { type FakeModel, fakeModel } from "./helpers.ts";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-resilience-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
@@ -26,32 +27,22 @@ let requests = 0;
 let window = 0;
 /** The messages of every request, so a test can see what a later one was sent. */
 let sent: { role: string; content: string }[][] = [];
-let server: http.Server;
-let baseUrl = "";
+let model: FakeModel;
 const open: http.ServerResponse[] = [];
 
-const completion = (content: string) => ({
-  id: "chatcmpl-test",
-  model: "fake",
-  choices: [{ message: { content } }],
-  usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-});
+/** Answers `/models` with the window, when there is one to report. */
+function listing(request: http.IncomingMessage, response: http.ServerResponse) {
+  if (!window || !request.url?.endsWith("/models")) return false;
+  response.writeHead(200, { "content-type": "application/json" });
+  response.end(JSON.stringify({ data: [{ id: "fake", context_length: window }] }));
+  return true;
+}
 
 beforeAll(async () => {
-  server = http.createServer((request, response) => {
-    if (window && request.url?.endsWith("/models")) {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ data: [{ id: "fake", context_length: window }] }));
-      return;
-    }
-    if (notChat(request, response)) return;
-    let body = "";
-    request.on("data", (chunk) => {
-      body += chunk;
-    });
-    request.on("end", () => {
+  model = await fakeModel(
+    (body, response) => {
       requests++;
-      sent.push(JSON.parse(body).messages);
+      sent.push(body.messages);
       const reply = replies.shift() ?? { kind: "ok", content: "done" };
       if (reply.kind === "status") {
         response.writeHead(reply.code, { "content-type": "application/json" });
@@ -59,17 +50,9 @@ beforeAll(async () => {
         return;
       }
       response.writeHead(200, { "content-type": "text/event-stream" });
-      if (reply.kind === "ok") {
-        response.end(sseFrom(completion(reply.content), false));
-        return;
-      }
-      if (reply.kind === "cut") {
-        response.end(
-          sseFrom(completion(reply.content), false).replace(
-            '"finish_reason":"stop"',
-            '"finish_reason":"length"',
-          ),
-        );
+      if (reply.kind === "ok" || reply.kind === "cut") {
+        const finish = reply.kind === "cut" ? "length" : "stop";
+        response.end(sseFrom(completion(reply.content, finish), false));
         return;
       }
       // Held open and never ended: the socket is closed in afterEach.
@@ -85,11 +68,9 @@ beforeAll(async () => {
           })}\n\n`,
         );
       }
-    });
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}/v1`;
+    },
+    (request, response) => listing(request, response) || notChat(request, response),
+  );
 });
 
 beforeEach(() => {
@@ -102,14 +83,14 @@ beforeEach(() => {
 
 afterAll(async () => {
   while (open.length) open.pop()?.destroy();
-  await new Promise((resolve) => server.close(resolve));
+  await model.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const config = (over: Partial<Settings> = {}) =>
   ({
     id: "default",
-    baseUrl,
+    baseUrl: model.baseUrl,
     apiKey: "",
     model: "fake",
     systemPrompt: "",

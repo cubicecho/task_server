@@ -1,59 +1,34 @@
 import fs from "node:fs";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
-import { notChat, replyWith } from "./fixtures/sse.ts";
+import { type Completion, completion, replyWith, toolCall } from "./fixtures/sse.ts";
+import { type FakeModel, fakeModel } from "./helpers.ts";
 
 // Loading the runner pulls in the database module, so give it somewhere disposable first.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-agent-"));
 process.env.TASK_SERVER_DATA_DIR = dir;
 
 /** Chat completions the fake model server hands back, one per request, in order. */
-let replies: ReturnType<typeof completion>[] = [];
-let server: http.Server;
-let baseUrl = "";
-
-const completion = (message: {
-  role: string;
-  content?: string | null;
-  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
-}) => ({
-  id: "chatcmpl-test",
-  object: "chat.completion",
-  created: 0,
-  model: "fake",
-  choices: [{ index: 0, message, finish_reason: "stop" }],
-  usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-});
+let replies: Completion[] = [];
+let model: FakeModel;
 
 beforeAll(async () => {
-  server = http.createServer((request, response) => {
-    if (notChat(request, response)) return;
-    let body = "";
-    request.on("data", (chunk) => {
-      body += chunk;
-    });
-    request.on("end", () => {
-      const sent = JSON.parse(body);
-      replyWith(response, replies.shift() ?? completion({ role: "assistant", content: "" }), sent);
-    });
-  });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}/v1`;
+  model = await fakeModel((body, response) =>
+    replyWith(response, replies.shift() ?? completion(""), body),
+  );
 });
 
 afterAll(async () => {
-  await new Promise((resolve) => server.close(resolve));
+  await model.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const config = () =>
   ({
     id: "default",
-    baseUrl,
+    baseUrl: model.baseUrl,
     apiKey: "",
     model: "fake",
     systemPrompt: "",
@@ -62,16 +37,9 @@ const config = () =>
     maxToolIterations: 3,
   }) as Settings;
 
-const toolCall = (name: string, args = "{}") =>
-  completion({
-    role: "assistant",
-    content: null,
-    tool_calls: [{ id: "call-1", type: "function", function: { name, arguments: args } }],
-  });
-
 test("returns the reply and sums usage across turns", async () => {
   const { runAgent } = await import("../server/runner/agent.ts");
-  replies = [toolCall("missing__tool"), completion({ role: "assistant", content: "done" })];
+  replies = [toolCall("missing__tool"), completion("done")];
 
   const result = await runAgent({
     config: config(),
@@ -89,7 +57,7 @@ test("returns the reply and sums usage across turns", async () => {
 
 test("reports the run as it happens, tokens and tool calls alike", async () => {
   const { runAgent } = await import("../server/runner/agent.ts");
-  replies = [toolCall("missing__tool"), completion({ role: "assistant", content: "all done" })];
+  replies = [toolCall("missing__tool"), completion("all done")];
 
   const events: { kind: string; text: string; name?: string; ok?: boolean | null }[] = [];
   await runAgent({

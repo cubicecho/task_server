@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { type FakeModel, hangingModel, useModel } from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
@@ -14,14 +14,11 @@ let schema: GraphQLSchema;
 let runner: typeof import("../server/runner/run.ts");
 let cron: typeof import("../server/scheduler/cron.ts");
 /** A model server that accepts the request and never answers, so the run stays in flight. */
-let hang: http.Server;
+let hang: FakeModel;
 let taskId = "";
 
 beforeAll(async () => {
-  hang = http.createServer(() => {});
-  await new Promise<void>((resolve) => hang.listen(0, "127.0.0.1", resolve));
-  const address = hang.address();
-  const port = typeof address === "object" && address ? address.port : 0;
+  hang = await hangingModel();
 
   const { ensureSchema } = await import("../server/db/migrate.ts");
   await ensureSchema();
@@ -29,20 +26,16 @@ beforeAll(async () => {
   runner = await import("../server/runner/run.ts");
   cron = await import("../server/scheduler/cron.ts");
 
-  const { eq } = await import("drizzle-orm");
   const { db } = await import("../server/db/client.ts");
-  const { settings, tasks } = await import("../server/db/schema.ts");
-  await db
-    .update(settings)
-    .set({ baseUrl: `http://127.0.0.1:${port}/v1`, model: "fake" })
-    .where(eq(settings.id, "default"));
+  const { tasks } = await import("../server/db/schema.ts");
+  await useModel(hang);
   const [task] = await db.insert(tasks).values({ name: "slow", prompt: "wait" }).returning();
   taskId = task.id;
 });
 
 afterAll(async () => {
   cron.stop();
-  await new Promise((resolve) => hang.close(resolve));
+  await hang.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

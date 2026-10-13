@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { type FakeModel, hangingModel, useModel } from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
@@ -13,15 +13,12 @@ let runner: typeof import("../server/runner/run.ts");
 let db: typeof import("../server/db/client.ts").db;
 let tables: typeof import("../server/db/schema.ts");
 /** A model server that accepts the request and never answers, so the run stays in flight. */
-let hang: http.Server;
+let hang: FakeModel;
 let taskId = "";
 let triggerId = "";
 
 beforeAll(async () => {
-  hang = http.createServer(() => {});
-  await new Promise<void>((resolve) => hang.listen(0, "127.0.0.1", resolve));
-  const address = hang.address();
-  const port = typeof address === "object" && address ? address.port : 0;
+  hang = await hangingModel();
 
   const { ensureSchema } = await import("../server/db/migrate.ts");
   await ensureSchema();
@@ -29,11 +26,7 @@ beforeAll(async () => {
   db = (await import("../server/db/client.ts")).db;
   tables = await import("../server/db/schema.ts");
 
-  const { eq } = await import("drizzle-orm");
-  await db
-    .update(tables.settings)
-    .set({ baseUrl: `http://127.0.0.1:${port}/v1`, model: "fake" })
-    .where(eq(tables.settings.id, "default"));
+  await useModel(hang);
 
   const [task] = await db.insert(tables.tasks).values({ name: "slow", prompt: "wait" }).returning();
   taskId = task.id;
@@ -45,7 +38,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await new Promise((resolve) => hang.close(resolve));
+  await hang.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
