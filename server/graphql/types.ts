@@ -15,6 +15,7 @@
 import { GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import {
   GraphQLBoolean,
+  GraphQLFloat,
   GraphQLInputObjectType,
   GraphQLInt,
   GraphQLList,
@@ -229,5 +230,133 @@ export const RunEventType = new GraphQLObjectType({
         "written. Empty for what belongs to the run rather than to any one step.",
     },
     ok: { type: GraphQLBoolean },
+  },
+});
+
+const strings = () => ({
+  type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))),
+});
+
+const AgentSpecProfileType = new GraphQLObjectType({
+  name: "AgentSpecProfile",
+  description:
+    "The profile an agent spec would be saved as, column by column. A value at its inherit " +
+    'sentinel — `""`, `-1`, or the word `inherit` — is a field the document did not have. ' +
+    "There is no key: a spec carries none.",
+  fields: {
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    description: { type: new GraphQLNonNull(GraphQLString) },
+    baseUrl: { type: new GraphQLNonNull(GraphQLString) },
+    model: { type: new GraphQLNonNull(GraphQLString) },
+    systemPrompt: { type: new GraphQLNonNull(GraphQLString) },
+    maxTokens: { type: new GraphQLNonNull(GraphQLInt) },
+    temperature: { type: new GraphQLNonNull(GraphQLFloat) },
+    maxToolIterations: { type: new GraphQLNonNull(GraphQLInt) },
+    toolDiscovery: { type: new GraphQLNonNull(GraphQLString) },
+    toolSelectModel: { type: new GraphQLNonNull(GraphQLString) },
+    requestTimeoutSeconds: { type: new GraphQLNonNull(GraphQLInt) },
+    maxRetries: { type: new GraphQLNonNull(GraphQLInt) },
+  },
+});
+
+const AgentSpecScopeType = new GraphQLObjectType({
+  name: "AgentSpecScope",
+  description: "One MCP server an imported profile would be narrowed to.",
+  fields: {
+    slug: { type: new GraphQLNonNull(GraphQLString) },
+    label: { type: new GraphQLNonNull(GraphQLString) },
+    created: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description: "Made by this import from the document's bundle, rather than found here.",
+    },
+  },
+});
+
+const AgentSpecBundledType = new GraphQLObjectType({
+  name: "AgentSpecBundled",
+  description:
+    "One MCP server an agent spec bundles, and what an import would do about it. Nothing is " +
+    "created unless `createServers` names its slug.",
+  fields: {
+    slug: { type: new GraphQLNonNull(GraphQLString) },
+    label: { type: new GraphQLNonNull(GraphQLString) },
+    transport: { type: new GraphQLNonNull(GraphQLString), description: "stdio | http" },
+    target: {
+      type: new GraphQLNonNull(GraphQLString),
+      description:
+        "What creating it would run or dial: the whole command line for stdio, the url for " +
+        "http. Shown so it can be read before it is agreed to.",
+    },
+    envNames: {
+      ...strings(),
+      description: "The names of the environment variables the document sets. Never the values.",
+    },
+    headerNames: {
+      ...strings(),
+      description: "The names of the headers the document sets. Never the values.",
+    },
+    exists: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description:
+        "A server with this slug is here already. Left out of `createServers`, the profile " +
+        "uses that one; named in it, the import is refused.",
+    },
+    create: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description: "`createServers` named it, so the import would create it, enabled.",
+    },
+    createByDefault: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description:
+        "Whether a form should offer it ticked: true for an http server that is not here yet " +
+        "and can be saved. Never true for stdio — a command line out of a file is run only " +
+        "when somebody chose to.",
+    },
+    problems: {
+      ...strings(),
+      description: "Why it could not be saved as written. Naming it refuses the import.",
+    },
+    notes: { ...strings(), description: "What is worth knowing about it that stops nothing." },
+  },
+});
+
+export const AgentSpecPreviewType = new GraphQLObjectType({
+  name: "AgentSpecPreview",
+  description:
+    "What importing an agent spec would do, without doing it. `importAgentSpec` with the same " +
+    "arguments writes exactly this, or refuses for exactly `refusals`.",
+  fields: {
+    refusals: {
+      ...strings(),
+      description:
+        "Why nothing would be written. Empty means the import would go ahead. A document that " +
+        "is not a spec is refused in the parser's own words.",
+    },
+    warnings: {
+      ...strings(),
+      description:
+        "What was dropped from the document because it could not be used, and what is worth " +
+        "knowing before saving — a server slug that is not here, a profile that will have no key.",
+    },
+    dropped: {
+      ...strings(),
+      description:
+        "What the document says that a profile here has no column for. It is not kept, and " +
+        "will not be in a later export.",
+    },
+    agent: {
+      type: AgentSpecProfileType,
+      description: "The profile as it would be saved. Null when the document is not a spec.",
+    },
+    servers: {
+      type: new GraphQLList(new GraphQLNonNull(AgentSpecScopeType)),
+      description:
+        "The MCP servers the profile would be narrowed to. Null is every enabled server, " +
+        "which is what a document that names none means.",
+    },
+    bundled: {
+      type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(AgentSpecBundledType))),
+      description: "The servers the document bundles, in its order.",
+    },
   },
 });

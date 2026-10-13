@@ -93,9 +93,10 @@ one, takes over a lock whose holder is gone, and does nothing at all for a `post
 `./data` with a host process is still on its own — that case is what `DATABASE_URL` is for.
 
 **Hand-written GraphQL fields go in `server/graphql/`**, beside the generated entities:
-`models`, `mcpStatus`, `schedule`, `runEvents` on the query side; `runTask`, `stopTask`,
-`reconnectMcp`, `setApiKey`, `setAgentApiKey` on the mutation side. Give every one of them a
-`description` — it is what an agent on `/mcp` reads to decide whether to call it.
+`models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec`, `agentSpecPreview` on the query side;
+`runTask`, `stopTask`, `reconnectMcp`, `setApiKey`, `setAgentApiKey`, `importAgentSpec` on the
+mutation side. Give every one of them a `description` — it is what an agent on `/mcp` reads to
+decide whether to call it.
 
 **A trigger that fires at a task that cannot start leaves a row either way.** `startTask` refuses
 it — right for a person or an agent, who are told on the spot — but nothing is watching a cron
@@ -394,6 +395,48 @@ scope written twice is scope that disagrees.
 Profiles are the operator's on both sides: they carry an endpoint, a key and the tool scope,
 which is the settings row's own argument. `agentId` on a task stays readable, so an agent on
 `/mcp` can see that a task runs on a profile without being able to read or choose one.
+
+**A profile leaves and arrives as an agent spec, and the columns are still the only copy.**
+`agentSpec` writes one as a `cubicecho.agent/1` document and `importAgentSpec` reads one back,
+with `agentSpecPreview` answering what the write would do, from the same three arguments and
+without doing it. All three are in `server/graphql/agent-spec.ts`, and the parsing, the
+redaction and the document's shape are agent-core's — `parseSpec`, `exportSpec` — not rewritten
+here. The export is `agentLayer` with a name on it, so a file says what a run on the profile is
+told and nothing a run is not; it carries no key, and `exportSpec` takes `env` and `headers` off
+every bundled server. It does not look inside `args` or a `url`, so a secret written into a
+command line travels — that is upstream's to change.
+
+Four things about the import were decided rather than left, and each has a test in
+`tests/agent-spec.test.ts`:
+
+- **No column for the document.** A field maps onto the column `agentLayer` reads it from, an
+  absent one lands on the inherit sentinel, and the rest is dropped. A key this server has no
+  column for is therefore gone from the next export, which is accepted — what is not accepted is
+  losing it quietly, so the preview lists every one under `dropped`. Storing the document beside
+  the row would be the second copy of a profile that the settings merge was written to not have.
+- **A bundled server is created only when it is named.** `createServers` is a list of slugs and
+  defaults to none: a bundle is a command line somebody else wrote, and this host would spawn it.
+  Unnamed, a slug in `tools.servers` means the server of that name already here. The dialog ticks
+  the remote ones and leaves the stdio ones for a person to tick, on `createByDefault`, which the
+  server computes so no second client has to re-derive the rule.
+- **A named slug that is already a server here refuses the whole import.** Nothing is
+  overwritten and nothing is renamed; the refusal names the slug, and unticking it is the way to
+  use the row that exists. The write re-plans inside its transaction, so a refusal leaves no
+  half — not the profile, not the first of two servers.
+- **Narrowing never widens.** A slug that is not here is dropped with a warning. If that empties
+  a list the document did have, the import is refused, because an empty `mcpServerIds` is every
+  enabled server and a profile written to reach one would arrive reaching all of them. An
+  explicit `servers: []` is refused for the same reason.
+
+A created server goes through the checks every MCP server write does — `shapeProblems` and
+`splitHookProblems` in `server/graphql/mcp-server.ts`, which `vetMcpServer` calls too — with one
+difference that is deliberate: a hook bound to an event this host never fires is a note on an
+import and still a refusal on `createMcpServer`. A document written on a host that compacts is
+not wrong for saying so, and a person typing that hook into this server's form is.
+
+All three fields are the operator's and none is in `TOOLS`: the document is the profile, and the
+bundle beside it is both guarded tables in one answer. The preview is gated as the write is,
+since it answers which slugs are servers here.
 
 **An MCP prompt is expanded into a prompt box, not resolved at run time.**
 `server/runner/mcp-prompts.ts` reads `prompts/list` and `prompts/get` off `mcp.client(id)` —

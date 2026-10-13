@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
+import { Bot, Download, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import {
   type AgentFieldsFragment,
+  AgentSpecDocument,
   AgentsDocument,
   DeleteAgentDocument,
 } from "@/__generated__/graphql/graphql";
 import { AgentDialog } from "@/components/agent-dialog";
+import { AgentImportDialog } from "@/components/agent-import-dialog";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
@@ -20,54 +22,15 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { overrides, saveFile, specFileName, specText } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
 import { stringList } from "@/lib/json";
-
-/**
- * What this profile changes, said in the badges rather than in a second form.
- *
- * A profile is mostly inherit, so listing what it *is* would be listing the settings page. The
- * card says only where it differs, which is the whole reason the row exists.
- */
-function overrides(agent: AgentFieldsFragment): string[] {
-  const said: string[] = [];
-  if (agent.baseUrl) {
-    said.push(agent.baseUrl);
-  }
-  if (agent.model) {
-    said.push(agent.model);
-  }
-  if (agent.systemPrompt) {
-    said.push("system prompt");
-  }
-  if (agent.maxTokens >= 0) {
-    said.push(`${agent.maxTokens} tokens`);
-  }
-  if (agent.temperature >= 0) {
-    said.push(`temp ${agent.temperature}`);
-  }
-  if (agent.maxToolIterations >= 0) {
-    said.push(`${agent.maxToolIterations} tool steps`);
-  }
-  if (agent.toolDiscovery !== "inherit") {
-    said.push(agent.toolDiscovery);
-  }
-  if (agent.toolSelectModel) {
-    said.push(`picks tools with ${agent.toolSelectModel}`);
-  }
-  if (agent.requestTimeoutSeconds >= 0) {
-    said.push(`${agent.requestTimeoutSeconds}s of silence`);
-  }
-  if (agent.maxRetries >= 0) {
-    said.push(`${agent.maxRetries} retries`);
-  }
-  return said;
-}
 
 export function AgentsRoute() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AgentFieldsFragment | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const agents = useQuery({ queryKey: ["agents"], queryFn: () => request(AgentsDocument) });
   const refresh = () => {
@@ -84,6 +47,16 @@ export function AgentsRoute() {
     onSuccess: refresh,
   });
 
+  // A read, but one made because a button was pressed and whose answer is a file rather than
+  // something to show, so it is a mutation to the cache: nothing to keep, and a failure is
+  // reported the way every other pressed button's is.
+  const exportSpec = useMutation({
+    mutationFn: async (agent: AgentFieldsFragment) => {
+      const { agentSpec } = await request(AgentSpecDocument, { agentId: agent.id });
+      saveFile(specFileName(agent.name), specText(agentSpec));
+    },
+  });
+
   const servers = agents.data?.mcpServers ?? [];
   const rows = agents.data?.agents ?? [];
 
@@ -92,7 +65,15 @@ export function AgentsRoute() {
       title="Agent profiles"
       description="A named set of overrides for Settings, that a task can be pointed at."
       actionSlot={
-        <Button onClick={() => setCreating(true)} iconSlot={<Plus />} content="New profile" />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setImporting(true)}
+            iconSlot={<Upload />}
+            content="Import"
+          />
+          <Button onClick={() => setCreating(true)} iconSlot={<Plus />} content="New profile" />
+        </div>
       }
       contentSlot={
         <>
@@ -145,6 +126,15 @@ export function AgentsRoute() {
                       onClick={() => setEditing(agent)}
                       iconSlot={<Pencil />}
                     />
+                    <Button
+                      aria-label="Export"
+                      hint="Save as an agent spec file. It carries no API key."
+                      variant="ghost"
+                      size="icon"
+                      disabled={exportSpec.isPending}
+                      onClick={() => exportSpec.mutate(agent)}
+                      iconSlot={<Download />}
+                    />
                     <ConfirmButton
                       aria-label="Delete"
                       variant="ghost"
@@ -181,7 +171,16 @@ export function AgentsRoute() {
             );
           })}
 
-          {creating ? (
+          {importing ? (
+            <AgentImportDialog
+              onClose={() => setImporting(false)}
+              onSaved={() => {
+                refresh();
+                // An import may have created the servers the document bundled.
+                queryClient.invalidateQueries({ queryKey: ["mcp"] });
+              }}
+            />
+          ) : creating ? (
             <AgentDialog servers={servers} onClose={() => setCreating(false)} onSaved={refresh} />
           ) : null}
           {editing && !creating ? (

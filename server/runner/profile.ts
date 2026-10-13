@@ -61,9 +61,10 @@ const settingsLayer = (settings: Settings): AgentSpec => ({
  * replace the server's prompt with nothing, where a missing one leaves it alone.
  *
  * `mcpServerIds` is not in it: a spec has no field for this server's row ids, and
- * `resolveServers` answers it from the row.
+ * `resolveServers` answers it from the row. Exported because `agentSpec` hands out this same
+ * layer with its slugs put back, and a second projection would be a second opinion on "inherit".
  */
-const agentLayer = (agent: Agent): AgentSpec => {
+export const agentLayer = (agent: Agent): AgentSpec => {
   const prompt = str(agent.systemPrompt);
   const toolSelect = str(agent.toolSelectModel);
   return {

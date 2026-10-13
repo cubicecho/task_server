@@ -175,6 +175,10 @@ const MUTATIONS: Record<string, Rule> = {
   deleteAgent: canUser(Actions.delete, "Agent"),
   // Write-only, exactly as `setApiKey` is, and for the same reason.
   setAgentApiKey: canUser(Actions.update, "Agent"),
+  // A profile from a document, and with it any bundled MCP server the caller names — a stdio
+  // command this host will then spawn. It asks after the profile because that is what it
+  // answers with, and the operator is the only caller who holds either.
+  importAgentSpec: canUser(Actions.create, "Agent"),
 };
 
 /**
@@ -212,6 +216,12 @@ export const permissions: PermissionsMap = {
     // And the profiles, which are the settings row per task: an endpoint, a key, and which of
     // those MCP servers a task on the profile may reach.
     ...tableReads("agent", "agents", "Agent"),
+    // A profile written down as a document is the profile, and the bundle beside it is the
+    // command line of every MCP server it reaches — both tables above, in one answer.
+    agentSpec: canUser(Actions.read, "Agent"),
+    // Writes nothing, and still answers which slugs are MCP servers here — the preview of a
+    // write an agent may not make is not a question an agent has a use for.
+    agentSpecPreview: canUser(Actions.create, "Agent"),
     // The same servers, answered from the live pool instead of the table. It carries no
     // credentials, but it is the same list of what this server dials and with which tools.
     mcpStatus: canUser(Actions.read, "McpServer"),
