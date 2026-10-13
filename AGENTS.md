@@ -581,7 +581,7 @@ submit it. `ConfirmButton` is a `Button` with `title`, `description` and `onConf
 
 **A button's variant says what pressing it does, and the table is cubeui's.** `info` makes
 something (New task, New server, New profile) and `info-outline` adds a row to what is already
-open (Add trigger, Add step, Add case); `positive` saves — every `form.SubmitButton` but the run
+open (Add, Add step, Add case); `positive` saves — every `form.SubmitButton` but the run
 dialog's, which starts a run rather than keeping anything; `destructive-outline` deletes or
 removes, `ConfirmButton` included; `outline` is everything quiet — Cancel, a row's edit and play
 icons, Test connection, Import. `default` is for the one emphasis nothing else names. `ghost`,
