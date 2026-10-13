@@ -90,6 +90,13 @@ export async function runTask(taskId: string, triggerId?: string, payload?: unkn
  */
 const capacity = async () => (await loadSettings()).maxConcurrentRuns;
 
+/** Whether every slot is taken. A limit of zero is no ceiling, so nothing fills it. */
+const isFull = (limit: number) => limit > 0 && inFlight.size >= limit;
+
+/** The rows one trigger wrote — or, with no trigger, the ones started by hand. */
+const firedBy = (triggerId?: string) =>
+  triggerId ? eq(runs.triggerId, triggerId) : isNull(runs.triggerId);
+
 /**
  * Takes the slot a run needs, or refuses.
  *
@@ -100,7 +107,7 @@ const capacity = async () => (await loadSettings()).maxConcurrentRuns;
  */
 function claim(taskId: string, name: string, limit: number) {
   if (inFlight.has(taskId)) throw new TaskBusyError(`task "${name}" is already running`);
-  if (limit > 0 && inFlight.size >= limit) {
+  if (isFull(limit)) {
     throw new AtCapacityError(`${inFlight.size} runs already going, and the limit is ${limit}`);
   }
   const entry: Slot = { runId: "", controller: new AbortController() };
@@ -253,13 +260,7 @@ async function enqueue({
   const [waiting] = await db
     .update(runs)
     .set({ attempts: sql`${runs.attempts} + 1`, payload: payload ?? null, error: reason })
-    .where(
-      and(
-        eq(runs.status, "queued"),
-        eq(runs.taskId, taskId),
-        triggerId ? eq(runs.triggerId, triggerId) : isNull(runs.triggerId),
-      ),
-    )
+    .where(and(eq(runs.status, "queued"), eq(runs.taskId, taskId), firedBy(triggerId)))
     .returning();
   if (waiting) return waiting;
 
@@ -314,7 +315,7 @@ async function recordSkip({
           eq(runs.status, "skipped"),
           eq(runs.taskId, taskId),
           eq(runs.blockedBy, blocking),
-          triggerId ? eq(runs.triggerId, triggerId) : isNull(runs.triggerId),
+          firedBy(triggerId),
         ),
       )
       .returning();
@@ -378,8 +379,7 @@ let pendingDrain: ReturnType<typeof setTimeout>;
 async function drainOnce(): Promise<void> {
   try {
     for (;;) {
-      const limit = await capacity();
-      if (limit > 0 && inFlight.size >= limit) return;
+      if (isFull(await capacity())) return;
 
       const busy = [...inFlight.keys()];
       const [next] = await db

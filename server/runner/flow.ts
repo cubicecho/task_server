@@ -273,6 +273,9 @@ export async function runFlow({
     (event: RunEventInput): void =>
       onEvent?.({ ...event, step: event.step ?? name });
 
+  /** The model a step runs on: its own, else the task's, else the one in settings. */
+  const modelFor = (plan: Plan) => plan.model || task.model || config.model;
+
   async function record(plan: Plan, status: RunStep["status"]): Promise<RunStep> {
     const [row] = await db
       .insert(runSteps)
@@ -328,7 +331,7 @@ export async function runFlow({
 
       const agentResult = await runAgent({
         config,
-        model: plan.model || task.model || config.model,
+        model: modelFor(plan),
         systemPrompt:
           plan.kind === "decision"
             ? `${systemPrompt}\n\n${decisionInstruction(plan.cases)}`.trim()
@@ -388,7 +391,7 @@ export async function runFlow({
     const extracted = await tryAsk("decision", () =>
       askJson<{ case?: unknown }>(
         config,
-        config.toolSelectModel || plan.model || task.model || config.model,
+        config.toolSelectModel || modelFor(plan),
         `Which of these did the following answer choose? Reply with exactly one of: ${plan.cases.join(", ")}.`,
         output,
         {
