@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, expect, test } from "vitest";
-import { type FakeModel, hangingModel, useModel } from "./helpers.ts";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
+import { type FakeModel, hangingModel, refused, started, until, useModel } from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
@@ -16,8 +16,6 @@ let tables: typeof import("../server/db/schema.ts");
 /** A model server that accepts the request and never answers, so a run stays in flight. */
 let hang: FakeModel;
 const ids: Record<string, { taskId: string; triggerId: string }> = {};
-/** The row the first refused firing was written into, which later tests watch start. */
-let waiting = "";
 
 beforeAll(async () => {
   hang = await hangingModel();
@@ -28,7 +26,6 @@ beforeAll(async () => {
   db = (await import("../server/db/client.ts")).db;
   tables = await import("../server/db/schema.ts");
 
-  await limit(1);
   await useModel(hang);
 
   // Two tasks that have nothing to do with each other. The per-task guard has no opinion about
@@ -43,9 +40,19 @@ beforeAll(async () => {
   }
 });
 
-afterAll(async () => {
+// Every test starts at a ceiling of one with nothing running, nothing waiting and both tasks
+// enabled, whatever the one before it left — including one that failed halfway.
+beforeEach(() => limit(1));
+
+afterEach(async () => {
+  // The queue first: a run that stops drains it, and a waiting row would start as this ends.
+  await db.delete(tables.runs).where(eq(tables.runs.status, "queued"));
   for (const { taskId } of Object.values(ids)) runner.stopTask(taskId);
-  await until(() => runner.runningTaskIds().size === 0);
+  await idle();
+  await db.update(tables.tasks).set({ enabled: true });
+});
+
+afterAll(async () => {
   await hang.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -61,35 +68,25 @@ const runById = async (id: string) => {
   return row;
 };
 
-/** Waits for the drain, which is debounced and then runs on its own. */
-async function until(ready: () => boolean | Promise<boolean>, ms = 3000) {
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    if (await ready()) return;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  throw new Error("timed out waiting");
-}
+const fire = (name: string, payload?: unknown) =>
+  runner.fireTask(ids[name].taskId, ids[name].triggerId, payload);
 
-/** Empties the queue between tests that would otherwise inherit each other's waiting rows. */
-async function clearQueue() {
-  await db.delete(tables.runs).where(eq(tables.runs.status, "queued"));
+const idle = () => until(() => runner.runningTaskIds().size === 0);
+
+/** A full server: `first` holds the only slot, and the firing at `second` is what comes back. */
+async function full() {
+  started(await fire("first"));
+  return refused(await fire("second"));
 }
 
 test("a firing that arrives with no slot free waits instead of being turned away", async () => {
-  const first = await runner.fireTask(ids.first.taskId, ids.first.triggerId);
-  expect(first.started).toBe(true);
-  if (!first.started) throw new Error("unreachable");
-
-  // A different task, so nothing about `second` itself refuses this — only the ceiling does.
-  const second = await runner.fireTask(ids.second.taskId, ids.second.triggerId);
-  expect(second.started).toBe(false);
-  if (second.started) throw new Error("unreachable");
+  // A different task from the one running, so nothing about `second` itself refuses this —
+  // only the ceiling does.
+  const second = await full();
   expect(second.queued).toBe(true);
   expect(second.reason).toMatch(/limit is 1/);
 
-  waiting = second.run.id;
-  const row = await runById(waiting);
+  const row = await runById(second.run.id);
   expect(row.status).toBe("queued");
   // Why it is waiting, in the column a skip uses to say why it never ran.
   expect(row.error).toMatch(/limit is 1/);
@@ -97,12 +94,11 @@ test("a firing that arrives with no slot free waits instead of being turned away
 });
 
 test("a second firing at the same full server folds into the row already waiting", async () => {
-  const again = await runner.fireTask(ids.second.taskId, ids.second.triggerId, { newest: true });
-  expect(again.started).toBe(false);
-  if (again.started) throw new Error("unreachable");
+  const waiting = await full();
+  const again = refused(await fire("second", { newest: true }));
   // The same row, not a second one: a sender posting every second would otherwise write a queue
   // of three hundred copies of one delivery.
-  expect(again.run.id).toBe(waiting);
+  expect(again.run.id).toBe(waiting.run.id);
 
   const queued = (await runsFor(ids.second.taskId)).filter((run) => run.status === "queued");
   expect(queued).toHaveLength(1);
@@ -112,54 +108,41 @@ test("a second firing at the same full server folds into the row already waiting
 });
 
 test("the queued run starts in its own row when a slot comes back", async () => {
+  const waiting = (await full()).run.id;
+
   expect(runner.stopTask(ids.first.taskId)).toBe(true);
   await until(async () => (await runById(waiting)).status === "running");
 
-  const started = await runById(waiting);
   // The same row the webhook was told about, so the id a sender kept is the id that ends up
   // holding the output.
-  expect(started.id).toBe(waiting);
-  expect(started.error).toBe("");
+  expect((await runById(waiting)).error).toBe("");
   expect(runner.runningTaskIds().has(ids.second.taskId)).toBe(true);
 
   runner.stopTask(ids.second.taskId);
-  await until(() => runner.runningTaskIds().size === 0);
+  await idle();
   expect((await runById(waiting)).status).toBe("stopped");
 });
 
 test("a task that meets itself is still skipped, not queued", async () => {
   await limit(0);
-  const first = await runner.fireTask(ids.first.taskId, ids.first.triggerId);
-  expect(first.started).toBe(true);
+  started(await fire("first"));
 
   // Room to spare, and it is still refused: the work is already in flight, and queueing a copy
   // behind it would run a slow task over and over on a schedule it was never meant for.
-  const again = await runner.fireTask(ids.first.taskId, ids.first.triggerId);
-  expect(again.started).toBe(false);
-  if (again.started) throw new Error("unreachable");
+  const again = refused(await fire("first"));
   expect(again.queued).toBe(false);
   expect((await runById(again.run.id)).status).toBe("skipped");
-
-  runner.stopTask(ids.first.taskId);
-  await until(() => runner.runningTaskIds().size === 0);
 });
 
 test("zero is no ceiling at all", async () => {
-  const first = await runner.fireTask(ids.first.taskId, ids.first.triggerId);
-  const second = await runner.fireTask(ids.second.taskId, ids.second.triggerId);
+  await limit(0);
+  const first = await fire("first");
+  const second = await fire("second");
   expect([first.started, second.started]).toEqual([true, true]);
-
-  runner.stopTask(ids.first.taskId);
-  runner.stopTask(ids.second.taskId);
-  await until(() => runner.runningTaskIds().size === 0);
-  await clearQueue();
 });
 
 test("a task disabled while its run waited does not run", async () => {
-  await limit(1);
-  await runner.fireTask(ids.first.taskId, ids.first.triggerId);
-  const held = await runner.fireTask(ids.second.taskId, ids.second.triggerId);
-  if (held.started) throw new Error("unreachable");
+  const held = await full();
   expect(held.queued).toBe(true);
 
   await db
@@ -173,30 +156,17 @@ test("a task disabled while its run waited does not run", async () => {
   await until(async () => (await runById(held.run.id)).status === "skipped");
   expect((await runById(held.run.id)).error).toMatch(/disabled/);
   expect(runner.runningTaskIds().size).toBe(0);
-
-  await db
-    .update(tables.tasks)
-    .set({ enabled: true })
-    .where(eq(tables.tasks.id, ids.second.taskId));
 });
 
 test("firings that race for the last slot do not both get it", async () => {
   // Both start in the same tick, which is what a midnight full of cron triggers looks like. A
   // check separated from its claim by an `await` lets both through; the claim is taken before
   // either write for exactly this.
-  const [first, second] = await Promise.all([
-    runner.fireTask(ids.first.taskId, ids.first.triggerId),
-    runner.fireTask(ids.second.taskId, ids.second.triggerId),
-  ]);
+  const [first, second] = await Promise.all([fire("first"), fire("second")]);
   expect([first.started, second.started].filter(Boolean)).toHaveLength(1);
 
   // The one that lost is waiting, not lost.
-  const loser = first.started ? second : first;
-  if (loser.started) throw new Error("unreachable");
+  const loser = refused(first.started ? second : first);
   expect(loser.queued).toBe(true);
   expect((await runById(loser.run.id)).status).toBe("queued");
-
-  for (const { taskId } of Object.values(ids)) runner.stopTask(taskId);
-  await until(() => runner.runningTaskIds().size === 0);
-  await clearQueue();
 });
