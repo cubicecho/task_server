@@ -27,6 +27,10 @@ export default defineConfig({
     // waiting on child processes while it happens. The default 5s is tight enough that a
     // loaded machine trips it; nothing here is meant to take anything like this long.
     testTimeout: 30_000,
+    // One worker per core is a PGlite per core, and several suites spawn stdio servers on top
+    // of theirs. On a machine doing anything else that is enough memory for the kernel to kill
+    // a worker, which reads as a suite failing for no reason it can name.
+    maxWorkers: 4,
     hookTimeout: 30_000,
   },
 });
