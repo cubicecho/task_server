@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { refusalCode } from "./helpers.ts";
 
 // The schema is built from the live Drizzle tables at import time, so the database has to be
 // pointed somewhere disposable before anything under server/ is loaded.
@@ -31,6 +32,12 @@ async function run(source: string, variableValues?: Record<string, unknown>) {
   return result.data as Record<string, any>;
 }
 
+/** One task's entries on the schedule, so a test reads its own and not its neighbours'. */
+async function scheduleOf(taskId: string) {
+  const { schedule } = await run(`{ schedule { triggerId taskId cron nextRun } }`);
+  return schedule.filter((entry: { taskId: string }) => entry.taskId === taskId);
+}
+
 test("a task with a cron trigger lands on the schedule", async () => {
   const { createTask: task } = await run(
     `mutation { createTask(values: { name: "digest", prompt: "summarise" }) { id name } }`,
@@ -50,25 +57,32 @@ test("a task with a cron trigger lands on the schedule", async () => {
   // No `cron.sync()` here on purpose. The rebuild is debounced past the mutation's own
   // transaction, and reading `schedule` is what pays it off — the assertion below is the whole
   // point of that: an agent calls these two back to back and must not be shown the old answer.
-  const { schedule } = await run(`{ schedule { triggerId taskId cron nextRun } }`);
-  expect(schedule).toHaveLength(1);
-  expect(schedule[0]).toMatchObject({ triggerId: trigger.id, taskId: task.id, cron: "0 9 * * *" });
-  expect(Date.parse(schedule[0].nextRun)).toBeGreaterThan(Date.now());
+  const scheduled = await scheduleOf(task.id);
+  expect(scheduled).toHaveLength(1);
+  expect(scheduled[0]).toMatchObject({ triggerId: trigger.id, cron: "0 9 * * *" });
+  expect(Date.parse(scheduled[0].nextRun)).toBeGreaterThan(Date.now());
 });
 
 test("disabling the task takes its triggers off the schedule with it", async () => {
-  const { tasks } = await run(`{ tasks { id } }`);
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "paused", prompt: "summarise" }) { id } }`,
+  );
+  await run(
+    `mutation Create($taskId: String!) {
+       createTrigger(values: { taskId: $taskId, cron: "0 9 * * *" }) { id }
+     }`,
+    { taskId: task.id },
+  );
+  expect(await scheduleOf(task.id)).toHaveLength(1);
+
   // The single-row form, which is the only one there is: `permissions.ts` shuts every bulk
   // write, and `updateTasks` with no `where` rewrites the table.
   await run(
     `mutation Off($id: String!) { updateTask(set: { enabled: false }, where: { id: { eq: $id } }) { id } }`,
-    {
-      id: tasks[0].id,
-    },
+    { id: task.id },
   );
 
-  const { schedule } = await run(`{ schedule { triggerId } }`);
-  expect(schedule).toEqual([]);
+  expect(await scheduleOf(task.id)).toEqual([]);
 });
 
 test("a cron trigger with no expression is refused, whether or not the kind is spelled out", async () => {
@@ -88,7 +102,7 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
        }`,
       variableValues: { taskId: task.id },
     });
-    expect(rejected.errors?.[0].message).toMatch(/needs an expression/);
+    expect(refusalCode(rejected)).toBe("BAD_CRON");
   }
 
   const { triggers } = await run(
@@ -119,7 +133,7 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
       source: `mutation { updateTrigger(set: ${set}, where: { id: { eq: "${id}" } }) { id } }`,
     });
   const emptied = await update(event.id, `{ event: " " }`);
-  expect(emptied.errors?.[0].message).toMatch(/needs a webhook id/);
+  expect(refusalCode(emptied)).toBe("BAD_EVENT");
   // Saying the kind it already is, and nothing else, is not a write with no address.
   expect((await update(event.id, `{ kind: event }`)).errors).toBeUndefined();
   expect((await update(event.id, `{ cron: "" }`)).errors).toBeUndefined();
@@ -130,8 +144,8 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
      }`,
     { taskId: task.id },
   );
-  expect((await update(timed.id, `{ cron: "" }`)).errors?.[0].message).toMatch(/needs an expr/);
-  expect((await update(timed.id, `{ kind: event }`)).errors?.[0].message).toMatch(/webhook id/);
+  expect(refusalCode(await update(timed.id, `{ cron: "" }`))).toBe("BAD_CRON");
+  expect(refusalCode(await update(timed.id, `{ kind: event }`))).toBe("BAD_EVENT");
   expect((await update(timed.id, `{ enabled: false }`)).errors).toBeUndefined();
 });
 
@@ -319,7 +333,7 @@ test("an expression the scheduler cannot read is refused, not stored", async () 
      }`,
     variableValues: { taskId: task.id },
   });
-  expect(rejected.errors?.[0].message).toMatch(/not a cron expression/);
+  expect(refusalCode(rejected)).toBe("BAD_CRON");
 
   // Refused before the insert, rather than accepted and skipped at the next sync — which is
   // what it would look like from here either way if the check ran in the scheduler.
@@ -353,7 +367,7 @@ test("an event trigger with no webhook id is refused", async () => {
      }`,
     variableValues: { taskId: task.id },
   });
-  expect(rejected.errors?.[0].message).toMatch(/needs a webhook id/);
+  expect(refusalCode(rejected)).toBe("BAD_EVENT");
 
   const { triggers } = await run(
     `query T($id: String!) { triggers(where: { taskId: { eq: $id } }) { id } }`,

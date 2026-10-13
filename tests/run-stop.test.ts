@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { type FakeModel, hangingModel, until, useModel } from "./helpers.ts";
+import { type FakeModel, hangingModel, refusalCode, until, useModel } from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
@@ -53,7 +53,7 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
       id: taskId,
     },
   );
-  expect(refused.errors?.[0].message).toMatch(/running/i);
+  expect(refusalCode(refused)).toBe("RUN_IN_FLIGHT");
   // The rollback has to leave the task itself alone.
   const still = await gql(`{ tasks { id } }`);
   expect(still.data?.tasks).toHaveLength(1);
@@ -67,7 +67,7 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
     `mutation D($id: String!) { deleteRun(where: { id: { eq: $id } }) { id } }`,
     { id: runId },
   );
-  expect(runRefused.errors?.[0].message).toMatch(/still going/i);
+  expect(refusalCode(runRefused)).toBe("RUN_IN_FLIGHT");
 
   // The run read the flow when it started and is recording what it executed against those very
   // rows, so editing them now would make its own account of itself lie.
@@ -75,7 +75,7 @@ test("a running task cannot be deleted, but it can be stopped and then deleted",
     `mutation S($id: String!) { setTaskSteps(taskId: $id, steps: [{ prompt: "later" }]) { id } }`,
     { id: taskId },
   );
-  expect(stepsRefused.errors?.[0].message).toMatch(/running/i);
+  expect(refusalCode(stepsRefused)).toBe("RUN_IN_FLIGHT");
 
   const stopped = await gql(`mutation S($id: String!) { stopTask(taskId: $id) }`, { id: taskId });
   expect(stopped.data?.stopTask).toBe(true);

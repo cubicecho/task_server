@@ -2,6 +2,7 @@ import fs from "node:fs";
 import type http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { resetClients } from "@cubicecho/agent-core";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import type { Settings } from "../server/db/schema.ts";
 import { completion, notChat, sseFrom } from "./fixtures/sse.ts";
@@ -74,6 +75,9 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  // What an endpoint lists is remembered per base URL, and every test here shares one: without
+  // this, whether a test sees a context window depends on which test asked first.
+  resetClients();
   replies = [];
   requests = 0;
   window = 0;
@@ -163,9 +167,6 @@ test("an answer cut off at the reply ceiling is carried on, not kept as half an 
 });
 
 test("a prompt the model cannot read is refused before it is sent", async () => {
-  // The listing is remembered per endpoint, and the tests above taught it this one has none.
-  const { resetClients } = await import("@cubicecho/agent-core");
-  resetClients();
   window = 16_384;
 
   const { runAgent } = await import("../server/runner/agent.ts");

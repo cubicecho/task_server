@@ -1,6 +1,7 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
+import type { ExecutionResult } from "graphql";
 import type { McpServerRow, Settings } from "../server/db/schema.ts";
 import type { Fired } from "../server/runner/run.ts";
 import { type ChatBody, notChat } from "./fixtures/sse.ts";
@@ -138,3 +139,9 @@ export function refused(fired: Fired): Extract<Fired, { started: false }> {
   if (fired.started) throw new Error("expected the firing to be refused, but it started a run");
   return fired;
 }
+
+/**
+ * The code a refusal carried, which is what a client branches on. The sentence beside it is
+ * for a person and is free to be reworded.
+ */
+export const refusalCode = (result: ExecutionResult) => result.errors?.[0]?.extensions.code;
