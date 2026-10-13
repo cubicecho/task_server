@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { RunEventsDocument, type RunEventsSubscription } from "@/__generated__/graphql/graphql";
 import { subscribe } from "@/lib/gql";
+import { cn } from "@/lib/utils";
 
 type RunEvent = RunEventsSubscription["runEvents"];
 
@@ -157,7 +158,10 @@ export function RunStream({ runId }: { runId: string }) {
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span
-          className={`size-2 rounded-full ${ended ? "bg-muted-foreground" : "animate-pulse bg-emerald-500"}`}
+          className={cn(
+            "size-2 rounded-full",
+            ended ? "bg-muted-foreground" : "animate-pulse bg-emerald-500",
+          )}
         />
         {ended ? "Run ended" : "Live"}
         {error ? <span className="text-destructive">· {error}</span> : null}
@@ -215,7 +219,10 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
     case "tool-result":
       return (
         <p
-          className={`font-mono text-xs whitespace-pre-wrap ${block.ok ? "text-muted-foreground" : "text-destructive"}`}
+          className={cn(
+            "font-mono text-xs whitespace-pre-wrap",
+            block.ok ? "text-muted-foreground" : "text-destructive",
+          )}
         >
           ← {block.name}: {block.text}
         </p>

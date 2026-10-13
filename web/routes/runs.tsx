@@ -35,6 +35,7 @@ import {
 } from "@/lib/run-filters";
 import { STATUS_VARIANT } from "@/lib/run-status";
 import { useRefreshRuns, useRunTask, useStopTask } from "@/lib/use-task-run";
+import { cn } from "@/lib/utils";
 
 type Run = RunsQuery["runs"][number];
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
@@ -65,9 +66,10 @@ function ToolChips({ calls }: { calls: unknown }) {
         <span
           // biome-ignore lint/suspicious/noArrayIndexKey: a finished run's tool list never changes, and the same tool may appear in it twice
           key={`${tool.name}-${index}`}
-          className={`rounded-md border px-2 py-0.5 font-mono text-xs ${
-            tool.ok ? "text-muted-foreground" : "border-destructive text-destructive"
-          }`}
+          className={cn(
+            "rounded-md border px-2 py-0.5 font-mono text-xs",
+            tool.ok ? "text-muted-foreground" : "border-destructive text-destructive",
+          )}
         >
           {tool.name}
         </span>
@@ -88,7 +90,7 @@ function HookNotes({ notes }: { notes: unknown }) {
   return (
     <details className="text-xs">
       <summary
-        className={`cursor-pointer ${failed ? "text-destructive" : "text-muted-foreground"}`}
+        className={cn("cursor-pointer", failed ? "text-destructive" : "text-muted-foreground")}
       >
         {list.length} hook note(s){failed ? `, ${failed} failed` : ""}
       </summary>
@@ -101,7 +103,10 @@ function HookNotes({ notes }: { notes: unknown }) {
               {note.tokens ? ` · ${note.tokens} tokens` : ""}
             </span>
             <pre
-              className={`overflow-x-auto whitespace-pre-wrap ${note.error ? "text-destructive" : ""}`}
+              className={cn(
+                "overflow-x-auto whitespace-pre-wrap",
+                note.error && "text-destructive",
+              )}
             >
               {note.error ?? note.text}
             </pre>

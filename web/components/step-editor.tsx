@@ -20,6 +20,7 @@ import {
   type StepContext,
   sameCase,
 } from "@/lib/flow";
+import { cn } from "@/lib/utils";
 
 const CONTEXT_LABELS: Record<StepContext, string> = {
   all: "Everything so far",
@@ -263,7 +264,10 @@ function StepCard({
                     // biome-ignore lint/suspicious/noArrayIndexKey: no id, and the list is positional
                     <div key={index} className="flex items-center gap-1">
                       <Input
-                        className={`h-8 w-40 font-mono ${duplicate(index) ? "border-destructive" : ""}`}
+                        className={cn(
+                          "h-8 w-40 font-mono",
+                          duplicate(index) && "border-destructive",
+                        )}
                         value={label}
                         onChange={(event) => setCase(index, event.target.value)}
                         placeholder="error"
@@ -304,8 +308,8 @@ function StepCard({
               <>
                 <FormField
                   label="Model"
-                  // The function form, because a Radix `Select` renders no DOM of its own and the
-                  // id has to reach the trigger.
+                  // The function form: `ModelSelect` puts the id on whichever of its two controls
+                  // is on screen.
                   control={(wired) => (
                     <ModelSelect
                       {...wired}
