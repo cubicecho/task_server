@@ -1,23 +1,51 @@
-import { CheckIcon } from "lucide-react";
 import { Checkbox as CheckboxPrimitive } from "radix-ui";
-import * as React from "react";
+import type { ComponentPropsWithRef } from "react";
+import { CHECKBOX_CLASS } from "@/components/ui/checkbox-base";
+import { Check } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
-function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
+/**
+ * radix's props, with `className` re-declared for `exactOptionalPropertyTypes`. Every prop of the
+ * shared contract but `accessibilityLabel` is already one of radix's; a `() => void` is a DOM
+ * `onBlur`.
+ */
+export type CheckboxProps = Omit<
+  ComponentPropsWithRef<typeof CheckboxPrimitive.Root>,
+  "className"
+> & {
+  className?: string | undefined;
+  /**
+   * The device half's name for the box, taken here so a call site shared across both halves —
+   * typechecked against the device half, so this is all it passes — still names it. It becomes
+   * `aria-label`; an `aria-label` of its own wins. Optional, because on the web a
+   * `<Label htmlFor={id}>` can name the box instead.
+   */
+  "aria-label"?: string | undefined;
+};
+
+/** A box that is checked, unchecked or indeterminate. */
+function Checkbox({
+  className,
+  "aria-label": accessibilityLabel,
+  "aria-label": ariaLabel,
+  ...props
+}: CheckboxProps) {
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
+      {...props}
+      aria-label={ariaLabel ?? accessibilityLabel}
       className={cn(
-        "peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input transition-colors outline-none group-has-disabled/field:opacity-50 group-has-[:focus-visible]/field-label:ring-0 group-has-[:focus-visible]/field-label:not-data-checked:border-input after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-[:focus-visible]/field-label:data-checked:border-primary dark:data-checked:bg-primary",
+        CHECKBOX_CLASS,
+        "peer flex border-foreground/15 bg-background focus-visible:outline-none data-[state=unchecked]:focus-visible:bg-hover data-[state=checked]:focus-visible:bg-active/90 data-[state=indeterminate]:focus-visible:bg-active/90 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-negative data-[state=checked]:border-active data-[state=checked]:bg-active data-[state=checked]:text-active-foreground data-[state=indeterminate]:border-active data-[state=indeterminate]:bg-active data-[state=indeterminate]:text-active-foreground",
         className,
       )}
-      {...props}
     >
       <CheckboxPrimitive.Indicator
         data-slot="checkbox-indicator"
-        className="grid place-content-center text-current transition-none [&>svg]:size-3.5"
+        className="flex items-center justify-center text-current"
       >
-        <CheckIcon />
+        <Check className="h-3 w-3" />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );

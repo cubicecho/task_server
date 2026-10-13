@@ -70,9 +70,9 @@ export function TaskEditRoute() {
       <PageLayout
         title="Task"
         description={DESCRIPTION}
-        breadcrumbs={<Breadcrumbs />}
+        breadcrumbsSlot={<Breadcrumbs />}
         loading={task.isPending}
-        content={
+        contentSlot={
           task.isPending ? null : (
             <QueryError
               // A task that is simply not there is not a failed request, and saying "try again"
@@ -250,18 +250,16 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     <PageLayout
       title={task ? "Edit task" : "New task"}
       description={DESCRIPTION}
-      breadcrumbs={<Breadcrumbs />}
-      action={
+      breadcrumbsSlot={<Breadcrumbs />}
+      actionSlot={
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => navigate({ to: "/tasks" })}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={() => navigate({ to: "/tasks" })} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton form="task">Save</form.SubmitButton>
+            <form.SubmitButton form="task" />
           </form.AppForm>
         </div>
       }
-      content={
+      contentSlot={
         <form
           id="task"
           className="flex flex-col gap-6"
@@ -288,7 +286,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
               description={doc("prompt")}
               // The label row's far end, which is where a control that writes into the field
               // belongs — beside its name rather than under the box it fills.
-              action={
+              actionSlot={
                 <McpPromptButton
                   onInsert={(text) =>
                     form.setFieldValue("prompt", (current) => withPrompt(current, text))
@@ -344,7 +342,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
           <form.Subscribe selector={(state) => state.values.agentId}>
             {(agentId) => (
               <FieldRow
-                content={
+                contentSlot={
                   <>
                     <ModelSelectField
                       form={form}
@@ -399,7 +397,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
                 cases runs next.
               </>
             }
-            content={
+            contentSlot={
               <form.Field name="steps">
                 {(field) => (
                   <StepList

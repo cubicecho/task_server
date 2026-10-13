@@ -79,11 +79,11 @@ the omissions typecheck errors rather than review comments.
 to `FormField` — replaced four hand-rolled `useState` forms, which is what moved validation from
 a toast on the way out to a message under the input as it is typed. See the frontend section of
 [`AGENTS.md`](AGENTS.md) for the conventions; the two sharp edges are that no cubeui component
-takes `children` (the body is `content`) and that `ActionButton` and `ConfirmButton` take a
-required `label`, which is the accessible name. `ActionButton` used to submit the `<form>` around
-it unless the caller passed `type="button"`; [cubeui#18](https://github.com/cubicecho/cubeui/issues/18)
-made `type="button"` the default, which is the fix being right rather than the reminder being
-remembered.
+takes `children` — a body is `contentSlot`, and a `Button`'s words are `content` — and that an
+icon-sized `Button` does not typecheck without an `aria-label`. That second one was
+`ActionButton`'s required `label` until the registry folded the component into `Button`, which
+also defaults to `type="button"` ([cubeui#18](https://github.com/cubicecho/cubeui/issues/18)), so
+a row action no longer submits the `<form>` around it.
 
 **What to watch.** The registry is a copy, so an upstream fix does not arrive on its own —
 re-running `npx shadcn add @cubeui/<name>` overwrites the local file, and anything edited here

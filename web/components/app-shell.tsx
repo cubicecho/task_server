@@ -23,7 +23,7 @@ export function AppShell() {
       stackBelow="md"
       divider="line"
       sidebarClassName="bg-sidebar"
-      sidebar={
+      sidebarSlot={
         <nav className="flex flex-col gap-1 px-2">
           <div className="flex items-center gap-2 px-3 py-4 font-semibold text-sm tracking-tight">
             <Zap className="size-4" />
@@ -44,7 +44,7 @@ export function AppShell() {
           ))}
         </nav>
       }
-      content={<Outlet />}
+      contentSlot={<Outlet />}
     />
   );
 }

@@ -1,7 +1,6 @@
 import { Check, Copy, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,13 +117,16 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
     <>
       <Section
         title="Schedule"
-        action={
-          <Button type="button" variant="ghost" size="sm" onClick={() => add(emptyTrigger("cron"))}>
-            <Plus className="size-4" />
-            Add
-          </Button>
+        actionSlot={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => add(emptyTrigger("cron"))}
+            iconSlot={<Plus />}
+            content="Add"
+          />
         }
-        content={
+        contentSlot={
           <>
             {cron.length === 0 ? (
               <p className="text-muted-foreground text-sm">
@@ -157,14 +159,13 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
                       trigger={trigger}
                       onChange={(enabled) => patch(trigger.key, { enabled })}
                     />
-                    <ActionButton
-                      label="Remove this schedule"
+                    <Button
+                      aria-label="Remove this schedule"
                       variant="ghost"
                       size="icon"
                       onClick={() => drop(trigger)}
-                    >
-                      <Trash2 />
-                    </ActionButton>
+                      iconSlot={<Trash2 />}
+                    />
                   </>
                 )}
               />
@@ -188,18 +189,16 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
 
       <Section
         title="Webhooks"
-        action={
+        actionSlot={
           <Button
-            type="button"
             variant="ghost"
             size="sm"
             onClick={() => add({ ...emptyTrigger("event"), event: newWebhookId() })}
-          >
-            <Plus className="size-4" />
-            Add
-          </Button>
+            iconSlot={<Plus />}
+            content="Add"
+          />
         }
-        content={
+        contentSlot={
           <>
             {webhooks.length === 0 ? (
               <p className="text-muted-foreground text-sm">
@@ -323,23 +322,24 @@ function WebhookRow({
               {...invalid}
             />
           </div>
-          <ActionButton
-            label={copied ? "Copied" : "Copy the URL"}
+          <Button
+            aria-label={copied ? "Copied" : "Copy the URL"}
             variant="ghost"
             size="icon"
             disabled={!trigger.event}
             hint={trigger.event ? undefined : "Give the webhook an id first"}
             onClick={() => void copy(webhookUrl(trigger.event))}
-          >
-            {copied ? <Check /> : <Copy />}
-          </ActionButton>
-          <Button type="button" variant="ghost" size="sm" onClick={onRegenerate}>
-            New id
-          </Button>
+            iconSlot={copied ? <Check /> : <Copy />}
+          />
+          <Button variant="ghost" size="sm" onClick={onRegenerate} content="New id" />
           <TriggerSwitch trigger={trigger} onChange={onToggle} />
-          <ActionButton label="Remove this webhook" variant="ghost" size="icon" onClick={onRemove}>
-            <Trash2 />
-          </ActionButton>
+          <Button
+            aria-label="Remove this webhook"
+            variant="ghost"
+            size="icon"
+            onClick={onRemove}
+            iconSlot={<Trash2 />}
+          />
         </>
       )}
     />

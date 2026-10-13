@@ -11,7 +11,6 @@ import {
   type RunsQuery,
   RunsStatusEnum,
 } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DisclosureRow } from "@/components/disclosure-row";
 import { OptionSelect } from "@/components/option-select";
@@ -238,10 +237,13 @@ function RunDetail({
         <div>
           {/* The body is the half of a failed delivery that could not be got at: the sender is
               not going to send it again, and it has been sitting on the row all along. */}
-          <Button variant="outline" size="sm" onClick={() => onReplay(payload)}>
-            <Play className="size-4" />
-            Run again with this body
-          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onReplay(payload)}
+            iconSlot={<Play />}
+            content="Run again with this body"
+          />
         </div>
       )}
       <HookNotes notes={found.hooks} />
@@ -324,14 +326,13 @@ function FilterBar({
       />
 
       {dirty ? (
-        <ActionButton
-          label="Clear filters"
+        <Button
+          aria-label="Clear filters"
           variant="ghost"
           size="icon"
           onClick={() => onChange(NO_FILTERS)}
-        >
-          <X />
-        </ActionButton>
+          iconSlot={<X />}
+        />
       ) : null}
     </div>
   );
@@ -398,25 +399,24 @@ export function RunsRoute() {
     <PageLayout
       title="Runs"
       description="Every execution, newest first."
-      action={
+      actionSlot={
         <Button
           variant="outline"
           onClick={() => queryClient.invalidateQueries({ queryKey: ["runs"] })}
-        >
-          <RefreshCw className="size-4" />
-          Refresh
-        </Button>
+          iconSlot={<RefreshCw />}
+          content="Refresh"
+        />
       }
-      headerContent={
+      headerContentSlot={
         <FilterBar filters={filters} onChange={update} tasks={tasks.data?.tasks ?? []} />
       }
-      content={
+      contentSlot={
         <>
           <QueryState
             query={runs}
             what="the run history"
             count={rows.length}
-            empty={
+            emptySlot={
               <Empty>
                 <EmptyHeader>
                   <EmptyTitle>{filtered ? "No matches" : "Nothing has run yet"}</EmptyTitle>
@@ -443,7 +443,7 @@ export function RunsRoute() {
                 key={run.id}
                 open={open === run.id}
                 onOpenChange={(next) => setOpen(next ? run.id : null)}
-                badges={
+                badgesSlot={
                   <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>{run.status}</Badge>
                 }
                 title={run.task.name}
@@ -462,23 +462,22 @@ export function RunsRoute() {
                 description={
                   <span className="line-clamp-2">{run.error || run.output || NO_OUTPUT}</span>
                 }
-                action={
+                actionSlot={
                   <>
                     {running ? (
-                      <ActionButton
-                        label="Stop this run"
+                      <Button
+                        aria-label="Stop this run"
                         variant="ghost"
                         size="icon"
                         // Only this row's button: `isPending` alone disabled every other running
                         // run's Stop while one of them was being stopped.
                         disabled={stop.isPending && stop.variables === run.taskId}
                         onClick={() => stop.mutate(run.taskId)}
-                      >
-                        <Square />
-                      </ActionButton>
+                        iconSlot={<Square />}
+                      />
                     ) : null}
                     <ConfirmButton
-                      label="Delete"
+                      aria-label="Delete"
                       variant="ghost"
                       size="icon"
                       hint={running ? "Stop the run before deleting" : undefined}
@@ -490,12 +489,11 @@ export function RunsRoute() {
                           : "Its output, its steps and the webhook body it was given go with it."
                       }
                       onConfirm={() => remove.mutate(run.id)}
-                    >
-                      <Trash2 />
-                    </ConfirmButton>
+                      iconSlot={<Trash2 />}
+                    />
                   </>
                 }
-                content={
+                contentSlot={
                   <>
                     {/* A run in flight has no stored output yet — this is the run itself, live. */}
                     {running ? <RunStream runId={run.id} /> : null}
@@ -534,9 +532,8 @@ export function RunsRoute() {
               variant="outline"
               onClick={() => setLimit(limit + PAGE)}
               disabled={runs.isFetching}
-            >
-              Load {PAGE} more
-            </Button>
+              content={`Load ${PAGE} more`}
+            />
           ) : null}
 
           {replay ? (

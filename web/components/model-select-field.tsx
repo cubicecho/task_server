@@ -15,7 +15,7 @@ type ModelSelectFieldProps = FieldProps &
 /**
  * `ModelSelect` as a bound field.
  *
- * The id and the `aria-*` props go in through the function form of `control`, and
+ * The id and the `aria-*` props go in through the function form of `controlSlot`, and
  * `ModelSelect` puts them on whichever of its two controls is on screen.
  */
 function BoundModelSelectField(props: ModelSelectFieldProps) {
@@ -27,7 +27,7 @@ function BoundModelSelectField(props: ModelSelectFieldProps) {
     <FormField
       {...fieldProps}
       error={error}
-      control={(wired) => (
+      controlSlot={(wired) => (
         <ModelSelect
           {...control}
           {...wired}
