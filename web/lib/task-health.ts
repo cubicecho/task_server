@@ -40,15 +40,27 @@ export function taskHealth(task: StatusTask): Health {
     // `finishedAt` on a skipped row moves with the latest firing it stands for, so this asks
     // whether anything has actually run since the last time one was turned away.
     const turnedAway = at(skip.finishedAt ?? skip.startedAt);
-    if (!last || turnedAway > at(last.startedAt)) return "refused";
+    if (!last || turnedAway > at(last.startedAt)) {
+      return "refused";
+    }
   }
-  if (last?.status === "running") return "running";
-  if (last?.status === "error") return "broken";
+  if (last?.status === "running") {
+    return "running";
+  }
+  if (last?.status === "error") {
+    return "broken";
+  }
   // Nothing is lost — the row runs when a slot comes back — but the task is behind, and the
   // last run finished cleanly and would otherwise read as `fine`.
-  if (task.waiting[0]) return "waiting";
-  if (!task.enabled) return "off";
-  if (!task.triggers.some((trigger) => trigger.enabled)) return "manual";
+  if (task.waiting[0]) {
+    return "waiting";
+  }
+  if (!task.enabled) {
+    return "off";
+  }
+  if (!task.triggers.some((trigger) => trigger.enabled)) {
+    return "manual";
+  }
   return "fine";
 }
 
@@ -58,7 +70,9 @@ const noneYet = (): Record<Health, number> =>
 
 export function tally(tasks: StatusTask[]): Record<Health, number> {
   const counts = noneYet();
-  for (const task of tasks) counts[taskHealth(task)] += 1;
+  for (const task of tasks) {
+    counts[taskHealth(task)] += 1;
+  }
   return counts;
 }
 

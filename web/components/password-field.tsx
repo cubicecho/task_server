@@ -10,7 +10,7 @@ import { FormField } from "@/components/form-field";
 import { PasswordInput } from "@/components/password-input";
 
 type PasswordFieldProps = FieldProps &
-  Omit<ComponentProps<typeof PasswordInput>, "id" | "value" | "onChange" | "onBlur">;
+  Omit<ComponentProps<typeof PasswordInput>, "id" | "value" | "onChangeText" | "onBlur">;
 
 function BoundPasswordField(props: PasswordFieldProps) {
   const [fieldProps, input] = splitProps(props);
@@ -24,13 +24,13 @@ function BoundPasswordField(props: PasswordFieldProps) {
       // The function form: the props belong on the `Input` inside the wrapper, not on the
       // `<div>` that positions the eye. Cloning would put the label's target on the wrapper —
       // the same blind spot `SelectField` has, and just as quiet.
-      control={(wired) => (
+      controlSlot={(wired) => (
         <PasswordInput
           {...input}
           {...wired}
           value={field.state.value ?? ""}
           onBlur={field.handleBlur}
-          onChange={(event) => field.handleChange(event.target.value)}
+          onChangeText={(text) => field.handleChange(text)}
         />
       )}
     />

@@ -5,17 +5,10 @@ import { mcp } from "./mcp.ts";
  * The prompts the configured MCP servers offer, as something a person picks rather than
  * something a model calls.
  *
- * A prompt is the server author's own phrasing of a job their server is good at — "review this
- * diff", "explain this query plan" — parameterised and written by whoever knows the server best.
- * This one indexed `tools/list` and nothing else, so a server could ship a dozen of them and
- * none of it reached anyone here.
- *
- * They go to the task editor and not to a run, which is the protocol's own division rather than
- * a taste: prompts are user-controlled, meant to be surfaced as menu items and slash commands.
- * Expanded here they become the text of a task's prompt — editable before it is saved, and
- * stored as the prompt, so what a run sends is what is in the box. A template resolved at run
- * time would be a prompt whose text nobody can read back off the task, changing under the task
- * whenever the server that wrote it changed its mind.
+ * Prompts are the user-controlled half of the protocol, so they go to the task editor and not
+ * to a run. Expanded here they become the text of a task's prompt: editable before it is saved,
+ * and stored, so what a run sends is what is in the box. A template resolved at run time would
+ * change under the task whenever its server's author rephrased it.
  */
 
 /** One blank in a template, as the server declared it. */
@@ -82,12 +75,9 @@ export async function list(): Promise<McpPromptRow[]> {
 /**
  * One prompt expanded with the arguments given, flattened to the single string a prompt box is.
  *
- * `prompts/get` answers with *messages* — a list, each with a role — and a task's prompt is one
- * string. The common case is a template that returns exactly one message, and that one arrives
- * verbatim. Where a server returns several the roles are labelled and the text joined, which is
- * lossy: an `assistant` turn in a template is a worked example the server wanted in the history,
- * and as a line inside the prompt it is a quotation of one. Labelling it leaves the model able
- * to read it as one, where dropping the roles would not.
+ * `prompts/get` answers with a list of messages, each with a role. One message arrives
+ * verbatim. Several are joined with their roles in front, which is lossy but leaves the model
+ * able to read an `assistant` turn as the worked example it was.
  */
 export async function get(
   server: string,
@@ -99,7 +89,9 @@ export async function get(
   }
 
   const { messages } = await (await mcp.client(server)).getPrompt({ name, arguments: args });
-  if (messages.length === 1) return messageText(messages[0].content);
+  if (messages.length === 1) {
+    return messageText(messages[0].content);
+  }
   return messages
     .map((message) => `${message.role}: ${messageText(message.content)}`)
     .join("\n\n")

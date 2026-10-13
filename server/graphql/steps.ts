@@ -1,6 +1,5 @@
 import { and, eq, getTableColumns, inArray, notInArray, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
-import { GraphQLError } from "graphql";
 import {
   CONTEXTS,
   DEFAULT_BRANCH,
@@ -11,6 +10,7 @@ import {
 } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { steps, tasks } from "../db/schema.ts";
+import { refusal } from "./errors.ts";
 
 /**
  * Writing a task's flow: one call that replaces the whole tree.
@@ -44,11 +44,11 @@ export interface StepInput {
 
 type NewStep = typeof steps.$inferInsert & { id: string };
 
-const reject = (message: string): never => {
-  // A plain Error reaches the client as "Internal server error"; every one of these is
-  // something the client got wrong and can fix.
-  throw new GraphQLError(message, { extensions: { code: "BAD_STEPS" } });
-};
+// A declaration, not an arrow: TypeScript only narrows past a call that returns `never` when
+// the callee is declared with that type, and the checks below rely on it.
+function reject(message: string): never {
+  throw refusal("BAD_STEPS", message);
+}
 
 /**
  * Flattens the nested input into rows, assigning `parentId`, `branch` and `position`.
@@ -61,13 +61,19 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
   const ids = new Set<string>();
 
   const walk = (list: StepInput[], parentId: string | null, branch: string, depth: number) => {
-    if (depth > MAX_DEPTH) reject(`Steps cannot nest more than ${MAX_DEPTH} deep.`);
+    if (depth > MAX_DEPTH) {
+      reject(`Steps cannot nest more than ${MAX_DEPTH} deep.`);
+    }
 
     list.forEach((item, index) => {
-      if (rows.length >= MAX_STEPS) reject(`A task cannot have more than ${MAX_STEPS} steps.`);
+      if (rows.length >= MAX_STEPS) {
+        reject(`A task cannot have more than ${MAX_STEPS} steps.`);
+      }
 
       const kind = KINDS.find((option) => option === (item.kind ?? "agent"));
-      if (!kind) reject(`Unknown step kind "${item.kind}" — expected ${KINDS.join(" or ")}.`);
+      if (!kind) {
+        reject(`Unknown step kind "${item.kind}" — expected ${KINDS.join(" or ")}.`);
+      }
       const context = CONTEXTS.find((option) => option === (item.context ?? "all"));
       if (!context) {
         reject(`Unknown context "${item.context}" — expected one of ${CONTEXTS.join(", ")}.`);
@@ -76,10 +82,14 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
       const name = (item.name ?? "").trim();
       const label = name || `step ${rows.length + 1}`;
       const prompt = item.prompt.trim();
-      if (!prompt) reject(`${label} has no prompt.`);
+      if (!prompt) {
+        reject(`${label} has no prompt.`);
+      }
 
       const id = (item.id ?? "").trim() || crypto.randomUUID();
-      if (ids.has(id)) reject(`${label} reuses the id of another step in the same flow.`);
+      if (ids.has(id)) {
+        reject(`${label} reuses the id of another step in the same flow.`);
+      }
       ids.add(id);
 
       const cases = (item.cases ?? []).map((option) => option.trim()).filter(Boolean);
@@ -105,7 +115,7 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
         cases: kind === "decision" ? cases : null,
         model: (item.model ?? "").trim(),
         systemPrompt: item.systemPrompt ?? "",
-        context: context as (typeof CONTEXTS)[number],
+        context,
         enabled: item.enabled ?? true,
       });
 
@@ -122,9 +132,11 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
               `(${cases.join(", ")}) or "${DEFAULT_BRANCH}".`,
           );
         }
-        if (taken.has(resolved as string)) reject(`${label} has two branches for "${arm.case}".`);
-        taken.add(resolved as string);
-        walk(arm.steps ?? [], id, resolved as string, depth + 1);
+        if (taken.has(resolved)) {
+          reject(`${label} has two branches for "${arm.case}".`);
+        }
+        taken.add(resolved);
+        walk(arm.steps ?? [], id, resolved, depth + 1);
       }
     });
   };
@@ -189,7 +201,9 @@ export async function writeTaskSteps(taskId: string, rows: NewStep[]): Promise<v
 /** Ids the client supplied that already belong to somebody else. */
 export async function foreignIds(taskId: string, rows: NewStep[]): Promise<string[]> {
   const ids = rows.map((row) => row.id);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) {
+    return [];
+  }
   const existing = await db
     .select({ id: steps.id, taskId: steps.taskId })
     .from(steps)

@@ -26,6 +26,9 @@ import { cn } from "@/lib/utils";
 type Failure = StatusQuery["failures"][number];
 type Server = StatusQuery["mcpStatus"][number];
 
+/** A failed run whose `error` is empty still has to say something. */
+const NO_REASON = "It broke without saying why.";
+
 const when = (iso: string) => new Date(iso).toLocaleString();
 
 /**
@@ -82,7 +85,7 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
   if (health === "broken" && last) {
     return (
       <ItemDescription className="line-clamp-3 text-destructive">
-        {last.error || "It broke without saying why."}
+        {last.error || NO_REASON}
       </ItemDescription>
     );
   }
@@ -129,10 +132,9 @@ function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
           // refuses one, and the refusal would arrive as a toast saying so.
           disabled={health === "running" || run.isPending}
           onClick={() => run.mutate({ taskId: task.id })}
-        >
-          <Play className="size-3.5" />
-          Run now
-        </Button>
+          iconSlot={<Play />}
+          content="Run now"
+        />
       </ItemActions>
     </Item>
   );
@@ -155,7 +157,7 @@ function FailureRow({ failure }: { failure: Failure }) {
           </span>
         </ItemTitle>
         <ItemDescription className="line-clamp-2 text-destructive">
-          {failure.error || "It broke without saying why."}
+          {failure.error || NO_REASON}
         </ItemDescription>
       </ItemContent>
     </Item>
@@ -211,22 +213,32 @@ export function StatusRoute() {
     (server: Server) => server.status === "error",
   );
 
+  /** What an empty list means: nothing in the chosen heap, no tasks at all, or all is well. */
+  const emptyNote = () => {
+    if (selected) {
+      return `Nothing is ${LABELS[selected].label.toLowerCase()}.`;
+    }
+    if (tasks.length === 0) {
+      return "No tasks yet.";
+    }
+    return `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`;
+  };
+
   return (
     <PageLayout
       title="Status"
       description="What is wrong, and what is about to be."
-      action={
+      actionSlot={
         <Button
           variant="outline"
           size="sm"
           onClick={() => queryClient.invalidateQueries({ queryKey: ["status"] })}
           disabled={status.isFetching}
-        >
-          <RefreshCw className={cn("size-4", status.isFetching && "animate-spin")} />
-          Refresh
-        </Button>
+          iconSlot={<RefreshCw className={status.isFetching ? "animate-spin" : undefined} />}
+          content="Refresh"
+        />
       }
-      content={
+      contentSlot={
         <>
           {status.isError ? (
             <QueryError
@@ -256,7 +268,7 @@ export function StatusRoute() {
             <Section
               title="Unreachable servers"
               description="Enabled, and not reached. Every run since has gone out without these tools, whether or not its prompt was written expecting them."
-              content={unreachable.map((server) => (
+              contentSlot={unreachable.map((server) => (
                 <Item key={server.id} variant="outline">
                   <ItemContent>
                     <ItemTitle>
@@ -268,9 +280,12 @@ export function StatusRoute() {
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
-                    <Button asChild size="sm" variant="outline">
-                      <Link to="/servers">Servers</Link>
-                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      linkSlot={<Link to="/servers" />}
+                      content="Servers"
+                    />
                   </ItemActions>
                 </Item>
               ))}
@@ -282,27 +297,25 @@ export function StatusRoute() {
           ))}
 
           {!status.isPending && shown.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              {selected
-                ? `Nothing is ${LABELS[selected].label.toLowerCase()}.`
-                : tasks.length === 0
-                  ? "No tasks yet."
-                  : `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`}
-            </p>
+            <p className="text-muted-foreground text-sm">{emptyNote()}</p>
           ) : null}
 
           {unexplained.length > 0 ? (
             <Section
               title="Unexplained failures"
               description="Runs that broke and whose task has run since, or whose task is gone. Nothing above counts these, and they are worth seeing once."
-              content={
+              contentSlot={
                 <>
                   {unexplained.slice(0, 5).map((failure) => (
                     <FailureRow key={failure.id} failure={failure} />
                   ))}
-                  <Button asChild variant="outline" size="sm" className="self-start">
-                    <Link to="/runs">Every run</Link>
-                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                    linkSlot={<Link to="/runs" />}
+                    content="Every run"
+                  />
                 </>
               }
             />

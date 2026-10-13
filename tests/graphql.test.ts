@@ -1,13 +1,10 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { dataDir, refusalCode } from "./helpers.ts";
 
 // The schema is built from the live Drizzle tables at import time, so the database has to be
 // pointed somewhere disposable before anything under server/ is loaded.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-test-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("test");
 
 let schema: GraphQLSchema;
 let cron: typeof import("../server/scheduler/cron.ts");
@@ -21,14 +18,35 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cron.stop();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
-async function run(source: string, variableValues?: Record<string, unknown>) {
+/** A row as a test reads it back: an id to carry into the next call, and columns to assert on. */
+type Row = { id: string; [column: string]: unknown };
+
+/**
+ * The `data` of an operation that must not fail. A single-row answer is the default; a test
+ * reading a list says so, since that is the one thing about the shape it goes on to lean on.
+ */
+async function run<T = Record<string, Row>>(
+  source: string,
+  variableValues?: Record<string, unknown>,
+) {
   const result = await graphql({ schema, source, variableValues });
   expect(result.errors).toBeUndefined();
-  // biome-ignore lint/suspicious/noExplicitAny: assertions walk arbitrary GraphQL payloads.
-  return result.data as Record<string, any>;
+  return result.data as T;
+}
+
+type Rows = Record<string, Row[]>;
+
+/** A `DateTime` as it leaves `graphql()`, which hands back the resolver's value unserialised. */
+type Instant = string | Date;
+
+/** One task's entries on the schedule, so a test reads its own and not its neighbours'. */
+async function scheduleOf(taskId: string) {
+  const { schedule } = await run<{ schedule: (Row & { nextRun: Instant })[] }>(
+    `{ schedule { triggerId taskId cron nextRun } }`,
+  );
+  return schedule.filter((entry) => entry.taskId === taskId);
 }
 
 test("a task with a cron trigger lands on the schedule", async () => {
@@ -50,25 +68,32 @@ test("a task with a cron trigger lands on the schedule", async () => {
   // No `cron.sync()` here on purpose. The rebuild is debounced past the mutation's own
   // transaction, and reading `schedule` is what pays it off — the assertion below is the whole
   // point of that: an agent calls these two back to back and must not be shown the old answer.
-  const { schedule } = await run(`{ schedule { triggerId taskId cron nextRun } }`);
-  expect(schedule).toHaveLength(1);
-  expect(schedule[0]).toMatchObject({ triggerId: trigger.id, taskId: task.id, cron: "0 9 * * *" });
-  expect(Date.parse(schedule[0].nextRun)).toBeGreaterThan(Date.now());
+  const scheduled = await scheduleOf(task.id);
+  expect(scheduled).toHaveLength(1);
+  expect(scheduled[0]).toMatchObject({ triggerId: trigger.id, cron: "0 9 * * *" });
+  expect(new Date(scheduled[0].nextRun).getTime()).toBeGreaterThan(Date.now());
 });
 
 test("disabling the task takes its triggers off the schedule with it", async () => {
-  const { tasks } = await run(`{ tasks { id } }`);
+  const { createTask: task } = await run(
+    `mutation { createTask(values: { name: "paused", prompt: "summarise" }) { id } }`,
+  );
+  await run(
+    `mutation Create($taskId: String!) {
+       createTrigger(values: { taskId: $taskId, cron: "0 9 * * *" }) { id }
+     }`,
+    { taskId: task.id },
+  );
+  expect(await scheduleOf(task.id)).toHaveLength(1);
+
   // The single-row form, which is the only one there is: `permissions.ts` shuts every bulk
   // write, and `updateTasks` with no `where` rewrites the table.
   await run(
     `mutation Off($id: String!) { updateTask(set: { enabled: false }, where: { id: { eq: $id } }) { id } }`,
-    {
-      id: tasks[0].id,
-    },
+    { id: task.id },
   );
 
-  const { schedule } = await run(`{ schedule { triggerId } }`);
-  expect(schedule).toEqual([]);
+  expect(await scheduleOf(task.id)).toEqual([]);
 });
 
 test("a cron trigger with no expression is refused, whether or not the kind is spelled out", async () => {
@@ -88,10 +113,10 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
        }`,
       variableValues: { taskId: task.id },
     });
-    expect(rejected.errors?.[0].message).toMatch(/needs an expression/);
+    expect(refusalCode(rejected)).toBe("BAD_CRON");
   }
 
-  const { triggers } = await run(
+  const { triggers } = await run<Rows>(
     `query T($id: String!) { triggers(where: { taskId: { eq: $id } }) { id } }`,
     { id: task.id },
   );
@@ -119,7 +144,7 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
       source: `mutation { updateTrigger(set: ${set}, where: { id: { eq: "${id}" } }) { id } }`,
     });
   const emptied = await update(event.id, `{ event: " " }`);
-  expect(emptied.errors?.[0].message).toMatch(/needs a webhook id/);
+  expect(refusalCode(emptied)).toBe("BAD_EVENT");
   // Saying the kind it already is, and nothing else, is not a write with no address.
   expect((await update(event.id, `{ kind: event }`)).errors).toBeUndefined();
   expect((await update(event.id, `{ cron: "" }`)).errors).toBeUndefined();
@@ -130,8 +155,8 @@ test("a cron trigger with no expression is refused, whether or not the kind is s
      }`,
     { taskId: task.id },
   );
-  expect((await update(timed.id, `{ cron: "" }`)).errors?.[0].message).toMatch(/needs an expr/);
-  expect((await update(timed.id, `{ kind: event }`)).errors?.[0].message).toMatch(/webhook id/);
+  expect(refusalCode(await update(timed.id, `{ cron: "" }`))).toBe("BAD_CRON");
+  expect(refusalCode(await update(timed.id, `{ kind: event }`))).toBe("BAD_EVENT");
   expect((await update(timed.id, `{ enabled: false }`)).errors).toBeUndefined();
 });
 
@@ -163,7 +188,7 @@ test("a flow is written as a tree and comes back as the rows that run it", async
     `mutation { createTask(values: { name: "mail", prompt: "read the last five emails" }) { id } }`,
   );
 
-  const { setTaskSteps: rows } = await run(FLOW, {
+  const { setTaskSteps: rows } = await run<Rows>(FLOW, {
     taskId: task.id,
     steps: [
       {
@@ -181,12 +206,7 @@ test("a flow is written as a tree and comes back as the rows that run it", async
   });
 
   // Flattened depth-first, so a parent is always written before the children that name it.
-  expect(rows.map((row: { name: string }) => row.name)).toEqual([
-    "any errors?",
-    "write it up",
-    "print",
-    "done",
-  ]);
+  expect(rows.map((row) => row.name)).toEqual(["any errors?", "write it up", "print", "done"]);
   const [decision, wrote, printed, done] = rows;
   expect(decision).toMatchObject({ parentId: null, branch: "", position: 0, kind: "decision" });
   expect(decision.cases).toEqual(["error", "clean"]);
@@ -197,7 +217,7 @@ test("a flow is written as a tree and comes back as the rows that run it", async
 
   // Sent back with their ids, the surviving steps are edited in place rather than replaced, so
   // the run history that points at them stays pointed at them.
-  const { setTaskSteps: edited } = await run(FLOW, {
+  const { setTaskSteps: edited } = await run<Rows>(FLOW, {
     taskId: task.id,
     steps: [
       {
@@ -210,19 +230,19 @@ test("a flow is written as a tree and comes back as the rows that run it", async
       },
     ],
   });
-  expect(edited.map((row: { id: string }) => row.id)).toEqual([decision.id, wrote.id]);
+  expect(edited.map((row) => row.id)).toEqual([decision.id, wrote.id]);
   expect(edited[0].prompt).toBe("look again");
   // The arm that went away took its step with it.
-  const { steps } = await run(
+  const { steps } = await run<Rows>(
     `query S($id: String!) { steps(where: { taskId: { eq: $id } }) { id } }`,
     {
       id: task.id,
     },
   );
-  expect(steps.map((row: { id: string }) => row.id).sort()).toEqual([decision.id, wrote.id].sort());
+  expect(steps.map((row) => row.id).sort()).toEqual([decision.id, wrote.id].sort());
 
   // And an empty list leaves the task with nothing but its own prompt.
-  const { setTaskSteps: cleared } = await run(FLOW, { taskId: task.id, steps: [] });
+  const { setTaskSteps: cleared } = await run<Rows>(FLOW, { taskId: task.id, steps: [] });
   expect(cleared).toEqual([]);
 });
 
@@ -230,7 +250,7 @@ test("rewriting a flow counts as editing the task", async () => {
   // Nothing on the task row changes when its steps do, so `updatedAt` would sit still through a
   // rewrite of the whole flow — and it is what "newest edit first" orders by, which would leave
   // an agent's own last edit missing from the top of the listing it goes looking in.
-  const { createTask: task } = await run(
+  const { createTask: task } = await run<{ createTask: Row & { updatedAt: Instant } }>(
     `mutation { createTask(values: { name: "touched", prompt: "go" }) { id updatedAt } }`,
   );
 
@@ -239,7 +259,7 @@ test("rewriting a flow counts as editing the task", async () => {
     steps: [{ name: "one", prompt: "do it" }],
   });
 
-  const { tasks: after } = await run(
+  const { tasks: after } = await run<{ tasks: { updatedAt: Instant }[] }>(
     `query Read($id: String!) { tasks(where: { id: { eq: $id } }) { updatedAt } }`,
     { id: task.id },
   );
@@ -290,7 +310,7 @@ test("a flow that cannot run is refused before any of it is written", async () =
   }
 
   // Every one of them was refused before anything was written, so the task still has no flow.
-  const { steps } = await run(
+  const { steps } = await run<Rows>(
     `query S($id: String!) { steps(where: { taskId: { eq: $id } }) { id } }`,
     {
       id: task.id,
@@ -303,7 +323,9 @@ test("the api key is write-only", async () => {
   const result = await graphql({ schema, source: `{ settings { apiKey } }` });
   expect(result.errors?.[0].message).toMatch(/apiKey/);
 
-  const { setApiKey } = await run(`mutation { setApiKey(apiKey: "sk-test") }`);
+  const { setApiKey } = await run<{ setApiKey: boolean }>(
+    `mutation { setApiKey(apiKey: "sk-test") }`,
+  );
   expect(setApiKey).toBe(true);
 });
 
@@ -319,11 +341,11 @@ test("an expression the scheduler cannot read is refused, not stored", async () 
      }`,
     variableValues: { taskId: task.id },
   });
-  expect(rejected.errors?.[0].message).toMatch(/not a cron expression/);
+  expect(refusalCode(rejected)).toBe("BAD_CRON");
 
   // Refused before the insert, rather than accepted and skipped at the next sync — which is
   // what it would look like from here either way if the check ran in the scheduler.
-  const { triggers } = await run(
+  const { triggers } = await run<Rows>(
     `query T($id: String!) { triggers(where: { taskId: { eq: $id } }) { id } }`,
     { id: task.id },
   );
@@ -353,9 +375,9 @@ test("an event trigger with no webhook id is refused", async () => {
      }`,
     variableValues: { taskId: task.id },
   });
-  expect(rejected.errors?.[0].message).toMatch(/needs a webhook id/);
+  expect(refusalCode(rejected)).toBe("BAD_EVENT");
 
-  const { triggers } = await run(
+  const { triggers } = await run<Rows>(
     `query T($id: String!) { triggers(where: { taskId: { eq: $id } }) { id } }`,
     { id: task.id },
   );

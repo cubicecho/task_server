@@ -26,16 +26,36 @@ export interface ProfileColumns {
  */
 export function overrides(agent: ProfileColumns): string[] {
   const said: string[] = [];
-  if (agent.baseUrl) said.push(agent.baseUrl);
-  if (agent.model) said.push(agent.model);
-  if (agent.systemPrompt) said.push("system prompt");
-  if (agent.maxTokens >= 0) said.push(`${agent.maxTokens} tokens`);
-  if (agent.temperature >= 0) said.push(`temp ${agent.temperature}`);
-  if (agent.maxToolIterations >= 0) said.push(`${agent.maxToolIterations} tool steps`);
-  if (agent.toolDiscovery !== "inherit") said.push(agent.toolDiscovery);
-  if (agent.toolSelectModel) said.push(`picks tools with ${agent.toolSelectModel}`);
-  if (agent.requestTimeoutSeconds >= 0) said.push(`${agent.requestTimeoutSeconds}s of silence`);
-  if (agent.maxRetries >= 0) said.push(`${agent.maxRetries} retries`);
+  if (agent.baseUrl) {
+    said.push(agent.baseUrl);
+  }
+  if (agent.model) {
+    said.push(agent.model);
+  }
+  if (agent.systemPrompt) {
+    said.push("system prompt");
+  }
+  if (agent.maxTokens >= 0) {
+    said.push(`${agent.maxTokens} tokens`);
+  }
+  if (agent.temperature >= 0) {
+    said.push(`temp ${agent.temperature}`);
+  }
+  if (agent.maxToolIterations >= 0) {
+    said.push(`${agent.maxToolIterations} tool steps`);
+  }
+  if (agent.toolDiscovery !== "inherit") {
+    said.push(agent.toolDiscovery);
+  }
+  if (agent.toolSelectModel) {
+    said.push(`picks tools with ${agent.toolSelectModel}`);
+  }
+  if (agent.requestTimeoutSeconds >= 0) {
+    said.push(`${agent.requestTimeoutSeconds}s of silence`);
+  }
+  if (agent.maxRetries >= 0) {
+    said.push(`${agent.maxRetries} retries`);
+  }
   return said;
 }
 
@@ -50,14 +70,18 @@ export type SpecRead = { document: unknown; problem?: undefined } | { problem: s
  * would turn away as a missing argument rather than as a document that is not a spec.
  */
 export function readSpec(text: string): SpecRead {
-  if (!text.trim()) return { problem: "Paste an agent spec, or choose a file." };
+  if (!text.trim()) {
+    return { problem: "Paste an agent spec, or choose a file." };
+  }
   let document: unknown;
   try {
     document = JSON.parse(text);
   } catch (error) {
     return { problem: `This is not JSON: ${(error as Error).message}` };
   }
-  if (document === null) return { problem: "This is not an agent spec: it is null." };
+  if (document === null) {
+    return { problem: "This is not an agent spec: it is null." };
+  }
   return { document };
 }
 

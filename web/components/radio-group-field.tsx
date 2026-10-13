@@ -1,121 +1,195 @@
-import type { ComponentProps, ReactNode } from "react";
-import {
-  bindToForm,
-  type FieldProps,
-  splitProps,
-  useFieldContext,
-  useFieldError,
-} from "@/components/app-form";
-import { FormField } from "@/components/form-field";
-import { FieldDescription, FieldLabel } from "@/components/ui/field";
+import type { AnyFieldApi, DeepKeys } from "@tanstack/react-form";
+import { useStore } from "@tanstack/react-form";
+import type { ReactNode } from "react";
+import * as React from "react";
+import { FieldDescription, FieldError, FieldTitle } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { messageOf } from "@/lib/error-message";
+import {
+  type BindableForm,
+  type FormBinding,
+  fieldOf,
+  type NamesOfType,
+  type ValuesOf,
+} from "@/lib/form-binding";
+import { cn, type SlotNode } from "@/lib/utils";
 
 /** One choice. `description` is the line under it — what picking this one means. */
 export type RadioOption = {
   value: string;
   label: ReactNode;
-  description?: ReactNode;
-  disabled?: boolean;
+  description?: ReactNode | undefined;
+  /** The picture over the label, in the `card` variant. */
+  iconSlot?: SlotNode | undefined;
+  /** A hover hint on the web and the accessibility hint on device. */
+  hint?: string | undefined;
+  disabled?: boolean | undefined;
 };
 
-type RadioGroupFieldProps = FieldProps & {
+type RadioGroupFieldProps<
+  TForm extends BindableForm,
+  TName extends DeepKeys<ValuesOf<TForm>>,
+> = FormBinding<TForm, TName> & {
   options: readonly RadioOption[];
-} & Omit<
-    ComponentProps<typeof RadioGroup>,
-    // The first four are this field's job. The rest collide with `FormField`'s own props of the
-    // same name — `required` marks the group, `orientation` arranges the field, `className` is
-    // the field's box — and a prop that means two things at one call site means neither.
-    | "value"
-    | "defaultValue"
-    | "onValueChange"
-    | "children"
-    | "id"
-    | "className"
-    | "required"
-    | "orientation"
-    | "aria-labelledby"
-    | "aria-describedby"
-    | "aria-invalid"
-  >;
+  /** The group's name, drawn as a title and pointed at by `aria-labelledby`. */
+  label?: ReactNode | undefined;
+  /** A line under the options, on the group as a whole. */
+  description?: ReactNode | undefined;
+  /** Marks the group required: an asterisk on the title and `aria-required` on the group. */
+  required?: boolean | undefined;
+  /** The title row's far end. */
+  actionSlot?: SlotNode | undefined;
+  /** Draws a placeholder where the options go, for a form whose values are still loading. */
+  loading?: boolean | undefined;
+  /** `row` (the default), `card` or `segmented` — see `RadioGroup`. */
+  variant?: "row" | "card" | "segmented" | undefined;
+  /** How the options are laid out. Defaults to the variant's own. */
+  orientation?: "vertical" | "horizontal" | undefined;
+  disabled?: boolean | undefined;
+  loop?: boolean | undefined;
+  className?: string | undefined;
+  labelClassName?: string | undefined;
+  descriptionClassName?: string | undefined;
+  errorClassName?: string | undefined;
+  loadingClassName?: string | undefined;
+  groupClassName?: string | undefined;
+};
 
-function BoundRadioGroupField(props: RadioGroupFieldProps) {
-  const [fieldProps, rest] = splitProps(props);
-  const { options, ...group } = rest;
-  const field = useFieldContext<string | null>();
-  const error = useFieldError();
+type BodyProps = Omit<
+  RadioGroupFieldProps<BindableForm, never>,
+  "form" | "name" | "validators" | "asyncDebounceMs" | "listeners"
+> & { field: AnyFieldApi };
+
+function RadioGroupFieldBody({
+  field,
+  options,
+  label,
+  description,
+  required = false,
+  actionSlot,
+  loading = false,
+  variant,
+  orientation,
+  disabled,
+  loop,
+  className,
+  labelClassName,
+  descriptionClassName,
+  errorClassName,
+  loadingClassName,
+  groupClassName,
+}: BodyProps) {
+  const uid = React.useId();
+  const labelId = `${uid}-label`;
+  const descriptionId = `${uid}-description`;
+  const errorId = `${uid}-error`;
+
+  const errors = useStore(field.store, (state) => state.meta.errors);
+  const isTouched = useStore(field.store, (state) => state.meta.isTouched);
+  const attempts = useStore(field.form.store, (state) => state.submissionAttempts);
+  // Nothing is wrong until the user has chosen or tried to submit — otherwise a required group is
+  // red on first paint.
+  const error = isTouched || attempts > 0 ? messageOf(errors[0]) : undefined;
+
+  const value: unknown = field.state.value;
+  const describedBy = [description ? descriptionId : null, error ? errorId : null]
+    .filter(Boolean)
+    .join(" ");
+
+  const title = label ? (
+    <FieldTitle id={labelId} className={labelClassName}>
+      {label}
+      {required ? (
+        <span aria-hidden className="cube-rn-text text-negative">
+          {" *"}
+        </span>
+      ) : null}
+    </FieldTitle>
+  ) : null;
 
   return (
-    <FormField
-      {...fieldProps}
-      // Fixed, not defaulted: the control is a `<div role="radiogroup">`, and there is no
-      // arrangement of this field in which a `<label for>` could reach it.
-      asGroup
-      error={error}
-      control={(wired) => (
+    // biome-ignore lint/a11y/useSemanticElements: React Native has no fieldset; role="group" is the cross-platform form
+    <div
+      role="group"
+      data-slot="radio-group-field"
+      className={cn("cube-rn-view", "w-full min-w-0 gap-2", className)}
+    >
+      {actionSlot ? (
+        <div className="cube-rn-view min-w-0 flex-row items-center gap-2">
+          {title}
+          <div className="cube-rn-view ml-auto shrink-0">{actionSlot}</div>
+        </div>
+      ) : (
+        title
+      )}
+      {loading ? (
+        <div
+          aria-hidden
+          data-slot="radio-group-field-skeleton"
+          className={cn(
+            "cube-rn-view",
+            "h-16 w-full rounded-md bg-foreground/10",
+            loadingClassName,
+          )}
+        />
+      ) : (
         <RadioGroup
-          {...group}
-          {...wired}
-          value={field.state.value ?? ""}
+          value={typeof value === "string" ? value : ""}
           onValueChange={(next) => {
             field.handleChange(next);
-            // Radix moves focus between the items with the arrow keys, so a blur happens on the
-            // way to a *different option* rather than out of the field. Choosing is what marks it
-            // touched.
+            // The arrow keys move focus between options, so a blur happens on the way to a
+            // *different option* rather than out of the field. Choosing is what marks it touched.
             field.handleBlur();
           }}
+          variant={variant}
+          orientation={orientation}
+          disabled={disabled}
+          loop={loop}
+          aria-labelledby={label ? labelId : undefined}
+          aria-describedby={describedBy || undefined}
+          aria-invalid={error ? true : undefined}
+          aria-required={required || undefined}
+          className={groupClassName}
         >
-          {options.map((option, index) => {
-            const itemId = `${wired.id}-option-${index}`;
-            const descriptionId = option.description ? `${itemId}-description` : undefined;
-            return (
-              <div
-                key={option.value}
-                data-slot="radio-group-option"
-                className="flex items-start gap-3"
-              >
-                <RadioGroupItem
-                  id={itemId}
-                  value={option.value}
-                  disabled={option.disabled}
-                  // Per option, not per group: this sentence describes this choice. The group's
-                  // own description and error are already on the group.
-                  aria-describedby={descriptionId}
-                  className="mt-0.5"
-                />
-                <div className="grid gap-1">
-                  {/* A real `<label for>`, because a radio *item* is an element a label can
-                      name — which is what makes the whole option, not just the 16px circle,
-                      somewhere you can click. */}
-                  <FieldLabel htmlFor={itemId} className="font-normal">
-                    {option.label}
-                  </FieldLabel>
-                  {option.description ? (
-                    <FieldDescription id={descriptionId}>{option.description}</FieldDescription>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
+          {options.map((option) => (
+            <RadioGroupItem
+              key={option.value}
+              value={option.value}
+              label={option.label}
+              description={option.description}
+              iconSlot={option.iconSlot}
+              hint={option.hint}
+              disabled={option.disabled}
+            />
+          ))}
         </RadioGroup>
       )}
-    />
+      {description ? (
+        <FieldDescription id={descriptionId} className={descriptionClassName}>
+          {description}
+        </FieldDescription>
+      ) : null}
+      {error ? (
+        <FieldError id={errorId} className={errorClassName}>
+          {error}
+        </FieldError>
+      ) : null}
+    </div>
   );
 }
 
 /**
- * A set of exclusive choices, all of them visible.
+ * A set of exclusive choices, all of them visible, bound to a TanStack form field.
  *
- * A `SelectField` hides its options behind a click, which is right for twelve of them and wrong
- * for three — a form asking for a priority, a visibility, a billing period reads better with the
- * answers on the page, and it reads much better when each answer can carry a line saying what it
- * costs, which a `<SelectItem>` cannot.
+ * A select hides its options behind a press, which is right for twelve of them and wrong for
+ * three — a priority, a visibility, a theme reads better with the answers on the screen, and
+ * better still when each can carry a line saying what it means.
  *
- * **This is the field that forced `asGroup` onto `FormField`.** A radio group is a
- * `<div role="radiogroup">`, and HTML will not let a `<label for>` name a `<div>` — so the
- * default wiring, which is otherwise the whole point of the shell, produces an association the
- * browser drops without saying so. On, the label is drawn as a title and the group is named by
- * `aria-labelledby` instead. The per-option labels are still real `<label for>`s, because a radio
- * item is a thing a label can name.
+ * One source for both platforms. The web item used to be a `FormField` around shadcn's radix
+ * group; it is now this, compiled, so the React Native app and the DOM one get the same field.
+ *
+ * The group is named by `aria-labelledby` pointing at a title, never by a `<label for>`: a radio
+ * group is a `role="radiogroup"` box, and HTML will not let a label name one.
  *
  * ```tsx
  * <RadioGroupField
@@ -129,7 +203,27 @@ function BoundRadioGroupField(props: RadioGroupFieldProps) {
  * />
  * ```
  */
-export const RadioGroupField = bindToForm<RadioGroupFieldProps, string>(
-  BoundRadioGroupField,
-  "RadioGroupField",
-);
+export function RadioGroupField<
+  TForm extends BindableForm,
+  TName extends NamesOfType<ValuesOf<TForm>, string>,
+>({
+  form,
+  name,
+  validators,
+  asyncDebounceMs,
+  listeners,
+  ...body
+}: RadioGroupFieldProps<TForm, TName>) {
+  const Subscribe = fieldOf(form);
+
+  return (
+    <Subscribe
+      name={name}
+      validators={validators}
+      asyncDebounceMs={asyncDebounceMs}
+      listeners={listeners}
+    >
+      {(field) => <RadioGroupFieldBody {...body} field={field} />}
+    </Subscribe>
+  );
+}

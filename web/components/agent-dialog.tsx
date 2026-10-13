@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useRef } from "react";
 import { toast } from "sonner";
 import {
   type AgentFieldsFragment,
@@ -18,6 +19,8 @@ import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
+import { stringList } from "@/lib/json";
+import { required } from "@/lib/validators";
 
 type Server = AgentsQuery["mcpServers"][number];
 
@@ -71,7 +74,7 @@ const toDraft = (agent?: AgentFieldsFragment): Draft => ({
   requestTimeoutSeconds: shown(agent?.requestTimeoutSeconds ?? -1),
   maxRetries: shown(agent?.maxRetries ?? -1),
   // The JSON scalar carries no shape, so this is where it is said what the column holds.
-  mcpServerIds: (agent?.mcpServerIds as string[] | null) ?? [],
+  mcpServerIds: stringList(agent?.mcpServerIds),
 });
 
 /** The draft as the row wants it — sentinels back in, and the key left behind. */
@@ -104,18 +107,25 @@ export function AgentDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // Kept across attempts: a save is two requests, and when the key's fails the profile has
+  // still been created. Without this a second press of Save created it again.
+  const saved = useRef(agent?.id);
+
   const save = useMutation({
     mutationFn: async (draft: Draft) => {
       const values = toValues(draft);
-      const id = agent
-        ? ((await request(UpdateAgentDocument, { id: agent.id, set: values })).updateAgent?.id ??
-          agent.id)
-        : (await request(CreateAgentDocument, { values })).createAgent.id;
+      if (saved.current) {
+        await request(UpdateAgentDocument, { id: saved.current, set: values });
+      } else {
+        saved.current = (await request(CreateAgentDocument, { values })).createAgent.id;
+      }
+      const id = saved.current;
 
       // The key travels on its own mutation because it is write-only, exactly as the server's
       // own key does — it is excluded from the Agent type and can never be read back.
-      if (draft.apiKey)
+      if (draft.apiKey) {
         await request(SetAgentApiKeyDocument, { agentId: id, apiKey: draft.apiKey });
+      }
     },
     onSuccess: () => {
       toast.success(agent ? "Profile saved" : "Profile created");
@@ -133,11 +143,11 @@ export function AgentDialog({
     <DialogLayout
       open
       onOpenChange={(open) => !open && onClose()}
-      hasUnsavedChanges={form.state.isDirty}
+      hasUnsavedChanges={() => !form.state.isDefaultValue}
       size="lg"
       title={agent ? "Edit profile" : "New agent profile"}
       description="Everything left blank comes from Settings, so a profile only has to say what it changes."
-      content={
+      contentSlot={
         <form
           id="agent-profile"
           className="flex flex-col gap-4"
@@ -147,7 +157,7 @@ export function AgentDialog({
           }}
         >
           <FieldRow
-            content={
+            contentSlot={
               <>
                 <InputField
                   form={form}
@@ -156,10 +166,7 @@ export function AgentDialog({
                   description={doc("name")}
                   required
                   placeholder="Local Qwen"
-                  validators={{
-                    onChange: ({ value }: { value: string }) =>
-                      value.trim() ? undefined : "A profile needs a name.",
-                  }}
+                  validators={required("A profile needs a name.")}
                 />
                 <InputField
                   form={form}
@@ -207,7 +214,7 @@ export function AgentDialog({
 
           <FieldRow
             perRow={3}
-            content={
+            contentSlot={
               <>
                 <NumberField
                   form={form}
@@ -314,20 +321,14 @@ export function AgentDialog({
       // A function, so Cancel closes through the dialog's own door: `hasUnsavedChanges` guards
       // Escape, the overlay and the X, and a Cancel wired straight to `onClose` was the fourth
       // way out — the one people actually click — going around the ask.
-      footerActions={(close) => (
+      footerActionsSlot={(close) => (
         <>
-          <Button type="button" variant="ghost" onClick={close}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={close} content="Cancel" />
           <form.AppForm>
             {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
                 server would refuse. Passing `disabled` tightens the store's own two reasons. */}
-            <form.Subscribe selector={(state) => state.isDirty}>
-              {(isDirty) => (
-                <form.SubmitButton form="agent-profile" disabled={!isDirty}>
-                  Save
-                </form.SubmitButton>
-              )}
+            <form.Subscribe selector={(state) => state.isDefaultValue}>
+              {(untouched) => <form.SubmitButton form="agent-profile" disabled={untouched} />}
             </form.Subscribe>
           </form.AppForm>
         </>

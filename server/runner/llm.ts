@@ -1,7 +1,7 @@
 import { listModels as listEndpointModels } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
-import { type Settings, settings } from "../db/schema.ts";
+import { SETTINGS_ID, type Settings, settings } from "../db/schema.ts";
 
 /**
  * What this server is configured to talk to, and what the endpoint offers.
@@ -23,8 +23,10 @@ import { type Settings, settings } from "../db/schema.ts";
  * something a response is built from.
  */
 export async function loadSettings(): Promise<Settings> {
-  const [row] = await db.select().from(settings).where(eq(settings.id, "default")).limit(1);
-  if (!row) throw new Error("settings row is missing — did ensureSchema() run?");
+  const [row] = await db.select().from(settings).where(eq(settings.id, SETTINGS_ID)).limit(1);
+  if (!row) {
+    throw new Error("settings row is missing — did ensureSchema() run?");
+  }
   return { ...row, apiKey: row.apiKey || process.env.OPENAI_API_KEY || "" };
 }
 

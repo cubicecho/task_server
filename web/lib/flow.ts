@@ -97,21 +97,30 @@ export function toDraft(rows: readonly StepFieldsFragment[]): DraftStep[] {
   // The query orders by `position`, so appending keeps every sequence in its own order.
   for (const row of rows) {
     const draft = drafts.get(row.id);
-    if (!draft) continue;
+    if (!draft) {
+      continue;
+    }
     const parent = row.parentId ? drafts.get(row.parentId) : undefined;
     if (!parent) {
       // A step whose parent is missing has nowhere to sit; the runner drops it too.
-      if (!row.parentId) roots.push(draft);
+      if (!row.parentId) {
+        roots.push(draft);
+      }
       continue;
     }
     const arm = parent.branches.find((branch) => branch.case === row.branch);
-    if (arm) arm.steps.push(draft);
-    else parent.branches.push({ case: row.branch, steps: [draft] });
+    if (arm) {
+      arm.steps.push(draft);
+    } else {
+      parent.branches.push({ case: row.branch, steps: [draft] });
+    }
   }
 
   // A declared case with nothing under it still deserves a place to drop something into.
   for (const draft of drafts.values()) {
-    if (draft.kind !== "decision") continue;
+    if (draft.kind !== "decision") {
+      continue;
+    }
     for (const label of draft.cases) {
       if (!draft.branches.some((branch) => branch.case === label)) {
         draft.branches.push({ case: label, steps: [] });

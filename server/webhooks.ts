@@ -15,15 +15,17 @@ import { fireTask } from "./runner/run.ts";
  * ids are real, which a 404 on the unknown ones would make it.
  *
  * The id is the whole of the address and the whole of the authentication. See `AGENTS.md`.
+ *
+ * `fire` is what starts a task for a delivery — `fireTask`, unless a test is standing in for it.
  */
-export function mountWebhooks(app: Express) {
+export function mountWebhooks(app: Express, fire: typeof fireTask = fireTask) {
   app.post("/webhooks/:id", readBody, (req: Request, res: Response) => {
     // Express 5 types a wildcard param as `string | string[]`; this one is a single segment.
     const event = String(req.params.id);
     // `req.body` is `any`, and everything downstream of here wants it to be `unknown`: the
     // server never looks inside it, it only stores it and prints it into a prompt.
     const payload: unknown = req.body ?? null;
-    void dispatch(event, payload)
+    void dispatch(event, payload, fire)
       .then((outcome) => res.json({ ok: true, event, ...outcome }))
       .catch((error: unknown) => {
         // Reaching here means the lookup itself failed — the database, not any one task. The
@@ -35,7 +37,10 @@ export function mountWebhooks(app: Express) {
   });
 }
 
-const parseJson = express.json({ limit: "1mb" });
+/** The largest body a delivery may carry. One past it is logged and the firing goes on with none. */
+const MAX_BODY = "1mb";
+
+const parseJson = express.json({ limit: MAX_BODY });
 
 /**
  * The body, when there is one that can be read, and nothing when there is not.
@@ -96,8 +101,11 @@ type Queued = Refused;
 async function dispatch(
   event: string,
   payload: unknown,
+  fire: typeof fireTask,
 ): Promise<{ dispatched: Dispatched[]; queued: Queued[]; refused: Refused[] }> {
-  if (!event) return { dispatched: [], queued: [], refused: [] };
+  if (!event) {
+    return { dispatched: [], queued: [], refused: [] };
+  }
 
   const rows = await db
     .select({ triggerId: triggers.id, taskId: triggers.taskId, name: tasks.name })
@@ -123,7 +131,7 @@ async function dispatch(
 
   for (const { triggerId, taskId, name } of rows) {
     try {
-      const fired = await fireTask(taskId, triggerId, payload);
+      const fired = await fire(taskId, triggerId, payload);
       if (!fired.started) {
         console.log(`[webhook] ${event}: ${name}: ${fired.reason}`);
         const entry = { taskId, name, runId: fired.run.id, reason: fired.reason };

@@ -71,20 +71,20 @@ export function McpPromptButton({
   const prompts = useMcpPrompts();
   const [open, setOpen] = useState(false);
 
-  if (!prompts.data?.mcpPrompts.length) return null;
+  if (!prompts.data?.mcpPrompts.length) {
+    return null;
+  }
 
   return (
     <>
       <Button
-        type="button"
         variant="ghost"
         size="sm"
         className={className}
         onClick={() => setOpen(true)}
-      >
-        <Sparkles className="size-3.5" aria-hidden />
-        MCP prompt
-      </Button>
+        iconSlot={<Sparkles />}
+        content="MCP prompt"
+      />
       {open ? (
         <PromptDialog
           prompts={prompts.data.mcpPrompts}
@@ -128,8 +128,11 @@ function PromptDialog({
    */
   const pick = (prompt: McpPrompt) => {
     setValues({});
-    if (prompt.arguments.length === 0) expand.mutate({ prompt, args: {} });
-    else setChosen(prompt);
+    if (prompt.arguments.length === 0) {
+      expand.mutate({ prompt, args: {} });
+    } else {
+      setChosen(prompt);
+    }
   };
 
   const missing = chosen?.arguments.some((arg) => arg.required && !values[arg.name]?.trim());
@@ -146,7 +149,7 @@ function PromptDialog({
           : "What the connected MCP servers say they are good at. The one you pick is expanded " +
             "into the box as text you can still edit — the task saves the text, not the template."
       }
-      content={
+      contentSlot={
         <div className="flex flex-col gap-3">
           {chosen ? (
             chosen.arguments.map((arg) => (
@@ -155,7 +158,7 @@ function PromptDialog({
                 label={arg.name}
                 required={arg.required}
                 description={arg.description || undefined}
-                control={
+                controlSlot={
                   <Input
                     value={values[arg.name] ?? ""}
                     onChange={(event) =>
@@ -190,26 +193,27 @@ function PromptDialog({
               arguments that may be wrong are. */}
           {expand.error ? (
             <p className="text-destructive text-sm">
-              {(expand.error as Error).message || "That prompt could not be expanded."}
+              {expand.error.message || "That prompt could not be expanded."}
             </p>
           ) : null}
         </div>
       }
-      footerActions={(close) => (
+      footerActionsSlot={(close) => (
         <>
-          <Button variant="ghost" onClick={chosen ? () => setChosen(null) : close}>
-            {chosen ? "Back" : "Cancel"}
-          </Button>
+          <Button
+            variant="ghost"
+            onClick={chosen ? () => setChosen(null) : close}
+            content={chosen ? "Back" : "Cancel"}
+          />
           {chosen ? (
             <Button
               onClick={() => expand.mutate({ prompt: chosen, args: values })}
               disabled={missing || expand.isPending}
               // A required blank is why the button is off, and a disabled button explains
               // nothing on its own.
-              title={missing ? "Fill in the required arguments first." : undefined}
-            >
-              {expand.isPending ? "Expanding…" : "Insert"}
-            </Button>
+              hint={missing ? "Fill in the required arguments first." : undefined}
+              content={expand.isPending ? "Expanding…" : "Insert"}
+            />
           ) : null}
         </>
       )}

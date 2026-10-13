@@ -103,7 +103,9 @@ export function AgentImportDialog({
 
   const save = useMutation({
     mutationFn: (draft: Draft) => {
-      if (!read) throw new Error("Preview the document before importing it.");
+      if (!read) {
+        throw new Error("Preview the document before importing it.");
+      }
       return request(ImportAgentSpecDocument, {
         document: read.document,
         createServers: tickedSlugs(read.bundled, draft.create),
@@ -129,7 +131,9 @@ export function AgentImportDialog({
   const reading = useMutation({
     mutationFn: async (text: string) => {
       const parsed = readSpec(text);
-      if (parsed.problem !== undefined) throw new Error(parsed.problem);
+      if (parsed.problem !== undefined) {
+        throw new Error(parsed.problem);
+      }
       const { agentSpecPreview } = await request(AgentSpecPreviewDocument, {
         document: parsed.document,
       });
@@ -167,7 +171,9 @@ export function AgentImportDialog({
   const settled = !preview.isFetching && !preview.isPlaceholderData;
 
   const choose = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file) {
+      return;
+    }
     const text = await file.text();
     form.setFieldValue("text", text);
     reading.mutate(text);
@@ -177,11 +183,11 @@ export function AgentImportDialog({
     <DialogLayout
       open
       onOpenChange={(open) => !open && onClose()}
-      hasUnsavedChanges={form.state.isDirty}
+      hasUnsavedChanges={() => !form.state.isDefaultValue}
       size="lg"
       title="Import an agent profile"
       description="From an agent spec file. Nothing is saved until you have read what it would do."
-      content={
+      contentSlot={
         <form
           id="agent-import"
           className="flex flex-col gap-4"
@@ -221,22 +227,23 @@ export function AgentImportDialog({
                 event.target.value = "";
               }}
             />
-            <Button type="button" variant="ghost" size="sm" onClick={() => picker.current?.click()}>
-              <FileUp className="size-4" />
-              Choose a file
-            </Button>
             <Button
-              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => picker.current?.click()}
+              iconSlot={<FileUp />}
+              content="Choose a file"
+            />
+            <Button
               variant="secondary"
               size="sm"
               disabled={
                 reading.isPending || Boolean(current) || readSpec(values.text).problem !== undefined
               }
               onClick={() => reading.mutate(values.text)}
-            >
-              <ScanSearch className="size-4" />
-              Preview
-            </Button>
+              iconSlot={<ScanSearch />}
+              content="Preview"
+            />
           </div>
 
           {current && preview.isError ? (
@@ -253,7 +260,7 @@ export function AgentImportDialog({
                 <Section
                   title="Cannot be imported"
                   divider
-                  content={<Lines lines={shown.refusals} tone="refusal" />}
+                  contentSlot={<Lines lines={shown.refusals} tone="refusal" />}
                 />
               ) : null}
 
@@ -261,7 +268,7 @@ export function AgentImportDialog({
                 <Section
                   title="Profile"
                   divider
-                  content={
+                  contentSlot={
                     <div className="flex flex-col gap-3">
                       <InputField
                         form={form}
@@ -316,7 +323,7 @@ export function AgentImportDialog({
                   title="Bundled MCP servers"
                   description="Ticked ones are created here, enabled. A command is run on this machine."
                   divider
-                  content={
+                  contentSlot={
                     <div className="flex flex-col gap-3">
                       {shown.bundled.map((server, index) => (
                         <CheckboxField
@@ -333,7 +340,11 @@ export function AgentImportDialog({
               ) : null}
 
               {shown.warnings.length ? (
-                <Section title="Worth knowing" divider content={<Lines lines={shown.warnings} />} />
+                <Section
+                  title="Worth knowing"
+                  divider
+                  contentSlot={<Lines lines={shown.warnings} />}
+                />
               ) : null}
 
               {shown.dropped.length ? (
@@ -341,7 +352,7 @@ export function AgentImportDialog({
                   title="Not kept"
                   description="A profile here has no column for these, so a later export will not have them."
                   divider
-                  content={<Lines lines={shown.dropped} />}
+                  contentSlot={<Lines lines={shown.dropped} />}
                 />
               ) : null}
             </>
@@ -350,19 +361,16 @@ export function AgentImportDialog({
       }
       // A function, so Cancel leaves through the dialog's own door and is asked about a pasted
       // document the same as Escape is.
-      footerActions={(close) => (
+      footerActionsSlot={(close) => (
         <>
-          <Button type="button" variant="ghost" onClick={close}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={close} content="Cancel" />
           <form.AppForm>
             <form.SubmitButton
               form="agent-import"
               pendingLabel="Importing…"
               disabled={!mayImport(shown, settled)}
-            >
-              Import
-            </form.SubmitButton>
+              content="Import"
+            />
           </form.AppForm>
         </>
       )}

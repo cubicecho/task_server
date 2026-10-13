@@ -1,5 +1,6 @@
 import { validateServerConfig } from "@cubicecho/agent-mcp-pool";
 import { unfiredProblems } from "../../shared/hooks.ts";
+import { mcpServers } from "../db/schema.ts";
 import { hookProblems } from "../runner/hooks.ts";
 
 /**
@@ -11,8 +12,16 @@ import { hookProblems } from "../runner/hooks.ts";
  * in through a file.
  */
 
-/** The columns' own defaults, which a create that leaves them out is going to get. */
-export const NEW_MCP_SERVER = { id: "new", label: "", enabled: true, transport: "stdio" };
+/**
+ * The columns' own defaults, which a create that leaves them out is going to get. The id is the
+ * exception: the row has none until it is written, and the check wants one to name.
+ */
+export const NEW_MCP_SERVER = {
+  id: "new",
+  label: mcpServers.label.default,
+  enabled: mcpServers.enabled.default,
+  transport: mcpServers.transport.default,
+};
 
 /**
  * What is wrong with the row apart from its hooks, by the pool's own `validateServerConfig` —

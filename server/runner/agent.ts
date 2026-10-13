@@ -1,7 +1,9 @@
 import {
   contextLimitFor,
+  type Endpoint,
   preselect,
   type RunEventInput,
+  RunEventKind,
   runAgentLoop,
   withContext,
 } from "@cubicecho/agent-core";
@@ -60,10 +62,7 @@ const WINDOW_LOOKUP_MS = 5_000;
  * lookup takes no signal and waits as long as a request may, so both the bound and the stop are
  * raced here: a run stopped while its endpoint sat on `/models` has to end now.
  */
-function windowFor(
-  endpoint: Parameters<typeof contextLimitFor>[0],
-  signal?: AbortSignal,
-): Promise<number> {
+function windowFor(endpoint: Endpoint & { model: string }, signal?: AbortSignal): Promise<number> {
   return new Promise((resolve, reject) => {
     const settle = (window: number) => {
       clearTimeout(timer);
@@ -75,7 +74,9 @@ function windowFor(
       reject(signal?.reason);
     };
     const timer = setTimeout(() => settle(0), WINDOW_LOOKUP_MS);
-    if (signal?.aborted) return stop();
+    if (signal?.aborted) {
+      return stop();
+    }
     signal?.addEventListener("abort", stop, { once: true });
     void contextLimitFor(endpoint).then(settle);
   });
@@ -85,12 +86,9 @@ function windowFor(
  * Runs one task to completion: send the prompt, execute whatever MCP tools the model asks
  * for, loop until it stops asking, and return its final reply.
  *
- * The loop itself is agent-core's `runAgentLoop`. What is here is what is this server's: which
- * model, which MCP servers, and what a watcher is told.
- *
- * A run keeps no history — it starts from nothing every time, so the only state is the messages
- * built up inside this call. That also means nothing is learned between runs: whatever the model
- * loads, it loads again next time.
+ * The loop is agent-core's `runAgentLoop`; what is here is which model, which MCP servers, and
+ * what a watcher is told. A run keeps no history, so nothing is learned between runs: whatever
+ * the model loads, it loads again next time.
  */
 export async function runAgent({
   config,
@@ -102,13 +100,15 @@ export async function runAgent({
   signal,
   onEvent,
 }: AgentOptions): Promise<AgentResult> {
-  if (!model) throw new Error("No model selected — pick one in Settings.");
+  if (!model) {
+    throw new Error("No model selected — pick one in Settings.");
+  }
 
   // Carries what was given up on, what is being waited out and what was cut short in one voice,
   // so a watcher and the log are told about a downgrade and a retry alike.
   const notice = (text: string) => {
     console.warn(`[agent] ${text}`);
-    onEvent?.({ kind: "notice", text });
+    onEvent?.({ kind: RunEventKind.Notice, text });
   };
 
   const catalog = mcp.catalog(servers);
@@ -124,7 +124,9 @@ export async function runAgent({
           onNotice: notice,
         })
       : [];
-  if (preselected.length) notice(`tools picked before the run: ${preselected.join(", ")}`);
+  if (preselected.length) {
+    notice(`tools picked before the run: ${preselected.join(", ")}`);
+  }
 
   const contextLength = await windowFor({ ...config, model }, signal);
 
@@ -155,7 +157,9 @@ export async function runAgent({
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {
-      if (event.kind === "notice") console.warn(`[agent] ${event.text}`);
+      if (event.kind === RunEventKind.Notice) {
+        console.warn(`[agent] ${event.text}`);
+      }
       onEvent?.(event);
     },
   });

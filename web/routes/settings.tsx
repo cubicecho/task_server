@@ -74,10 +74,13 @@ function Snippet({ label, text }: { label: string; text: string }) {
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-sm">{label}</h3>
-        <Button variant="ghost" size="xs" onClick={() => void copy(text)}>
-          {copied ? <Check /> : <Copy />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => void copy(text)}
+          iconSlot={copied ? <Check /> : <Copy />}
+          content={copied ? "Copied" : "Copy"}
+        />
       </div>
       <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs">
         <code>{text}</code>
@@ -101,6 +104,14 @@ const number = {
     value == null ? "A number is required." : undefined,
 };
 
+/** What the endpoint button says: mid-flight, about to change the endpoint, or just asking again. */
+function endpointAction(connecting: boolean, unapplied: boolean): string {
+  if (connecting) {
+    return "Connecting…";
+  }
+  return unapplied ? "Apply and load models" : "Reload models";
+}
+
 /** How the endpoint button last went: what the server answered, or why it did not. */
 type Probe = { ok: boolean; detail: string } | null;
 
@@ -115,7 +126,7 @@ export function SettingsRoute() {
         description={DESCRIPTION}
         width="prose"
         loading={settings.isPending}
-        content={
+        contentSlot={
           settings.isError ? (
             <QueryError
               error={settings.error}
@@ -156,8 +167,12 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
       const { updateSetting } = await request(UpdateSettingsDocument, { set: toRow(values) });
       // The key travels on its own mutation because it is write-only — it is excluded from
       // the Setting type, so it can never be read back out of the API.
-      if (values.apiKey) await request(SetApiKeyDocument, { apiKey: values.apiKey });
-      if (!updateSetting) throw new Error("There is no settings row to save to.");
+      if (values.apiKey) {
+        await request(SetApiKeyDocument, { apiKey: values.apiKey });
+      }
+      if (!updateSetting) {
+        throw new Error("There is no settings row to save to.");
+      }
       return updateSetting;
     },
     onSuccess: (fresh) => {
@@ -194,8 +209,12 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
   const applyEndpoint = useMutation({
     mutationFn: async ({ baseUrl, apiKey }: Pick<SettingsForm, "baseUrl" | "apiKey">) => {
       const { updateSetting } = await request(UpdateSettingsDocument, { set: { baseUrl } });
-      if (apiKey) await request(SetApiKeyDocument, { apiKey });
-      if (updateSetting) store(updateSetting);
+      if (apiKey) {
+        await request(SetApiKeyDocument, { apiKey });
+      }
+      if (updateSetting) {
+        store(updateSetting);
+      }
       form.setFieldValue("apiKey", "");
       await queryClient.invalidateQueries({ queryKey: ["models"], refetchType: "none" });
       const { models } = await queryClient.fetchQuery({
@@ -232,9 +251,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
             form.reset(toForm(row));
             setProbe(null);
           }}
-        >
-          Revert
-        </Button>
+          content="Revert"
+        />
         <form.AppForm>
           <form.SubmitButton form={FORM_ID} />
         </form.AppForm>
@@ -248,9 +266,9 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
       title={TITLE}
       description={DESCRIPTION}
       width="prose"
-      footer={bar}
+      footerSlot={bar}
       footerClassName="border-t"
-      content={
+      contentSlot={
         <Tabs value={tab} onValueChange={open}>
           <div className="max-w-full overflow-x-auto">
             <TabsList>
@@ -287,7 +305,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                     names an endpoint of its own.
                   </>
                 }
-                content={
+                contentSlot={
                   <div className="flex flex-col gap-4">
                     <InputField
                       form={form}
@@ -315,13 +333,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                         onClick={() =>
                           applyEndpoint.mutate({ baseUrl: values.baseUrl, apiKey: values.apiKey })
                         }
-                      >
-                        {applyEndpoint.isPending
-                          ? "Connecting…"
-                          : endpointPending
-                            ? "Apply and load models"
-                            : "Reload models"}
-                      </Button>
+                        content={endpointAction(applyEndpoint.isPending, endpointPending)}
+                      />
                       {endpointPending ? (
                         <p className="text-xs text-muted-foreground">
                           Not applied yet — the model lists are still the stored endpoint's.
@@ -359,7 +372,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
 
               <CardLayout
                 title="Model"
-                content={
+                contentSlot={
                   <div className="flex flex-col gap-4">
                     <ModelSelectField
                       form={form}
@@ -383,10 +396,10 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
               <CardLayout
                 title="Limits"
                 description="What one run may spend."
-                content={
+                contentSlot={
                   <FieldRow
                     perRow={3}
-                    content={
+                    contentSlot={
                       <>
                         <NumberField
                           form={form}
@@ -419,9 +432,9 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
               <CardLayout
                 title="Resilience"
                 description="What a request does when the endpoint goes quiet or falls over."
-                content={
+                contentSlot={
                   <FieldRow
-                    content={
+                    contentSlot={
                       <>
                         <NumberField
                           form={form}
@@ -447,12 +460,12 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
             <TabsContent value="tools" forceMount className={panel}>
               <CardLayout
                 title="MCP tools"
-                content={
+                contentSlot={
                   <div className="flex flex-col gap-4">
                     <RadioGroupField
                       form={form}
                       name="toolDiscovery"
-                      label="Discovery"
+                      label="Tool discovery"
                       description={doc("toolDiscovery")}
                       options={[
                         {
@@ -463,7 +476,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                         {
                           value: SettingsToolDiscoveryEnum.Ondemand,
                           label: "On demand",
-                          description: "Load definitions as they are needed.",
+                          description: "Load definitions as the run asks for them.",
                         },
                       ]}
                     />
@@ -483,9 +496,9 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
               <CardLayout
                 title="Housekeeping"
                 description="What this process does on its own, with no trigger asking."
-                content={
+                contentSlot={
                   <FieldRow
-                    content={
+                    contentSlot={
                       <>
                         <NumberField
                           form={form}
@@ -520,7 +533,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                   is no authentication: anyone who can reach the port can do all of that.
                 </>
               }
-              content={
+              contentSlot={
                 <div className="flex flex-col gap-4">
                   <Snippet label=".mcp.json" text={MCP_JSON} />
                   <Snippet label="Claude Code" text={CLAUDE_CLI} />

@@ -7,7 +7,6 @@ import {
   AgentsDocument,
   DeleteAgentDocument,
 } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { AgentDialog } from "@/components/agent-dialog";
 import { AgentImportDialog } from "@/components/agent-import-dialog";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -25,6 +24,7 @@ import {
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { overrides, saveFile, specFileName, specText } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
+import { stringList } from "@/lib/json";
 
 export function AgentsRoute() {
   const queryClient = useQueryClient();
@@ -64,25 +64,24 @@ export function AgentsRoute() {
     <PageLayout
       title="Agent profiles"
       description="A named set of overrides for Settings, that a task can be pointed at."
-      action={
+      actionSlot={
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setImporting(true)}>
-            <Upload className="size-4" />
-            Import
-          </Button>
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="size-4" />
-            New profile
-          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setImporting(true)}
+            iconSlot={<Upload />}
+            content="Import"
+          />
+          <Button onClick={() => setCreating(true)} iconSlot={<Plus />} content="New profile" />
         </div>
       }
-      content={
+      contentSlot={
         <>
           <QueryState
             query={agents}
             what="your agent profiles"
             count={rows.length}
-            empty={
+            emptySlot={
               <Empty>
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -98,7 +97,7 @@ export function AgentsRoute() {
           />
 
           {rows.map((agent) => {
-            const scoped = (agent.mcpServerIds as string[] | null) ?? [];
+            const scoped = stringList(agent.mcpServerIds);
             const said = overrides(agent);
             return (
               <Item key={agent.id} variant="outline" className="flex-col items-stretch gap-3">
@@ -120,26 +119,24 @@ export function AgentsRoute() {
                     ) : null}
                   </ItemContent>
                   <ItemActions className="gap-1">
-                    <ActionButton
-                      label="Edit"
+                    <Button
+                      aria-label="Edit"
                       variant="ghost"
                       size="icon"
                       onClick={() => setEditing(agent)}
-                    >
-                      <Pencil />
-                    </ActionButton>
-                    <ActionButton
-                      label="Export"
+                      iconSlot={<Pencil />}
+                    />
+                    <Button
+                      aria-label="Export"
                       hint="Save as an agent spec file. It carries no API key."
                       variant="ghost"
                       size="icon"
                       disabled={exportSpec.isPending}
                       onClick={() => exportSpec.mutate(agent)}
-                    >
-                      <Download />
-                    </ActionButton>
+                      iconSlot={<Download />}
+                    />
                     <ConfirmButton
-                      label="Delete"
+                      aria-label="Delete"
                       variant="ghost"
                       size="icon"
                       title={`Delete ${agent.name}?`}
@@ -149,9 +146,8 @@ export function AgentsRoute() {
                           : "Nothing runs on it, so nothing changes but the list."
                       }
                       onConfirm={() => remove.mutate(agent.id)}
-                    >
-                      <Trash2 />
-                    </ConfirmButton>
+                      iconSlot={<Trash2 />}
+                    />
                   </ItemActions>
                 </div>
 
@@ -186,7 +182,8 @@ export function AgentsRoute() {
             />
           ) : creating ? (
             <AgentDialog servers={servers} onClose={() => setCreating(false)} onSaved={refresh} />
-          ) : editing ? (
+          ) : null}
+          {editing && !creating ? (
             <AgentDialog
               agent={editing}
               servers={servers}

@@ -261,7 +261,9 @@ export const runSteps = pgTable(
     position: integer().notNull().default(0),
     depth: integer().notNull().default(0),
     name: text().notNull().default(""),
-    kind: text().notNull().default("agent"),
+    // Typed, not an `enum`: the set is closed, but an enum here would be a second GraphQL type
+    // for what `steps.kind` already names.
+    kind: text().$type<"agent" | "decision">().notNull().default("agent"),
     status: text({ enum: ["running", "ok", "error", "stopped", "skipped"] })
       .notNull()
       .default("running"),
@@ -314,9 +316,12 @@ export const mcpServers = pgTable("mcp_servers", {
   hooks: jsonb().$type<ToolHook[]>(),
 });
 
-/** One row, `id: "default"`. A table rather than a file so it comes free over GraphQL. */
+/** The id of the one settings row. */
+export const SETTINGS_ID = "default";
+
+/** One row, `SETTINGS_ID`. A table rather than a file so it comes free over GraphQL. */
 export const settings = pgTable("settings", {
-  id: text().primaryKey().default("default"),
+  id: text().primaryKey().default(SETTINGS_ID),
   baseUrl: text().notNull().default("http://localhost:11434/v1"),
   /** Empty falls back to $OPENAI_API_KEY. */
   apiKey: text().notNull().default(""),

@@ -11,7 +11,6 @@ import {
   type RunsQuery,
   RunsStatusEnum,
 } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DisclosureRow } from "@/components/disclosure-row";
 import { OptionSelect } from "@/components/option-select";
@@ -34,7 +33,8 @@ import {
   WINDOWS,
 } from "@/lib/run-filters";
 import { STATUS_VARIANT } from "@/lib/run-status";
-import { useRunTask, useStopTask } from "@/lib/use-task-run";
+import { useRefreshRuns, useRunTask, useStopTask } from "@/lib/use-task-run";
+import { cn } from "@/lib/utils";
 
 type Run = RunsQuery["runs"][number];
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
@@ -50,7 +50,9 @@ const duration = (from: string, to?: string | null) =>
  * page has no way to tell which. Saying "manual" would be a guess presented as a fact.
  */
 function Provenance({ trigger }: { trigger: Run["trigger"] }) {
-  if (!trigger) return null;
+  if (!trigger) {
+    return null;
+  }
   const label = trigger.kind === "cron" ? trigger.cron : `/webhooks/${trigger.event}`;
   return <span className="shrink-0 font-mono text-muted-foreground text-xs">{label}</span>;
 }
@@ -58,16 +60,19 @@ function Provenance({ trigger }: { trigger: Run["trigger"] }) {
 /** Tool names as chips, red where the call failed. */
 function ToolChips({ calls }: { calls: unknown }) {
   const tools = (calls ?? []) as { name: string; ok: boolean }[];
-  if (tools.length === 0) return null;
+  if (tools.length === 0) {
+    return null;
+  }
   return (
     <div className="flex flex-wrap gap-1">
       {tools.map((tool, index) => (
         <span
           // biome-ignore lint/suspicious/noArrayIndexKey: a finished run's tool list never changes, and the same tool may appear in it twice
           key={`${tool.name}-${index}`}
-          className={`rounded-md border px-2 py-0.5 font-mono text-xs ${
-            tool.ok ? "text-muted-foreground" : "border-destructive text-destructive"
-          }`}
+          className={cn(
+            "rounded-md border px-2 py-0.5 font-mono text-xs",
+            tool.ok ? "text-muted-foreground" : "border-destructive text-destructive",
+          )}
         >
           {tool.name}
         </span>
@@ -83,12 +88,14 @@ function ToolChips({ calls }: { calls: unknown }) {
  */
 function HookNotes({ notes }: { notes: unknown }) {
   const list = (notes ?? []) as HookNote[];
-  if (list.length === 0) return null;
+  if (list.length === 0) {
+    return null;
+  }
   const failed = list.filter((note) => note.error).length;
   return (
     <details className="text-xs">
       <summary
-        className={`cursor-pointer ${failed ? "text-destructive" : "text-muted-foreground"}`}
+        className={cn("cursor-pointer", failed ? "text-destructive" : "text-muted-foreground")}
       >
         {list.length} hook note(s){failed ? `, ${failed} failed` : ""}
       </summary>
@@ -101,7 +108,10 @@ function HookNotes({ notes }: { notes: unknown }) {
               {note.tokens ? ` · ${note.tokens} tokens` : ""}
             </span>
             <pre
-              className={`overflow-x-auto whitespace-pre-wrap ${note.error ? "text-destructive" : ""}`}
+              className={cn(
+                "overflow-x-auto whitespace-pre-wrap",
+                note.error && "text-destructive",
+              )}
             >
               {note.error ?? note.text}
             </pre>
@@ -125,7 +135,7 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
         <li
           key={step.id}
           className="flex flex-col gap-1 border-l-2 pl-3"
-          style={{ marginLeft: `${step.depth * 1}rem` }}
+          style={{ marginLeft: `${step.depth}rem` }}
         >
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={STATUS_VARIANT[step.status] ?? "secondary"}>{step.status}</Badge>
@@ -159,7 +169,9 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
  * looking for rather than reads in passing.
  */
 function Payload({ payload }: { payload: unknown }) {
-  if (payload === null || payload === undefined) return null;
+  if (payload === null || payload === undefined) {
+    return null;
+  }
   return (
     <details className="text-sm">
       <summary className="cursor-pointer text-muted-foreground">Event payload</summary>
@@ -199,14 +211,24 @@ function RunDetail({
   const found = detail.data?.runs[0];
 
   if (!found) {
-    return detail.error ? (
-      <p className="text-destructive text-sm">{(detail.error as Error).message}</p>
-    ) : (
-      <p className="text-muted-foreground text-sm">Loading…</p>
-    );
+    return <QueryState query={detail} what="this run" count={0} rows={1} />;
   }
 
   const payload = found.payload;
+  const result = found.steps.length ? (
+    <>
+      <RunSteps steps={found.steps} />
+      {/* The run failed before or between steps — nothing above says why. */}
+      {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
+    </>
+  ) : (
+    <>
+      <ToolChips calls={found.toolCalls} />
+      <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
+        {run.error || run.output || NO_OUTPUT}
+      </pre>
+    </>
+  );
 
   return (
     <>
@@ -215,32 +237,25 @@ function RunDetail({
         <div>
           {/* The body is the half of a failed delivery that could not be got at: the sender is
               not going to send it again, and it has been sitting on the row all along. */}
-          <Button variant="outline" size="sm" onClick={() => onReplay(payload)}>
-            <Play className="size-4" />
-            Run again with this body
-          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onReplay(payload)}
+            iconSlot={<Play />}
+            content="Run again with this body"
+          />
         </div>
       )}
       <HookNotes notes={found.hooks} />
-      {!withResult ? null : found.steps.length ? (
-        <>
-          <RunSteps steps={found.steps} />
-          {/* The run failed before or between steps — nothing above says why. */}
-          {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
-        </>
-      ) : (
-        <>
-          <ToolChips calls={found.toolCalls} />
-          <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-            {run.error || run.output || "(no output)"}
-          </pre>
-        </>
-      )}
+      {withResult ? result : null}
     </>
   );
 }
 
 const PAGE = 50;
+
+/** What stands in for a run that ended with nothing to show. */
+const NO_OUTPUT = "(no output)";
 
 /**
  * The bar above the list: what to look for, and how far to look.
@@ -311,14 +326,13 @@ function FilterBar({
       />
 
       {dirty ? (
-        <ActionButton
-          label="Clear filters"
+        <Button
+          aria-label="Clear filters"
           variant="ghost"
           size="icon"
           onClick={() => onChange(NO_FILTERS)}
-        >
-          <X />
-        </ActionButton>
+          iconSlot={<X />}
+        />
       ) : null}
     </div>
   );
@@ -371,9 +385,11 @@ export function RunsRoute() {
     setLimit(PAGE);
   };
 
+  const refresh = useRefreshRuns();
   const remove = useMutation({
     mutationFn: (id: string) => request(DeleteRunDocument, { id }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["runs"] }),
+    // Not this list alone: the tasks page and the status page each show a task's last run.
+    onSuccess: refresh,
   });
 
   const start = useRunTask();
@@ -383,25 +399,24 @@ export function RunsRoute() {
     <PageLayout
       title="Runs"
       description="Every execution, newest first."
-      action={
+      actionSlot={
         <Button
           variant="outline"
           onClick={() => queryClient.invalidateQueries({ queryKey: ["runs"] })}
-        >
-          <RefreshCw className="size-4" />
-          Refresh
-        </Button>
+          iconSlot={<RefreshCw />}
+          content="Refresh"
+        />
       }
-      headerContent={
+      headerContentSlot={
         <FilterBar filters={filters} onChange={update} tasks={tasks.data?.tasks ?? []} />
       }
-      content={
+      contentSlot={
         <>
           <QueryState
             query={runs}
             what="the run history"
             count={rows.length}
-            empty={
+            emptySlot={
               <Empty>
                 <EmptyHeader>
                   <EmptyTitle>{filtered ? "No matches" : "Nothing has run yet"}</EmptyTitle>
@@ -428,7 +443,7 @@ export function RunsRoute() {
                 key={run.id}
                 open={open === run.id}
                 onOpenChange={(next) => setOpen(next ? run.id : null)}
-                badges={
+                badgesSlot={
                   <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>{run.status}</Badge>
                 }
                 title={run.task.name}
@@ -445,25 +460,24 @@ export function RunsRoute() {
                   </>
                 }
                 description={
-                  <span className="line-clamp-2">{run.error || run.output || "(no output)"}</span>
+                  <span className="line-clamp-2">{run.error || run.output || NO_OUTPUT}</span>
                 }
-                action={
+                actionSlot={
                   <>
                     {running ? (
-                      <ActionButton
-                        label="Stop this run"
+                      <Button
+                        aria-label="Stop this run"
                         variant="ghost"
                         size="icon"
                         // Only this row's button: `isPending` alone disabled every other running
                         // run's Stop while one of them was being stopped.
                         disabled={stop.isPending && stop.variables === run.taskId}
                         onClick={() => stop.mutate(run.taskId)}
-                      >
-                        <Square />
-                      </ActionButton>
+                        iconSlot={<Square />}
+                      />
                     ) : null}
                     <ConfirmButton
-                      label="Delete"
+                      aria-label="Delete"
                       variant="ghost"
                       size="icon"
                       hint={running ? "Stop the run before deleting" : undefined}
@@ -475,12 +489,11 @@ export function RunsRoute() {
                           : "Its output, its steps and the webhook body it was given go with it."
                       }
                       onConfirm={() => remove.mutate(run.id)}
-                    >
-                      <Trash2 />
-                    </ConfirmButton>
+                      iconSlot={<Trash2 />}
+                    />
                   </>
                 }
-                content={
+                contentSlot={
                   <>
                     {/* A run in flight has no stored output yet — this is the run itself, live. */}
                     {running ? <RunStream runId={run.id} /> : null}
@@ -519,9 +532,8 @@ export function RunsRoute() {
               variant="outline"
               onClick={() => setLimit(limit + PAGE)}
               disabled={runs.isFetching}
-            >
-              Load {PAGE} more
-            </Button>
+              content={`Load ${PAGE} more`}
+            />
           ) : null}
 
           {replay ? (

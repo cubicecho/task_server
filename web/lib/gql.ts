@@ -27,8 +27,12 @@ export async function request<TResult, TVariables>(
 
   const body = (await response.json()) as GraphQLResponse<TResult>;
   // GraphQL reports failures in the body with a 200, so the status alone proves nothing.
-  if (body.errors?.length) throw new Error(body.errors.map((error) => error.message).join("; "));
-  if (!body.data) throw new Error(`GraphQL returned no data (HTTP ${response.status})`);
+  if (body.errors?.length) {
+    throw new Error(body.errors.map((error) => error.message).join("; "));
+  }
+  if (!body.data) {
+    throw new Error(`GraphQL returned no data (HTTP ${response.status})`);
+  }
   return body.data;
 }
 
@@ -66,7 +70,9 @@ export function subscribe<TResult, TVariables>(
       handlers.error?.(new Error(body.errors.map((error) => error.message).join("; ")));
       return;
     }
-    if (body.data) handlers.next(body.data);
+    if (body.data) {
+      handlers.next(body.data);
+    }
   });
 
   source.addEventListener("complete", () => {

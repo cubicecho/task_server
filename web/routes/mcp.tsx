@@ -10,7 +10,6 @@ import {
   TestMcpServerDocument,
   UpdateMcpServerDocument,
 } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { McpDialog } from "@/components/mcp-dialog";
 import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
@@ -46,7 +45,11 @@ export function McpRoute() {
     queryFn: () => request(McpServersDocument),
     refetchInterval: 5000,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["mcp"] });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["mcp"] });
+    // The profiles page lists these rows as the servers a profile can be scoped to.
+    queryClient.invalidateQueries({ queryKey: ["agents"] });
+  };
 
   const reconnect = useMutation({
     mutationFn: () => request(ReconnectMcpDocument),
@@ -85,25 +88,25 @@ export function McpRoute() {
     <PageLayout
       title="MCP servers"
       description="The tools every task can reach, named slug__tool-name."
-      action={
+      actionSlot={
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => reconnect.mutate()} disabled={reconnect.isPending}>
-            <RefreshCw className="size-4" />
-            Reconnect all
-          </Button>
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="size-4" />
-            New server
-          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => reconnect.mutate()}
+            disabled={reconnect.isPending}
+            iconSlot={<RefreshCw />}
+            content="Reconnect all"
+          />
+          <Button onClick={() => setCreating(true)} iconSlot={<Plus />} content="New server" />
         </div>
       }
-      content={
+      contentSlot={
         <>
           <QueryState
             query={servers}
             what="your MCP servers"
             count={rows.length}
-            empty={
+            emptySlot={
               <Empty>
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -160,33 +163,30 @@ export function McpRoute() {
                       onCheckedChange={(enabled) => toggle.mutate({ id: server.id, enabled })}
                       aria-label={`Enable ${server.slug}`}
                     />
-                    <ActionButton
-                      label="Test connection"
+                    <Button
+                      aria-label="Test connection"
                       variant="ghost"
                       size="icon"
                       onClick={() => test.mutate(server)}
                       disabled={test.isPending && test.variables?.id === server.id}
-                    >
-                      <PlugZap />
-                    </ActionButton>
-                    <ActionButton
-                      label="Edit"
+                      iconSlot={<PlugZap />}
+                    />
+                    <Button
+                      aria-label="Edit"
                       variant="ghost"
                       size="icon"
                       onClick={() => setEditing(server)}
-                    >
-                      <Pencil />
-                    </ActionButton>
+                      iconSlot={<Pencil />}
+                    />
                     <ConfirmButton
-                      label="Delete"
+                      aria-label="Delete"
                       variant="ghost"
                       size="icon"
                       title={`Delete ${server.slug}?`}
                       description="Every task loses its tools, and any profile scoped to it falls back to the servers that are left."
                       onConfirm={() => remove.mutate(server.id)}
-                    >
-                      <Trash2 />
-                    </ConfirmButton>
+                      iconSlot={<Trash2 />}
+                    />
                   </ItemActions>
                 </div>
 
@@ -201,9 +201,8 @@ export function McpRoute() {
             );
           })}
 
-          {creating ? (
-            <McpDialog onClose={() => setCreating(false)} onSaved={refresh} />
-          ) : editing ? (
+          {creating ? <McpDialog onClose={() => setCreating(false)} onSaved={refresh} /> : null}
+          {editing && !creating ? (
             <McpDialog
               server={editing}
               tools={statusOf(editing.id)?.tools}

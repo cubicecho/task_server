@@ -19,8 +19,9 @@ import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { describeFor } from "@/lib/docs";
+import { errorMessage } from "@/lib/errors";
 import { request } from "@/lib/gql";
-import { parseJson } from "@/lib/json";
+import { parseJson, stringList } from "@/lib/json";
 import { fieldProblem, parseMcpJson } from "@/lib/mcp-config";
 import { HOOK_PLACEHOLDER, hooksProblem } from "@/lib/mcp-hooks";
 
@@ -58,7 +59,7 @@ const toDraft = (server?: McpServer): Draft => ({
   env: json(server?.env, "{}"),
   url: server?.url ?? "",
   headers: json(server?.headers, "{}"),
-  hiddenTools: (server?.hiddenTools as string[] | null | undefined) ?? [],
+  hiddenTools: stringList(server?.hiddenTools),
   // Pretty-printed, unlike the one-line fields above: a hook is several keys deep and read more
   // often than it is written.
   hooks: server?.hooks ? JSON.stringify(server.hooks, null, 2) : "",
@@ -104,8 +105,11 @@ export function McpDialog({
         hiddenTools: draft.hiddenTools.length ? draft.hiddenTools : null,
         hooks: parseJson<unknown>(draft.hooks, "Hooks", null),
       };
-      if (server) await request(UpdateMcpServerDocument, { id: server.id, set: values });
-      else await request(CreateMcpServerDocument, { values });
+      if (server) {
+        await request(UpdateMcpServerDocument, { id: server.id, set: values });
+      } else {
+        await request(CreateMcpServerDocument, { values });
+      }
     },
     onSuccess: () => {
       toast.success(server ? "Server saved" : "Server added");
@@ -140,7 +144,7 @@ export function McpDialog({
       setPaste("");
       toast.success("Config applied");
     } catch (error) {
-      toast.error((error as Error).message);
+      toast.error(errorMessage(error));
     }
   };
 
@@ -148,7 +152,7 @@ export function McpDialog({
     <DialogLayout
       open
       onOpenChange={(open) => !open && onClose()}
-      hasUnsavedChanges={form.state.isDirty}
+      hasUnsavedChanges={() => !form.state.isDefaultValue}
       size="lg"
       title={server ? "Edit server" : "New MCP server"}
       description={
@@ -160,7 +164,7 @@ export function McpDialog({
           )}
         </form.Subscribe>
       }
-      content={
+      contentSlot={
         <form
           id="mcp-server"
           className="flex flex-col gap-4"
@@ -180,7 +184,7 @@ export function McpDialog({
                   <code>.mcp.json</code> shaped — the whole file, one entry, or just the body.
                 </>
               }
-              control={
+              controlSlot={
                 <Textarea
                   rows={3}
                   className="font-mono text-xs"
@@ -194,20 +198,18 @@ export function McpDialog({
             />
             <div className="flex justify-end">
               <Button
-                type="button"
                 variant="secondary"
                 size="sm"
                 onClick={applyPaste}
                 disabled={!paste.trim()}
-              >
-                <ClipboardPaste className="size-4" />
-                Apply
-              </Button>
+                iconSlot={<ClipboardPaste />}
+                content="Apply"
+              />
             </div>
           </div>
 
           <FieldRow
-            content={
+            contentSlot={
               <>
                 <InputField
                   form={form}
@@ -335,7 +337,7 @@ export function McpDialog({
             form={form}
             name="enabled"
             label="Enabled"
-            description="A disabled server stays configured but offers no tools."
+            description={doc("enabled")}
             orientation="horizontal"
             className="rounded-md border p-3"
           />
@@ -343,34 +345,26 @@ export function McpDialog({
           {probe ? <McpProbeResult probe={probe} /> : null}
         </form>
       }
-      footer={
+      footerSlot={
         <Button
-          type="button"
           variant="secondary"
           onClick={() => test.mutate()}
           disabled={test.isPending}
-        >
-          <PlugZap className="size-4" />
-          {test.isPending ? "Connecting…" : "Test connection"}
-        </Button>
+          iconSlot={<PlugZap />}
+          content={test.isPending ? "Connecting…" : "Test connection"}
+        />
       }
       // A function, so Cancel closes through the dialog's own door: `hasUnsavedChanges` guards
       // Escape, the overlay and the X, and a Cancel wired straight to `onClose` was the fourth
       // way out — the one people actually click — going around the ask.
-      footerActions={(close) => (
+      footerActionsSlot={(close) => (
         <>
-          <Button type="button" variant="ghost" onClick={close}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={close} content="Cancel" />
           <form.AppForm>
             {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
                 server would refuse. Passing `disabled` tightens the store's own two reasons. */}
-            <form.Subscribe selector={(state) => state.isDirty}>
-              {(isDirty) => (
-                <form.SubmitButton form="mcp-server" disabled={!isDirty}>
-                  Save
-                </form.SubmitButton>
-              )}
+            <form.Subscribe selector={(state) => state.isDefaultValue}>
+              {(untouched) => <form.SubmitButton form="mcp-server" disabled={untouched} />}
             </form.Subscribe>
           </form.AppForm>
         </>

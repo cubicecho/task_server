@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AgentOptionsDocument,
@@ -28,13 +28,9 @@ import { Button } from "@/components/ui/button";
 import { describeFor } from "@/lib/docs";
 import { type DraftStep, toDraft, toInput } from "@/lib/flow";
 import { request } from "@/lib/gql";
+import { isBlank, triggerProblem } from "@/lib/triggers";
+import { required } from "@/lib/validators";
 
-/**
- * The page behind `/tasks/new` and `/tasks/$taskId`.
- *
- * An existing task is fetched whole — triggers and flow included — before the form is built,
- * so the form is initialised once from real data rather than patched into shape afterwards.
- */
 /** The notes under this form's fields are the columns' own descriptions. */
 const doc = describeFor("Task");
 
@@ -51,6 +47,12 @@ const Breadcrumbs = () => (
   </Link>
 );
 
+/**
+ * The page behind `/tasks/new` and `/tasks/$taskId`.
+ *
+ * An existing task is fetched whole — triggers and flow included — before the form is built,
+ * so the form is initialised once from real data rather than patched into shape afterwards.
+ */
 export function TaskEditRoute() {
   const { taskId } = useParams({ strict: false });
 
@@ -60,20 +62,22 @@ export function TaskEditRoute() {
     enabled: Boolean(taskId),
   });
 
-  if (!taskId) return <TaskForm />;
+  if (!taskId) {
+    return <TaskForm />;
+  }
   if (task.isPending || task.isError || !task.data?.task) {
     return (
       <PageLayout
         title="Task"
         description={DESCRIPTION}
-        breadcrumbs={<Breadcrumbs />}
+        breadcrumbsSlot={<Breadcrumbs />}
         loading={task.isPending}
-        content={
+        contentSlot={
           task.isPending ? null : (
             <QueryError
               // A task that is simply not there is not a failed request, and saying "try again"
               // about it would be a lie — so the absence is phrased as the error it is.
-              error={(task.error as Error | null) ?? new Error("There is no task with that id.")}
+              error={task.error ?? new Error("There is no task with that id.")}
               onRetry={() => task.refetch()}
               what="that task"
             />
@@ -112,10 +116,6 @@ interface Form {
   steps: unknown;
 }
 
-const required = (what: string) => ({
-  onChange: ({ value }: { value: string }) => (value.trim() ? undefined : what),
-});
-
 function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -130,8 +130,19 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     queryFn: () => request(AgentOptionsDocument),
   });
 
+  // What a save has already written, kept across attempts. A save is several requests, and one
+  // that fails part-way has still created whatever came before it: without this a second press
+  // of Save created the task again, and every trigger the first attempt had got to.
+  const progress = useRef({
+    taskId: task?.id,
+    /** Draft key to the id the server gave it. */
+    triggers: new Map<string, string>(),
+    deleted: new Set<string>(),
+  });
+
   const save = useMutation({
     mutationFn: async (form: Form) => {
+      const done = progress.current;
       // Null rather than "": the column is a foreign key, and an empty string is not a profile.
       const values = {
         name: form.name.trim(),
@@ -141,25 +152,34 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         systemPrompt: form.systemPrompt,
       };
 
-      const taskId = task
-        ? ((await request(UpdateTaskDocument, { id: task.id, set: values })).updateTask?.id ??
-          task.id)
-        : (await request(CreateTaskDocument, { values })).createTask.id;
+      if (done.taskId) {
+        await request(UpdateTaskDocument, { id: done.taskId, set: values });
+      } else {
+        done.taskId = (await request(CreateTaskDocument, { values })).createTask.id;
+      }
+      const taskId = done.taskId;
 
       // Triggers are saved one by one because `nestedWrites` is off (see
       // `server/graphql/schema.ts`). The flow is not: `setTaskSteps` writes the tree in one
       // transaction, so a flow either lands whole or not at all.
-      for (const id of removed) await request(DeleteTriggerDocument, { id });
+      for (const id of removed) {
+        if (done.deleted.has(id)) {
+          continue;
+        }
+        await request(DeleteTriggerDocument, { id });
+        done.deleted.add(id);
+      }
       const saved: DraftTrigger[] = [];
       for (const trigger of form.triggers) {
         // A row left blank is one that was added and never filled in, which is not an edit to
-        // save. A webhook with no id would be worse than nothing: no address reaches it.
-        const cron = trigger.cron.trim();
-        const event = trigger.event.trim();
-        if (trigger.kind === "cron" ? !cron : !event) {
+        // save. A webhook with no id would be worse than nothing: no address reaches it. A
+        // *saved* row left blank never gets this far — the field's validator refuses it.
+        if (isBlank(trigger)) {
           saved.push(trigger);
           continue;
         }
+        const cron = trigger.cron.trim();
+        const event = trigger.event.trim();
 
         const kind = trigger.kind === "cron" ? TriggersKindEnum.Cron : TriggersKindEnum.Event;
         const set = {
@@ -169,12 +189,13 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
           event,
           enabled: trigger.enabled,
         };
-        let id = trigger.id;
+        let id = trigger.id ?? done.triggers.get(trigger.key);
         if (id) {
           await request(UpdateTriggerDocument, { id, set });
         } else {
           id = (await request(CreateTriggerDocument, { values: { taskId, ...set } })).createTrigger
             .id;
+          done.triggers.set(trigger.key, id);
         }
         // The trimmed values go back too, so the row reads as what was actually stored.
         saved.push({ ...trigger, id, cron, event, timezone: set.timezone });
@@ -205,7 +226,11 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     onSubmit: async ({ value, formApi }) => {
       const written = await save.mutateAsync(value);
       toast.success(task ? "Task saved" : "Task created");
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      // The name and the triggers are drawn on the status page, in the runs filter and under a
+      // profile as well as in the list.
+      for (const key of ["tasks", "status", "agents", "run-filter-tasks"]) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
       queryClient.invalidateQueries({ queryKey: ["task", written.taskId] });
       // The ids the server assigned come back, so a second save edits the same rows rather
       // than replacing them and orphaning their run history. The form is keyed on the task, so
@@ -214,7 +239,10 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       // nothing, because the draft still had no id to delete by.
       formApi.reset({ ...value, triggers: written.triggers, steps: written.steps });
       setRemoved([]);
-      if (!task) navigate({ to: "/tasks/$taskId", params: { taskId: written.taskId } });
+      progress.current.deleted.clear();
+      if (!task) {
+        navigate({ to: "/tasks/$taskId", params: { taskId: written.taskId } });
+      }
     },
   });
 
@@ -222,18 +250,16 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
     <PageLayout
       title={task ? "Edit task" : "New task"}
       description={DESCRIPTION}
-      breadcrumbs={<Breadcrumbs />}
-      action={
+      breadcrumbsSlot={<Breadcrumbs />}
+      actionSlot={
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => navigate({ to: "/tasks" })}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={() => navigate({ to: "/tasks" })} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton form="task">Save</form.SubmitButton>
+            <form.SubmitButton form="task" />
           </form.AppForm>
         </div>
       }
-      content={
+      contentSlot={
         <form
           id="task"
           className="flex flex-col gap-6"
@@ -260,7 +286,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
               description={doc("prompt")}
               // The label row's far end, which is where a control that writes into the field
               // belongs — beside its name rather than under the box it fills.
-              action={
+              actionSlot={
                 <McpPromptButton
                   onInsert={(text) =>
                     form.setFieldValue("prompt", (current) => withPrompt(current, text))
@@ -316,7 +342,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
           <form.Subscribe selector={(state) => state.values.agentId}>
             {(agentId) => (
               <FieldRow
-                content={
+                contentSlot={
                   <>
                     <ModelSelectField
                       form={form}
@@ -345,7 +371,13 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
             )}
           </form.Subscribe>
 
-          <form.Field name="triggers">
+          <form.Field
+            name="triggers"
+            validators={{
+              // The rows say which one and why; this is what holds the Save button.
+              onChange: ({ value }) => value.map(triggerProblem).find(Boolean),
+            }}
+          >
             {(field) => (
               <TriggerEditor
                 triggers={field.state.value}
@@ -365,7 +397,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
                 cases runs next.
               </>
             }
-            content={
+            contentSlot={
               <form.Field name="steps">
                 {(field) => (
                   <StepList

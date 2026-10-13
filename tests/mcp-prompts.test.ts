@@ -1,15 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterAll, afterEach, beforeAll, expect, test } from "vitest";
+import { afterEach, beforeAll, expect, test } from "vitest";
 import type { McpServerRow } from "../server/db/schema.ts";
+import { dataDir, echoRow } from "./helpers.ts";
 
 // Loading the pool pulls in the database module, so give it somewhere disposable first.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-mcp-prompts-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
-
-const FIXTURE = fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url));
+dataDir("mcp-prompts");
 
 /**
  * What a server offers a picker, read off a real connection.
@@ -21,21 +15,8 @@ const FIXTURE = fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url
  * the SDK checks a server's declared capabilities before it sends either request, and a stub of
  * the client would be a stub of the very check being relied on.
  */
-const config = (over: Partial<McpServerRow> = {}): McpServerRow => ({
-  id: "echo-1",
-  slug: "echo",
-  label: "Echo",
-  enabled: true,
-  transport: "stdio",
-  command: process.execPath,
-  args: [FIXTURE],
-  env: { MCP_ECHO_PROMPTS: "1" },
-  url: "",
-  headers: null,
-  hiddenTools: null,
-  hooks: null,
-  ...over,
-});
+const config = (over: Partial<McpServerRow> = {}) =>
+  echoRow({ env: { MCP_ECHO_PROMPTS: "1" }, ...over });
 
 let mcp: typeof import("../server/runner/mcp.ts")["mcp"];
 let prompts: typeof import("../server/runner/mcp-prompts.ts");
@@ -54,10 +35,6 @@ beforeAll(async () => {
 afterEach(async () => {
   await mcp.shutdown();
   await db.delete(mcpServers);
-});
-
-afterAll(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("lists what a connected server offers, carrying the server on every row", async () => {

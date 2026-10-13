@@ -1,10 +1,10 @@
-import { fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
+import { errorMessage, fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
 import { buildSchema, extractFilters, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import { applyPermissions } from "@vantreeseba/graphql-casl";
 import { eq, inArray } from "drizzle-orm";
 import {
   GraphQLBoolean,
-  GraphQLError,
+  type GraphQLError,
   GraphQLInt,
   GraphQLList,
   GraphQLNonNull,
@@ -15,7 +15,16 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
-import { agents, mcpServers, runs, settings, steps, tasks, triggers } from "../db/schema.ts";
+import {
+  agents,
+  mcpServers,
+  runs,
+  SETTINGS_ID,
+  settings,
+  steps,
+  tasks,
+  triggers,
+} from "../db/schema.ts";
 import { hookProblems, runsDeleted } from "../runner/hooks.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
@@ -25,6 +34,7 @@ import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
 import { exportAgent, type ImportOptions, importAgent, previewImport } from "./agent-spec.ts";
 import { describeColumn, describeTable } from "./docs.ts";
+import { refusal } from "./errors.ts";
 import { NEW_MCP_SERVER, shapeProblems } from "./mcp-server.ts";
 import { permissions } from "./permissions.ts";
 import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
@@ -38,6 +48,9 @@ import {
   ScheduleEntryType,
   StepInputType,
 } from "./types.ts";
+
+/** How much of a run's log `runEvents` hands back when the caller names no limit. */
+const DEFAULT_EVENT_LIMIT = 200;
 
 /** `McpConnectionInput` as it arrives: both arms' fields, all of them optional but the transport. */
 type McpConnectionArgs = {
@@ -119,7 +132,9 @@ const { entities } = buildSchema(db, {
       // run that is really gone. A rolled-back transaction after this is the one gap, and a
       // forgotten memory of a run that still exists costs less than a remembered one that doesn't.
       after: ({ operation, rows }) => {
-        if (operation === "delete") runsDeleted((rows as { id: string }[]).map((row) => row.id));
+        if (operation === "delete") {
+          runsDeleted((rows as { id: string }[]).map((row) => row.id));
+        }
       },
     },
     triggers: {
@@ -167,48 +182,57 @@ async function vetTrigger(tx: typeof db, args: unknown) {
   for (const written of [...created, ...changed.map(({ set }) => set)]) {
     for (const column of ["cron", "event"]) {
       const value = written[column];
-      if (typeof value === "string") written[column] = value.trim();
+      if (typeof value === "string") {
+        written[column] = value.trim();
+      }
     }
   }
 
-  for (const values of created) refuseTrigger({ ...NEW_TRIGGER, ...values });
+  for (const values of created) {
+    refuseTrigger({ ...NEW_TRIGGER, ...values });
+  }
   for (const { where, set } of changed) {
-    const filter = where
-      ? extractFilters(triggers, "triggers", where as Parameters<typeof extractFilters>[2])
-      : undefined;
+    const filter = filterOf(triggers, "triggers", where);
     for (const stored of await tx.select().from(triggers).where(filter)) {
       refuseTrigger({ ...stored, ...set }, stored);
     }
   }
 }
 
+/**
+ * A generated `where` as the SQL it means, and nothing for a write that has none. The driver
+ * does not export the argument's type, so this is the one place it is asserted.
+ */
+const filterOf = (table: Parameters<typeof extractFilters>[0], name: string, where: unknown) =>
+  where ? extractFilters(table, name, where as Parameters<typeof extractFilters>[2]) : undefined;
+
 /** The columns' own defaults, which a create that leaves them out is going to get. */
-const NEW_TRIGGER = { kind: "cron", cron: "", event: "" };
+const NEW_TRIGGER = {
+  kind: triggers.kind.default,
+  cron: triggers.cron.default,
+  event: triggers.event.default,
+};
 
 /** Why nothing could ever fire this trigger, if nothing could. */
 function triggerProblem(row: Record<string, unknown>): GraphQLError | undefined {
   const cron = String(row.cron ?? "");
   if (cron && !isValidCron(cron)) {
-    return new GraphQLError(`"${cron}" is not a cron expression this scheduler can read.`, {
-      extensions: { code: "BAD_CRON" },
-    });
+    return refusal("BAD_CRON", `"${cron}" is not a cron expression this scheduler can read.`);
   }
   if (row.kind === "cron" && !cron) {
-    return new GraphQLError("A cron trigger needs an expression — without one it never fires.", {
-      extensions: { code: "BAD_CRON" },
-    });
+    return refusal("BAD_CRON", "A cron trigger needs an expression — without one it never fires.");
   }
   if (row.kind === "event" && !row.event) {
-    return new GraphQLError("An event trigger needs a webhook id — it is the whole address.", {
-      extensions: { code: "BAD_EVENT" },
-    });
+    return refusal("BAD_EVENT", "An event trigger needs a webhook id — it is the whole address.");
   }
 }
 
 /** Throws for what is wrong with `row` and was not already wrong with the row it replaces. */
 function refuseTrigger(row: Record<string, unknown>, stored?: Record<string, unknown>) {
   const problem = triggerProblem(row);
-  if (problem && problem.message !== (stored && triggerProblem(stored))?.message) throw problem;
+  if (problem && problem.message !== (stored && triggerProblem(stored))?.message) {
+    throw problem;
+  }
 }
 
 /**
@@ -236,13 +260,17 @@ function writesOf(args: unknown) {
  * here rolls the mutation back before it writes.
  */
 function refuseWhileRunning(args: unknown, running: Set<string>, message: string) {
-  if (running.size === 0) return;
+  if (running.size === 0) {
+    return;
+  }
   const where = (args as { where?: { id?: { eq?: unknown } } } | undefined)?.where;
   const id = typeof where?.id?.eq === "string" ? where.id.eq : undefined;
-  if (id !== undefined && !running.has(id)) return;
+  if (id !== undefined && !running.has(id)) {
+    return;
+  }
   // A plain Error would reach the client as "Internal server error" — the library only lets a
   // GraphQLError of its own through. This one is the client's to act on, so it says why.
-  throw new GraphQLError(message, { extensions: { code: "RUN_IN_FLIGHT" } });
+  throw refusal("RUN_IN_FLIGHT", message);
 }
 
 /**
@@ -254,16 +282,18 @@ const doomedRuns = new WeakMap<object, string[]>();
 
 async function runsOfTasks(tx: typeof db, args: unknown): Promise<string[]> {
   const where = (args as { where?: unknown } | undefined)?.where;
-  if (!where || typeof where !== "object") return [];
+  if (!where || typeof where !== "object") {
+    return [];
+  }
   try {
-    const filter = extractFilters(tasks, "tasks", where as Parameters<typeof extractFilters>[2]);
+    const filter = filterOf(tasks, "tasks", where);
     const doomed = tx.select({ id: tasks.id }).from(tasks).where(filter);
     const rows = await tx.select({ id: runs.id }).from(runs).where(inArray(runs.taskId, doomed));
     return rows.map((row) => row.id);
   } catch (error) {
     // A filter this cannot read is a delete that goes ahead with its runs' hooks unfired, not a
     // delete that fails: forgetting is the hooks' business, and deleting is the operator's.
-    console.warn(`[hooks] could not list the runs of a deleted task: ${error}`);
+    console.warn(`[hooks] could not list the runs of a deleted task: ${errorMessage(error)}`);
     return [];
   }
 }
@@ -281,11 +311,11 @@ async function runsOfTasks(tx: typeof db, args: unknown): Promise<string[]> {
  */
 async function vetMcpServer(tx: typeof db, args: unknown) {
   const { created, changed } = writesOf(args);
-  for (const values of created) refuseMcpServer({ ...NEW_MCP_SERVER, ...values });
+  for (const values of created) {
+    refuseMcpServer({ ...NEW_MCP_SERVER, ...values });
+  }
   for (const { where, set } of changed) {
-    const filter = where
-      ? extractFilters(mcpServers, "mcpServers", where as Parameters<typeof extractFilters>[2])
-      : undefined;
+    const filter = filterOf(mcpServers, "mcpServers", where);
     for (const stored of await tx.select().from(mcpServers).where(filter)) {
       refuseMcpServer({ ...stored, ...set }, stored);
     }
@@ -299,14 +329,16 @@ function refuseMcpServer(row: Record<string, unknown>, stored?: Record<string, u
 
   const problems = fresh(shapeProblems(row));
   if (problems.length) {
-    throw new GraphQLError(`This server cannot be saved as written: ${problems.join("; ")}`, {
-      extensions: { code: "BAD_MCP_SERVER", problems },
-    });
+    throw refusal(
+      "BAD_MCP_SERVER",
+      `This server cannot be saved as written: ${problems.join("; ")}`,
+      { problems },
+    );
   }
   const hooks = fresh(hookProblems(row.hooks));
   if (hooks.length) {
-    throw new GraphQLError(`These hooks cannot run as written: ${hooks.join("; ")}`, {
-      extensions: { code: "BAD_HOOKS", problems: hooks },
+    throw refusal("BAD_HOOKS", `These hooks cannot run as written: ${hooks.join("; ")}`, {
+      problems: hooks,
     });
   }
 }
@@ -363,7 +395,9 @@ const baseSchema = new GraphQLSchema({
           },
         },
         resolve: async (_source, args: { agentId?: string | null }) => {
-          if (!args.agentId) return listModels();
+          if (!args.agentId) {
+            return listModels();
+          }
           const [agent] = await db
             .select()
             .from(agents)
@@ -467,7 +501,7 @@ const baseSchema = new GraphQLSchema({
           },
           limit: {
             type: GraphQLInt,
-            description: "At most this many entries, oldest first. Default 200.",
+            description: `At most this many entries, oldest first. Default ${DEFAULT_EVENT_LIMIT}.`,
           },
         },
         resolve: (
@@ -476,7 +510,7 @@ const baseSchema = new GraphQLSchema({
         ) =>
           fold(history(args.runId).filter((event) => event.seq > (args.afterSeq ?? 0))).slice(
             0,
-            args.limit ?? 200,
+            args.limit ?? DEFAULT_EVENT_LIMIT,
           ),
       },
     },
@@ -532,24 +566,23 @@ const baseSchema = new GraphQLSchema({
         resolve: async (_source, args: { taskId: string; steps: StepInput[] }) => {
           const [task] = await db.select().from(tasks).where(eq(tasks.id, args.taskId)).limit(1);
           if (!task) {
-            throw new GraphQLError(`There is no task with id ${args.taskId}.`, {
-              extensions: { code: "NOT_FOUND" },
-            });
+            throw refusal("NOT_FOUND", `There is no task with id ${args.taskId}.`);
           }
           // The run in flight read the flow when it started and is recording what it executed
           // against those very rows; editing them now would make its own account of itself lie.
           if (runningTaskIds().has(args.taskId)) {
-            throw new GraphQLError("This task is running. Stop it first, then edit its steps.", {
-              extensions: { code: "RUN_IN_FLIGHT" },
-            });
+            throw refusal(
+              "RUN_IN_FLIGHT",
+              "This task is running. Stop it first, then edit its steps.",
+            );
           }
 
           const rows = flattenSteps(args.taskId, args.steps);
           const foreign = await foreignIds(args.taskId, rows);
           if (foreign.length) {
-            throw new GraphQLError(
+            throw refusal(
+              "BAD_STEPS",
               `These step ids already belong to another task: ${foreign.join(", ")}.`,
-              { extensions: { code: "BAD_STEPS" } },
             );
           }
           await writeTaskSteps(args.taskId, rows);
@@ -621,9 +654,7 @@ const baseSchema = new GraphQLSchema({
             .where(eq(agents.id, args.agentId))
             .returning({ id: agents.id });
           if (!updated.length) {
-            throw new GraphQLError(`There is no agent with id ${args.agentId}.`, {
-              extensions: { code: "NOT_FOUND" },
-            });
+            throw refusal("NOT_FOUND", `There is no agent with id ${args.agentId}.`);
           }
           return true;
         },
@@ -635,7 +666,10 @@ const baseSchema = new GraphQLSchema({
           "it is excluded from the Setting type so it can never be read back out.",
         args: { apiKey: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: async (_source, args: { apiKey: string }) => {
-          await db.update(settings).set({ apiKey: args.apiKey }).where(eq(settings.id, "default"));
+          await db
+            .update(settings)
+            .set({ apiKey: args.apiKey })
+            .where(eq(settings.id, SETTINGS_ID));
           return true;
         },
       },
@@ -677,7 +711,5 @@ const baseSchema = new GraphQLSchema({
  */
 export const schema = applyPermissions(baseSchema, permissions, {
   fallbackError: (_original, _parent, _args, _context, info) =>
-    new GraphQLError(`Not authorized to call ${info.parentType.name}.${info.fieldName}.`, {
-      extensions: { code: "FORBIDDEN" },
-    }),
+    refusal("FORBIDDEN", `Not authorized to call ${info.parentType.name}.${info.fieldName}.`),
 });

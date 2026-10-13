@@ -9,7 +9,6 @@ import {
   TasksDocument,
   UpdateTaskDocument,
 } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
@@ -40,7 +39,13 @@ export function TasksRoute() {
     refetchInterval: (query) =>
       query.state.data?.tasks.some((task) => task.runs[0]?.status === "running") ? 2000 : false,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  // A task is drawn on more pages than this one: status counts it, the runs page lists its runs
+  // and offers it as a filter, and a profile says which tasks run on it.
+  const refresh = () => {
+    for (const key of ["tasks", "runs", "status", "agents", "run-filter-tasks"]) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  };
 
   const toggle = useMutation({
     mutationFn: (task: TaskFieldsFragment) =>
@@ -70,31 +75,32 @@ export function TasksRoute() {
   const nextRuns = new Map(tasks.data?.schedule.map((entry) => [entry.triggerId, entry.nextRun]));
 
   const press = (task: TaskFieldsFragment) => {
-    if (task.triggers.some((trigger) => trigger.kind === "event")) setAskFor(task);
-    else run.mutate({ taskId: task.id });
+    if (task.triggers.some((trigger) => trigger.kind === "event")) {
+      setAskFor(task);
+    } else {
+      run.mutate({ taskId: task.id });
+    }
   };
 
   const rows = tasks.data?.tasks ?? [];
+
+  // Offered twice: in the header always, and in the empty state where it is the only thing to do.
+  const newTask = (
+    <Button linkSlot={<Link to="/tasks/new" />} iconSlot={<Plus />} content="New task" />
+  );
 
   return (
     <PageLayout
       title="Tasks"
       description="A prompt, and the triggers that decide when it runs."
-      action={
-        <Button asChild>
-          <Link to="/tasks/new">
-            <Plus className="size-4" />
-            New task
-          </Link>
-        </Button>
-      }
-      content={
+      actionSlot={newTask}
+      contentSlot={
         <>
           <QueryState
             query={tasks}
             what="your tasks"
             count={rows.length}
-            empty={
+            emptySlot={
               <Empty>
                 <EmptyHeader>
                   <EmptyTitle>No tasks yet</EmptyTitle>
@@ -102,14 +108,7 @@ export function TasksRoute() {
                     Create one, give it a cron expression, and it runs on its own.
                   </EmptyDescription>
                 </EmptyHeader>
-                <EmptyContent>
-                  <Button asChild>
-                    <Link to="/tasks/new">
-                      <Plus className="size-4" />
-                      New task
-                    </Link>
-                  </Button>
-                </EmptyContent>
+                <EmptyContent>{newTask}</EmptyContent>
               </Empty>
             }
           />
@@ -145,8 +144,8 @@ export function TasksRoute() {
                       aria-label="Enabled"
                     />
                     {running ? (
-                      <ActionButton
-                        label="Stop this run"
+                      <Button
+                        aria-label="Stop this run"
                         variant="ghost"
                         size="icon"
                         // Only this card's button. `isPending` alone is true for the whole list
@@ -154,27 +153,27 @@ export function TasksRoute() {
                         // other row's control along with the one that was clicked.
                         disabled={stop.isPending && stop.variables === task.id}
                         onClick={() => stop.mutate(task.id)}
-                      >
-                        <Square />
-                      </ActionButton>
+                        iconSlot={<Square />}
+                      />
                     ) : (
-                      <ActionButton
-                        label="Run now"
+                      <Button
+                        aria-label="Run now"
                         variant="ghost"
                         size="icon"
                         disabled={run.isPending && run.variables?.taskId === task.id}
                         onClick={() => press(task)}
-                      >
-                        <Play />
-                      </ActionButton>
+                        iconSlot={<Play />}
+                      />
                     )}
-                    <ActionButton label="Edit" variant="ghost" size="icon" asChild>
-                      <Link to="/tasks/$taskId" params={{ taskId: task.id }}>
-                        <Pencil />
-                      </Link>
-                    </ActionButton>
+                    <Button
+                      aria-label="Edit"
+                      variant="ghost"
+                      size="icon"
+                      linkSlot={<Link to="/tasks/$taskId" params={{ taskId: task.id }} />}
+                      iconSlot={<Pencil />}
+                    />
                     <ConfirmButton
-                      label="Delete"
+                      aria-label="Delete"
                       variant="ghost"
                       size="icon"
                       hint={running ? "Stop the run before deleting" : undefined}
@@ -182,9 +181,8 @@ export function TasksRoute() {
                       title={`Delete ${task.name}?`}
                       description="Its triggers and its whole run history go with it, output included."
                       onConfirm={() => remove.mutate(task.id)}
-                    >
-                      <Trash2 />
-                    </ConfirmButton>
+                      iconSlot={<Trash2 />}
+                    />
                   </ItemActions>
                 </div>
 

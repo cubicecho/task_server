@@ -376,10 +376,10 @@ is inherit, and the sentinel differs by column because zero is a real answer for
 `""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`.
 
 The key is the one column that is not a plain override. A profile naming a `baseUrl` of its own
-never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`, the
-constant `llm.ts` exports for "there is no key here, do not fall through to the environment".
+never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`,
+agent-core's constant for "there is no key here, do not fall through to the environment".
 A credential issued for one endpoint has no business being posted to another. A profile on the
-*same* endpoint inherits it like anything else. `llm.ts` caches a client per endpoint for the
+*same* endpoint inherits it like anything else. agent-core caches a client per endpoint for the
 same reason: two profiles on two servers would otherwise evict each other's connection pool on
 every request.
 
@@ -556,24 +556,31 @@ query keys it affected.
 registers `https://cubicecho.github.io/cubeui/r/{name}.json`, and `npx shadcn add @cubeui/<name>`
 copies a shell into `web/components/` rewritten against the local aliases — there is no runtime
 dependency, and an installed file is this repo's to edit. What is here: `PageLayout` (every
-route's header, trail, action row and body), `DialogLayout` (title, body, `footer` for a side
-control and `footerActions` for cancel/confirm, and the unsaved-changes guard), `Section`,
-`CardLayout`, `SplitLayout`, `QueryState` with `QueryError`, `DisclosureRow`, `ActionButton`,
-`ConfirmButton`, `FormField`, `FieldRow`, `OptionSelect`, `MultiSelect`, `PasswordInput`,
-`ModelSelect`'s field wrapper. **No cubeui component takes `children`** — the body is the
-`content` prop, and every other slot is a prop too, which is what stops a shell from being
-subclassed by nesting. Never hand-write `mx-auto max-w-3xl` or a
+route's header, trail, action row and body), `DialogLayout` (title, body, `footerSlot` for a side
+control and `footerActionsSlot` for cancel/confirm, and the unsaved-changes guard), `Section`,
+`CardLayout`, `SplitLayout`, `QueryState` with `QueryError`, `DisclosureRow`, `ConfirmButton`,
+`FormField`, `FieldRow`, `OptionSelect`, `MultiSelect`, `PasswordInput`, `ModelSelect`'s field
+wrapper — and, since the registry began shipping its own, every primitive under
+`web/components/ui/`. **No cubeui component takes `children`** — the body is `contentSlot`, and
+every other place an element goes is a prop ending in `Slot` (`actionSlot`, `emptySlot`,
+`iconSlot`, `breadcrumbsSlot`, `controlSlot`…), which is what stops a shell from being subclassed
+by nesting. A slot takes an element, never a bare string; words go in `title`, `description`,
+`label` and `meta`. Never hand-write `mx-auto max-w-3xl` or a
 `<header className="border-b px-6 py-4">`: that is `PageLayout` being re-derived, and the point
 of taking the registry was to stop having four of them.
 
-`ActionButton` and `ConfirmButton` take a required `label`, which is the accessible name — an
-icon-only button with no `label` does not typecheck. Both default to `type="button"` as of
-[cubeui#18](https://github.com/cubicecho/cubeui/issues/18), so the call sites inside a `<form>`
-that used to carry one by hand have dropped it; a row action that submitted the form
-around it was the bug, and it is the default that is right rather than the reminder.
+**`Button` takes no children either.** The words are `content`, the glyph is `iconSlot` — passed
+bare, the button sizes it — and a button that is a link takes `linkSlot={<Link to="…" />}` where
+it used to take `asChild`. An icon size (`icon`, `icon-sm`…) does not typecheck without an
+`aria-label`, which is the job `ActionButton`'s required `label` did before that component was
+folded into this one. `hint` is the one tooltip, and with it `disabled` becomes `aria-disabled`,
+so the reason a control is off can still be hovered and tabbed to; a bare `title` on a disabled
+button reaches nobody. `type` defaults to `button`, so a row action inside a `<form>` does not
+submit it. `ConfirmButton` is a `Button` with `title`, `description` and `onConfirm` in place of
+`onClick`.
 
-`DialogLayout`'s `footerActions` takes a function, and every dialog here uses that form: it is
-handed the dialog's own `close`, which is the one Escape, the overlay and the X go through, so
+`DialogLayout`'s `footerActionsSlot` takes a function, and every dialog here uses that form: it
+is handed the dialog's own `close`, which is the one Escape, the overlay and the X go through, so
 `hasUnsavedChanges` asks on the way out of Cancel too
 ([cubeui#2](https://github.com/cubicecho/cubeui/issues/2)). Wired straight to the caller's
 `onClose` — which is what all three did — Cancel was the fourth way out of a dialog and the only
@@ -593,27 +600,19 @@ status region beside the trigger, rather than a disabled option the keyboard wal
 ([cubeui#37](https://github.com/cubicecho/cubeui/issues/37)). An option's `className` is the
 row's, which is how a model id is `font-mono`.
 
-The local `option-select.tsx` is behind the published one on purpose. `open`/`onOpenChange`,
-notes and the option `className` were ported by hand; `searchable` was not, because it draws a
-popover over cubeui's own `Button` and `Command`, and `npx shadcn add -o @cubeui/option-select`
-brings those with it over the shadcn primitives every other file here is written against. Taking
-the registry's copy is a refresh of the whole set, not of one control.
-
-**Updating is `npx shadcn add -o @cubeui/<name>`, and one thing has to be put back after it.**
-The control used to ship as `select`, and the CLI resolves a cross-item import by basename, so
-`app-form.tsx` arrived pointing at shadcn's primitive
-([cubeui#36](https://github.com/cubicecho/cubeui/issues/36)); cubeui#38 renamed it to
-`option-select`, and the import now lands correctly. What is still left to do by hand is `cn`:
-shadcn's own primitives import it from the `cn` package rather than from the `utils` alias
-([cubeui#24](https://github.com/cubicecho/cubeui/issues/24)), which installs a runtime dependency —
-into `dependencies`, which is the section `npm ci --omit=dev` keeps — and leaves this repo with two
-`cn`s. Keep every `web/components/ui/*` on `@/lib/utils`, which is what `components.json` says the
-alias is, and `npm pkg delete dependencies.cn`. `-o` also rewrites every shadcn primitive an item
-depends on; when the only difference is import order and a `"use client"`, put them back. The
-linter is off for `web/components/ui/**` in `biome.json` for the same reason it is off upstream —
-the files are vendored, and which of Biome's rules a shadcn update trips is not this repo's
-question to answer per rule, which a narrower override learned the hard way when one more appeared
-on this update.
+**Updating is `npx shadcn add -o @cubeui/<name>`, and it is a refresh of the whole set.** An
+item brings every primitive it draws with, so one control taken alone leaves the rest of
+`web/components/ui/` a version behind it; name every installed item in one command. The
+primitives are cubeui's own now, compiled from its React Native sources, each with a `*-base.ts`
+beside it — there is no shadcn copy left to put back, and all of them import `cn` from
+`@/lib/utils`. `cubeui-tokens.css` and `cubeui-reset.css` land beside `components.json` and are
+generated: `web/index.css` imports the first straight after `tailwindcss`, and it is the palette
+— this app defines no colours of its own, and a colour a component names (`neutral`, `hover`,
+`info`, `positive`…) exists nowhere else. Two things to check afterwards. The CLI rewrites
+dependency ranges to what an item declares, and one of them pinned `@types/react-dom` a minor
+behind `@types/react`; read the `package.json` diff. And the linter is off for
+`web/components/ui/**` in `biome.json` for the reason it is off upstream — the files are vendored,
+and which of Biome's rules an update trips is not this repo's question to answer per rule.
 
 **Forms are `@tanstack/react-form`, through `web/components/app-form.tsx`.** Every field is one
 line, taking the form and the name — `<InputField form={form} name="name" label="Name" required
@@ -627,16 +626,17 @@ used exactly the same way.
 
 Nothing at a call site writes `id`, `aria-describedby`, `aria-invalid`, or a `disabled` that
 re-derives `canSubmit`/`isSubmitting` — `FormField` and `SubmitButton` own those. `SubmitButton`'s
-own `disabled` is OR-ed with the store's two, so it can only tighten: settings and the two edit
-dialogs pass `disabled={!isDirty}`, because a form nobody has touched has nothing to save. The run
-dialog does not — replaying the body already in the box is the whole feature. A dialog passes
-`form.state.isDirty` to `DialogLayout`'s `hasUnsavedChanges`; the guard is asked for, never
-computed.
+own `disabled` is OR-ed with the store's two, so it can only tighten: the two edit dialogs pass
+the store's `isDefaultValue`, because a form that holds what it opened with has nothing to save.
+The run dialog does not — replaying the body already in the box is the whole feature. A dialog
+passes `() => !form.state.isDefaultValue` to `DialogLayout`'s `hasUnsavedChanges`: a function, so
+it is read at the click and subscribes to nothing, and `isDefaultValue` rather than `isDirty`,
+which stays true for a field typed into and back out of and so asks about edits that are gone.
 
 One thing the driver cannot do: it types a field's `name` by walking the whole store's shape,
 with no depth limit, so a value that contains itself is `TS2589` — reported at the *first* field
 in the form, not at the recursive one. `task-edit.tsx` holds the flow as `unknown` for that
-reason (a step has branches, and a branch has steps) and casts at the one place it is read.
+reason (a step has branches, and a branch has steps) and casts at the two places it is read.
 
 **A `where` a person assembles goes in `web/lib/`, not in the route.** `run-filters.ts` builds
 the runs page's filter, and `tests/run-history.test.ts` runs what it builds — with the printed
@@ -659,9 +659,12 @@ screenshot settles.
 - Files `kebab-case.ts(x)`; components `PascalCase`; vars and functions `camelCase`; true
   constants `SCREAMING_SNAKE_CASE`
 - Prefix an unused parameter with `_`; `unknown` over `any`, which is an error
+- Every `if`, `else`, `for` and `while` body is braced, one-liners included — Biome's
+  `useBlockStatements`, an error. It is off for the cubeui shells listed in `biome.json`, which
+  are vendored and arrive unbraced; a shell installed later goes on that list
 - Comments explain why, not what. A comment that restates the line below it is noise
-- Tests are `tests/*.test.ts`, Vitest `describe`/`it`/`expect`, against a temp
-  `TASK_SERVER_DATA_DIR` — no mocks of the database, and MCP tests drive a real stdio fixture
+- Tests are `tests/*.test.ts`, flat Vitest `test`/`expect` with a sentence for a title that says
+  what holds ("a blanked saved trigger is refused"), against a temp `TASK_SERVER_DATA_DIR` — no mocks of the database, and MCP tests drive a real stdio fixture
 
 ## Git
 

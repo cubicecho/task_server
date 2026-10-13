@@ -1,18 +1,12 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { NO_KEY } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import type { Agent, McpServerRow, Settings } from "../server/db/schema.ts";
+import type { Agent, Settings } from "../server/db/schema.ts";
+import { dataDir, echoRow, settingsRow } from "./helpers.ts";
 
 // The profile module reaches the database as soon as it is imported, so point it somewhere
 // disposable before anything under server/ loads.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-agents-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
-
-const FIXTURE = fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url));
+dataDir("agents");
 
 let db: typeof import("../server/db/client.ts")["db"];
 let schema: typeof import("../server/db/schema.ts");
@@ -30,26 +24,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await mcp.shutdown();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const settings = (over: Partial<Settings> = {}): Settings => ({
-  id: "default",
-  baseUrl: "http://server:11434/v1",
-  apiKey: "server-key",
-  model: "server-model",
-  systemPrompt: "server prompt",
-  maxTokens: 1000,
-  temperature: 0.5,
-  maxToolIterations: 8,
-  toolDiscovery: "eager",
-  toolSelectModel: "small",
-  runRetentionDays: 30,
-  requestTimeoutSeconds: 120,
-  maxRetries: 2,
-  maxConcurrentRuns: 4,
-  ...over,
-});
+const settings = (over: Partial<Settings> = {}) =>
+  settingsRow({
+    baseUrl: "http://server:11434/v1",
+    apiKey: "server-key",
+    model: "server-model",
+    systemPrompt: "server prompt",
+    maxTokens: 1000,
+    temperature: 0.5,
+    maxToolIterations: 8,
+    toolSelectModel: "small",
+    requestTimeoutSeconds: 120,
+    maxRetries: 2,
+    ...over,
+  });
 
 /** A profile as the table hands one over: every column at its inherit sentinel. */
 const agent = (over: Partial<Agent> = {}): Agent => ({
@@ -77,52 +67,6 @@ test("no profile, and a profile that overrides nothing, are the settings row", (
   const base = settings();
   expect(profile.resolveConfig(base, null)).toEqual(base);
   expect(profile.resolveConfig(base, agent())).toEqual(base);
-});
-
-test("a profile overrides only the columns it filled in", () => {
-  const config = profile.resolveConfig(
-    settings(),
-    agent({ model: "gpt-5", maxTokens: 4000, toolDiscovery: "ondemand" }),
-  );
-  expect(config.model).toBe("gpt-5");
-  expect(config.maxTokens).toBe(4000);
-  expect(config.toolDiscovery).toBe("ondemand");
-  // Untouched columns still answer from settings, including the key.
-  expect(config.systemPrompt).toBe("server prompt");
-  expect(config.temperature).toBe(0.5);
-  expect(config.apiKey).toBe("server-key");
-});
-
-test("zero is a value, and -1 is the only way to inherit a number", () => {
-  const config = profile.resolveConfig(
-    settings(),
-    agent({ maxRetries: 0, requestTimeoutSeconds: 0, temperature: 0 }),
-  );
-  expect(config.maxRetries).toBe(0);
-  expect(config.requestTimeoutSeconds).toBe(0);
-  expect(config.temperature).toBe(0);
-});
-
-test("whitespace is not an override", () => {
-  const config = profile.resolveConfig(settings(), agent({ model: "   ", systemPrompt: "\n" }));
-  expect(config.model).toBe("server-model");
-  expect(config.systemPrompt).toBe("server prompt");
-});
-
-test("a profile with an endpoint of its own never inherits the server's key", async () => {
-  const borrowed = profile.resolveConfig(settings(), agent({ baseUrl: "http://friend/v1" }));
-  expect(borrowed.baseUrl).toBe("http://friend/v1");
-  expect(borrowed.apiKey).toBe(NO_KEY);
-
-  const own = profile.resolveConfig(
-    settings(),
-    agent({ baseUrl: "http://friend/v1", apiKey: "friend-key" }),
-  );
-  expect(own.apiKey).toBe("friend-key");
-
-  // The same endpoint written out again is the same endpoint, and inherits like anything else.
-  const same = profile.resolveConfig(settings(), agent({ baseUrl: "http://server:11434/v1" }));
-  expect(same.apiKey).toBe("server-key");
 });
 
 /**
@@ -321,23 +265,10 @@ test("a task reads its own profile, and a task with none reads settings", async 
 });
 
 test("a run scoped to one server cannot see or call another's tools", async () => {
-  const server = (over: Partial<McpServerRow>): McpServerRow => ({
-    id: "",
-    slug: "",
-    label: "",
-    enabled: true,
-    transport: "stdio",
-    command: process.execPath,
-    args: [FIXTURE],
-    env: null,
-    url: "",
-    headers: null,
-    hiddenTools: null,
-    hooks: null,
-    ...over,
-  });
-
-  await mcp.sync([server({ id: "mine", slug: "mine" }), server({ id: "theirs", slug: "theirs" })]);
+  await mcp.sync([
+    echoRow({ id: "mine", slug: "mine" }),
+    echoRow({ id: "theirs", slug: "theirs" }),
+  ]);
 
   const names = (servers?: ReadonlySet<string>) =>
     mcp
@@ -358,4 +289,27 @@ test("a run scoped to one server cannot see or call another's tools", async () =
 
   // Loading a schema by name is the same door, so it is held to the same scope.
   expect(mcp.tools({ names: ["theirs__echo"], servers: new Set(["mine"]) })).toEqual([]);
+});
+
+test("$OPENAI_API_KEY is the key when the settings row has none, and only then", async () => {
+  const { loadSettings } = await import("../server/runner/llm.ts");
+  const key = (apiKey: string) =>
+    db.update(schema.settings).set({ apiKey }).where(eq(schema.settings.id, "default"));
+  const before = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "from-the-environment";
+  try {
+    await key("");
+    // Folded in where the row is read, so the turns and the side tasks cannot disagree about it.
+    expect((await loadSettings()).apiKey).toBe("from-the-environment");
+
+    await key("from-the-row");
+    expect((await loadSettings()).apiKey).toBe("from-the-row");
+  } finally {
+    await key("");
+    if (before === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = before;
+    }
+  }
 });

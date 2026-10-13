@@ -10,14 +10,13 @@ import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
 
 type ModelSelectFieldProps = FieldProps &
-  Omit<ComponentProps<typeof ModelSelect>, "id" | "value" | "onChange">;
+  Omit<ComponentProps<typeof ModelSelect>, "id" | "value" | "onValueChange">;
 
 /**
  * `ModelSelect` as a bound field.
  *
- * Written with `bindToForm` rather than as a `ModelSelect` inside a `FormField`: its root is a
- * Radix `Select`, which renders no DOM, so the id and the `aria-*` props have to reach the
- * trigger through the function form of `control` — the same reason `SelectField` exists.
+ * The id and the `aria-*` props go in through the function form of `controlSlot`, and
+ * `ModelSelect` puts them on whichever of its two controls is on screen.
  */
 function BoundModelSelectField(props: ModelSelectFieldProps) {
   const [fieldProps, control] = splitProps(props);
@@ -28,12 +27,12 @@ function BoundModelSelectField(props: ModelSelectFieldProps) {
     <FormField
       {...fieldProps}
       error={error}
-      control={(wired) => (
+      controlSlot={(wired) => (
         <ModelSelect
           {...control}
           {...wired}
           value={field.state.value ?? ""}
-          onChange={field.handleChange}
+          onValueChange={field.handleChange}
         />
       )}
     />

@@ -3,13 +3,16 @@ import { toast } from "sonner";
 import { RunTaskDocument, StopTaskDocument } from "@/__generated__/graphql/graphql";
 import { request } from "@/lib/gql";
 
-/** Every list a run starting, ending or being stopped is drawn in. */
+/** Every list a run starting, ending, being stopped or being deleted is drawn in. */
 const SHOWN_IN = ["tasks", "runs", "status"];
 
-function useRefresh() {
+/** Refetches every page that draws a run, for whichever mutation just changed one. */
+export function useRefreshRuns() {
   const queryClient = useQueryClient();
   return () => {
-    for (const key of SHOWN_IN) queryClient.invalidateQueries({ queryKey: [key] });
+    for (const key of SHOWN_IN) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
   };
 }
 
@@ -21,14 +24,18 @@ function useRefresh() {
  * as a success.
  */
 export function useRunTask() {
-  const refresh = useRefresh();
+  const refresh = useRefreshRuns();
   return useMutation({
     mutationFn: (variables: { taskId: string; payload?: unknown }) =>
       request(RunTaskDocument, variables),
     onSuccess: ({ runTask: { status, error } }) => {
-      if (status === "error") toast.error(error || "Run failed");
-      else if (status === "stopped") toast.success("Run stopped");
-      else toast.success("Run finished");
+      if (status === "error") {
+        toast.error(error || "Run failed");
+      } else if (status === "stopped") {
+        toast.success("Run stopped");
+      } else {
+        toast.success("Run finished");
+      }
       refresh();
     },
   });
@@ -36,13 +43,15 @@ export function useRunTask() {
 
 /** Stops a task's run. A run is stopped through its task: the runner keys what is in flight by task. */
 export function useStopTask() {
-  const refresh = useRefresh();
+  const refresh = useRefreshRuns();
   return useMutation({
     mutationFn: (taskId: string) => request(StopTaskDocument, { taskId }),
     onSuccess: ({ stopTask }) => {
       // False means the run had already finished on its own — nothing was stopped, and the
       // refresh is what shows that.
-      if (stopTask) toast.success("Stopping…");
+      if (stopTask) {
+        toast.success("Stopping…");
+      }
       refresh();
     },
   });

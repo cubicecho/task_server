@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { RunEventsDocument, type RunEventsSubscription } from "@/__generated__/graphql/graphql";
 import { subscribe } from "@/lib/gql";
+import { cn } from "@/lib/utils";
 
 type RunEvent = RunEventsSubscription["runEvents"];
 
@@ -65,8 +66,11 @@ function group(blocks: Block[]): Group[] {
       groups.push(last);
     }
     // The `step` event is the heading rather than a line of its own; it names the kind.
-    if (block.kind === "step") last.kind = block.text;
-    else last.blocks.push(block);
+    if (block.kind === "step") {
+      last.kind = block.text;
+    } else {
+      last.blocks.push(block);
+    }
   }
   return groups;
 }
@@ -98,12 +102,16 @@ export function RunStream({ runId }: { runId: string }) {
     let failed = false;
     let pending: RunEvent[] = [];
     const flush = () => {
-      if (pending.length === 0) return;
+      if (pending.length === 0) {
+        return;
+      }
       const batch = pending;
       pending = [];
       setBlocks((prev) => {
         const next = prev.slice();
-        for (const event of batch) appendInto(next, event);
+        for (const event of batch) {
+          appendInto(next, event);
+        }
         return next;
       });
     };
@@ -114,7 +122,9 @@ export function RunStream({ runId }: { runId: string }) {
       { runId },
       {
         next: ({ runEvents: event }) => {
-          if (event.seq <= seen) return;
+          if (event.seq <= seen) {
+            return;
+          }
           seen = event.seq;
           // The transport resubscribes on its own, so a dropped connection is usually followed
           // by events again — and "lost the connection to the server" stayed on screen for the
@@ -150,14 +160,19 @@ export function RunStream({ runId }: { runId: string }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: following new output is the point.
   useEffect(() => {
     const element = scroller.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (element) {
+      element.scrollTop = element.scrollHeight;
+    }
   }, [blocks]);
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span
-          className={`size-2 rounded-full ${ended ? "bg-muted-foreground" : "animate-pulse bg-emerald-500"}`}
+          className={cn(
+            "size-2 rounded-full",
+            ended ? "bg-muted-foreground" : "animate-pulse bg-emerald-500",
+          )}
         />
         {ended ? "Run ended" : "Live"}
         {error ? <span className="text-destructive">· {error}</span> : null}
@@ -215,7 +230,10 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
     case "tool-result":
       return (
         <p
-          className={`font-mono text-xs whitespace-pre-wrap ${block.ok ? "text-muted-foreground" : "text-destructive"}`}
+          className={cn(
+            "font-mono text-xs whitespace-pre-wrap",
+            block.ok ? "text-muted-foreground" : "text-destructive",
+          )}
         >
           ← {block.name}: {block.text}
         </p>

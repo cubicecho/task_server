@@ -1,7 +1,6 @@
 import { Command as CommandPrimitive } from "cmdk";
-import { CheckIcon, SearchIcon } from "lucide-react";
-import * as React from "react";
-
+import type * as React from "react";
+import { COMMAND_DIALOG_DESCRIPTION, COMMAND_DIALOG_TITLE } from "@/components/ui/command-base";
 import {
   Dialog,
   DialogContent,
@@ -9,15 +8,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
+import { Search } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
+/** The root of a filtered list: it holds the search text and decides which items match. */
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
       data-slot="command"
       className={cn(
-        "flex size-full flex-col overflow-hidden rounded-xl! bg-popover p-1 text-popover-foreground",
+        "flex h-full w-full flex-col overflow-hidden rounded-md bg-secondary text-foreground",
         className,
       )}
       {...props}
@@ -25,12 +25,13 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
   );
 }
 
+/** A `Command` inside a dialog: a command palette. */
 function CommandDialog({
-  title = "Command Palette",
-  description = "Search for a command to run...",
+  title = COMMAND_DIALOG_TITLE,
+  description = COMMAND_DIALOG_DESCRIPTION,
   children,
   className,
-  showCloseButton = false,
+  showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string;
@@ -45,64 +46,60 @@ function CommandDialog({
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <DialogContent
-        className={cn("top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0", className)}
+        className={cn("overflow-hidden p-0", className)}
         showCloseButton={showCloseButton}
       >
-        {children}
+        <Command className="**:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-foreground/60 [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+          {children}
+        </Command>
       </DialogContent>
     </Dialog>
   );
 }
 
+/** The search box that filters the list. */
 function CommandInput({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
-    <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
-        <CommandPrimitive.Input
-          data-slot="command-input"
-          className={cn(
-            "w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
-            className,
-          )}
-          {...props}
-        />
-        <InputGroupAddon>
-          <SearchIcon className="size-4 shrink-0 opacity-50" />
-        </InputGroupAddon>
-      </InputGroup>
+    <div data-slot="command-input-wrapper" className="flex h-9 items-center gap-2 border-b px-3">
+      <Search className="size-4 shrink-0 opacity-50" />
+      <CommandPrimitive.Input
+        data-slot="command-input"
+        className={cn(
+          "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-hidden placeholder:text-foreground/60 disabled:cursor-not-allowed disabled:opacity-50",
+          className,
+        )}
+        {...props}
+      />
     </div>
   );
 }
 
+/** The scrolling list of groups and items. */
 function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
   return (
     <CommandPrimitive.List
       data-slot="command-list"
-      className={cn(
-        "no-scrollbar max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto outline-none",
-        className,
-      )}
+      className={cn("max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto", className)}
       {...props}
     />
   );
 }
 
-function CommandEmpty({
-  className,
-  ...props
-}: React.ComponentProps<typeof CommandPrimitive.Empty>) {
+/** What is shown when no item matches the search. */
+function CommandEmpty({ ...props }: React.ComponentProps<typeof CommandPrimitive.Empty>) {
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className={cn("py-6 text-center text-sm", className)}
+      className="py-6 text-center text-sm"
       {...props}
     />
   );
 }
 
+/** A set of items under a heading, hidden when none of them matches. */
 function CommandGroup({
   className,
   ...props
@@ -111,7 +108,7 @@ function CommandGroup({
     <CommandPrimitive.Group
       data-slot="command-group"
       className={cn(
-        "overflow-hidden p-1 text-foreground **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:py-1.5 **:[[cmdk-group-heading]]:text-xs **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-muted-foreground",
+        "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-foreground/60",
         className,
       )}
       {...props}
@@ -119,47 +116,43 @@ function CommandGroup({
   );
 }
 
+/** A rule between groups. */
 function CommandSeparator({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Separator>) {
   return (
+    // Decorative: cmdk writes `role="separator"`, which a `listbox` may not hold. Hidden, the
+    // rule is still drawn and no longer read. See `command-base.ts`.
     <CommandPrimitive.Separator
+      aria-hidden
       data-slot="command-separator"
-      className={cn("-mx-1 h-px bg-border", className)}
+      className={cn("-mx-1 h-px bg-foreground/10", className)}
       {...props}
     />
   );
 }
 
-function CommandItem({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof CommandPrimitive.Item>) {
+/** One row that can be chosen, filtered by its `value` and its text. */
+function CommandItem({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Item>) {
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-lg! data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
+        "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-hover data-[selected=true]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-foreground/60",
         className,
       )}
       {...props}
-    >
-      {children}
-      <CheckIcon className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
-    </CommandPrimitive.Item>
+    />
   );
 }
 
+/** The keyboard shortcut shown at the far end of an item. */
 function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="command-shortcut"
-      className={cn(
-        "ml-auto text-xs tracking-widest text-muted-foreground group-data-selected/command-item:text-foreground",
-        className,
-      )}
+      className={cn("ml-auto text-xs tracking-widest text-foreground/60", className)}
       {...props}
     />
   );

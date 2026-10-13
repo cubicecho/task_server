@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { List } from "lucide-react";
 import { useState } from "react";
 import { ModelsDocument } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { OptionSelect, type SelectEntry } from "@/components/option-select";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
 
@@ -13,8 +13,9 @@ const CUSTOM = "__custom__";
 
 /**
  * The props a `FormField` hands its control, which this passes to whichever of its two
- * controls is on screen. Its root renders no DOM of its own, so callers inside a field reach
- * it through the function form of `control` — see `ModelSelectField`.
+ * controls is on screen: the select's trigger, or the text input "Type a name…" swaps in.
+ * Callers inside a field hand them over with the function form of `controlSlot` — see
+ * `ModelSelectField`.
  */
 type Wired = {
   id?: string;
@@ -33,13 +34,13 @@ type Wired = {
  */
 export function ModelSelect({
   value,
-  onChange,
+  onValueChange,
   defaultLabel,
   agentId,
   ...wired
 }: Wired & {
   value: string;
-  onChange: (model: string) => void;
+  onValueChange: (model: string) => void;
   /** Label for the empty choice. Omitted, a model must be named. */
   defaultLabel?: string;
   /**
@@ -66,17 +67,16 @@ export function ModelSelect({
         <Input
           {...wired}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => onValueChange(event.target.value)}
           placeholder="llama3.1:8b"
         />
-        <ActionButton
-          label="Pick from the list"
+        <Button
+          aria-label="Pick from the list"
           variant="ghost"
           size="icon"
           onClick={() => setTyping(false)}
-        >
-          <List />
-        </ActionButton>
+          iconSlot={<List />}
+        />
       </div>
     );
   }
@@ -90,7 +90,7 @@ export function ModelSelect({
     ...names.map((name) => ({ value: name, label: name, className: "font-mono" })),
     ...(models.isFetching && names.length === 0 ? [{ note: "Loading…" }] : []),
     ...(models.error
-      ? [{ note: (models.error as Error).message, className: "text-destructive text-xs" }]
+      ? [{ note: models.error.message, className: "text-destructive text-xs" }]
       : []),
     { separator: true },
     { value: CUSTOM, label: "Type a name…" },
@@ -102,8 +102,11 @@ export function ModelSelect({
       options={options}
       value={value || (defaultLabel ? DEFAULT : "")}
       onValueChange={(next) => {
-        if (next === CUSTOM) setTyping(true);
-        else onChange(next === DEFAULT ? "" : next);
+        if (next === CUSTOM) {
+          setTyping(true);
+        } else {
+          onValueChange(next === DEFAULT ? "" : next);
+        }
       }}
       onOpenChange={(open) => open && setOpened(true)}
       placeholder="Select a model"

@@ -30,7 +30,9 @@ import { NEW_MCP_SERVER, shapeProblems, splitHookProblems } from "./mcp-server.t
  */
 function compact<T extends object>(value: T): T {
   const kept = Object.entries(value).filter(([, held]) => {
-    if (held === undefined || held === null || held === "") return false;
+    if (held === undefined || held === null || held === "") {
+      return false;
+    }
     return Array.isArray(held) || typeof held !== "object" || Object.keys(held).length > 0;
   });
   return Object.fromEntries(kept) as T;
@@ -283,9 +285,13 @@ function readBundled(
 
   const notes = hooks.unfired.map((problem) => `${problem} — kept as written, and never called`);
   for (const key of Object.keys(held)) {
-    if (!SERVER_COLUMNS.has(key)) notes.push(`\`${key}\` has no column here, and is not kept`);
+    if (!SERVER_COLUMNS.has(key)) {
+      notes.push(`\`${key}\` has no column here, and is not kept`);
+    }
   }
-  if (held.enabled === false) notes.push("disabled where it was exported; created enabled here");
+  if (held.enabled === false) {
+    notes.push("disabled where it was exported; created enabled here");
+  }
 
   const names = (value: unknown) => (isRecord(value) ? Object.keys(value) : []);
   const line = [candidate.command, ...(Array.isArray(candidate.args) ? candidate.args : [])];
@@ -364,19 +370,29 @@ export function planImport(
     rows: { mcpServerIds: null, servers: [] },
   };
   const spec = parsed.spec;
-  if (!spec) return plan;
+  if (!spec) {
+    return plan;
+  }
 
   const drop = (path: string, why: string) => plan.dropped.push(`${path}: ${why}`);
 
   const name = options.name?.trim() || spec.name?.trim() || "";
-  if (!name) plan.refusals.push("name: the document names no agent, so give the profile a name");
+  if (!name) {
+    plan.refusals.push("name: the document names no agent, so give the profile a name");
+  }
 
   // --- what a profile has no column for -------------------------------------------------------
 
-  if (spec.id !== undefined) drop("id", "a profile here is given an id of its own");
-  if (spec.$schema !== undefined) drop("$schema", "is for an editor, and is not kept");
+  if (spec.id !== undefined) {
+    drop("id", "a profile here is given an id of its own");
+  }
+  if (spec.$schema !== undefined) {
+    drop("$schema", "is for an editor, and is not kept");
+  }
   for (const key of Object.keys(spec)) {
-    if (!READ.has(key) && !DROPPED_BY_NAME.has(key)) drop(key, "is not a key this server reads");
+    if (!READ.has(key) && !DROPPED_BY_NAME.has(key)) {
+      drop(key, "is not a key this server reads");
+    }
   }
   for (const key of Object.keys(spec.extensions ?? {})) {
     drop(`extensions.${key}`, "this server implements no extension");
@@ -391,7 +407,9 @@ export function planImport(
     drop("endpoint.firstTokenSeconds", "the first token is given requestTimeoutSeconds here");
   }
   for (const key of ["reasoningEffort", "contextLength", "extraBody"] as const) {
-    if (spec.model?.[key] !== undefined) drop(`model.${key}`, "a profile has no such setting");
+    if (spec.model?.[key] !== undefined) {
+      drop(`model.${key}`, "a profile has no such setting");
+    }
   }
   if (spec.retry?.loadingTimeoutSeconds !== undefined) {
     drop("retry.loadingTimeoutSeconds", "a profile has no such setting");
@@ -405,7 +423,9 @@ export function planImport(
       continue;
     }
     for (const key of Object.keys(said)) {
-      if (key !== "model") drop(`tasks.toolSelect.${key}`, "tool selection takes a model only");
+      if (key !== "model") {
+        drop(`tasks.toolSelect.${key}`, "tool selection takes a model only");
+      }
     }
   }
 
@@ -413,7 +433,9 @@ export function planImport(
   // that is only a reference has nothing to join, since nothing here reads a file or a url.
   const texts: string[] = [];
   for (const [index, part] of (spec.prompt ?? []).entries()) {
-    if (part.ref) drop(`prompt[${index}].ref`, "a reference is not followed here");
+    if (part.ref) {
+      drop(`prompt[${index}].ref`, "a reference is not followed here");
+    }
     if (part.text === "") {
       drop(`prompt[${index}]`, "an empty part deletes the one below it, which a row cannot say");
     } else if (part.text !== undefined) {
@@ -432,8 +454,12 @@ export function planImport(
   // The integer columns hold whole numbers, and the parser has only promised a finite one in
   // range. A value that would fail the insert is dropped here instead, with the reason.
   const whole = (path: string, value: number | undefined) => {
-    if (value === undefined) return -1;
-    if (Number.isInteger(value) && value <= MAX_INTEGER) return value;
+    if (value === undefined) {
+      return -1;
+    }
+    if (Number.isInteger(value) && value <= MAX_INTEGER) {
+      return value;
+    }
     drop(path, `${value} is not a whole number this column can hold, so it is left to inherit`);
     return -1;
   };
@@ -472,7 +498,9 @@ export function planImport(
   for (const held of spec.bundle?.mcpServers ?? []) {
     const { preview, row } = readBundled(held, bySlug, chosen);
     plan.bundled.push(preview);
-    if (!preview.create) continue;
+    if (!preview.create) {
+      continue;
+    }
     if (preview.exists) {
       plan.refusals.push(
         `bundle: "${preview.slug}" is already an MCP server here, and an import does not ` +
@@ -506,7 +534,9 @@ export function planImport(
   }
   const asked = spec.tools?.servers;
   // Absent is every server in a spec and in the column alike, so there is nothing to resolve.
-  if (asked === undefined) return plan;
+  if (asked === undefined) {
+    return plan;
+  }
 
   const scoped: ScopedServer[] = [];
   const ids: string[] = [];
@@ -576,7 +606,9 @@ export async function importAgent(document: unknown, options: ImportOptions): Pr
         extensions: { code: "BAD_AGENT_SPEC", problems: plan.refusals },
       });
     }
-    if (plan.rows.servers.length) await tx.insert(mcpServers).values(plan.rows.servers);
+    if (plan.rows.servers.length) {
+      await tx.insert(mcpServers).values(plan.rows.servers);
+    }
     const [row] = await tx
       .insert(agents)
       .values({ ...plan.agent, mcpServerIds: plan.rows.mcpServerIds })
@@ -585,6 +617,8 @@ export async function importAgent(document: unknown, options: ImportOptions): Pr
   });
   // A hand-written write goes round the `onWrite` hook that reconciles the pool, so it says so
   // itself — once the rows are committed, or the pool would read the table from before them.
-  if (made) mcp.syncSoon();
+  if (made) {
+    mcp.syncSoon();
+  }
   return agent;
 }

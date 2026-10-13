@@ -1,12 +1,10 @@
 import fs from "node:fs";
-import http from "node:http";
-import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
-import { notChat, replyWith } from "./fixtures/sse.ts";
+import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
+import { dataDir, ECHO_FIXTURE, type FakeModel, fakeModel, until, useModel } from "./helpers.ts";
 
 /**
  * The MCP servers' hooks, fired around a real run against a real stdio server.
@@ -17,16 +15,14 @@ import { notChat, replyWith } from "./fixtures/sse.ts";
  * which is where injected context has to land.
  */
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-hooks-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+const dir = dataDir("hooks");
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/mcp-echo.mjs", import.meta.url));
 const callLog = path.join(dir, "calls.log");
 
 let replies: string[] = [];
 let prompts: string[] = [];
 let toolNames: string[][] = [];
-let server: http.Server;
+let model: FakeModel;
 
 let client: typeof import("../server/db/client.ts");
 let tables: typeof import("../server/db/schema.ts");
@@ -35,15 +31,6 @@ let hooks: typeof import("../server/runner/hooks.ts");
 let mcp: typeof import("../server/runner/mcp.ts")["mcp"];
 let cron: typeof import("../server/scheduler/cron.ts");
 let schema: GraphQLSchema;
-
-const completion = (content: string) => ({
-  id: "chatcmpl-test",
-  object: "chat.completion",
-  created: 0,
-  model: "fake",
-  choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
-  usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-});
 
 /** Every call the fixture received, in order. */
 const calls = (): { name: string; arguments: Record<string, unknown> }[] =>
@@ -62,7 +49,7 @@ async function echoServer(rowHooks: ToolHook[], hiddenTools: string[] = []) {
     slug: "echo",
     label: "Echo",
     command: process.execPath,
-    args: [FIXTURE],
+    args: [ECHO_FIXTURE],
     env: { MCP_ECHO_CALL_LOG: callLog },
     hooks: rowHooks,
     hiddenTools,
@@ -80,26 +67,11 @@ async function gql(source: string, variableValues?: Record<string, unknown>) {
 }
 
 beforeAll(async () => {
-  server = http.createServer((request, response) => {
-    if (notChat(request, response)) return;
-    let body = "";
-    request.on("data", (chunk) => {
-      body += chunk;
-    });
-    request.on("end", () => {
-      const sent = JSON.parse(body) as {
-        messages: { role: string; content: string }[];
-        tools?: { function: { name: string } }[];
-        stream?: boolean;
-      };
-      prompts.push(sent.messages.find((message) => message.role === "user")?.content ?? "");
-      toolNames.push((sent.tools ?? []).map((tool) => tool.function.name));
-      replyWith(response, completion(replies.shift() ?? ""), sent);
-    });
+  model = await fakeModel((body, response) => {
+    prompts.push(userPrompt(body));
+    toolNames.push((body.tools ?? []).map((tool) => tool.function.name));
+    replyWith(response, completion(replies.shift() ?? ""), body);
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  const port = typeof address === "object" && address ? address.port : 0;
 
   const { ensureSchema } = await import("../server/db/migrate.ts");
   await ensureSchema();
@@ -110,12 +82,7 @@ beforeAll(async () => {
   ({ mcp } = await import("../server/runner/mcp.ts"));
   cron = await import("../server/scheduler/cron.ts");
   ({ schema } = await import("../server/graphql/schema.ts"));
-
-  const { eq } = await import("drizzle-orm");
-  await client.db
-    .update(tables.settings)
-    .set({ baseUrl: `http://127.0.0.1:${port}/v1`, model: "fake" })
-    .where(eq(tables.settings.id, "default"));
+  await useModel(model);
 });
 
 beforeEach(() => {
@@ -134,8 +101,7 @@ afterEach(async () => {
 
 afterAll(async () => {
   cron.stop();
-  await new Promise((resolve) => server.close(resolve));
-  fs.rmSync(dir, { recursive: true, force: true });
+  await model.close();
 });
 
 test("a beforeTurn hook's result is put in front of each step's prompt, and noted", async () => {
@@ -273,6 +239,39 @@ test("deleting a run, or the task it belongs to, sends sessionDelete for each ru
     expect.arrayContaining([first.id, second.id, third.id]),
   );
   expect(calls()).toHaveLength(3);
+});
+
+test("a run removed by retention sends sessionDelete, like one deleted by hand", async () => {
+  await echoServer([
+    { id: "forget", on: "sessionDelete", tool: "echo", args: { text: "{{session.id}}" } },
+  ]);
+  const { id: taskId } = await task("old", "p");
+  const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  const [old] = await client.db
+    .insert(tables.runs)
+    .values({ taskId, status: "ok", startedAt: yearAgo })
+    .returning();
+  const [recent] = await client.db.insert(tables.runs).values({ taskId, status: "ok" }).returning();
+
+  const { eq } = await import("drizzle-orm");
+  const retention = (runRetentionDays: number) =>
+    client.db
+      .update(tables.settings)
+      .set({ runRetentionDays })
+      .where(eq(tables.settings.id, "default"));
+  const { prune } = await import("../server/scheduler/cleanup.ts");
+  await retention(30);
+  try {
+    expect(await prune()).toBe(1);
+  } finally {
+    await retention(0);
+  }
+
+  await until(() => calls().length > 0);
+  await hooks.hooksSettled();
+  // The run inside the window is still a session, and is not told otherwise.
+  expect(calls().map((call) => call.arguments.text)).toEqual([old.id]);
+  expect(recent.id).not.toBe(old.id);
 });
 
 test("hooks that could never run are refused when the row is saved", async () => {

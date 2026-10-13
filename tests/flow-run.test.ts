@@ -1,14 +1,10 @@
-import fs from "node:fs";
-import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { notChat, replyWith } from "./fixtures/sse.ts";
+import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
+import { dataDir, type FakeModel, fakeModel, until, useModel } from "./helpers.ts";
 
 // The schema and the runner are built against the live tables at import time, so the database
 // has to be pointed somewhere disposable before anything under server/ is loaded.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-server-flow-run-"));
-process.env.TASK_SERVER_DATA_DIR = dir;
+dataDir("flow-run");
 
 /** Replies the fake model server hands back, one per request, in order. */
 let replies: string[] = [];
@@ -19,45 +15,23 @@ let formats: unknown[] = [];
 /** Requests to leave unanswered, so a run can be caught mid-flow and stopped. */
 let hangAfter = Number.POSITIVE_INFINITY;
 let received = 0;
-let server: http.Server;
+let model: FakeModel;
 
 let client: typeof import("../server/db/client.ts");
 let tables: typeof import("../server/db/schema.ts");
 let runner: typeof import("../server/runner/run.ts");
 let cron: typeof import("../server/scheduler/cron.ts");
 
-const completion = (content: string) => ({
-  id: "chatcmpl-test",
-  object: "chat.completion",
-  created: 0,
-  model: "fake",
-  choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
-  usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-});
-
 beforeAll(async () => {
-  server = http.createServer((request, response) => {
-    if (notChat(request, response)) return;
-    let body = "";
-    request.on("data", (chunk) => {
-      body += chunk;
-    });
-    request.on("end", () => {
-      const sent = JSON.parse(body) as {
-        messages: { role: string; content: string }[];
-        stream?: boolean;
-        response_format?: unknown;
-      };
-      formats.push(sent.response_format);
-      prompts.push(sent.messages.find((message) => message.role === "user")?.content ?? "");
-      // Accepted and never answered: the run stays in flight until it is stopped.
-      if (++received > hangAfter) return;
-      replyWith(response, completion(replies.shift() ?? ""), sent);
-    });
+  model = await fakeModel((body, response) => {
+    formats.push(body.response_format);
+    prompts.push(userPrompt(body));
+    // Accepted and never answered: the run stays in flight until it is stopped.
+    if (++received > hangAfter) {
+      return;
+    }
+    replyWith(response, completion(replies.shift() ?? ""), body);
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  const port = typeof address === "object" && address ? address.port : 0;
 
   const { ensureSchema } = await import("../server/db/migrate.ts");
   await ensureSchema();
@@ -65,18 +39,12 @@ beforeAll(async () => {
   tables = await import("../server/db/schema.ts");
   runner = await import("../server/runner/run.ts");
   cron = await import("../server/scheduler/cron.ts");
-
-  const { eq } = await import("drizzle-orm");
-  await client.db
-    .update(tables.settings)
-    .set({ baseUrl: `http://127.0.0.1:${port}/v1`, model: "fake" })
-    .where(eq(tables.settings.id, "default"));
+  await useModel(model);
 });
 
 afterAll(async () => {
   cron.stop();
-  await new Promise((resolve) => server.close(resolve));
-  fs.rmSync(dir, { recursive: true, force: true });
+  await model.close();
 });
 
 beforeEach(() => {
@@ -261,7 +229,7 @@ test("stopping mid-flow ends the run and the step it was in as stopped", async (
   hangAfter = 1;
 
   const finished = runner.runTask(taskId);
-  while (received < 2) await new Promise((resolve) => setTimeout(resolve, 5));
+  await until(() => received >= 2);
   expect(runner.stopTask(taskId)).toBe(true);
 
   const run = await finished;

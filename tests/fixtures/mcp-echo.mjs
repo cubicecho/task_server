@@ -10,8 +10,9 @@ import {
 
 // One line per process started. The pool is supposed to keep one child per configured server,
 // and nothing it exposes can tell one child from two — so the children say so themselves.
-if (process.env.MCP_ECHO_SPAWN_LOG)
+if (process.env.MCP_ECHO_SPAWN_LOG) {
   appendFileSync(process.env.MCP_ECHO_SPAWN_LOG, `${process.pid}\n`);
+}
 
 /** A stdio MCP server with three trivial tools, for the runner tests to connect to. */
 const tools = [
@@ -78,11 +79,12 @@ const server = new Server(
 // The `clientInfo` of the handshake, when a test asks for it. It is the whole of what a dialled
 // server learns about who is calling it, and nothing on the pool's side of the connection can
 // read it back — so, like the spawn log above, the child is the only witness.
-if (process.env.MCP_ECHO_CLIENT_LOG)
+if (process.env.MCP_ECHO_CLIENT_LOG) {
   server.oninitialized = () => {
     const client = server.getClientVersion();
     appendFileSync(process.env.MCP_ECHO_CLIENT_LOG, `${client?.name}/${client?.version}\n`);
   };
+}
 server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }));
 // Every call as one JSON line, when a test asks. A hook's call reaches the server and nothing
 // else — it is not a run event and not a tool call on the run — so the child is its witness too.
@@ -109,7 +111,9 @@ if (process.env.MCP_ECHO_PROMPTS) {
   server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }));
   server.setRequestHandler(GetPromptRequestSchema, (request) => {
     const messages = expand[request.params.name];
-    if (!messages) throw new Error(`no prompt named ${request.params.name}`);
+    if (!messages) {
+      throw new Error(`no prompt named ${request.params.name}`);
+    }
     return { messages: messages(request.params.arguments ?? {}) };
   });
 }

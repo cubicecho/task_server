@@ -3,10 +3,11 @@ import {
   errorMessage,
   parseJson,
   type RunEventInput,
+  RunEventKind,
   tryAsk,
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
-import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS } from "../../shared/flow.ts";
+import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
 import { type AgentResult, runAgent } from "./agent.ts";
@@ -15,32 +16,25 @@ import type { HookSession, HookStep } from "./hooks.ts";
 /**
  * A task as a flow: its prompt, then a tree of steps under it.
  *
- * One prompt is enough to summarise a build. It is not enough for the thing people actually
- * want from an automation — *do something, look at what came back, then do one of several
- * things* — and that is what this adds. A **sequence** is steps one after another, each shown
- * what the ones before it produced. A **decision** is a step that also picks which of its arms
- * runs next, and an arm is itself a sequence, so the whole thing nests.
- *
- * A decision is a full agent run, tools and all: deciding whether the last five emails contain
- * an application error may well mean going and reading them. What separates it from an ordinary
- * step is only that its final answer has to land on one of the arms it declared.
- *
- * Nothing here loops: the flow is a tree, walked depth-first, and each step's own tool loop is
- * bounded by `settings.maxToolIterations` as before.
+ * A **sequence** is steps one after another, each shown what the ones before it produced. A
+ * **decision** is a full agent run, tools and all, whose final answer has to land on one of the
+ * arms it declared, and an arm is itself a sequence, so the whole thing nests. Nothing loops:
+ * the flow is a tree walked depth-first, and each step's own tool loop is bounded by
+ * `settings.maxToolIterations`.
  */
 
 // The editor enforces the same three, so they live where both halves can read them, and are
 // re-exported here because this is the module the rest of the server already asks.
 export { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS };
 
-export interface FlowNode {
+interface FlowNode {
   step: Step;
   /** Children by the arm they sit in. */
   branches: Map<string, FlowNode[]>;
 }
 
 /** What a step produced, under the name the next step refers to it by. */
-export interface ContextEntry {
+interface ContextEntry {
   name: string;
   output: string;
 }
@@ -60,10 +54,14 @@ export function buildTree(rows: Step[]): FlowNode[] {
     const seen = new Set<string>();
     let current: Step | undefined = row;
     while (current?.parentId) {
-      if (seen.has(current.id)) return false;
+      if (seen.has(current.id)) {
+        return false;
+      }
       seen.add(current.id);
       current = byId.get(current.parentId);
-      if (!current) return false;
+      if (!current) {
+        return false;
+      }
     }
     return current !== undefined;
   });
@@ -84,13 +82,17 @@ export function buildTree(rows: Step[]): FlowNode[] {
 
   for (const row of ordered) {
     const node = nodes.get(row.id);
-    if (!node) continue;
+    if (!node) {
+      continue;
+    }
     if (!row.parentId) {
       roots.push(node);
       continue;
     }
     const parent = nodes.get(row.parentId);
-    if (!parent) continue;
+    if (!parent) {
+      continue;
+    }
     const arm = parent.branches.get(row.branch) ?? [];
     arm.push(node);
     parent.branches.set(row.branch, arm);
@@ -98,10 +100,11 @@ export function buildTree(rows: Step[]): FlowNode[] {
   return roots;
 }
 
+/** The read-back answers with one case name inside one JSON object, and nothing else. */
+const READ_BACK_MAX_TOKENS = 32;
+
 /** What a prompt can ask for by hand: `{{previous}}`, `{{steps.<name>}}` and `{{event}}`. */
 const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?)\s*\}\}/gi;
-
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
  * The webhook body as a prompt reads it.
@@ -112,21 +115,31 @@ const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
  * know that it is not there.
  */
 function renderPayload(payload: unknown): string {
-  if (payload === null || payload === undefined) return "(this run has no event payload)";
+  if (payload === null || payload === undefined) {
+    return "(this run has no event payload)";
+  }
   return JSON.stringify(payload, null, 2);
+}
+
+/** The earlier steps a step is shown under its `context` mode. */
+function visibleTo(mode: Step["context"], context: ContextEntry[]): ContextEntry[] {
+  if (mode === "none") {
+    return [];
+  }
+  if (mode === "previous") {
+    return context.slice(-1);
+  }
+  return context;
 }
 
 /**
  * The user message a step is sent: what came before it, then what it was asked to do.
  *
  * By default the earlier outputs are a preamble above the prompt, as much of them as the step's
- * `context` mode allows. A prompt that names what it wants — "write an md file containing
- * {{previous}}" — gets the substitution instead and no preamble, because it has said where the
- * data belongs and repeating it above would only be a second copy for the model to reconcile.
- *
- * `{{event}}` is the exception to that: it is the webhook body, which is not step context at
- * all, so placing it says nothing about where the earlier outputs go and does not suppress the
- * preamble. A prompt can ask for both and get both.
+ * `context` mode allows. A prompt that places them itself with `{{previous}}` or
+ * `{{steps.<name>}}` gets the substitution and no preamble, since a second copy would only be
+ * something for the model to reconcile. `{{event}}` is the webhook body, not step context, so
+ * placing it does not suppress the preamble.
  */
 export function renderPrompt(
   step: Pick<Step, "prompt" | "context">,
@@ -138,21 +151,28 @@ export function renderPrompt(
   let placed = false;
   const substituted = step.prompt.replace(PLACEHOLDER, (_match, token: string) => {
     const key = token.toLowerCase();
-    if (key === "event") return renderPayload(payload);
+    if (key === "event") {
+      return renderPayload(payload);
+    }
     placed = true;
-    if (key === "previous") return context[context.length - 1]?.output ?? "";
+    if (key === "previous") {
+      return context[context.length - 1]?.output ?? "";
+    }
     const wanted = token.slice("steps.".length);
-    const entry = context.find((item) => sameName(item.name, wanted));
+    const entry = context.find((item) => sameCase(item.name, wanted));
     // Saying so beats substituting an empty string and leaving the model to invent the rest.
     return entry ? entry.output : `(no step named "${wanted.trim()}" has run)`;
   });
-  if (placed) return substituted;
+  if (placed) {
+    return substituted;
+  }
 
   // `substituted` from here down, not `step.prompt`: `{{event}}` leaves the preamble standing
   // but has still been replaced, and putting the raw prompt back would undo it.
-  const visible =
-    step.context === "none" ? [] : step.context === "previous" ? context.slice(-1) : context;
-  if (visible.length === 0) return substituted;
+  const visible = visibleTo(step.context, context);
+  if (visible.length === 0) {
+    return substituted;
+  }
 
   const earlier = visible.map((entry) => `### ${entry.name}\n\n${entry.output}`).join("\n\n");
   return `## Earlier in this task\n\n${earlier}\n\n---\n\n${substituted}`;
@@ -166,6 +186,10 @@ export function decisionInstruction(cases: string[]): string {
   );
 }
 
+/** The declared case a label names, spelled as it was declared. */
+const caseNamed = (cases: string[], label: string) =>
+  cases.find((option) => sameCase(option, label));
+
 /**
  * Reads the arm out of a decision's reply.
  *
@@ -175,14 +199,16 @@ export function decisionInstruction(cases: string[]): string {
  * cannot be talked out of answering in prose still tend to end on the answer.
  */
 export function parseCase(output: string, cases: string[]): string | undefined {
-  const match = (value: string) => cases.find((option) => sameName(option, value));
+  const match = (value: string) => caseNamed(cases, value);
 
   const objects = output.match(/\{[^{}]*"case"[^{}]*\}/g);
   for (const candidate of objects?.reverse() ?? []) {
     const parsed = parseJson<{ case?: unknown }>(candidate);
     if (typeof parsed?.case === "string") {
       const found = match(parsed.case);
-      if (found) return found;
+      if (found) {
+        return found;
+      }
     }
   }
 
@@ -194,7 +220,9 @@ export function parseCase(output: string, cases: string[]): string | undefined {
     // A final line is an answer, not a sentence: strip the punctuation a model wraps it in.
     const bare = line.replace(/^[`"'*\s]+|[`"'*.,!\s]+$/g, "");
     const found = match(bare);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return undefined;
 }
@@ -271,6 +299,9 @@ export async function runFlow({
     (event: RunEventInput): void =>
       onEvent?.({ ...event, step: event.step ?? name });
 
+  /** The model a step runs on: its own, else the task's, else the one in settings. */
+  const modelFor = (plan: Plan) => plan.model || task.model || config.model;
+
   async function record(plan: Plan, status: RunStep["status"]): Promise<RunStep> {
     const [row] = await db
       .insert(runSteps)
@@ -313,7 +344,7 @@ export async function runFlow({
       kind: plan.kind,
       prompt: renderPrompt(plan, context, payload),
     };
-    emit({ kind: "step", name: plan.name, text: plan.kind });
+    emit({ kind: RunEventKind.Step, name: plan.name, text: plan.kind });
 
     const systemPrompt = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
     // Kept on the row whether the step works or not: a recall that failed is as much a part of
@@ -322,11 +353,13 @@ export async function runFlow({
 
     try {
       const gathered = await hooks?.before(turn, signal, emit);
-      if (gathered?.notes.length) noted = { hooks: gathered.notes };
+      if (gathered?.notes.length) {
+        noted = { hooks: gathered.notes };
+      }
 
       const agentResult = await runAgent({
         config,
-        model: plan.model || task.model || config.model,
+        model: modelFor(plan),
         systemPrompt:
           plan.kind === "decision"
             ? `${systemPrompt}\n\n${decisionInstruction(plan.cases)}`.trim()
@@ -349,7 +382,7 @@ export async function runFlow({
       let branch: string | undefined;
       if (plan.kind === "decision") {
         branch = await resolveCase(plan, output, emit);
-        emit({ kind: "decision", name: plan.name, text: branch });
+        emit({ kind: RunEventKind.Decision, name: plan.name, text: branch });
       }
       await close(row.id, { status: "ok", output, branch, ...tokens, ...noted });
       hooks?.after(turn, output, row.id, emit);
@@ -379,14 +412,16 @@ export async function runFlow({
     emit: (event: RunEventInput) => void,
   ): Promise<string> {
     const direct = parseCase(output, plan.cases);
-    if (direct) return direct;
+    if (direct) {
+      return direct;
+    }
 
     // Asked with the arms as a schema, so an endpoint that can hold a reply to one does: the answer
     // to "which did it mean" cannot itself come back as prose.
     const extracted = await tryAsk("decision", () =>
       askJson<{ case?: unknown }>(
         config,
-        config.toolSelectModel || plan.model || task.model || config.model,
+        config.toolSelectModel || modelFor(plan),
         `Which of these did the following answer choose? Reply with exactly one of: ${plan.cases.join(", ")}.`,
         output,
         {
@@ -395,20 +430,21 @@ export async function runFlow({
           required: ["case"],
           additionalProperties: false,
         },
-        { name: "decision", maxTokens: 32, signal },
+        { name: "decision", maxTokens: READ_BACK_MAX_TOKENS, signal },
       ),
     );
     const guessed =
-      typeof extracted?.case === "string"
-        ? plan.cases.find((option) => sameName(option, extracted.case as string))
-        : undefined;
+      typeof extracted?.case === "string" ? caseNamed(plan.cases, extracted.case) : undefined;
     if (guessed) {
-      emit({ kind: "notice", text: `decision "${plan.name}" read back as ${guessed}` });
+      emit({ kind: RunEventKind.Notice, text: `decision "${plan.name}" read back as ${guessed}` });
       return guessed;
     }
 
-    if (plan.cases.some((option) => sameName(option, DEFAULT_BRANCH))) {
-      emit({ kind: "notice", text: `decision "${plan.name}" fell through to ${DEFAULT_BRANCH}` });
+    if (caseNamed(plan.cases, DEFAULT_BRANCH)) {
+      emit({
+        kind: RunEventKind.Notice,
+        text: `decision "${plan.name}" fell through to ${DEFAULT_BRANCH}`,
+      });
       return DEFAULT_BRANCH;
     }
     throw new Error(
@@ -431,7 +467,9 @@ export async function runFlow({
       }
 
       const branch = await execute(plan);
-      if (branch === undefined) continue;
+      if (branch === undefined) {
+        continue;
+      }
       // An arm with nothing in it is a legitimate "then do nothing"; only an unanswerable
       // decision is a failure, and `resolveCase` has already thrown by here if it was one.
       await runSequence(node.branches.get(branch) ?? [], depth + 1);

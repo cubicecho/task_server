@@ -112,7 +112,9 @@ test("an exported profile carries no key, and no env or headers of the servers i
   const spec = await exported("a1");
   const text = JSON.stringify(spec);
 
-  for (const secret of SECRETS) expect(text, secret).not.toContain(secret);
+  for (const secret of SECRETS) {
+    expect(text, secret).not.toContain(secret);
+  }
   // Not only the values: the names of what was held are the library's to strip too, and a
   // document with an `env` of blanks would read as one that had been filled in.
   for (const field of ["apiKey", "env", "headers", "MEMORY_TOKEN", "Authorization"]) {
@@ -583,7 +585,9 @@ test("a preview names what a bundled server would be given, and never the values
     [["TOKEN"], []],
     [[], ["Authorization"]],
   ]);
-  for (const secret of SECRETS) expect(JSON.stringify(shown)).not.toContain(secret);
+  for (const secret of SECRETS) {
+    expect(JSON.stringify(shown)).not.toContain(secret);
+  }
 });
 
 test("creating a bundled server whose slug is taken refuses the import, and writes nothing", async () => {

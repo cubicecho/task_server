@@ -21,7 +21,9 @@ const queryClient = new QueryClient({
   // `meta: { quiet: true }` to keep it from being said twice.
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
-      if (!mutation.meta?.quiet) toast.error(error.message);
+      if (!mutation.meta?.quiet) {
+        toast.error(error.message);
+      }
     },
   }),
   defaultOptions: {
@@ -43,7 +45,9 @@ const queryClient = new QueryClient({
 });
 
 const root = document.getElementById("root");
-if (!root) throw new Error("#root is missing from index.html");
+if (!root) {
+  throw new Error("#root is missing from index.html");
+}
 
 createRoot(root).render(
   <StrictMode>

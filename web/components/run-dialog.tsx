@@ -4,7 +4,7 @@ import { TextareaField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { Button } from "@/components/ui/button";
 import { request } from "@/lib/gql";
-import { parseJson } from "@/lib/json";
+import { jsonProblem, parseJson } from "@/lib/json";
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
 
@@ -43,26 +43,41 @@ export function RunDialog({
   // The box is filled once, when the form mounts, so nothing lands in it behind the cursor.
   // Waiting for the fetch rather than filling it late is why this shows nothing for the moment
   // it takes: the query is one row by id, and only runs when there is no body to start from.
-  if (body === undefined && last.isPending) return null;
+  if (body === undefined && last.isPending) {
+    return null;
+  }
 
-  const found = last.data?.runs[0];
-  const prefill = body !== undefined ? pretty(body) : found ? pretty(found.payload) : "";
+  const { prefill, description } = startingBody(body, last.data?.runs[0]);
 
   return (
     <BodyForm
       taskName={taskName}
       prefill={prefill}
-      description={
-        body !== undefined
-          ? "The body this run was given. Edit it to try something else."
-          : found
-            ? "The last body this task saw. Edit it, or empty the box to run with none."
-            : "JSON. Empty runs the task with no body, as pressing play does."
-      }
+      description={description}
       onClose={onClose}
       onRun={onRun}
     />
   );
+}
+
+/** What the box opens holding, and the line under it that says where that came from. */
+function startingBody(body: unknown, lastRun?: { payload?: unknown }) {
+  if (body !== undefined) {
+    return {
+      prefill: pretty(body),
+      description: "The body this run was given. Edit it to try something else.",
+    };
+  }
+  if (lastRun) {
+    return {
+      prefill: pretty(lastRun.payload),
+      description: "The last body this task saw. Edit it, or empty the box to run with none.",
+    };
+  }
+  return {
+    prefill: "",
+    description: "JSON. Empty runs the task with no body, as pressing play does.",
+  };
 }
 
 function BodyForm({
@@ -91,7 +106,7 @@ function BodyForm({
     <DialogLayout
       open
       onOpenChange={(open) => !open && onClose()}
-      hasUnsavedChanges={form.state.isDirty}
+      hasUnsavedChanges={() => !form.state.isDefaultValue}
       size="lg"
       title={`Run ${taskName} with a body`}
       description={
@@ -100,7 +115,7 @@ function BodyForm({
           task's webhooks would be. The run is a hand-started one and names no trigger.
         </>
       }
-      content={
+      contentSlot={
         <form
           id="run-body"
           onSubmit={(event) => {
@@ -119,14 +134,7 @@ function BodyForm({
             validators={{
               // Malformed JSON used to be a toast on the way out, which arrived after the dialog
               // was already gone and said nothing about where in the box the fault was.
-              onChange: ({ value }: { value: string }) => {
-                try {
-                  parseJson<unknown>(value, "The body", null);
-                  return undefined;
-                } catch (error) {
-                  return (error as Error).message;
-                }
-              },
+              onChange: ({ value }: { value: string }) => jsonProblem(value, "The body"),
             }}
           />
         </form>
@@ -134,15 +142,11 @@ function BodyForm({
       // A function, so Cancel closes through the dialog's own door: `hasUnsavedChanges` guards
       // Escape, the overlay and the X, and a Cancel wired straight to `onClose` was the fourth
       // way out — the one people actually click — going around the ask.
-      footerActions={(close) => (
+      footerActionsSlot={(close) => (
         <>
-          <Button variant="ghost" onClick={close}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={close} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton form="run-body" pendingLabel="Starting…">
-              Run
-            </form.SubmitButton>
+            <form.SubmitButton form="run-body" pendingLabel="Starting…" content="Run" />
           </form.AppForm>
         </>
       )}

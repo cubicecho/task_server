@@ -1,10 +1,11 @@
 import { Check, Copy, Plus, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { triggerProblem } from "@/lib/triggers";
 import { useCopy } from "@/lib/use-copy";
 
 /**
@@ -38,6 +39,12 @@ let counter = 0;
 const nextKey = () => `trigger-${++counter}`;
 
 /**
+ * 32 letters exactly, so that `% 32` over a byte stays uniform, and without `i`, `l`, `o` and
+ * `u`, so an id read off a screen cannot be transcribed into a different one.
+ */
+const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+
+/**
  * An unguessable webhook id.
  *
  * The id is the whole of the address and the whole of the authentication — there is no secret
@@ -46,16 +53,21 @@ const nextKey = () => `trigger-${++counter}`;
  *
  * `crypto.randomUUID` is not used: it is unavailable outside a secure context, and this server
  * is very often reached over plain http at a LAN address. `getRandomValues` is always there.
- * The alphabet is 32 letters exactly so that `% 32` over a byte stays uniform, and it drops
- * `i`, `l`, `o` and `u` so an id read off a screen cannot be transcribed into a different one.
  */
-const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
-
 function newWebhookId(): string {
   const bytes = new Uint8Array(26);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => ALPHABET[byte % ALPHABET.length]).join("");
 }
+
+/** A trigger of this kind with nothing filled in, armed. */
+const emptyTrigger = (kind: DraftTrigger["kind"]): Omit<DraftTrigger, "key"> => ({
+  kind,
+  cron: "",
+  timezone: "",
+  event: "",
+  enabled: true,
+});
 
 /** The saved rows, as the editor holds them. */
 export const toDraftTriggers = (rows: TaskFieldsFragment["triggers"]): DraftTrigger[] =>
@@ -92,7 +104,9 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
     onChange([...triggers, { ...trigger, key: nextKey() }]);
 
   const drop = (trigger: DraftTrigger) => {
-    if (trigger.id) onRemoveSaved(trigger.id);
+    if (trigger.id) {
+      onRemoveSaved(trigger.id);
+    }
     onChange(triggers.filter((current) => current.key !== trigger.key));
   };
 
@@ -103,18 +117,16 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
     <>
       <Section
         title="Schedule"
-        action={
+        actionSlot={
           <Button
-            type="button"
             variant="ghost"
             size="sm"
-            onClick={() => add({ kind: "cron", cron: "", timezone: "", event: "", enabled: true })}
-          >
-            <Plus className="size-4" />
-            Add
-          </Button>
+            onClick={() => add(emptyTrigger("cron"))}
+            iconSlot={<Plus />}
+            content="Add"
+          />
         }
-        content={
+        contentSlot={
           <>
             {cron.length === 0 ? (
               <p className="text-muted-foreground text-sm">
@@ -123,34 +135,40 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
             ) : null}
 
             {cron.map((trigger) => (
-              <div key={trigger.key} className="flex items-center gap-2">
-                <Input
-                  className="font-mono"
-                  value={trigger.cron}
-                  onChange={(event) => patch(trigger.key, { cron: event.target.value })}
-                  placeholder="0 9 * * *"
-                  aria-label="Cron expression"
-                />
-                <Input
-                  className="w-52"
-                  value={trigger.timezone}
-                  onChange={(event) => patch(trigger.key, { timezone: event.target.value })}
-                  placeholder="America/Chicago"
-                  aria-label="Time zone"
-                />
-                <TriggerSwitch
-                  trigger={trigger}
-                  onChange={(enabled) => patch(trigger.key, { enabled })}
-                />
-                <ActionButton
-                  label="Remove this schedule"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => drop(trigger)}
-                >
-                  <Trash2 />
-                </ActionButton>
-              </div>
+              <TriggerRow
+                key={trigger.key}
+                trigger={trigger}
+                content={(invalid) => (
+                  <>
+                    <Input
+                      className="font-mono"
+                      value={trigger.cron}
+                      onChange={(event) => patch(trigger.key, { cron: event.target.value })}
+                      placeholder="0 9 * * *"
+                      aria-label="Cron expression"
+                      {...invalid}
+                    />
+                    <Input
+                      className="w-52"
+                      value={trigger.timezone}
+                      onChange={(event) => patch(trigger.key, { timezone: event.target.value })}
+                      placeholder="America/Chicago"
+                      aria-label="Time zone"
+                    />
+                    <TriggerSwitch
+                      trigger={trigger}
+                      onChange={(enabled) => patch(trigger.key, { enabled })}
+                    />
+                    <Button
+                      aria-label="Remove this schedule"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => drop(trigger)}
+                      iconSlot={<Trash2 />}
+                    />
+                  </>
+                )}
+              />
             ))}
 
             <div className="flex gap-2 text-muted-foreground text-xs">
@@ -159,15 +177,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
                   key={example.cron}
                   type="button"
                   className="rounded-md border px-2 py-1 hover:bg-accent"
-                  onClick={() =>
-                    add({
-                      kind: "cron",
-                      cron: example.cron,
-                      timezone: "",
-                      event: "",
-                      enabled: true,
-                    })
-                  }
+                  onClick={() => add({ ...emptyTrigger("cron"), cron: example.cron })}
                 >
                   {example.label} <span className="font-mono">{example.cron}</span>
                 </button>
@@ -179,20 +189,16 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
 
       <Section
         title="Webhooks"
-        action={
+        actionSlot={
           <Button
-            type="button"
             variant="ghost"
             size="sm"
-            onClick={() =>
-              add({ kind: "event", cron: "", timezone: "", event: newWebhookId(), enabled: true })
-            }
-          >
-            <Plus className="size-4" />
-            Add
-          </Button>
+            onClick={() => add({ ...emptyTrigger("event"), event: newWebhookId() })}
+            iconSlot={<Plus />}
+            content="Add"
+          />
         }
-        content={
+        contentSlot={
           <>
             {webhooks.length === 0 ? (
               <p className="text-muted-foreground text-sm">
@@ -221,6 +227,35 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
         }
       />
     </>
+  );
+}
+
+/**
+ * One trigger's controls in a row, with the reason it cannot be saved underneath.
+ *
+ * `content` is handed what the row's own input has to carry for that reason to be announced
+ * with it, and nothing when there is none.
+ */
+function TriggerRow({
+  trigger,
+  content,
+}: {
+  trigger: DraftTrigger;
+  content: (invalid: { "aria-invalid"?: true; "aria-describedby"?: string }) => ReactNode;
+}) {
+  const problem = triggerProblem(trigger);
+  const id = `trigger-problem-${trigger.key}`;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        {content(problem ? { "aria-invalid": true, "aria-describedby": id } : {})}
+      </div>
+      {problem ? (
+        <p id={id} role="alert" className="text-destructive text-sm">
+          {problem}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -267,37 +302,46 @@ function WebhookRow({
   const { copied, copy } = useCopy();
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex min-w-0 flex-1 items-center rounded-md border bg-muted/40 pl-3 font-mono text-sm">
-        {/* The origin is shown but not editable: it is where this page came from, not a setting. */}
-        <span className="shrink-0 text-muted-foreground">{window.location.origin}/webhooks/</span>
-        <Input
-          id={`webhook-${trigger.key}`}
-          className="border-0 bg-transparent font-mono shadow-none focus-visible:ring-0"
-          value={trigger.event}
-          onChange={(input) => onChange(input.target.value.trim())}
-          placeholder="(an id is required)"
-          aria-label="Webhook id"
-          spellCheck={false}
-        />
-      </div>
-      <ActionButton
-        label={copied ? "Copied" : "Copy the URL"}
-        variant="ghost"
-        size="icon"
-        disabled={!trigger.event}
-        hint={trigger.event ? undefined : "Give the webhook an id first"}
-        onClick={() => void copy(webhookUrl(trigger.event))}
-      >
-        {copied ? <Check /> : <Copy />}
-      </ActionButton>
-      <Button type="button" variant="ghost" size="sm" onClick={onRegenerate}>
-        New id
-      </Button>
-      <TriggerSwitch trigger={trigger} onChange={onToggle} />
-      <ActionButton label="Remove this webhook" variant="ghost" size="icon" onClick={onRemove}>
-        <Trash2 />
-      </ActionButton>
-    </div>
+    <TriggerRow
+      trigger={trigger}
+      content={(invalid) => (
+        <>
+          <div className="flex min-w-0 flex-1 items-center rounded-md border bg-muted/40 pl-3 font-mono text-sm">
+            {/* The origin is shown but not editable: it is where this page came from, not a setting. */}
+            <span className="shrink-0 text-muted-foreground">
+              {window.location.origin}/webhooks/
+            </span>
+            <Input
+              id={`webhook-${trigger.key}`}
+              className="border-0 bg-transparent font-mono shadow-none focus-visible:ring-0"
+              value={trigger.event}
+              onChange={(input) => onChange(input.target.value.trim())}
+              placeholder="(an id is required)"
+              aria-label="Webhook id"
+              spellCheck={false}
+              {...invalid}
+            />
+          </div>
+          <Button
+            aria-label={copied ? "Copied" : "Copy the URL"}
+            variant="ghost"
+            size="icon"
+            disabled={!trigger.event}
+            hint={trigger.event ? undefined : "Give the webhook an id first"}
+            onClick={() => void copy(webhookUrl(trigger.event))}
+            iconSlot={copied ? <Check /> : <Copy />}
+          />
+          <Button variant="ghost" size="sm" onClick={onRegenerate} content="New id" />
+          <TriggerSwitch trigger={trigger} onChange={onToggle} />
+          <Button
+            aria-label="Remove this webhook"
+            variant="ghost"
+            size="icon"
+            onClick={onRemove}
+            iconSlot={<Trash2 />}
+          />
+        </>
+      )}
+    />
   );
 }

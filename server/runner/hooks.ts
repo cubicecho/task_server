@@ -3,45 +3,34 @@ import {
   errorMessage,
   gather,
   type HookContext,
-  type HookEvent,
+  HookEvent,
   type HookNote,
   type HookRunner,
   notify,
   type RunEventInput,
+  RunEventKind,
   turnMessages,
 } from "@cubicecho/agent-core";
 import { type ToolHook, validateHooks } from "@cubicecho/agent-mcp-pool";
 import { eq, sql } from "drizzle-orm";
 import { unfiredProblems } from "../../shared/hooks.ts";
 import { db } from "../db/client.ts";
-import { runSteps, runs, type Task } from "../db/schema.ts";
+import { runSteps, runs, type Step, type Task } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
 
 /**
- * The MCP servers' hooks, fired at a run's points.
+ * The MCP servers' hooks, fired at a run's points, in the session vocabulary min-agent and
+ * kanban_server fire them in.
  *
- * The pool runs them and never lets one fail a step. This is the half that knows what a run of
- * this server looks like, mapped onto the session vocabulary the hooks are written in — the
- * same vocabulary min-agent and kanban_server fire them in, so one memory server's documented
- * config works on all three:
- *
- * - A **run** is the session: `{{session.id}}` is the run id.
- * - A **step** is a turn: `beforeTurn` before each step that executes, `afterTurn` once it has
- *   its output. The task's own prompt is turn 0, and `sessionStart` fires ahead of it too.
- * - `sessionEnd` fires once the run has finished, with its status and final output.
- * - `sessionDelete` fires for a run deleted by hand, by retention, or with its task.
- * - `beforeCompact` never fires. A step starts from nothing and nothing is ever compacted, so a
- *   hook bound to it is refused when the row is saved rather than left to wait forever.
- *
- * A skipped or queued run never started, and fires nothing. A step that is disabled is not a turn.
- *
- * Each run starts from nothing, so a memory server keyed by `{{session.id}}` remembers nothing
- * the next run can use. `{{vars.task.id}}` is what to key on for memory that should outlast the
- * run — see `vars` below.
+ * A run is the session (`{{session.id}}` is the run id) and each executed step is a turn, the
+ * task's own prompt being turn 0 with `sessionStart` ahead of it. `sessionEnd` fires once the
+ * run has finished, `sessionDelete` for a run deleted by hand, by retention or with its task,
+ * and `beforeCompact` never, so a hook bound to it is refused on save. A skipped or queued run
+ * fires nothing, and `{{vars.task.id}}` is the key for memory that should outlast one run.
  */
 
 /** Every hook's `{{host}}`, so a server shared with min-agent can tell the two apart. */
-export const HOST = "task-server";
+const HOST = "task-server";
 
 /** Where the pool's notices go. The pool prints nothing itself. */
 const log = (message: string) => console.warn(`[hooks] ${message}`);
@@ -52,8 +41,12 @@ const log = (message: string) => console.warn(`[hooks] ${message}`);
  * The pool's own check, plus the one thing it cannot know: which events this host fires.
  */
 export function hookProblems(hooks: unknown): string[] {
-  if (hooks === null || hooks === undefined) return [];
-  if (!Array.isArray(hooks)) return ["hooks must be a JSON array"];
+  if (hooks === null || hooks === undefined) {
+    return [];
+  }
+  if (!Array.isArray(hooks)) {
+    return ["hooks must be a JSON array"];
+  }
   return [...validateHooks(hooks as ToolHook[]), ...unfiredProblems(hooks as Partial<ToolHook>[])];
 }
 
@@ -84,7 +77,7 @@ export interface HookStep {
   /** Which executed step this is, from 0. Skipped steps are not counted. */
   index: number;
   name: string;
-  kind: string;
+  kind: Step["kind"];
   /** The prompt as the step was sent it, before any context. */
   prompt: string;
 }
@@ -137,7 +130,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
      */
     before(step: HookStep, signal?: AbortSignal, onEvent?: (event: RunEventInput) => void) {
       const events: HookEvent[] =
-        step.index === 0 ? ["sessionStart", "beforeTurn"] : ["beforeTurn"];
+        step.index === 0 ? [HookEvent.SessionStart, HookEvent.BeforeTurn] : [HookEvent.BeforeTurn];
       const context: HookContext = {
         ...contextFor(step),
         prompt: step.prompt,
@@ -145,7 +138,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
       };
       return gather(run, events, context, {
         signal,
-        onNote: (note) => onEvent?.({ kind: "notice", text: describe(note) }),
+        onNote: (note) => onEvent?.({ kind: RunEventKind.Notice, text: describe(note) }),
       });
     },
 
@@ -162,10 +155,12 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
         reply,
         turn: { index: step.index, messages: exchange(step, reply) },
       };
-      const done = notify(run, "afterTurn", context, (note) =>
-        onEvent?.({ kind: "notice", text: describe(note) }),
+      const done = notify(run, HookEvent.AfterTurn, context, (note) =>
+        onEvent?.({ kind: RunEventKind.Notice, text: describe(note) }),
       ).then(async (notes) => {
-        if (!notes.length) return;
+        if (!notes.length) {
+          return;
+        }
         await db
           .update(runSteps)
           .set({ hooks: appended(runSteps.hooks, notes) })
@@ -205,8 +200,10 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
   async function finishing(status: RunEnding, reply: string) {
     try {
       await Promise.all(pending);
-      const notes = await notify(run, "sessionEnd", { ...contextFor(), status, reply });
-      if (!notes.length) return;
+      const notes = await notify(run, HookEvent.SessionEnd, { ...contextFor(), status, reply });
+      if (!notes.length) {
+        return;
+      }
       await db
         .update(runs)
         .set({ hooks: appended(runs.hooks, notes) })
@@ -237,5 +234,7 @@ export type HookSession = ReturnType<typeof hookSession>;
  */
 export function runsDeleted(ids: readonly string[]) {
   const run: HookRunner = (event, context) => mcp.runHooks(event, context, { onNotice: log });
-  for (const id of ids) void notify(run, "sessionDelete", { session: { id }, host: HOST });
+  for (const id of ids) {
+    void notify(run, HookEvent.SessionDelete, { session: { id }, host: HOST });
+  }
 }
