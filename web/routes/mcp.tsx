@@ -46,7 +46,11 @@ export function McpRoute() {
     queryFn: () => request(McpServersDocument),
     refetchInterval: 5000,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["mcp"] });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["mcp"] });
+    // The profiles page lists these rows as the servers a profile can be scoped to.
+    queryClient.invalidateQueries({ queryKey: ["agents"] });
+  };
 
   const reconnect = useMutation({
     mutationFn: () => request(ReconnectMcpDocument),

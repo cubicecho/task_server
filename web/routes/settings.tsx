@@ -310,6 +310,9 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                         stored endpoint, not the one in the boxes. */}
                     <div className="flex flex-wrap items-center gap-3">
                       <Button
+                        // Inside the form, so without this it is a submit: applying the
+                        // endpoint would also save every other tab's half-written edits.
+                        type="button"
                         variant="outline"
                         disabled={applyEndpoint.isPending}
                         onClick={() =>
