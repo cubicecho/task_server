@@ -69,52 +69,6 @@ test("no profile, and a profile that overrides nothing, are the settings row", (
   expect(profile.resolveConfig(base, agent())).toEqual(base);
 });
 
-test("a profile overrides only the columns it filled in", () => {
-  const config = profile.resolveConfig(
-    settings(),
-    agent({ model: "gpt-5", maxTokens: 4000, toolDiscovery: "ondemand" }),
-  );
-  expect(config.model).toBe("gpt-5");
-  expect(config.maxTokens).toBe(4000);
-  expect(config.toolDiscovery).toBe("ondemand");
-  // Untouched columns still answer from settings, including the key.
-  expect(config.systemPrompt).toBe("server prompt");
-  expect(config.temperature).toBe(0.5);
-  expect(config.apiKey).toBe("server-key");
-});
-
-test("zero is a value, and -1 is the only way to inherit a number", () => {
-  const config = profile.resolveConfig(
-    settings(),
-    agent({ maxRetries: 0, requestTimeoutSeconds: 0, temperature: 0 }),
-  );
-  expect(config.maxRetries).toBe(0);
-  expect(config.requestTimeoutSeconds).toBe(0);
-  expect(config.temperature).toBe(0);
-});
-
-test("whitespace is not an override", () => {
-  const config = profile.resolveConfig(settings(), agent({ model: "   ", systemPrompt: "\n" }));
-  expect(config.model).toBe("server-model");
-  expect(config.systemPrompt).toBe("server prompt");
-});
-
-test("a profile with an endpoint of its own never inherits the server's key", async () => {
-  const borrowed = profile.resolveConfig(settings(), agent({ baseUrl: "http://friend/v1" }));
-  expect(borrowed.baseUrl).toBe("http://friend/v1");
-  expect(borrowed.apiKey).toBe(NO_KEY);
-
-  const own = profile.resolveConfig(
-    settings(),
-    agent({ baseUrl: "http://friend/v1", apiKey: "friend-key" }),
-  );
-  expect(own.apiKey).toBe("friend-key");
-
-  // The same endpoint written out again is the same endpoint, and inherits like anything else.
-  const same = profile.resolveConfig(settings(), agent({ baseUrl: "http://server:11434/v1" }));
-  expect(same.apiKey).toBe("server-key");
-});
-
 /**
  * The whole sentinel matrix, held as rows rather than as a rule restated. Each case names what
  * the profile and the settings row say and the columns that should differ from the settings row;

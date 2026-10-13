@@ -66,19 +66,19 @@ afterAll(async () => {
 });
 
 /** Tools answer with the GraphQL envelope as JSON text; this is the `data` half of it. */
-async function call(name: string, args: Record<string, unknown> = {}) {
+async function call<T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}) {
   const { text } = await raw(name, args);
   // Not every failure arrives as an envelope: an argument the driver rejects comes back as a bare
   // `MCP error -32602: …` string. Parsing that blind reports a `SyntaxError` about a stray `M`,
   // which says nothing about the call that actually went wrong.
-  let envelope: { data?: Record<string, unknown>; errors?: unknown };
+  let envelope: { data?: T; errors?: unknown };
   try {
     envelope = JSON.parse(text);
   } catch {
     throw new Error(`${name} did not answer with an envelope: ${text}`);
   }
   if (envelope.errors) throw new Error(`${name}: ${JSON.stringify(envelope.errors)}`);
-  return envelope.data ?? {};
+  return envelope.data ?? ({} as T);
 }
 
 /** The result as the client meets it, for the calls that are meant to fail. */
@@ -244,37 +244,37 @@ test("a tool tells an agent what its arguments mean", async () => {
 });
 
 test("writes a task, reads it back, and deletes it", async () => {
-  const created = (await call("create_task", {
+  const created = await call<{ createTask: { id: string; name: string } }>("create_task", {
     values: { name: "from mcp", prompt: "say hello" },
-  })) as { createTask: { id: string; name: string } };
+  });
   const id = created.createTask.id;
   expect(created.createTask.name).toBe("from mcp");
 
-  const listed = (await call("tasks", { where: { id: { eq: id } } })) as {
+  const listed = await call<{
     tasks: { id: string; prompt: string }[];
-  };
+  }>("tasks", { where: { id: { eq: id } } });
   expect(listed.tasks).toHaveLength(1);
   expect(listed.tasks[0].prompt).toBe("say hello");
 
   await call("update_task", { where: { id: { eq: id } }, set: { enabled: false } });
-  const trigger = (await call("create_trigger", {
+  const trigger = await call<{ createTrigger: { id: string } }>("create_trigger", {
     values: { taskId: id, kind: "cron", cron: "0 9 * * *" },
-  })) as { createTrigger: { id: string } };
+  });
   expect(trigger.createTrigger.id).toBeTruthy();
 
   // Nothing has run, so `runs` is empty for it rather than missing.
-  const runs = (await call("runs", { where: { taskId: { eq: id } } })) as { runs: unknown[] };
+  const runs = await call<{ runs: unknown[] }>("runs", { where: { taskId: { eq: id } } });
   expect(runs.runs).toEqual([]);
 
   await call("delete_task", { where: { id: { eq: id } } });
-  const gone = (await call("tasks", { where: { id: { eq: id } } })) as { tasks: unknown[] };
+  const gone = await call<{ tasks: unknown[] }>("tasks", { where: { id: { eq: id } } });
   expect(gone.tasks).toEqual([]);
 });
 
 test("a question about a task's triggers is asked from the trigger end", async () => {
-  const created = (await call("create_task", {
+  const created = await call<{ createTask: { id: string } }>("create_task", {
     values: { name: "webhooked", prompt: "wait for a POST" },
-  })) as { createTask: { id: string } };
+  });
   const id = created.createTask.id;
   await call("create_trigger", {
     values: { taskId: id, kind: "event", event: "hook-filter-test" },
@@ -283,16 +283,15 @@ test("a question about a task's triggers is asked from the trigger end", async (
   // The relation filter is pruned from the projection, so the reach it bought is gone from here
   // and the tool says so rather than ignoring the key. It was most of the listing's weight and
   // no agent sent one in a hundred logged calls.
-  const refused = (await client.callTool({
-    name: "tasks",
-    arguments: { where: { triggers: { some: { event: { eq: "hook-filter-test" } } } } },
-  })) as CallToolResult;
+  const refused = await raw("tasks", {
+    where: { triggers: { some: { event: { eq: "hook-filter-test" } } } },
+  });
   expect(refused.isError).toBe(true);
 
   // And the question is still answerable, from the end that owns the foreign key.
-  const found = (await call("triggers", {
+  const found = await call<{ triggers: { taskId: string }[] }>("triggers", {
     where: { event: { eq: "hook-filter-test" } },
-  })) as { triggers: { taskId: string }[] };
+  });
   expect(found.triggers.map((trigger) => trigger.taskId)).toEqual([id]);
 
   await call("delete_task", { where: { id: { eq: id } } });
@@ -306,18 +305,18 @@ test("hands a run's progress to a client that polls for it", async () => {
   }
   events.emit("run-mcp", { kind: "tool-call", name: "echo__ping", text: "{}" });
 
-  const first = (await call("run_events", { runId: "run-mcp" })) as {
+  const first = await call<{
     runEvents: { seq: number; kind: string; text: string }[];
-  };
+  }>("run_events", { runId: "run-mcp" });
   // Four thinking deltas are one thought: a client reading in snapshots gets prose, not tokens.
   expect(first.runEvents.map((event) => event.kind)).toEqual(["step", "thinking", "tool-call"]);
   expect(first.runEvents[1].text).toBe("thinking out loud");
 
   const last = first.runEvents[first.runEvents.length - 1].seq;
   events.emit("run-mcp", { kind: "done", ok: true, text: "finished" });
-  const next = (await call("run_events", { runId: "run-mcp", afterSeq: last })) as {
+  const next = await call<{
     runEvents: { kind: string; text: string }[];
-  };
+  }>("run_events", { runId: "run-mcp", afterSeq: last });
   // Resuming from the last `seq` reads what came after it, and nothing twice.
   expect(next.runEvents).toEqual([expect.objectContaining({ kind: "done", text: "finished" })]);
 });
@@ -405,10 +404,10 @@ test("marks only the tools that actually destroy something", async () => {
 });
 
 test("a flow is written nested and read back flat, and says so", async () => {
-  const { createTask } = await call("create_task", {
+  const { createTask } = await call<{ createTask: { id: string } }>("create_task", {
     values: { name: "roundtrip", prompt: "p", model: "m" },
   });
-  const taskId = (createTask as { id: string }).id;
+  const taskId = createTask.id;
 
   await call("set_task_steps", {
     taskId,
@@ -424,8 +423,9 @@ test("a flow is written nested and read back flat, and says so", async () => {
     ],
   });
 
-  const { steps } = await call("steps", { where: { taskId: { eq: taskId } } });
-  const rows = steps as Record<string, unknown>[];
+  const { steps: rows } = await call<{ steps: Record<string, unknown>[] }>("steps", {
+    where: { taskId: { eq: taskId } },
+  });
   const under = rows.find((row) => row.name === "doit");
   expect(under?.parentId).toBe(rows.find((row) => row.name === "pick")?.id);
   expect(under?.branch).toBe("yes");
@@ -447,8 +447,10 @@ test("a flow is written nested and read back flat, and says so", async () => {
     prompt: row.prompt,
     cases: row.cases,
   }));
-  const { setTaskSteps } = await call("set_task_steps", { taskId, steps: pruned });
-  const flattened = setTaskSteps as Record<string, unknown>[];
+  const { setTaskSteps: flattened } = await call<{ setTaskSteps: Record<string, unknown>[] }>(
+    "set_task_steps",
+    { taskId, steps: pruned },
+  );
   expect(flattened.every((row) => row.parentId === null && row.branch === "")).toBe(true);
 
   const { tools } = await client.listTools();

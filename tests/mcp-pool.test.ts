@@ -190,15 +190,16 @@ test("a server that cannot start is reported rather than thrown", async () => {
 });
 
 test("flush pays off a debounced sync, so a reader sees its own write", async () => {
+  // Straight into the table, past the write hook: the hook's own `syncSoon` is what is under
+  // test, and it is called by hand below.
+  await db.insert(mcpServers).values(config());
   mcp.syncSoon();
   // The debounce is what the write hook leans on; without `flush` a read arriving in the same
   // millisecond — `create_mcp_server` then `mcp_status` — answers about the pool as it was.
   expect(mcp.state()).toEqual([]);
 
   await mcp.flush();
-  // Nothing is configured in this test's database, so the reconcile is a real one that finds
-  // nothing. What matters is that it happened before `flush` resolved.
-  expect(mcp.state()).toEqual([]);
+  expect(mcp.state()).toMatchObject([{ slug: "echo", status: "ready" }]);
 });
 
 test("flush is a no-op when nothing is owed", async () => {
