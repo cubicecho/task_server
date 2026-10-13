@@ -2,7 +2,7 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { ROOT } from "../paths.ts";
 import { db, runMigrations } from "./client.ts";
-import { runSteps, runs, settings } from "./schema.ts";
+import { runSteps, runs, SETTINGS_ID, settings } from "./schema.ts";
 
 /**
  * Brings the database up to the current schema on boot, so a fresh clone — or a fresh postgres
@@ -20,7 +20,7 @@ export async function ensureSchema() {
 
   // The settings row is a singleton the UI edits in place, so it has to exist before the UI
   // can load. Column defaults fill the rest in.
-  await db.insert(settings).values({ id: "default" }).onConflictDoNothing();
+  await db.insert(settings).values({ id: SETTINGS_ID }).onConflictDoNothing();
 
   // A run left `running` by a crash is never going to finish; nothing would ever clear it. The
   // step it died inside is in the same position, and a run whose steps still say `running`

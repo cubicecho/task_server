@@ -33,14 +33,14 @@ import type { HookSession, HookStep } from "./hooks.ts";
 // re-exported here because this is the module the rest of the server already asks.
 export { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS };
 
-export interface FlowNode {
+interface FlowNode {
   step: Step;
   /** Children by the arm they sit in. */
   branches: Map<string, FlowNode[]>;
 }
 
 /** What a step produced, under the name the next step refers to it by. */
-export interface ContextEntry {
+interface ContextEntry {
   name: string;
   output: string;
 }
@@ -97,6 +97,9 @@ export function buildTree(rows: Step[]): FlowNode[] {
   }
   return roots;
 }
+
+/** The read-back answers with one case name inside one JSON object, and nothing else. */
+const READ_BACK_MAX_TOKENS = 32;
 
 /** What a prompt can ask for by hand: `{{previous}}`, `{{steps.<name>}}` and `{{event}}`. */
 const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?)\s*\}\}/gi;
@@ -406,7 +409,7 @@ export async function runFlow({
           required: ["case"],
           additionalProperties: false,
         },
-        { name: "decision", maxTokens: 32, signal },
+        { name: "decision", maxTokens: READ_BACK_MAX_TOKENS, signal },
       ),
     );
     const guessed =

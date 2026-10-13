@@ -37,7 +37,10 @@ export function mountWebhooks(app: Express, fire: typeof fireTask = fireTask) {
   });
 }
 
-const parseJson = express.json({ limit: "1mb" });
+/** The largest body a delivery may carry. One past it is logged and the firing goes on with none. */
+const MAX_BODY = "1mb";
+
+const parseJson = express.json({ limit: MAX_BODY });
 
 /**
  * The body, when there is one that can be read, and nothing when there is not.

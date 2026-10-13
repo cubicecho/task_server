@@ -26,6 +26,9 @@ import { cn } from "@/lib/utils";
 type Failure = StatusQuery["failures"][number];
 type Server = StatusQuery["mcpStatus"][number];
 
+/** A failed run whose `error` is empty still has to say something. */
+const NO_REASON = "It broke without saying why.";
+
 const when = (iso: string) => new Date(iso).toLocaleString();
 
 /**
@@ -82,7 +85,7 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
   if (health === "broken" && last) {
     return (
       <ItemDescription className="line-clamp-3 text-destructive">
-        {last.error || "It broke without saying why."}
+        {last.error || NO_REASON}
       </ItemDescription>
     );
   }
@@ -155,7 +158,7 @@ function FailureRow({ failure }: { failure: Failure }) {
           </span>
         </ItemTitle>
         <ItemDescription className="line-clamp-2 text-destructive">
-          {failure.error || "It broke without saying why."}
+          {failure.error || NO_REASON}
         </ItemDescription>
       </ItemContent>
     </Item>

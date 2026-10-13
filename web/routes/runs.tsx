@@ -130,7 +130,7 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
         <li
           key={step.id}
           className="flex flex-col gap-1 border-l-2 pl-3"
-          style={{ marginLeft: `${step.depth * 1}rem` }}
+          style={{ marginLeft: `${step.depth}rem` }}
         >
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={STATUS_VARIANT[step.status] ?? "secondary"}>{step.status}</Badge>
@@ -203,13 +203,7 @@ function RunDetail({
   });
   const found = detail.data?.runs[0];
 
-  if (!found) {
-    return detail.error ? (
-      <p className="text-destructive text-sm">{detail.error.message}</p>
-    ) : (
-      <p className="text-muted-foreground text-sm">Loading…</p>
-    );
-  }
+  if (!found) return <QueryState query={detail} what="this run" count={0} rows={1} />;
 
   const payload = found.payload;
   const result = found.steps.length ? (
@@ -222,7 +216,7 @@ function RunDetail({
     <>
       <ToolChips calls={found.toolCalls} />
       <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-        {run.error || run.output || "(no output)"}
+        {run.error || run.output || NO_OUTPUT}
       </pre>
     </>
   );
@@ -247,6 +241,9 @@ function RunDetail({
 }
 
 const PAGE = 50;
+
+/** What stands in for a run that ended with nothing to show. */
+const NO_OUTPUT = "(no output)";
 
 /**
  * The bar above the list: what to look for, and how far to look.
@@ -453,7 +450,7 @@ export function RunsRoute() {
                   </>
                 }
                 description={
-                  <span className="line-clamp-2">{run.error || run.output || "(no output)"}</span>
+                  <span className="line-clamp-2">{run.error || run.output || NO_OUTPUT}</span>
                 }
                 action={
                   <>

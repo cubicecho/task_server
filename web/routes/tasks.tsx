@@ -82,18 +82,21 @@ export function TasksRoute() {
 
   const rows = tasks.data?.tasks ?? [];
 
+  // Offered twice: in the header always, and in the empty state where it is the only thing to do.
+  const newTask = (
+    <Button asChild>
+      <Link to="/tasks/new">
+        <Plus className="size-4" />
+        New task
+      </Link>
+    </Button>
+  );
+
   return (
     <PageLayout
       title="Tasks"
       description="A prompt, and the triggers that decide when it runs."
-      action={
-        <Button asChild>
-          <Link to="/tasks/new">
-            <Plus className="size-4" />
-            New task
-          </Link>
-        </Button>
-      }
+      action={newTask}
       content={
         <>
           <QueryState
@@ -108,14 +111,7 @@ export function TasksRoute() {
                     Create one, give it a cron expression, and it runs on its own.
                   </EmptyDescription>
                 </EmptyHeader>
-                <EmptyContent>
-                  <Button asChild>
-                    <Link to="/tasks/new">
-                      <Plus className="size-4" />
-                      New task
-                    </Link>
-                  </Button>
-                </EmptyContent>
+                <EmptyContent>{newTask}</EmptyContent>
               </Empty>
             }
           />

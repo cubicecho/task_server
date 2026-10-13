@@ -16,7 +16,16 @@ import {
 } from "graphql";
 import { GraphQLJSON } from "graphql-scalars";
 import { db } from "../db/client.ts";
-import { agents, mcpServers, runs, settings, steps, tasks, triggers } from "../db/schema.ts";
+import {
+  agents,
+  mcpServers,
+  runs,
+  SETTINGS_ID,
+  settings,
+  steps,
+  tasks,
+  triggers,
+} from "../db/schema.ts";
 import { hookProblems, runsDeleted } from "../runner/hooks.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
@@ -37,6 +46,9 @@ import {
   ScheduleEntryType,
   StepInputType,
 } from "./types.ts";
+
+/** How much of a run's log `runEvents` hands back when the caller names no limit. */
+const DEFAULT_EVENT_LIMIT = 200;
 
 /** `McpConnectionInput` as it arrives: both arms' fields, all of them optional but the transport. */
 type McpConnectionArgs = {
@@ -187,7 +199,11 @@ const filterOf = (table: Parameters<typeof extractFilters>[0], name: string, whe
   where ? extractFilters(table, name, where as Parameters<typeof extractFilters>[2]) : undefined;
 
 /** The columns' own defaults, which a create that leaves them out is going to get. */
-const NEW_TRIGGER = { kind: "cron", cron: "", event: "" };
+const NEW_TRIGGER = {
+  kind: triggers.kind.default,
+  cron: triggers.cron.default,
+  event: triggers.event.default,
+};
 
 /** Why nothing could ever fire this trigger, if nothing could. */
 function triggerProblem(row: Record<string, unknown>): GraphQLError | undefined {
@@ -266,8 +282,16 @@ async function runsOfTasks(tx: typeof db, args: unknown): Promise<string[]> {
   }
 }
 
-/** The columns' own defaults, which a create that leaves them out is going to get. */
-const NEW_MCP_SERVER = { id: "new", label: "", enabled: true, transport: "stdio" };
+/**
+ * The columns' own defaults, which a create that leaves them out is going to get. The id is the
+ * exception: the row has none until it is written, and the check wants one to name.
+ */
+const NEW_MCP_SERVER = {
+  id: "new",
+  label: mcpServers.label.default,
+  enabled: mcpServers.enabled.default,
+  transport: mcpServers.transport.default,
+};
 
 /**
  * Refuses an MCP server row the pool could not use as written: hooks that could never run, a
@@ -427,7 +451,7 @@ const baseSchema = new GraphQLSchema({
           },
           limit: {
             type: GraphQLInt,
-            description: "At most this many entries, oldest first. Default 200.",
+            description: `At most this many entries, oldest first. Default ${DEFAULT_EVENT_LIMIT}.`,
           },
         },
         resolve: (
@@ -436,7 +460,7 @@ const baseSchema = new GraphQLSchema({
         ) =>
           fold(history(args.runId).filter((event) => event.seq > (args.afterSeq ?? 0))).slice(
             0,
-            args.limit ?? 200,
+            args.limit ?? DEFAULT_EVENT_LIMIT,
           ),
       },
     },
@@ -578,7 +602,10 @@ const baseSchema = new GraphQLSchema({
           "it is excluded from the Setting type so it can never be read back out.",
         args: { apiKey: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: async (_source, args: { apiKey: string }) => {
-          await db.update(settings).set({ apiKey: args.apiKey }).where(eq(settings.id, "default"));
+          await db
+            .update(settings)
+            .set({ apiKey: args.apiKey })
+            .where(eq(settings.id, SETTINGS_ID));
           return true;
         },
       },

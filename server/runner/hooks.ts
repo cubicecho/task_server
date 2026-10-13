@@ -14,7 +14,7 @@ import { type ToolHook, validateHooks } from "@cubicecho/agent-mcp-pool";
 import { eq, sql } from "drizzle-orm";
 import { unfiredProblems } from "../../shared/hooks.ts";
 import { db } from "../db/client.ts";
-import { runSteps, runs, type Task } from "../db/schema.ts";
+import { runSteps, runs, type Step, type Task } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
 
 /**
@@ -41,7 +41,7 @@ import { mcp } from "./mcp.ts";
  */
 
 /** Every hook's `{{host}}`, so a server shared with min-agent can tell the two apart. */
-export const HOST = "task-server";
+const HOST = "task-server";
 
 /** Where the pool's notices go. The pool prints nothing itself. */
 const log = (message: string) => console.warn(`[hooks] ${message}`);
@@ -84,7 +84,7 @@ export interface HookStep {
   /** Which executed step this is, from 0. Skipped steps are not counted. */
   index: number;
   name: string;
-  kind: string;
+  kind: Step["kind"];
   /** The prompt as the step was sent it, before any context. */
   prompt: string;
 }

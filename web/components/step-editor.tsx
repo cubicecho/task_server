@@ -314,7 +314,7 @@ function StepCard({
                     <ModelSelect
                       {...wired}
                       value={step.model}
-                      onChange={(model) => patch({ model })}
+                      onValueChange={(model) => patch({ model })}
                       defaultLabel="Same as the task"
                     />
                   )}
