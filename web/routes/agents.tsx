@@ -6,7 +6,6 @@ import {
   AgentsDocument,
   DeleteAgentDocument,
 } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { AgentDialog } from "@/components/agent-dialog";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageLayout } from "@/components/page-layout";
@@ -92,19 +91,16 @@ export function AgentsRoute() {
     <PageLayout
       title="Agent profiles"
       description="A named set of overrides for Settings, that a task can be pointed at."
-      action={
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" />
-          New profile
-        </Button>
+      actionSlot={
+        <Button onClick={() => setCreating(true)} iconSlot={<Plus />} content="New profile" />
       }
-      content={
+      contentSlot={
         <>
           <QueryState
             query={agents}
             what="your agent profiles"
             count={rows.length}
-            empty={
+            emptySlot={
               <Empty>
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -142,16 +138,15 @@ export function AgentsRoute() {
                     ) : null}
                   </ItemContent>
                   <ItemActions className="gap-1">
-                    <ActionButton
-                      label="Edit"
+                    <Button
+                      aria-label="Edit"
                       variant="ghost"
                       size="icon"
                       onClick={() => setEditing(agent)}
-                    >
-                      <Pencil />
-                    </ActionButton>
+                      iconSlot={<Pencil />}
+                    />
                     <ConfirmButton
-                      label="Delete"
+                      aria-label="Delete"
                       variant="ghost"
                       size="icon"
                       title={`Delete ${agent.name}?`}
@@ -161,9 +156,8 @@ export function AgentsRoute() {
                           : "Nothing runs on it, so nothing changes but the list."
                       }
                       onConfirm={() => remove.mutate(agent.id)}
-                    >
-                      <Trash2 />
-                    </ConfirmButton>
+                      iconSlot={<Trash2 />}
+                    />
                   </ItemActions>
                 </div>
 

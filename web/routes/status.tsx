@@ -132,10 +132,9 @@ function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
           // refuses one, and the refusal would arrive as a toast saying so.
           disabled={health === "running" || run.isPending}
           onClick={() => run.mutate({ taskId: task.id })}
-        >
-          <Play className="size-3.5" />
-          Run now
-        </Button>
+          iconSlot={<Play />}
+          content="Run now"
+        />
       </ItemActions>
     </Item>
   );
@@ -229,18 +228,17 @@ export function StatusRoute() {
     <PageLayout
       title="Status"
       description="What is wrong, and what is about to be."
-      action={
+      actionSlot={
         <Button
           variant="outline"
           size="sm"
           onClick={() => queryClient.invalidateQueries({ queryKey: ["status"] })}
           disabled={status.isFetching}
-        >
-          <RefreshCw className={cn("size-4", status.isFetching && "animate-spin")} />
-          Refresh
-        </Button>
+          iconSlot={<RefreshCw className={status.isFetching ? "animate-spin" : undefined} />}
+          content="Refresh"
+        />
       }
-      content={
+      contentSlot={
         <>
           {status.isError ? (
             <QueryError
@@ -270,7 +268,7 @@ export function StatusRoute() {
             <Section
               title="Unreachable servers"
               description="Enabled, and not reached. Every run since has gone out without these tools, whether or not its prompt was written expecting them."
-              content={unreachable.map((server) => (
+              contentSlot={unreachable.map((server) => (
                 <Item key={server.id} variant="outline">
                   <ItemContent>
                     <ItemTitle>
@@ -282,9 +280,12 @@ export function StatusRoute() {
                     </ItemDescription>
                   </ItemContent>
                   <ItemActions>
-                    <Button asChild size="sm" variant="outline">
-                      <Link to="/servers">Servers</Link>
-                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      linkSlot={<Link to="/servers" />}
+                      content="Servers"
+                    />
                   </ItemActions>
                 </Item>
               ))}
@@ -303,14 +304,18 @@ export function StatusRoute() {
             <Section
               title="Unexplained failures"
               description="Runs that broke and whose task has run since, or whose task is gone. Nothing above counts these, and they are worth seeing once."
-              content={
+              contentSlot={
                 <>
                   {unexplained.slice(0, 5).map((failure) => (
                     <FailureRow key={failure.id} failure={failure} />
                   ))}
-                  <Button asChild variant="outline" size="sm" className="self-start">
-                    <Link to="/runs">Every run</Link>
-                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                    linkSlot={<Link to="/runs" />}
+                    content="Every run"
+                  />
                 </>
               }
             />

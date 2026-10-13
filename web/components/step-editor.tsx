@@ -1,5 +1,4 @@
 import { ChevronDown, ChevronUp, GitBranch, Plus, Trash2, X } from "lucide-react";
-import { ActionButton } from "@/components/action-button";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
@@ -73,27 +72,22 @@ export function StepList({
 
       <div className="flex gap-2">
         <Button
-          type="button"
           variant="outline"
           size="sm"
           onClick={() => onChange([...steps, emptyStep("agent")])}
-        >
-          <Plus className="size-4" />
-          Add step
-        </Button>
-        <ActionButton
-          label="Add decision"
-          tooltip={false}
+          iconSlot={<Plus />}
+          content="Add step"
+        />
+        <Button
           variant="outline"
           size="sm"
           // A decision's arms sit one level deeper, and the server refuses past MAX_DEPTH.
           disabled={depth >= MAX_DEPTH}
           hint={depth >= MAX_DEPTH ? `Steps cannot nest more than ${MAX_DEPTH} deep.` : undefined}
           onClick={() => onChange([...steps, emptyStep("decision")])}
-        >
-          <GitBranch className="size-4" />
-          Add decision
-        </ActionButton>
+          iconSlot={<GitBranch />}
+          content="Add decision"
+        />
       </div>
     </div>
   );
@@ -195,32 +189,29 @@ function StepCard({
           aria-label="Enabled"
           title={step.enabled ? "Runs" : "Skipped"}
         />
-        <ActionButton
-          label="Move up"
+        <Button
+          aria-label="Move up"
           variant="ghost"
           size="icon"
           disabled={first}
           onClick={() => onMove(-1)}
-        >
-          <ChevronUp />
-        </ActionButton>
-        <ActionButton
-          label="Move down"
+          iconSlot={<ChevronUp />}
+        />
+        <Button
+          aria-label="Move down"
           variant="ghost"
           size="icon"
           disabled={last}
           onClick={() => onMove(1)}
-        >
-          <ChevronDown />
-        </ActionButton>
-        <ActionButton
-          label={decision ? "Remove this decision" : "Remove this step"}
+          iconSlot={<ChevronDown />}
+        />
+        <Button
+          aria-label={decision ? "Remove this decision" : "Remove this step"}
           variant="ghost"
           size="icon"
           onClick={onRemove}
-        >
-          <Trash2 />
-        </ActionButton>
+          iconSlot={<Trash2 />}
+        />
       </div>
 
       <div className="flex flex-col gap-3 p-3">
@@ -247,18 +238,16 @@ function StepCard({
         {decision ? (
           <Section
             title="Cases"
-            action={
+            actionSlot={
               <Button
-                type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => patch({ cases: [...step.cases, ""] })}
-              >
-                <Plus className="size-4" />
-                Add case
-              </Button>
+                iconSlot={<Plus />}
+                content="Add case"
+              />
             }
-            content={
+            contentSlot={
               <>
                 <div className="flex flex-wrap gap-2">
                   {step.cases.map((label, index) => (
@@ -276,14 +265,13 @@ function StepCard({
                         aria-label={`Case ${index + 1}`}
                         aria-invalid={duplicate(index)}
                       />
-                      <ActionButton
-                        label="Remove this case"
+                      <Button
+                        aria-label="Remove this case"
                         variant="ghost"
                         size="icon"
                         onClick={() => dropCase(index)}
-                      >
-                        <X />
-                      </ActionButton>
+                        iconSlot={<X />}
+                      />
                     </div>
                   ))}
                 </div>
@@ -306,13 +294,13 @@ function StepCard({
           <FieldRow
             className="mt-3"
             perRow={3}
-            content={
+            contentSlot={
               <>
                 <FormField
                   label="Model"
                   // The function form: `ModelSelect` puts the id on whichever of its two controls
                   // is on screen.
-                  control={(wired) => (
+                  controlSlot={(wired) => (
                     <ModelSelect
                       {...wired}
                       value={step.model}
@@ -323,7 +311,7 @@ function StepCard({
                 />
                 <FormField
                   label="System prompt"
-                  control={
+                  controlSlot={
                     <Input
                       value={step.systemPrompt}
                       onChange={(event) => patch({ systemPrompt: event.target.value })}
@@ -335,7 +323,7 @@ function StepCard({
                   label="Sees"
                   // Still the function form: the control spreads what it is handed onto the
                   // trigger, and the trigger is the only element a Radix select renders.
-                  control={(wired) => (
+                  controlSlot={(wired) => (
                     <OptionSelect
                       {...wired}
                       value={step.context}

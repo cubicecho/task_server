@@ -143,11 +143,11 @@ export function AgentDialog({
     <DialogLayout
       open
       onOpenChange={(open) => !open && onClose()}
-      hasUnsavedChanges={form.state.isDirty}
+      hasUnsavedChanges={() => !form.state.isDefaultValue}
       size="lg"
       title={agent ? "Edit profile" : "New agent profile"}
       description="Everything left blank comes from Settings, so a profile only has to say what it changes."
-      content={
+      contentSlot={
         <form
           id="agent-profile"
           className="flex flex-col gap-4"
@@ -157,7 +157,7 @@ export function AgentDialog({
           }}
         >
           <FieldRow
-            content={
+            contentSlot={
               <>
                 <InputField
                   form={form}
@@ -214,7 +214,7 @@ export function AgentDialog({
 
           <FieldRow
             perRow={3}
-            content={
+            contentSlot={
               <>
                 <NumberField
                   form={form}
@@ -321,20 +321,14 @@ export function AgentDialog({
       // A function, so Cancel closes through the dialog's own door: `hasUnsavedChanges` guards
       // Escape, the overlay and the X, and a Cancel wired straight to `onClose` was the fourth
       // way out — the one people actually click — going around the ask.
-      footerActions={(close) => (
+      footerActionsSlot={(close) => (
         <>
-          <Button type="button" variant="ghost" onClick={close}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={close} content="Cancel" />
           <form.AppForm>
             {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
                 server would refuse. Passing `disabled` tightens the store's own two reasons. */}
-            <form.Subscribe selector={(state) => state.isDirty}>
-              {(isDirty) => (
-                <form.SubmitButton form="agent-profile" disabled={!isDirty}>
-                  Save
-                </form.SubmitButton>
-              )}
+            <form.Subscribe selector={(state) => state.isDefaultValue}>
+              {(untouched) => <form.SubmitButton form="agent-profile" disabled={untouched} />}
             </form.Subscribe>
           </form.AppForm>
         </>

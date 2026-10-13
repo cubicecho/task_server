@@ -74,10 +74,13 @@ function Snippet({ label, text }: { label: string; text: string }) {
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-sm">{label}</h3>
-        <Button variant="ghost" size="xs" onClick={() => void copy(text)}>
-          {copied ? <Check /> : <Copy />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => void copy(text)}
+          iconSlot={copied ? <Check /> : <Copy />}
+          content={copied ? "Copied" : "Copy"}
+        />
       </div>
       <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs">
         <code>{text}</code>
@@ -123,7 +126,7 @@ export function SettingsRoute() {
         description={DESCRIPTION}
         width="prose"
         loading={settings.isPending}
-        content={
+        contentSlot={
           settings.isError ? (
             <QueryError
               error={settings.error}
@@ -248,9 +251,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
             form.reset(toForm(row));
             setProbe(null);
           }}
-        >
-          Revert
-        </Button>
+          content="Revert"
+        />
         <form.AppForm>
           <form.SubmitButton form={FORM_ID} />
         </form.AppForm>
@@ -264,9 +266,9 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
       title={TITLE}
       description={DESCRIPTION}
       width="prose"
-      footer={bar}
+      footerSlot={bar}
       footerClassName="border-t"
-      content={
+      contentSlot={
         <Tabs value={tab} onValueChange={open}>
           <div className="max-w-full overflow-x-auto">
             <TabsList>
@@ -303,7 +305,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                     names an endpoint of its own.
                   </>
                 }
-                content={
+                contentSlot={
                   <div className="flex flex-col gap-4">
                     <InputField
                       form={form}
@@ -326,17 +328,13 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                         stored endpoint, not the one in the boxes. */}
                     <div className="flex flex-wrap items-center gap-3">
                       <Button
-                        // Inside the form, so without this it is a submit: applying the
-                        // endpoint would also save every other tab's half-written edits.
-                        type="button"
                         variant="outline"
                         disabled={applyEndpoint.isPending}
                         onClick={() =>
                           applyEndpoint.mutate({ baseUrl: values.baseUrl, apiKey: values.apiKey })
                         }
-                      >
-                        {endpointAction(applyEndpoint.isPending, endpointPending)}
-                      </Button>
+                        content={endpointAction(applyEndpoint.isPending, endpointPending)}
+                      />
                       {endpointPending ? (
                         <p className="text-xs text-muted-foreground">
                           Not applied yet — the model lists are still the stored endpoint's.
@@ -374,7 +372,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
 
               <CardLayout
                 title="Model"
-                content={
+                contentSlot={
                   <div className="flex flex-col gap-4">
                     <ModelSelectField
                       form={form}
@@ -398,10 +396,10 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
               <CardLayout
                 title="Limits"
                 description="What one run may spend."
-                content={
+                contentSlot={
                   <FieldRow
                     perRow={3}
-                    content={
+                    contentSlot={
                       <>
                         <NumberField
                           form={form}
@@ -434,9 +432,9 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
               <CardLayout
                 title="Resilience"
                 description="What a request does when the endpoint goes quiet or falls over."
-                content={
+                contentSlot={
                   <FieldRow
-                    content={
+                    contentSlot={
                       <>
                         <NumberField
                           form={form}
@@ -462,7 +460,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
             <TabsContent value="tools" forceMount className={panel}>
               <CardLayout
                 title="MCP tools"
-                content={
+                contentSlot={
                   <div className="flex flex-col gap-4">
                     <RadioGroupField
                       form={form}
@@ -498,9 +496,9 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
               <CardLayout
                 title="Housekeeping"
                 description="What this process does on its own, with no trigger asking."
-                content={
+                contentSlot={
                   <FieldRow
-                    content={
+                    contentSlot={
                       <>
                         <NumberField
                           form={form}
@@ -535,7 +533,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                   is no authentication: anyone who can reach the port can do all of that.
                 </>
               }
-              content={
+              contentSlot={
                 <div className="flex flex-col gap-4">
                   <Snippet label=".mcp.json" text={MCP_JSON} />
                   <Snippet label="Claude Code" text={CLAUDE_CLI} />

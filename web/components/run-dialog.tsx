@@ -106,7 +106,7 @@ function BodyForm({
     <DialogLayout
       open
       onOpenChange={(open) => !open && onClose()}
-      hasUnsavedChanges={form.state.isDirty}
+      hasUnsavedChanges={() => !form.state.isDefaultValue}
       size="lg"
       title={`Run ${taskName} with a body`}
       description={
@@ -115,7 +115,7 @@ function BodyForm({
           task's webhooks would be. The run is a hand-started one and names no trigger.
         </>
       }
-      content={
+      contentSlot={
         <form
           id="run-body"
           onSubmit={(event) => {
@@ -142,15 +142,11 @@ function BodyForm({
       // A function, so Cancel closes through the dialog's own door: `hasUnsavedChanges` guards
       // Escape, the overlay and the X, and a Cancel wired straight to `onClose` was the fourth
       // way out — the one people actually click — going around the ask.
-      footerActions={(close) => (
+      footerActionsSlot={(close) => (
         <>
-          <Button variant="ghost" onClick={close}>
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={close} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton form="run-body" pendingLabel="Starting…">
-              Run
-            </form.SubmitButton>
+            <form.SubmitButton form="run-body" pendingLabel="Starting…" content="Run" />
           </form.AppForm>
         </>
       )}

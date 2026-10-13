@@ -26,7 +26,7 @@ function BoundMultiSelectField(props: MultiSelectFieldProps) {
       error={error}
       // The function form, because `MultiSelect`'s root renders a `Popover` and the id has to
       // land on the trigger — the same reason `SelectField` uses it.
-      control={(wired) => (
+      controlSlot={(wired) => (
         <MultiSelect
           {...control}
           {...wired}

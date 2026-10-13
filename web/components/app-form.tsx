@@ -1,21 +1,30 @@
-import type { AnyFieldApi, DeepKeys, DeepValue } from "@tanstack/react-form";
+import type { DeepKeys } from "@tanstack/react-form";
 import { createFormHook, createFormHookContexts, useStore } from "@tanstack/react-form";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import { useState } from "react";
 import { FormField } from "@/components/form-field";
 import type { SelectEntry, SelectOption, SelectSeparatorEntry } from "@/components/option-select";
 import { OptionSelect } from "@/components/option-select";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonPropsWithout } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { messageOf } from "@/lib/error-message";
+import {
+  type BindableForm,
+  type FormBinding,
+  fieldOf,
+  type NamesOfType,
+  type ValuesOf,
+} from "@/lib/form-binding";
 
+/** TanStack Form's contexts, which the bound fields read their field and form from. */
 export const { fieldContext, formContext, useFieldContext, useFormContext } =
   createFormHookContexts();
 
 /** Everything `FormField` draws, minus the two parts a bound field works out for itself. */
-export type FieldProps = Omit<ComponentProps<typeof FormField>, "control" | "error">;
+export type FieldProps = Omit<ComponentProps<typeof FormField>, "controlSlot" | "error">;
 
 /**
  * The keys above, as values, so a call site can spread control props and field props into one
@@ -61,15 +70,6 @@ export function splitProps<T>(props: FieldProps & T): [FieldProps, T] {
   return [field as FieldProps, control as T];
 }
 
-function messageOf(error: unknown): string | undefined {
-  if (error == null) return undefined;
-  if (typeof error === "string") return error;
-  if (typeof error === "object" && "message" in error) {
-    return String((error as { message: unknown }).message);
-  }
-  return String(error);
-}
-
 /**
  * The field's first error, or nothing — and *when* is most of what this does.
  *
@@ -85,12 +85,17 @@ export function useFieldError(): string | undefined {
   const isTouched = useStore(field.store, (state) => state.meta.isTouched);
   const attempts = useStore(field.form.store, (state) => state.submissionAttempts);
 
-  if (!isTouched && attempts === 0) return undefined;
+  if (isTouched === false && attempts === 0) {
+    return undefined;
+  }
   return messageOf(errors[0]);
 }
 
 type InputFieldProps = FieldProps &
-  Omit<ComponentProps<typeof Input>, "id" | "value" | "onChange" | "onBlur">;
+  Omit<
+    ComponentProps<typeof Input>,
+    "id" | "value" | "defaultValue" | "onChange" | "onChangeText" | "onBlur"
+  >;
 
 /** A text input. For numbers see {@link NumberField}, which keeps the store numeric. */
 function BoundInputField(props: InputFieldProps) {
@@ -102,12 +107,12 @@ function BoundInputField(props: InputFieldProps) {
     <FormField
       {...fieldProps}
       error={error}
-      control={
+      controlSlot={
         <Input
           {...input}
           value={field.state.value ?? ""}
           onBlur={field.handleBlur}
-          onChange={(event) => field.handleChange(event.target.value)}
+          onChangeText={(text) => field.handleChange(text)}
         />
       }
     />
@@ -123,13 +128,18 @@ function BoundInputField(props: InputFieldProps) {
  */
 function parseNumber(text: string): number | null {
   const trimmed = text.trim();
-  if (trimmed === "") return null;
+  if (trimmed === "") {
+    return null;
+  }
   const parsed = Number(trimmed);
   return Number.isNaN(parsed) ? null : parsed;
 }
 
 type NumberFieldProps = FieldProps &
-  Omit<ComponentProps<typeof Input>, "id" | "value" | "onChange" | "onBlur" | "type">;
+  Omit<
+    ComponentProps<typeof Input>,
+    "id" | "value" | "defaultValue" | "onChange" | "onChangeText" | "onBlur" | "type"
+  >;
 
 /**
  * A number input whose store stays numeric.
@@ -152,13 +162,16 @@ function BoundNumberField(props: NumberFieldProps) {
   const [draft, setDraft] = useState<string | undefined>(undefined);
 
   const stored = field.state.value ?? null;
-  const value = draft !== undefined && parseNumber(draft) === stored ? draft : (stored ?? "");
+  // `String`, not the raw number: the DOM `<input>` this was written against took either, and
+  // `TextInput` takes only a string — so the registry's `Input` does too, on both platforms.
+  const storedText = stored === null ? "" : String(stored);
+  const value = draft !== undefined && parseNumber(draft) === stored ? draft : storedText;
 
   return (
     <FormField
       {...fieldProps}
       error={error}
-      control={
+      controlSlot={
         <Input
           // `inputMode` is what gets a phone keypad; `type` is what gets the spinners and the
           // browser's own numeric parsing. They are not the same knob and both are wanted.
@@ -171,9 +184,9 @@ function BoundNumberField(props: NumberFieldProps) {
             setDraft(undefined);
             field.handleBlur();
           }}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            field.handleChange(parseNumber(event.target.value));
+          onChangeText={(text) => {
+            setDraft(text);
+            field.handleChange(parseNumber(text));
           }}
         />
       }
@@ -197,7 +210,10 @@ const TEXTAREA_BOX: Record<number, string | undefined> = {
 };
 
 type TextareaFieldProps = FieldProps &
-  Omit<ComponentProps<typeof Textarea>, "id" | "value" | "onChange" | "onBlur">;
+  Omit<
+    ComponentProps<typeof Textarea>,
+    "id" | "value" | "defaultValue" | "onChange" | "onChangeText" | "onBlur"
+  >;
 
 function BoundTextareaField(props: TextareaFieldProps) {
   const [fieldProps, textarea] = splitProps(props);
@@ -212,12 +228,12 @@ function BoundTextareaField(props: TextareaFieldProps) {
       loadingClassName={TEXTAREA_BOX[textarea.rows ?? 0] ?? "h-16"}
       {...fieldProps}
       error={error}
-      control={
+      controlSlot={
         <Textarea
           {...textarea}
           value={field.state.value ?? ""}
           onBlur={field.handleBlur}
-          onChange={(event) => field.handleChange(event.target.value)}
+          onChangeText={(text) => field.handleChange(text)}
         />
       }
     />
@@ -226,8 +242,18 @@ function BoundTextareaField(props: TextareaFieldProps) {
 
 type SelectFieldProps = FieldProps & {
   options: readonly SelectEntry[];
-  placeholder?: string;
-  triggerClassName?: string;
+  placeholder?: string | undefined;
+  triggerClassName?: string | undefined;
+  /** A search box above the list, for the long one. `OptionSelect`'s own prop, passed through. */
+  searchable?: boolean | undefined;
+  searchPlaceholder?: string | undefined;
+  /**
+   * Told when the menu opens, so a field whose list is fetched can ask for it then. Named here
+   * as well as on the control because a form is where most fetched lists are, and a field that
+   * had to drop to `FormField`'s function form to get one word through would be the hand-wiring
+   * this component exists to end.
+   */
+  onOpenChange?: ((open: boolean) => void) | undefined;
 };
 
 /**
@@ -237,7 +263,15 @@ type SelectFieldProps = FieldProps & {
  * on the root instead, silently, leaving a trigger with no `aria-invalid` and an error message
  * nothing points at.
  */
-function BoundSelectField({ options, placeholder, triggerClassName, ...rest }: SelectFieldProps) {
+function BoundSelectField({
+  options,
+  placeholder,
+  triggerClassName,
+  searchable,
+  searchPlaceholder,
+  onOpenChange,
+  ...rest
+}: SelectFieldProps) {
   const field = useFieldContext<string>();
   const error = useFieldError();
 
@@ -245,7 +279,7 @@ function BoundSelectField({ options, placeholder, triggerClassName, ...rest }: S
     <FormField
       {...rest}
       error={error}
-      control={(wired) => (
+      controlSlot={(wired) => (
         <OptionSelect
           {...wired}
           options={options}
@@ -253,6 +287,9 @@ function BoundSelectField({ options, placeholder, triggerClassName, ...rest }: S
           onValueChange={field.handleChange}
           onBlur={field.handleBlur}
           placeholder={placeholder}
+          searchable={searchable}
+          searchPlaceholder={searchPlaceholder}
+          onOpenChange={onOpenChange}
           className={triggerClassName}
         />
       )}
@@ -261,7 +298,10 @@ function BoundSelectField({ options, placeholder, triggerClassName, ...rest }: S
 }
 
 type CheckboxFieldProps = FieldProps &
-  Omit<ComponentProps<typeof Checkbox>, "id" | "checked" | "onCheckedChange" | "onBlur">;
+  Omit<
+    ComponentProps<typeof Checkbox>,
+    "id" | "checked" | "defaultChecked" | "onCheckedChange" | "onBlur"
+  >;
 
 /** Horizontal by default: a 16px box on a line of its own above its caption is not a field. */
 function BoundCheckboxField(props: CheckboxFieldProps) {
@@ -274,7 +314,7 @@ function BoundCheckboxField(props: CheckboxFieldProps) {
       orientation="horizontal"
       {...fieldProps}
       error={error}
-      control={
+      controlSlot={
         <Checkbox
           {...checkbox}
           checked={field.state.value ?? false}
@@ -287,7 +327,10 @@ function BoundCheckboxField(props: CheckboxFieldProps) {
 }
 
 type SwitchFieldProps = FieldProps &
-  Omit<ComponentProps<typeof Switch>, "id" | "checked" | "onCheckedChange" | "onBlur">;
+  Omit<
+    ComponentProps<typeof Switch>,
+    "id" | "checked" | "defaultChecked" | "onCheckedChange" | "onBlur"
+  >;
 
 function BoundSwitchField(props: SwitchFieldProps) {
   const [fieldProps, control] = splitProps(props);
@@ -300,7 +343,7 @@ function BoundSwitchField(props: SwitchFieldProps) {
       loadingClassName="h-5 w-8 rounded-full"
       {...fieldProps}
       error={error}
-      control={
+      controlSlot={
         <Switch
           {...control}
           checked={field.state.value ?? false}
@@ -312,10 +355,9 @@ function BoundSwitchField(props: SwitchFieldProps) {
   );
 }
 
-type SubmitButtonProps = Omit<ComponentProps<typeof Button>, "type" | "children"> & {
-  children?: ReactNode;
+type SubmitButtonProps = ButtonPropsWithout<"type" | "loading" | "loadingLabel"> & {
   /** What it says mid-flight. The label is replaced, not appended to. */
-  pendingLabel?: ReactNode;
+  pendingLabel?: string | undefined;
 };
 
 /**
@@ -331,11 +373,17 @@ type SubmitButtonProps = Omit<ComponentProps<typeof Button>, "type" | "children"
  * without a way to say them the whole component gets dropped for a hand-written
  * `<Button type="submit">` that re-derives `canSubmit` and `isSubmitting`, which is the
  * duplication this exists to remove.
+ *
+ * Inside a `<form>`, or naming one with `form="…"`, it is a submit control and the form's own
+ * `onSubmit` runs. With no form to submit — a dialog's `footerActionsSlot`, a card's footer —
+ * a `type="submit"` button does nothing at all, so there it calls `form.handleSubmit()` itself,
+ * as the native `SubmitButton` always does.
  */
 export function SubmitButton({
-  children = "Save",
+  content = "Save",
   pendingLabel = "Saving…",
   disabled,
+  onClick,
   ...props
 }: SubmitButtonProps) {
   const form = useFormContext();
@@ -345,9 +393,21 @@ export function SubmitButton({
   // Ahead of the spread as well as OR-ed, so that neither a caller nor a future prop can put a
   // `disabled={false}` back over the store's answer.
   return (
-    <Button type="submit" {...props} disabled={disabled || !canSubmit || isSubmitting}>
-      {isSubmitting ? pendingLabel : children}
-    </Button>
+    <Button
+      type="submit"
+      {...props}
+      onClick={(event) => {
+        onClick?.(event);
+        // `button.form` is the form that owns it, by ancestry or by the `form` attribute.
+        if (event.defaultPrevented === false && !event.currentTarget.form) {
+          form.handleSubmit();
+        }
+      }}
+      disabled={disabled || canSubmit === false}
+      loading={isSubmitting}
+      loadingLabel={pendingLabel}
+      content={content}
+    />
   );
 }
 
@@ -380,116 +440,6 @@ export const { useAppForm, withForm } = createFormHook({
   },
   formComponents: { SubmitButton },
 });
-
-/**
- * What a bound field needs off a form, and nothing else — structural on purpose, so these work
- * with a plain `useForm` as well as with `useAppForm`.
- */
-type BindableForm = {
-  state: { values: unknown };
-  // Not `=> ReactNode`: a function component may return a promise, and TanStack types `Field`
-  // that way, so narrowing here rejects every real form.
-  Field: (props: never) => ReactNode | Promise<ReactNode>;
-};
-
-/** The shape of a form's values, recovered from the form itself, so `name` can be checked. */
-type ValuesOf<TForm extends BindableForm> = TForm extends { state: { values: infer TValues } }
-  ? TValues
-  : never;
-
-/**
- * A validator, with its `value` already narrowed to the type of the field being validated.
- *
- * Anything falsy passes. A string is the message; TanStack accepts any error shape, and
- * `messageOf` upstream turns an object with a `message` into one, so a schema issue can be
- * returned whole.
- */
-type Validate<TValue> = (context: {
-  value: TValue;
-  fieldApi: AnyFieldApi;
-  signal: AbortSignal;
-}) => unknown;
-
-/**
- * The validators a field call site actually writes, spelled out rather than imported.
- *
- * TanStack's own `FieldValidators` carries twenty-three type parameters that exist to infer each
- * validator's error type from the one before it. Naming them here would mean naming all of them
- * at every use; what a call site wants is `value`, typed, and this gets that from the form and
- * the field name. Anything beyond these seven belongs on `form.AppField`, which has the real
- * type in full.
- */
-type Validators<TValues, TName extends DeepKeys<TValues>> = {
-  onMount?: Validate<DeepValue<TValues, TName>>;
-  onChange?: Validate<DeepValue<TValues, TName>>;
-  onChangeAsync?: Validate<DeepValue<TValues, TName>>;
-  onBlur?: Validate<DeepValue<TValues, TName>>;
-  onBlurAsync?: Validate<DeepValue<TValues, TName>>;
-  onSubmit?: Validate<DeepValue<TValues, TName>>;
-  onSubmitAsync?: Validate<DeepValue<TValues, TName>>;
-};
-
-type Listen<TValue> = (context: { value: TValue; fieldApi: AnyFieldApi }) => void;
-
-/**
- * What the field should *do* when it changes, spelled out for the same reason
- * {@link Validators} is.
- *
- * A validator answers whether the value is allowed; a listener acts on it having changed —
- * naming a lane after the kind you picked for it, filling a description from a template,
- * clearing the fields the other transport owned. Both are field-level options, both are handed
- * straight to the field, and neither is a reason to fall back to `form.AppField`: the render
- * prop is for a field that needs the `field` object to *render*, not for one that needs a
- * callback the wrapper forgot to pass on.
- *
- * `onGroupSubmit` is the one omitted — it belongs to TanStack's field groups, which nothing in
- * this registry builds.
- */
-type Listeners<TValues, TName extends DeepKeys<TValues>> = {
-  onMount?: Listen<DeepValue<TValues, TName>>;
-  onUnmount?: Listen<DeepValue<TValues, TName>>;
-  onChange?: Listen<DeepValue<TValues, TName>>;
-  /** How long to wait after the last change before running `onChange`, in milliseconds. */
-  onChangeDebounceMs?: number;
-  onBlur?: Listen<DeepValue<TValues, TName>>;
-  /** How long to wait after the last blur before running `onBlur`, in milliseconds. */
-  onBlurDebounceMs?: number;
-  onSubmit?: Listen<DeepValue<TValues, TName>>;
-};
-
-/**
- * The names of the fields whose value is a `TValue` — the whole reason `NumberField` is a file
- * and not a `type="number"` prop.
- *
- * Rule 2 says a variant prop is not a component, and it is right: a number input differs from a
- * text input by one attribute. What it cannot do is change what `name` is allowed to be. A
- * `<NumberField name="title">` on a string field is a control that writes `42` into a `string`
- * and a form that submits the wrong type, and no prop can make the compiler notice — the
- * constraint on `name` is fixed before the props are read. So the narrowing has to live in the
- * component's own signature, which means the component has to be its own signature.
- *
- * `NonNullable` so a `string | null` column still counts as a string field; nearly every one of
- * these forms is editing a row that can be null.
- *
- * With the default `unknown` this is every key, which is what the unnarrowed fields want.
- */
-type NamesOfType<TValues, TValue> = {
-  [TName in DeepKeys<TValues>]: NonNullable<DeepValue<TValues, TName>> extends TValue
-    ? TName
-    : never;
-  // Intersected back so the result is provably a `DeepKeys`, which `Validators` requires.
-}[DeepKeys<TValues>] &
-  DeepKeys<TValues>;
-
-type FormBinding<TForm extends BindableForm, TName extends DeepKeys<ValuesOf<TForm>>> = {
-  form: TForm;
-  /** A key of the form's values. Checked: `naem` is a type error, not a field that stays empty. */
-  name: TName;
-  validators?: Validators<ValuesOf<TForm>, TName>;
-  /** How long to wait before running the async validators, in milliseconds. */
-  asyncDebounceMs?: number;
-  listeners?: Listeners<ValuesOf<TForm>, TName>;
-};
 
 /**
  * The control's props, minus the two names the binding needs for itself.
@@ -536,16 +486,7 @@ export function bindToForm<TProps extends object, TValue = unknown>(
     listeners,
     ...rest
   }: ControlPropsOf<TProps> & FormBinding<TForm, TName>) {
-    // The generic `Field` cannot be described to TypeScript without repeating twenty-three type
-    // parameters that are already correct on `form`. The cast is here, once, and `name` above is
-    // what it is protecting.
-    const Subscribe = form.Field as ComponentType<{
-      name: unknown;
-      validators?: unknown;
-      asyncDebounceMs?: number;
-      listeners?: unknown;
-      children: (field: AnyFieldApi) => ReactNode;
-    }>;
+    const Subscribe = fieldOf(form);
 
     return (
       <Subscribe
@@ -556,7 +497,7 @@ export function bindToForm<TProps extends object, TValue = unknown>(
       >
         {(field) => (
           <fieldContext.Provider value={field}>
-            <Bound {...(rest as unknown as TProps)} />
+            <Bound {...(rest as TProps)} />
           </fieldContext.Provider>
         )}
       </Subscribe>

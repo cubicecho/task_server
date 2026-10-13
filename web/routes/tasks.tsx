@@ -9,7 +9,6 @@ import {
   TasksDocument,
   UpdateTaskDocument,
 } from "@/__generated__/graphql/graphql";
-import { ActionButton } from "@/components/action-button";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
@@ -87,26 +86,21 @@ export function TasksRoute() {
 
   // Offered twice: in the header always, and in the empty state where it is the only thing to do.
   const newTask = (
-    <Button asChild>
-      <Link to="/tasks/new">
-        <Plus className="size-4" />
-        New task
-      </Link>
-    </Button>
+    <Button linkSlot={<Link to="/tasks/new" />} iconSlot={<Plus />} content="New task" />
   );
 
   return (
     <PageLayout
       title="Tasks"
       description="A prompt, and the triggers that decide when it runs."
-      action={newTask}
-      content={
+      actionSlot={newTask}
+      contentSlot={
         <>
           <QueryState
             query={tasks}
             what="your tasks"
             count={rows.length}
-            empty={
+            emptySlot={
               <Empty>
                 <EmptyHeader>
                   <EmptyTitle>No tasks yet</EmptyTitle>
@@ -150,8 +144,8 @@ export function TasksRoute() {
                       aria-label="Enabled"
                     />
                     {running ? (
-                      <ActionButton
-                        label="Stop this run"
+                      <Button
+                        aria-label="Stop this run"
                         variant="ghost"
                         size="icon"
                         // Only this card's button. `isPending` alone is true for the whole list
@@ -159,27 +153,27 @@ export function TasksRoute() {
                         // other row's control along with the one that was clicked.
                         disabled={stop.isPending && stop.variables === task.id}
                         onClick={() => stop.mutate(task.id)}
-                      >
-                        <Square />
-                      </ActionButton>
+                        iconSlot={<Square />}
+                      />
                     ) : (
-                      <ActionButton
-                        label="Run now"
+                      <Button
+                        aria-label="Run now"
                         variant="ghost"
                         size="icon"
                         disabled={run.isPending && run.variables?.taskId === task.id}
                         onClick={() => press(task)}
-                      >
-                        <Play />
-                      </ActionButton>
+                        iconSlot={<Play />}
+                      />
                     )}
-                    <ActionButton label="Edit" variant="ghost" size="icon" asChild>
-                      <Link to="/tasks/$taskId" params={{ taskId: task.id }}>
-                        <Pencil />
-                      </Link>
-                    </ActionButton>
+                    <Button
+                      aria-label="Edit"
+                      variant="ghost"
+                      size="icon"
+                      linkSlot={<Link to="/tasks/$taskId" params={{ taskId: task.id }} />}
+                      iconSlot={<Pencil />}
+                    />
                     <ConfirmButton
-                      label="Delete"
+                      aria-label="Delete"
                       variant="ghost"
                       size="icon"
                       hint={running ? "Stop the run before deleting" : undefined}
@@ -187,9 +181,8 @@ export function TasksRoute() {
                       title={`Delete ${task.name}?`}
                       description="Its triggers and its whole run history go with it, output included."
                       onConfirm={() => remove.mutate(task.id)}
-                    >
-                      <Trash2 />
-                    </ConfirmButton>
+                      iconSlot={<Trash2 />}
+                    />
                   </ItemActions>
                 </div>
 
