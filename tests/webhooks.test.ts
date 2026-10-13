@@ -243,3 +243,14 @@ test("a body that is not JSON at all still fires, with nothing in it", async () 
   expect(status).toBe(200);
   expect(payloads).toEqual([null]);
 });
+
+test("a body over the limit is a delivery with no payload, not a failure", async () => {
+  const row = await task("too-big");
+
+  // Just past the megabyte the parser reads. The id arrived, so the task runs; what it cannot
+  // have is a body nobody agreed to hold.
+  const { status, body } = await post("too-big", JSON.stringify({ blob: "x".repeat(1024 * 1024) }));
+  expect(status).toBe(200);
+  expect(body.dispatched).toEqual([{ taskId: row.id, name: "too-big", runId: `run-${row.id}` }]);
+  expect(payloads).toEqual([null]);
+});

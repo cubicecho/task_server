@@ -72,7 +72,11 @@ test("firing again into the same collision bumps the row rather than adding one"
 
   const before = (await runsFor(taskId)).length;
   const skips: Fired[] = [];
-  for (const n of [2, 3, 4]) skips.push(await runner.fireTask(taskId, triggerId, { n }));
+  for (const n of [2, 3, 4]) {
+    skips.push(await runner.fireTask(taskId, triggerId, { n }));
+    // Apart by more than the clock's grain, so the row's end can be seen to move.
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
 
   // Three firings, one row: a sender posting faster than the task runs must not be able to
   // bury the runs someone opened the page to read.
@@ -84,6 +88,10 @@ test("firing again into the same collision bumps the row rather than adding one"
   // The row stands for all three, and carries the most recent of them.
   expect(skipped.payload).toEqual({ n: 4 });
   expect(skipped.blockedBy).toBe(first.run.id);
+  // It spans the collision: begun at the first firing and ended at the latest.
+  const asFirstWritten = skips[0].run;
+  expect(skipped.startedAt).toEqual(asFirstWritten.startedAt);
+  expect(skipped.finishedAt?.getTime()).toBeGreaterThan(asFirstWritten.finishedAt?.getTime() ?? 0);
 
   runner.stopTask(taskId);
   await first.done;
