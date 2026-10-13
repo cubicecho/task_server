@@ -22,7 +22,6 @@ query McpServers {
     tools {
       name
       description
-      hidden
     }
   }
 }
@@ -52,7 +51,6 @@ mutation TestMcpServer($config: McpConnectionInput!) {
     tools {
       name
       description
-      hidden
     }
   }
 }
@@ -60,8 +58,6 @@ mutation TestMcpServer($config: McpConnectionInput!) {
 mutation ReconnectMcp {
   reconnectMcp {
     id
-    status
-    error
   }
 }
 

@@ -336,7 +336,7 @@ export function McpDialog({
             form={form}
             name="enabled"
             label="Enabled"
-            description="A disabled server stays configured but offers no tools."
+            description={doc("enabled")}
             orientation="horizontal"
             className="rounded-md border p-3"
           />

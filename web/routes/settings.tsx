@@ -455,7 +455,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                     <RadioGroupField
                       form={form}
                       name="toolDiscovery"
-                      label="Discovery"
+                      label="Tool discovery"
                       description={doc("toolDiscovery")}
                       options={[
                         {
@@ -466,7 +466,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                         {
                           value: SettingsToolDiscoveryEnum.Ondemand,
                           label: "On demand",
-                          description: "Load definitions as they are needed.",
+                          description: "Load definitions as the run asks for them.",
                         },
                       ]}
                     />
