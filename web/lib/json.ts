@@ -8,7 +8,9 @@ import { errorMessage } from "@/lib/errors";
  * rather than "unexpected token".
  */
 export function parseJson<T>(text: string, field: string, fallback: T): T {
-  if (!text.trim()) return fallback;
+  if (!text.trim()) {
+    return fallback;
+  }
   try {
     return JSON.parse(text) as T;
   } catch {

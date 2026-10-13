@@ -109,7 +109,9 @@ const agentLayer = (agent: Agent): AgentSpec => {
  * used: it treats a trailing slash as the same endpoint, which errs toward sending the key.
  */
 export function resolveConfig(settings: Settings, agent?: Agent | null): Settings {
-  if (!agent) return settings;
+  if (!agent) {
+    return settings;
+  }
 
   const baseUrl = agent.baseUrl.trim();
   const elsewhere = baseUrl !== "" && baseUrl !== settings.baseUrl;
@@ -147,7 +149,9 @@ export const resolveServers = (agent?: Agent | null): ReadonlySet<string> | unde
  */
 export async function configForTask(task: Task): Promise<RunConfig> {
   const settings = await loadSettings();
-  if (!task.agentId) return { config: settings };
+  if (!task.agentId) {
+    return { config: settings };
+  }
 
   const [agent] = await db.select().from(agents).where(eq(agents.id, task.agentId)).limit(1);
   return { config: resolveConfig(settings, agent), servers: resolveServers(agent) };

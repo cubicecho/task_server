@@ -29,7 +29,9 @@ const open: http.ServerResponse[] = [];
 
 /** Answers `/models` with the window, when there is one to report. */
 function listing(request: http.IncomingMessage, response: http.ServerResponse) {
-  if (!window || !request.url?.endsWith("/models")) return false;
+  if (!window || !request.url?.endsWith("/models")) {
+    return false;
+  }
   response.writeHead(200, { "content-type": "application/json" });
   response.end(JSON.stringify({ data: [{ id: "fake", context_length: window }] }));
   return true;
@@ -78,11 +80,15 @@ beforeEach(() => {
   requests = 0;
   window = 0;
   sent = [];
-  while (open.length) open.pop()?.destroy();
+  while (open.length) {
+    open.pop()?.destroy();
+  }
 });
 
 afterAll(async () => {
-  while (open.length) open.pop()?.destroy();
+  while (open.length) {
+    open.pop()?.destroy();
+  }
   await model.close();
 });
 

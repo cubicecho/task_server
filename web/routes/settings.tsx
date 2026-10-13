@@ -103,7 +103,9 @@ const number = {
 
 /** What the endpoint button says: mid-flight, about to change the endpoint, or just asking again. */
 function endpointAction(connecting: boolean, unapplied: boolean): string {
-  if (connecting) return "Connecting…";
+  if (connecting) {
+    return "Connecting…";
+  }
   return unapplied ? "Apply and load models" : "Reload models";
 }
 
@@ -162,8 +164,12 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
       const { updateSetting } = await request(UpdateSettingsDocument, { set: toRow(values) });
       // The key travels on its own mutation because it is write-only — it is excluded from
       // the Setting type, so it can never be read back out of the API.
-      if (values.apiKey) await request(SetApiKeyDocument, { apiKey: values.apiKey });
-      if (!updateSetting) throw new Error("There is no settings row to save to.");
+      if (values.apiKey) {
+        await request(SetApiKeyDocument, { apiKey: values.apiKey });
+      }
+      if (!updateSetting) {
+        throw new Error("There is no settings row to save to.");
+      }
       return updateSetting;
     },
     onSuccess: (fresh) => {
@@ -200,8 +206,12 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
   const applyEndpoint = useMutation({
     mutationFn: async ({ baseUrl, apiKey }: Pick<SettingsForm, "baseUrl" | "apiKey">) => {
       const { updateSetting } = await request(UpdateSettingsDocument, { set: { baseUrl } });
-      if (apiKey) await request(SetApiKeyDocument, { apiKey });
-      if (updateSetting) store(updateSetting);
+      if (apiKey) {
+        await request(SetApiKeyDocument, { apiKey });
+      }
+      if (updateSetting) {
+        store(updateSetting);
+      }
       form.setFieldValue("apiKey", "");
       await queryClient.invalidateQueries({ queryKey: ["models"], refetchType: "none" });
       const { models } = await queryClient.fetchQuery({

@@ -66,8 +66,11 @@ function group(blocks: Block[]): Group[] {
       groups.push(last);
     }
     // The `step` event is the heading rather than a line of its own; it names the kind.
-    if (block.kind === "step") last.kind = block.text;
-    else last.blocks.push(block);
+    if (block.kind === "step") {
+      last.kind = block.text;
+    } else {
+      last.blocks.push(block);
+    }
   }
   return groups;
 }
@@ -99,12 +102,16 @@ export function RunStream({ runId }: { runId: string }) {
     let failed = false;
     let pending: RunEvent[] = [];
     const flush = () => {
-      if (pending.length === 0) return;
+      if (pending.length === 0) {
+        return;
+      }
       const batch = pending;
       pending = [];
       setBlocks((prev) => {
         const next = prev.slice();
-        for (const event of batch) appendInto(next, event);
+        for (const event of batch) {
+          appendInto(next, event);
+        }
         return next;
       });
     };
@@ -115,7 +122,9 @@ export function RunStream({ runId }: { runId: string }) {
       { runId },
       {
         next: ({ runEvents: event }) => {
-          if (event.seq <= seen) return;
+          if (event.seq <= seen) {
+            return;
+          }
           seen = event.seq;
           // The transport resubscribes on its own, so a dropped connection is usually followed
           // by events again — and "lost the connection to the server" stayed on screen for the
@@ -151,7 +160,9 @@ export function RunStream({ runId }: { runId: string }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: following new output is the point.
   useEffect(() => {
     const element = scroller.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (element) {
+      element.scrollTop = element.scrollHeight;
+    }
   }, [blocks]);
 
   return (

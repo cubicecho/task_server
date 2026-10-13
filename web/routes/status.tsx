@@ -216,8 +216,12 @@ export function StatusRoute() {
 
   /** What an empty list means: nothing in the chosen heap, no tasks at all, or all is well. */
   const emptyNote = () => {
-    if (selected) return `Nothing is ${LABELS[selected].label.toLowerCase()}.`;
-    if (tasks.length === 0) return "No tasks yet.";
+    if (selected) {
+      return `Nothing is ${LABELS[selected].label.toLowerCase()}.`;
+    }
+    if (tasks.length === 0) {
+      return "No tasks yet.";
+    }
     return `Nothing needs you. ${counts.running} running, ${counts.fine} armed and well.`;
   };
 

@@ -69,9 +69,15 @@ export const isFiltered = (filters: Filters) =>
 export function buildWhere(filters: Filters, search: string): RunFilters | undefined {
   const and: RunFilters[] = [];
 
-  if (filters.taskId !== ANY) and.push({ taskId: { eq: filters.taskId } });
-  if (filters.status !== ANY) and.push({ status: { eq: filters.status as RunsStatusEnum } });
-  if (filters.from) and.push({ startedAt: { gte: filters.from } });
+  if (filters.taskId !== ANY) {
+    and.push({ taskId: { eq: filters.taskId } });
+  }
+  if (filters.status !== ANY) {
+    and.push({ status: { eq: filters.status as RunsStatusEnum } });
+  }
+  if (filters.from) {
+    and.push({ startedAt: { gte: filters.from } });
+  }
 
   const term = search.trim();
   if (term) {

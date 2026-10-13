@@ -76,8 +76,11 @@ export function TasksRoute() {
   const nextRuns = new Map(tasks.data?.schedule.map((entry) => [entry.triggerId, entry.nextRun]));
 
   const press = (task: TaskFieldsFragment) => {
-    if (task.triggers.some((trigger) => trigger.kind === "event")) setAskFor(task);
-    else run.mutate({ taskId: task.id });
+    if (task.triggers.some((trigger) => trigger.kind === "event")) {
+      setAskFor(task);
+    } else {
+      run.mutate({ taskId: task.id });
+    }
   };
 
   const rows = tasks.data?.tasks ?? [];

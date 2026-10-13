@@ -306,7 +306,10 @@ test("$OPENAI_API_KEY is the key when the settings row has none, and only then",
     expect((await loadSettings()).apiKey).toBe("from-the-row");
   } finally {
     await key("");
-    if (before === undefined) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = before;
+    if (before === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = before;
+    }
   }
 });

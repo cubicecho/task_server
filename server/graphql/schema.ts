@@ -130,7 +130,9 @@ const { entities } = buildSchema(db, {
       // run that is really gone. A rolled-back transaction after this is the one gap, and a
       // forgotten memory of a run that still exists costs less than a remembered one that doesn't.
       after: ({ operation, rows }) => {
-        if (operation === "delete") runsDeleted((rows as { id: string }[]).map((row) => row.id));
+        if (operation === "delete") {
+          runsDeleted((rows as { id: string }[]).map((row) => row.id));
+        }
       },
     },
     triggers: {
@@ -178,11 +180,15 @@ async function vetTrigger(tx: typeof db, args: unknown) {
   for (const written of [...created, ...changed.map(({ set }) => set)]) {
     for (const column of ["cron", "event"]) {
       const value = written[column];
-      if (typeof value === "string") written[column] = value.trim();
+      if (typeof value === "string") {
+        written[column] = value.trim();
+      }
     }
   }
 
-  for (const values of created) refuseTrigger({ ...NEW_TRIGGER, ...values });
+  for (const values of created) {
+    refuseTrigger({ ...NEW_TRIGGER, ...values });
+  }
   for (const { where, set } of changed) {
     const filter = filterOf(triggers, "triggers", where);
     for (const stored of await tx.select().from(triggers).where(filter)) {
@@ -222,7 +228,9 @@ function triggerProblem(row: Record<string, unknown>): GraphQLError | undefined 
 /** Throws for what is wrong with `row` and was not already wrong with the row it replaces. */
 function refuseTrigger(row: Record<string, unknown>, stored?: Record<string, unknown>) {
   const problem = triggerProblem(row);
-  if (problem && problem.message !== (stored && triggerProblem(stored))?.message) throw problem;
+  if (problem && problem.message !== (stored && triggerProblem(stored))?.message) {
+    throw problem;
+  }
 }
 
 /**
@@ -250,10 +258,14 @@ function writesOf(args: unknown) {
  * here rolls the mutation back before it writes.
  */
 function refuseWhileRunning(args: unknown, running: Set<string>, message: string) {
-  if (running.size === 0) return;
+  if (running.size === 0) {
+    return;
+  }
   const where = (args as { where?: { id?: { eq?: unknown } } } | undefined)?.where;
   const id = typeof where?.id?.eq === "string" ? where.id.eq : undefined;
-  if (id !== undefined && !running.has(id)) return;
+  if (id !== undefined && !running.has(id)) {
+    return;
+  }
   // A plain Error would reach the client as "Internal server error" — the library only lets a
   // GraphQLError of its own through. This one is the client's to act on, so it says why.
   throw refusal("RUN_IN_FLIGHT", message);
@@ -268,7 +280,9 @@ const doomedRuns = new WeakMap<object, string[]>();
 
 async function runsOfTasks(tx: typeof db, args: unknown): Promise<string[]> {
   const where = (args as { where?: unknown } | undefined)?.where;
-  if (!where || typeof where !== "object") return [];
+  if (!where || typeof where !== "object") {
+    return [];
+  }
   try {
     const filter = filterOf(tasks, "tasks", where);
     const doomed = tx.select({ id: tasks.id }).from(tasks).where(filter);
@@ -306,7 +320,9 @@ const NEW_MCP_SERVER = {
  */
 async function vetMcpServer(tx: typeof db, args: unknown) {
   const { created, changed } = writesOf(args);
-  for (const values of created) refuseMcpServer({ ...NEW_MCP_SERVER, ...values });
+  for (const values of created) {
+    refuseMcpServer({ ...NEW_MCP_SERVER, ...values });
+  }
   for (const { where, set } of changed) {
     const filter = filterOf(mcpServers, "mcpServers", where);
     for (const stored of await tx.select().from(mcpServers).where(filter)) {
@@ -369,7 +385,9 @@ const baseSchema = new GraphQLSchema({
           },
         },
         resolve: async (_source, args: { agentId?: string | null }) => {
-          if (!args.agentId) return listModels();
+          if (!args.agentId) {
+            return listModels();
+          }
           const [agent] = await db
             .select()
             .from(agents)

@@ -114,14 +114,18 @@ export function AgentDialog({
   const save = useMutation({
     mutationFn: async (draft: Draft) => {
       const values = toValues(draft);
-      if (saved.current) await request(UpdateAgentDocument, { id: saved.current, set: values });
-      else saved.current = (await request(CreateAgentDocument, { values })).createAgent.id;
+      if (saved.current) {
+        await request(UpdateAgentDocument, { id: saved.current, set: values });
+      } else {
+        saved.current = (await request(CreateAgentDocument, { values })).createAgent.id;
+      }
       const id = saved.current;
 
       // The key travels on its own mutation because it is write-only, exactly as the server's
       // own key does — it is excluded from the Agent type and can never be read back.
-      if (draft.apiKey)
+      if (draft.apiKey) {
         await request(SetAgentApiKeyDocument, { agentId: id, apiKey: draft.apiKey });
+      }
     },
     onSuccess: () => {
       toast.success(agent ? "Profile saved" : "Profile created");

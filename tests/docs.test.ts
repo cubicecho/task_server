@@ -30,7 +30,9 @@ afterAll(async () => {
 
 const objectType = (name: string): GraphQLObjectType => {
   const type = schema.getType(name);
-  if (!isObjectType(type)) throw new Error(`${name} is not an object type`);
+  if (!isObjectType(type)) {
+    throw new Error(`${name} is not an object type`);
+  }
   return type;
 };
 
@@ -72,7 +74,9 @@ test("a column is described once and the description arrives everywhere", () => 
  */
 test("the write inputs are described as well as the rows", () => {
   const input = schema.getType("CreateTaskInput");
-  if (!input || !("getFields" in input)) throw new Error("CreateTaskInput is not an input type");
+  if (!input || !("getFields" in input)) {
+    throw new Error("CreateTaskInput is not an input type");
+  }
   const fields = (
     input as { getFields(): Record<string, { description?: string | null }> }
   ).getFields();

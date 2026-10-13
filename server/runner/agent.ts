@@ -73,7 +73,9 @@ function windowFor(endpoint: Endpoint & { model: string }, signal?: AbortSignal)
       reject(signal?.reason);
     };
     const timer = setTimeout(() => settle(0), WINDOW_LOOKUP_MS);
-    if (signal?.aborted) return stop();
+    if (signal?.aborted) {
+      return stop();
+    }
     signal?.addEventListener("abort", stop, { once: true });
     void contextLimitFor(endpoint).then(settle);
   });
@@ -100,7 +102,9 @@ export async function runAgent({
   signal,
   onEvent,
 }: AgentOptions): Promise<AgentResult> {
-  if (!model) throw new Error("No model selected — pick one in Settings.");
+  if (!model) {
+    throw new Error("No model selected — pick one in Settings.");
+  }
 
   // Carries what was given up on, what is being waited out and what was cut short in one voice,
   // so a watcher and the log are told about a downgrade and a retry alike.
@@ -122,7 +126,9 @@ export async function runAgent({
           onNotice: notice,
         })
       : [];
-  if (preselected.length) notice(`tools picked before the run: ${preselected.join(", ")}`);
+  if (preselected.length) {
+    notice(`tools picked before the run: ${preselected.join(", ")}`);
+  }
 
   const contextLength = await windowFor({ ...config, model }, signal);
 
@@ -153,7 +159,9 @@ export async function runAgent({
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {
-      if (event.kind === "notice") console.warn(`[agent] ${event.text}`);
+      if (event.kind === "notice") {
+        console.warn(`[agent] ${event.text}`);
+      }
       onEvent?.(event);
     },
   });

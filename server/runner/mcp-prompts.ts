@@ -99,7 +99,9 @@ export async function get(
   }
 
   const { messages } = await (await mcp.client(server)).getPrompt({ name, arguments: args });
-  if (messages.length === 1) return messageText(messages[0].content);
+  if (messages.length === 1) {
+    return messageText(messages[0].content);
+  }
   return messages
     .map((message) => `${message.role}: ${messageText(message.content)}`)
     .join("\n\n")

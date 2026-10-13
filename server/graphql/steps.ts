@@ -61,13 +61,19 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
   const ids = new Set<string>();
 
   const walk = (list: StepInput[], parentId: string | null, branch: string, depth: number) => {
-    if (depth > MAX_DEPTH) reject(`Steps cannot nest more than ${MAX_DEPTH} deep.`);
+    if (depth > MAX_DEPTH) {
+      reject(`Steps cannot nest more than ${MAX_DEPTH} deep.`);
+    }
 
     list.forEach((item, index) => {
-      if (rows.length >= MAX_STEPS) reject(`A task cannot have more than ${MAX_STEPS} steps.`);
+      if (rows.length >= MAX_STEPS) {
+        reject(`A task cannot have more than ${MAX_STEPS} steps.`);
+      }
 
       const kind = KINDS.find((option) => option === (item.kind ?? "agent"));
-      if (!kind) reject(`Unknown step kind "${item.kind}" — expected ${KINDS.join(" or ")}.`);
+      if (!kind) {
+        reject(`Unknown step kind "${item.kind}" — expected ${KINDS.join(" or ")}.`);
+      }
       const context = CONTEXTS.find((option) => option === (item.context ?? "all"));
       if (!context) {
         reject(`Unknown context "${item.context}" — expected one of ${CONTEXTS.join(", ")}.`);
@@ -76,10 +82,14 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
       const name = (item.name ?? "").trim();
       const label = name || `step ${rows.length + 1}`;
       const prompt = item.prompt.trim();
-      if (!prompt) reject(`${label} has no prompt.`);
+      if (!prompt) {
+        reject(`${label} has no prompt.`);
+      }
 
       const id = (item.id ?? "").trim() || crypto.randomUUID();
-      if (ids.has(id)) reject(`${label} reuses the id of another step in the same flow.`);
+      if (ids.has(id)) {
+        reject(`${label} reuses the id of another step in the same flow.`);
+      }
       ids.add(id);
 
       const cases = (item.cases ?? []).map((option) => option.trim()).filter(Boolean);
@@ -122,7 +132,9 @@ export function flattenSteps(taskId: string, input: StepInput[]): NewStep[] {
               `(${cases.join(", ")}) or "${DEFAULT_BRANCH}".`,
           );
         }
-        if (taken.has(resolved)) reject(`${label} has two branches for "${arm.case}".`);
+        if (taken.has(resolved)) {
+          reject(`${label} has two branches for "${arm.case}".`);
+        }
         taken.add(resolved);
         walk(arm.steps ?? [], id, resolved, depth + 1);
       }
@@ -189,7 +201,9 @@ export async function writeTaskSteps(taskId: string, rows: NewStep[]): Promise<v
 /** Ids the client supplied that already belong to somebody else. */
 export async function foreignIds(taskId: string, rows: NewStep[]): Promise<string[]> {
   const ids = rows.map((row) => row.id);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) {
+    return [];
+  }
   const existing = await db
     .select({ id: steps.id, taskId: steps.taskId })
     .from(steps)

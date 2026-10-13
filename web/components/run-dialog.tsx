@@ -43,7 +43,9 @@ export function RunDialog({
   // The box is filled once, when the form mounts, so nothing lands in it behind the cursor.
   // Waiting for the fetch rather than filling it late is why this shows nothing for the moment
   // it takes: the query is one row by id, and only runs when there is no body to start from.
-  if (body === undefined && last.isPending) return null;
+  if (body === undefined && last.isPending) {
+    return null;
+  }
 
   const { prefill, description } = startingBody(body, last.data?.runs[0]);
 

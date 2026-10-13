@@ -77,7 +77,9 @@ async function call<T = Record<string, unknown>>(name: string, args: Record<stri
   } catch {
     throw new Error(`${name} did not answer with an envelope: ${text}`);
   }
-  if (envelope.errors) throw new Error(`${name}: ${JSON.stringify(envelope.errors)}`);
+  if (envelope.errors) {
+    throw new Error(`${name}: ${JSON.stringify(envelope.errors)}`);
+  }
   return envelope.data ?? ({} as T);
 }
 
@@ -85,7 +87,9 @@ async function call<T = Record<string, unknown>>(name: string, args: Record<stri
 async function raw(name: string, args: Record<string, unknown> = {}) {
   const result = (await client.callTool({ name, arguments: args })) as CallToolResult;
   const [content] = result.content;
-  if (content?.type !== "text") throw new Error(`no text in the result of ${name}`);
+  if (content?.type !== "text") {
+    throw new Error(`no text in the result of ${name}`);
+  }
   return { isError: result.isError === true, text: content.text };
 }
 
@@ -111,17 +115,21 @@ interface SchemaNode {
 function whereKeys(root: SchemaNode): string[] {
   const defs = root.definitions ?? root.$defs ?? {};
   const deref = (node: SchemaNode | undefined, depth = 0): SchemaNode | undefined => {
-    if (!node || depth > 8) return node;
-    if (node.$ref)
+    if (!node || depth > 8) {
+      return node;
+    }
+    if (node.$ref) {
       return deref(defs[node.$ref.replace(/^#\/(definitions|\$defs)\//, "")], depth + 1);
+    }
     // A nullable argument is `anyOf: [the type, null]`; the type is the half with content. One
     // with no null branch is a single-element `allOf`, which has only that half.
     const branches = node.anyOf ?? node.allOf;
-    if (branches)
+    if (branches) {
       return deref(
         branches.find((branch) => branch.$ref ?? branch.properties),
         depth + 1,
       );
+    }
     return node;
   };
   return Object.keys(deref(root.properties?.where)?.properties ?? {});
@@ -464,6 +472,8 @@ test("a flow is written nested and read back flat, and says so", async () => {
 test("a call arriving here is an agent, whatever it asks for", async () => {
   const result = (await probe.callTool({ name: "settings" })) as CallToolResult;
   const [content] = result.content;
-  if (content?.type !== "text") throw new Error("no text in the result of settings");
+  if (content?.type !== "text") {
+    throw new Error("no text in the result of settings");
+  }
   expect(content.text).toContain("FORBIDDEN");
 });

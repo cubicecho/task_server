@@ -24,7 +24,9 @@ import { SETTINGS_ID, type Settings, settings } from "../db/schema.ts";
  */
 export async function loadSettings(): Promise<Settings> {
   const [row] = await db.select().from(settings).where(eq(settings.id, SETTINGS_ID)).limit(1);
-  if (!row) throw new Error("settings row is missing — did ensureSchema() run?");
+  if (!row) {
+    throw new Error("settings row is missing — did ensureSchema() run?");
+  }
   return { ...row, apiKey: row.apiKey || process.env.OPENAI_API_KEY || "" };
 }
 

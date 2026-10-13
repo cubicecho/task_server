@@ -30,7 +30,9 @@ const fire: Fire = (taskId, triggerId, payload) => {
   triggers.push(triggerId);
   payloads.push(payload);
   const answer = answers.get(taskId);
-  if (answer) return answer();
+  if (answer) {
+    return answer();
+  }
   const row = run(`run-${taskId}`);
   return Promise.resolve({ started: true, run: row, done: Promise.resolve(row) });
 };

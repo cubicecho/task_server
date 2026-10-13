@@ -58,7 +58,9 @@ export const runningRunIds = () =>
  */
 export function stopTask(taskId: string): boolean {
   const entry = inFlight.get(taskId);
-  if (!entry) return false;
+  if (!entry) {
+    return false;
+  }
   entry.controller.abort();
   return true;
 }
@@ -106,7 +108,9 @@ const firedBy = (triggerId?: string) =>
  * that the slot is spoken for, and the controller that can call the run off.
  */
 function claim(taskId: string, name: string, limit: number) {
-  if (inFlight.has(taskId)) throw new TaskBusyError(`task "${name}" is already running`);
+  if (inFlight.has(taskId)) {
+    throw new TaskBusyError(`task "${name}" is already running`);
+  }
   if (isFull(limit)) {
     throw new AtCapacityError(`${inFlight.size} runs already going, and the limit is ${limit}`);
   }
@@ -134,7 +138,9 @@ export async function startTask(
   payload?: unknown,
 ): Promise<{ run: Run; done: Promise<Run> }> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
-  if (!task) throw new Error(`no task with id ${taskId}`);
+  if (!task) {
+    throw new Error(`no task with id ${taskId}`);
+  }
   const entry = claim(task.id, task.name, await capacity());
 
   try {
@@ -212,7 +218,9 @@ export async function fireTask(
     const { run, done } = await startTask(taskId, triggerId, payload);
     return { started: true, run, done };
   } catch (error) {
-    if (!(error instanceof RunRefusedError)) throw error;
+    if (!(error instanceof RunRefusedError)) {
+      throw error;
+    }
     const reason = errorMessage(error);
     // A full server is a wait; a task meeting itself is a collision. Only the first is worth
     // holding on to — see `enqueue`.
@@ -262,7 +270,9 @@ async function enqueue({
     .set({ attempts: sql`${runs.attempts} + 1`, payload: payload ?? null, error: reason })
     .where(and(eq(runs.status, "queued"), eq(runs.taskId, taskId), firedBy(triggerId)))
     .returning();
-  if (waiting) return waiting;
+  if (waiting) {
+    return waiting;
+  }
 
   const [run] = await db
     .insert(runs)
@@ -319,7 +329,9 @@ async function recordSkip({
         ),
       )
       .returning();
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
   }
 
   const [run] = await db
@@ -379,7 +391,9 @@ let pendingDrain: ReturnType<typeof setTimeout>;
 async function drainOnce(): Promise<void> {
   try {
     for (;;) {
-      if (isFull(await capacity())) return;
+      if (isFull(await capacity())) {
+        return;
+      }
 
       const busy = [...inFlight.keys()];
       const [next] = await db
@@ -395,7 +409,9 @@ async function drainOnce(): Promise<void> {
         .orderBy(asc(runs.startedAt))
         .limit(1);
 
-      if (!next || !(await startQueued(next))) return;
+      if (!next || !(await startQueued(next))) {
+        return;
+      }
     }
   } catch (error) {
     console.error(`[queue] ${errorMessage(error)}`);
@@ -417,7 +433,9 @@ async function drainOnce(): Promise<void> {
  */
 async function startQueued(waiting: Run): Promise<boolean> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, waiting.taskId)).limit(1);
-  if (!task) return false;
+  if (!task) {
+    return false;
+  }
   if (!task.enabled) {
     await finish(waiting.id, {
       status: "skipped",
@@ -430,7 +448,9 @@ async function startQueued(waiting: Run): Promise<boolean> {
   try {
     entry = claim(task.id, task.name, await capacity());
   } catch (error) {
-    if (error instanceof RunRefusedError) return false;
+    if (error instanceof RunRefusedError) {
+      return false;
+    }
     throw error;
   }
 

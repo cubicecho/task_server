@@ -105,7 +105,9 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
     onChange([...triggers, { ...trigger, key: nextKey() }]);
 
   const drop = (trigger: DraftTrigger) => {
-    if (trigger.id) onRemoveSaved(trigger.id);
+    if (trigger.id) {
+      onRemoveSaved(trigger.id);
+    }
     onChange(triggers.filter((current) => current.key !== trigger.key));
   };
 

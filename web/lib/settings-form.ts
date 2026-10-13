@@ -125,11 +125,15 @@ export function dirtySections(
   form: SettingsForm,
   row: SettingsFieldsFragment | undefined,
 ): SettingsSection[] {
-  if (!row) return [];
+  if (!row) {
+    return [];
+  }
   const stored = toForm(row);
   const dirty = new Set<SettingsSection>();
   for (const key of Object.keys(SECTION_OF) as (keyof SettingsForm)[]) {
-    if (form[key] !== stored[key]) dirty.add(SECTION_OF[key]);
+    if (form[key] !== stored[key]) {
+      dirty.add(SECTION_OF[key]);
+    }
   }
   return SETTINGS_SECTIONS.map((section) => section.key).filter((key) => dirty.has(key));
 }

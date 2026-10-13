@@ -139,7 +139,9 @@ export function syncSoon() {
  * letting the timer fire again costs one redundant sync and keeps that write's guarantee intact.
  */
 export async function flush() {
-  if (owed) await settle();
+  if (owed) {
+    await settle();
+  }
 }
 
 export function state(): ScheduleEntry[] {
@@ -153,6 +155,8 @@ export function state(): ScheduleEntry[] {
 
 export function stop() {
   clearTimeout(pending);
-  for (const entry of entries.values()) void entry.task.destroy();
+  for (const entry of entries.values()) {
+    void entry.task.destroy();
+  }
   entries.clear();
 }

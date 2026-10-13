@@ -52,8 +52,12 @@ const log = (message: string) => console.warn(`[hooks] ${message}`);
  * The pool's own check, plus the one thing it cannot know: which events this host fires.
  */
 export function hookProblems(hooks: unknown): string[] {
-  if (hooks === null || hooks === undefined) return [];
-  if (!Array.isArray(hooks)) return ["hooks must be a JSON array"];
+  if (hooks === null || hooks === undefined) {
+    return [];
+  }
+  if (!Array.isArray(hooks)) {
+    return ["hooks must be a JSON array"];
+  }
   return [...validateHooks(hooks as ToolHook[]), ...unfiredProblems(hooks as Partial<ToolHook>[])];
 }
 
@@ -165,7 +169,9 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
       const done = notify(run, "afterTurn", context, (note) =>
         onEvent?.({ kind: "notice", text: describe(note) }),
       ).then(async (notes) => {
-        if (!notes.length) return;
+        if (!notes.length) {
+          return;
+        }
         await db
           .update(runSteps)
           .set({ hooks: appended(runSteps.hooks, notes) })
@@ -206,7 +212,9 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
     try {
       await Promise.all(pending);
       const notes = await notify(run, "sessionEnd", { ...contextFor(), status, reply });
-      if (!notes.length) return;
+      if (!notes.length) {
+        return;
+      }
       await db
         .update(runs)
         .set({ hooks: appended(runs.hooks, notes) })
@@ -237,5 +245,7 @@ export type HookSession = ReturnType<typeof hookSession>;
  */
 export function runsDeleted(ids: readonly string[]) {
   const run: HookRunner = (event, context) => mcp.runHooks(event, context, { onNotice: log });
-  for (const id of ids) void notify(run, "sessionDelete", { session: { id }, host: HOST });
+  for (const id of ids) {
+    void notify(run, "sessionDelete", { session: { id }, host: HOST });
+  }
 }

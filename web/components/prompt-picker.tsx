@@ -71,7 +71,9 @@ export function McpPromptButton({
   const prompts = useMcpPrompts();
   const [open, setOpen] = useState(false);
 
-  if (!prompts.data?.mcpPrompts.length) return null;
+  if (!prompts.data?.mcpPrompts.length) {
+    return null;
+  }
 
   return (
     <>
@@ -128,8 +130,11 @@ function PromptDialog({
    */
   const pick = (prompt: McpPrompt) => {
     setValues({});
-    if (prompt.arguments.length === 0) expand.mutate({ prompt, args: {} });
-    else setChosen(prompt);
+    if (prompt.arguments.length === 0) {
+      expand.mutate({ prompt, args: {} });
+    } else {
+      setChosen(prompt);
+    }
   };
 
   const missing = chosen?.arguments.some((arg) => arg.required && !values[arg.name]?.trim());

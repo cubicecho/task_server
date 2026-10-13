@@ -21,7 +21,9 @@ async function take<T>(iterator: AsyncIterator<T>, count: number): Promise<T[]> 
   const taken: T[] = [];
   for (let i = 0; i < count; i++) {
     const next = await iterator.next();
-    if (next.done) break;
+    if (next.done) {
+      break;
+    }
     taken.push(next.value);
   }
   return taken;
@@ -44,7 +46,9 @@ test("the subscription carries a run over GraphQL", async () => {
     schema,
     document: parse(`subscription { runEvents(runId: "run-4") { seq kind text name ok } }`),
   });
-  if (!(Symbol.asyncIterator in result)) throw new Error("expected a subscription stream");
+  if (!(Symbol.asyncIterator in result)) {
+    throw new Error("expected a subscription stream");
+  }
   const stream = result as AsyncIterableIterator<ExecutionResult>;
 
   events.emit("run-4", { kind: "tool-call", name: "echo__ping", text: "{}" });

@@ -54,7 +54,9 @@ beforeEach(() => limit(1));
 afterEach(async () => {
   // The queue first: a run that stops drains it, and a waiting row would start as this ends.
   await db.delete(tables.runs).where(eq(tables.runs.status, "queued"));
-  for (const { taskId } of Object.values(ids)) runner.stopTask(taskId);
+  for (const { taskId } of Object.values(ids)) {
+    runner.stopTask(taskId);
+  }
   await idle();
   await db.update(tables.tasks).set({ enabled: true });
 });

@@ -103,8 +103,11 @@ export function ModelSelect({
       options={options}
       value={value || (defaultLabel ? DEFAULT : "")}
       onValueChange={(next) => {
-        if (next === CUSTOM) setTyping(true);
-        else onValueChange(next === DEFAULT ? "" : next);
+        if (next === CUSTOM) {
+          setTyping(true);
+        } else {
+          onValueChange(next === DEFAULT ? "" : next);
+        }
       }}
       onOpenChange={(open) => open && setOpened(true)}
       placeholder="Select a model"

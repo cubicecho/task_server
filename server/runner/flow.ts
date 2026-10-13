@@ -60,10 +60,14 @@ export function buildTree(rows: Step[]): FlowNode[] {
     const seen = new Set<string>();
     let current: Step | undefined = row;
     while (current?.parentId) {
-      if (seen.has(current.id)) return false;
+      if (seen.has(current.id)) {
+        return false;
+      }
       seen.add(current.id);
       current = byId.get(current.parentId);
-      if (!current) return false;
+      if (!current) {
+        return false;
+      }
     }
     return current !== undefined;
   });
@@ -84,13 +88,17 @@ export function buildTree(rows: Step[]): FlowNode[] {
 
   for (const row of ordered) {
     const node = nodes.get(row.id);
-    if (!node) continue;
+    if (!node) {
+      continue;
+    }
     if (!row.parentId) {
       roots.push(node);
       continue;
     }
     const parent = nodes.get(row.parentId);
-    if (!parent) continue;
+    if (!parent) {
+      continue;
+    }
     const arm = parent.branches.get(row.branch) ?? [];
     arm.push(node);
     parent.branches.set(row.branch, arm);
@@ -113,14 +121,20 @@ const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?)\s*\}\}/gi;
  * know that it is not there.
  */
 function renderPayload(payload: unknown): string {
-  if (payload === null || payload === undefined) return "(this run has no event payload)";
+  if (payload === null || payload === undefined) {
+    return "(this run has no event payload)";
+  }
   return JSON.stringify(payload, null, 2);
 }
 
 /** The earlier steps a step is shown under its `context` mode. */
 function visibleTo(mode: Step["context"], context: ContextEntry[]): ContextEntry[] {
-  if (mode === "none") return [];
-  if (mode === "previous") return context.slice(-1);
+  if (mode === "none") {
+    return [];
+  }
+  if (mode === "previous") {
+    return context.slice(-1);
+  }
   return context;
 }
 
@@ -146,20 +160,28 @@ export function renderPrompt(
   let placed = false;
   const substituted = step.prompt.replace(PLACEHOLDER, (_match, token: string) => {
     const key = token.toLowerCase();
-    if (key === "event") return renderPayload(payload);
+    if (key === "event") {
+      return renderPayload(payload);
+    }
     placed = true;
-    if (key === "previous") return context[context.length - 1]?.output ?? "";
+    if (key === "previous") {
+      return context[context.length - 1]?.output ?? "";
+    }
     const wanted = token.slice("steps.".length);
     const entry = context.find((item) => sameCase(item.name, wanted));
     // Saying so beats substituting an empty string and leaving the model to invent the rest.
     return entry ? entry.output : `(no step named "${wanted.trim()}" has run)`;
   });
-  if (placed) return substituted;
+  if (placed) {
+    return substituted;
+  }
 
   // `substituted` from here down, not `step.prompt`: `{{event}}` leaves the preamble standing
   // but has still been replaced, and putting the raw prompt back would undo it.
   const visible = visibleTo(step.context, context);
-  if (visible.length === 0) return substituted;
+  if (visible.length === 0) {
+    return substituted;
+  }
 
   const earlier = visible.map((entry) => `### ${entry.name}\n\n${entry.output}`).join("\n\n");
   return `## Earlier in this task\n\n${earlier}\n\n---\n\n${substituted}`;
@@ -193,7 +215,9 @@ export function parseCase(output: string, cases: string[]): string | undefined {
     const parsed = parseJson<{ case?: unknown }>(candidate);
     if (typeof parsed?.case === "string") {
       const found = match(parsed.case);
-      if (found) return found;
+      if (found) {
+        return found;
+      }
     }
   }
 
@@ -205,7 +229,9 @@ export function parseCase(output: string, cases: string[]): string | undefined {
     // A final line is an answer, not a sentence: strip the punctuation a model wraps it in.
     const bare = line.replace(/^[`"'*\s]+|[`"'*.,!\s]+$/g, "");
     const found = match(bare);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return undefined;
 }
@@ -336,7 +362,9 @@ export async function runFlow({
 
     try {
       const gathered = await hooks?.before(turn, signal, emit);
-      if (gathered?.notes.length) noted = { hooks: gathered.notes };
+      if (gathered?.notes.length) {
+        noted = { hooks: gathered.notes };
+      }
 
       const agentResult = await runAgent({
         config,
@@ -393,7 +421,9 @@ export async function runFlow({
     emit: (event: RunEventInput) => void,
   ): Promise<string> {
     const direct = parseCase(output, plan.cases);
-    if (direct) return direct;
+    if (direct) {
+      return direct;
+    }
 
     // Asked with the arms as a schema, so an endpoint that can hold a reply to one does: the answer
     // to "which did it mean" cannot itself come back as prose.
@@ -443,7 +473,9 @@ export async function runFlow({
       }
 
       const branch = await execute(plan);
-      if (branch === undefined) continue;
+      if (branch === undefined) {
+        continue;
+      }
       // An arm with nothing in it is a legitimate "then do nothing"; only an unanswerable
       // decision is a failure, and `resolveCase` has already thrown by here if it was one.
       await runSequence(node.branches.get(branch) ?? [], depth + 1);

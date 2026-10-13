@@ -23,7 +23,9 @@ const TYPES_FILE = path.join(ROOT, "web/__generated__/graphql/graphql.ts");
  */
 export async function runCodegen(): Promise<void> {
   const changed = writeSchemaFile();
-  if (!changed && fs.existsSync(TYPES_FILE)) return;
+  if (!changed && fs.existsSync(TYPES_FILE)) {
+    return;
+  }
 
   // Imported here rather than at the top so this module can be loaded in a tree that has no
   // devDependencies without the import itself throwing.

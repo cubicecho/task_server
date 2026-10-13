@@ -103,7 +103,9 @@ async function dispatch(
   payload: unknown,
   fire: typeof fireTask,
 ): Promise<{ dispatched: Dispatched[]; queued: Queued[]; refused: Refused[] }> {
-  if (!event) return { dispatched: [], queued: [], refused: [] };
+  if (!event) {
+    return { dispatched: [], queued: [], refused: [] };
+  }
 
   const rows = await db
     .select({ triggerId: triggers.id, taskId: triggers.taskId, name: tasks.name })
