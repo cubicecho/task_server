@@ -54,7 +54,7 @@ function Provenance({ trigger }: { trigger: Run["trigger"] }) {
     return null;
   }
   const label = trigger.kind === "cron" ? trigger.cron : `/webhooks/${trigger.event}`;
-  return <span className="shrink-0 font-mono text-muted-foreground text-xs">{label}</span>;
+  return <span className="shrink-0 font-mono text-foreground/60 text-xs">{label}</span>;
 }
 
 /** Tool names as chips, red where the call failed. */
@@ -71,7 +71,7 @@ function ToolChips({ calls }: { calls: unknown }) {
           key={`${tool.name}-${index}`}
           className={cn(
             "rounded-md border px-2 py-0.5 font-mono text-xs",
-            tool.ok ? "text-muted-foreground" : "border-destructive text-destructive",
+            tool.ok ? "text-foreground/60" : "border-negative text-negative",
           )}
         >
           {tool.name}
@@ -94,24 +94,19 @@ function HookNotes({ notes }: { notes: unknown }) {
   const failed = list.filter((note) => note.error).length;
   return (
     <details className="text-xs">
-      <summary
-        className={cn("cursor-pointer", failed ? "text-destructive" : "text-muted-foreground")}
-      >
+      <summary className={cn("cursor-pointer", failed ? "text-negative" : "text-foreground/60")}>
         {list.length} hook note(s){failed ? `, ${failed} failed` : ""}
       </summary>
       <ul className="mt-1 flex flex-col gap-2">
         {list.map((note, index) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: notes are only ever appended, and one hook may leave two
           <li key={`${note.hookId}-${index}`} className="flex flex-col gap-0.5">
-            <span className="font-mono text-muted-foreground">
+            <span className="font-mono text-foreground/60">
               {note.source}/{note.hookId} · {note.event}
               {note.tokens ? ` · ${note.tokens} tokens` : ""}
             </span>
             <pre
-              className={cn(
-                "overflow-x-auto whitespace-pre-wrap",
-                note.error && "text-destructive",
-              )}
+              className={cn("overflow-x-auto whitespace-pre-wrap", note.error && "text-negative")}
             >
               {note.error ?? note.text}
             </pre>
@@ -141,12 +136,12 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
             <Badge variant={STATUS_VARIANT[step.status] ?? "secondary"}>{step.status}</Badge>
             <span className="font-medium text-sm">{step.name}</span>
             {step.kind === "decision" ? (
-              <span className="font-mono text-muted-foreground text-xs">
+              <span className="font-mono text-foreground/60 text-xs">
                 → {step.branch || "(undecided)"}
               </span>
             ) : null}
             {step.totalTokens ? (
-              <span className="text-muted-foreground text-xs">{step.totalTokens} tokens</span>
+              <span className="text-foreground/60 text-xs">{step.totalTokens} tokens</span>
             ) : null}
           </div>
           <ToolChips calls={step.toolCalls} />
@@ -174,7 +169,7 @@ function Payload({ payload }: { payload: unknown }) {
   }
   return (
     <details className="text-sm">
-      <summary className="cursor-pointer text-muted-foreground">Event payload</summary>
+      <summary className="cursor-pointer text-foreground/60">Event payload</summary>
       <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-xs">
         {JSON.stringify(payload, null, 2)}
       </pre>
@@ -219,7 +214,7 @@ function RunDetail({
     <>
       <RunSteps steps={found.steps} />
       {/* The run failed before or between steps — nothing above says why. */}
-      {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
+      {run.error ? <p className="text-negative text-sm">{run.error}</p> : null}
     </>
   ) : (
     <>
@@ -449,7 +444,7 @@ export function RunsRoute() {
                 title={run.task.name}
                 meta={
                   <>
-                    <span className="shrink-0 font-normal text-muted-foreground text-xs">
+                    <span className="shrink-0 font-normal text-foreground/60 text-xs">
                       {new Date(run.startedAt).toLocaleString()}
                       {skipped || queued ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
                       {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
@@ -498,7 +493,7 @@ export function RunsRoute() {
                     {/* A run in flight has no stored output yet — this is the run itself, live. */}
                     {running ? <RunStream runId={run.id} /> : null}
                     {skipped ? (
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-foreground/60 text-sm">
                         {run.attempts > 1
                           ? `The trigger fired ${run.attempts} times while this task was already running, so nothing was started.`
                           : "The trigger fired while this task was already running, so nothing was started."}{" "}
@@ -508,7 +503,7 @@ export function RunsRoute() {
                       </p>
                     ) : null}
                     {queued ? (
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-foreground/60 text-sm">
                         {run.attempts > 1
                           ? `The trigger fired ${run.attempts} times while the server was at its limit, and this row stands for all of them.`
                           : "The trigger fired while the server was at its limit."}{" "}

@@ -83,7 +83,7 @@ function Snippet({ label, text }: { label: string; text: string }) {
           content={copied ? "Copied" : "Copy"}
         />
       </div>
-      <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs">
+      <pre className="overflow-x-auto rounded-md border bg-foreground/10 p-3 text-xs">
         <code>{text}</code>
       </pre>
     </div>
@@ -273,7 +273,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                   {section.label}
                   {dirty.includes(section.key) ? (
                     <>
-                      <span aria-hidden className="size-1.5 rounded-full bg-primary" />
+                      <span aria-hidden className="size-1.5 rounded-full bg-info" />
                       <span className="sr-only">(unsaved changes)</span>
                     </>
                   ) : null}
@@ -332,7 +332,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                         content={endpointAction(applyEndpoint.isPending, endpointPending)}
                       />
                       {endpointPending ? (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-foreground/60">
                           Not applied yet — the model lists are still the stored endpoint's.
                         </p>
                       ) : null}
@@ -342,20 +342,17 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                       <div className="flex items-start gap-2 text-sm">
                         {probe.ok ? (
                           <CircleCheck
-                            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                            className="mt-0.5 size-4 shrink-0 text-foreground/60"
                             aria-hidden
                           />
                         ) : (
-                          <XCircle
-                            className="mt-0.5 size-4 shrink-0 text-destructive"
-                            aria-hidden
-                          />
+                          <XCircle className="mt-0.5 size-4 shrink-0 text-negative" aria-hidden />
                         )}
                         <p
                           className={
                             probe.ok
-                              ? "text-muted-foreground"
-                              : "whitespace-pre-wrap font-mono text-xs text-destructive"
+                              ? "text-foreground/60"
+                              : "whitespace-pre-wrap font-mono text-xs text-negative"
                           }
                         >
                           {probe.ok ? `Connected — ${probe.detail}` : probe.detail}

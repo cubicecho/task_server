@@ -89,9 +89,7 @@ export function ModelSelect({
     ...(defaultLabel ? [{ value: DEFAULT, label: defaultLabel }] : []),
     ...names.map((name) => ({ value: name, label: name, className: "font-mono" })),
     ...(models.isFetching && names.length === 0 ? [{ note: "Loading…" }] : []),
-    ...(models.error
-      ? [{ note: models.error.message, className: "text-destructive text-xs" }]
-      : []),
+    ...(models.error ? [{ note: models.error.message, className: "text-negative text-xs" }] : []),
     { separator: true },
     // The search hides a row its words do not match, and the words of a model nobody listed are
     // never this row's — so it answers to the word the empty message tells the reader to type.

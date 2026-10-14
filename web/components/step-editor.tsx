@@ -172,9 +172,9 @@ function StepCard({
   };
 
   return (
-    <div className="rounded-lg border bg-card">
+    <div className="rounded-lg border bg-secondary">
       <div className="flex items-center gap-2 border-b px-3 py-2">
-        <span className="shrink-0 rounded-md border px-2 py-0.5 text-xs text-muted-foreground">
+        <span className="shrink-0 rounded-md border px-2 py-0.5 text-xs text-foreground/60">
           {decision ? "decision" : "step"}
         </span>
         <Input
@@ -256,10 +256,7 @@ function StepCard({
                     // biome-ignore lint/suspicious/noArrayIndexKey: no id, and the list is positional
                     <div key={index} className="flex items-center gap-1">
                       <Input
-                        className={cn(
-                          "h-8 w-40 font-mono",
-                          duplicate(index) && "border-destructive",
-                        )}
+                        className={cn("h-8 w-40 font-mono", duplicate(index) && "border-negative")}
                         value={label}
                         onChange={(event) => setCase(index, event.target.value)}
                         placeholder="error"
@@ -279,7 +276,7 @@ function StepCard({
                 {/* Said here rather than at save time: the server refuses the whole flow over it,
                     and by then it is a message about a step you have scrolled away from. */}
                 {step.cases.some((_, index) => duplicate(index)) ? (
-                  <p className="text-destructive text-xs">
+                  <p className="text-negative text-xs">
                     Two cases spelling the same thing are one case. Rename or remove one.
                   </p>
                 ) : null}
@@ -289,7 +286,7 @@ function StepCard({
         ) : null}
 
         <details className="text-sm">
-          <summary className="cursor-pointer text-xs text-muted-foreground">
+          <summary className="cursor-pointer text-xs text-foreground/60">
             Model, system prompt, context
           </summary>
           <FieldRow
@@ -346,7 +343,7 @@ function StepCard({
               // Keyed by position: two cases can briefly share a name while one is being typed.
               // biome-ignore lint/suspicious/noArrayIndexKey: the arms follow `cases` positionally
               <div key={index} className="border-l-2 pl-3">
-                <p className="mb-2 font-mono text-xs text-muted-foreground">
+                <p className="mb-2 font-mono text-xs text-foreground/60">
                   {arm.case === DEFAULT_BRANCH
                     ? "default — anything else"
                     : arm.case || "(unnamed)"}

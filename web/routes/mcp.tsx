@@ -142,7 +142,7 @@ export function McpRoute() {
                         {status?.status ?? "unknown"}
                       </Badge>
                       {tools.length ? (
-                        <span className="font-normal text-muted-foreground text-xs">
+                        <span className="font-normal text-foreground/60 text-xs">
                           {tools.length} tool(s)
                         </span>
                       ) : null}
@@ -150,7 +150,7 @@ export function McpRoute() {
                           names a process that has exited, and a reused pid names someone else's. */}
                       {age ? (
                         <span
-                          className="font-normal text-muted-foreground text-xs"
+                          className="font-normal text-foreground/60 text-xs"
                           title={`connected ${new Date(status?.startedAt ?? "").toLocaleString()}`}
                         >
                           up {age}
@@ -198,7 +198,7 @@ export function McpRoute() {
                 </div>
 
                 {status?.error ? (
-                  <p className="whitespace-pre-wrap font-mono text-destructive text-xs">
+                  <p className="whitespace-pre-wrap font-mono text-negative text-xs">
                     {status.error}
                   </p>
                 ) : null}

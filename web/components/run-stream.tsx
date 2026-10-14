@@ -167,20 +167,23 @@ export function RunStream({ runId }: { runId: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-xs text-foreground/60">
         <span
           className={cn(
             "size-2 rounded-full",
-            ended ? "bg-muted-foreground" : "animate-pulse bg-emerald-500",
+            ended ? "bg-foreground/60" : "animate-pulse bg-positive",
           )}
         />
         {ended ? "Run ended" : "Live"}
-        {error ? <span className="text-destructive">· {error}</span> : null}
+        {error ? <span className="text-negative">· {error}</span> : null}
       </div>
 
-      <div ref={scroller} className="max-h-80 overflow-y-auto rounded-md border bg-muted/30 p-3">
+      <div
+        ref={scroller}
+        className="max-h-80 overflow-y-auto rounded-md border bg-foreground/10 p-3"
+      >
         {blocks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Waiting for the model…</p>
+          <p className="text-sm text-foreground/60">Waiting for the model…</p>
         ) : null}
         <div className="flex flex-col gap-3">
           {groups.map((entry, index) => (
@@ -191,7 +194,7 @@ export function RunStream({ runId }: { runId: string }) {
               className="flex flex-col gap-2"
             >
               {entry.step ? (
-                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                <p className="text-xs font-medium tracking-wide text-foreground/60 uppercase">
                   {entry.step}
                   {entry.kind === "decision" ? " · decision" : ""}
                 </p>
@@ -215,7 +218,7 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
   switch (block.kind) {
     case "thinking":
       return (
-        <p className="whitespace-pre-wrap border-l-2 pl-2 text-sm text-muted-foreground italic">
+        <p className="whitespace-pre-wrap border-l-2 pl-2 text-sm text-foreground/60 italic">
           {block.text}
         </p>
       );
@@ -223,7 +226,7 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
       return <p className="whitespace-pre-wrap text-sm">{block.text}</p>;
     case "tool-call":
       return (
-        <p className="font-mono text-xs break-all text-muted-foreground">
+        <p className="font-mono text-xs break-all text-foreground/60">
           → {block.name}({block.text})
         </p>
       );
@@ -232,7 +235,7 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
         <p
           className={cn(
             "font-mono text-xs whitespace-pre-wrap",
-            block.ok ? "text-muted-foreground" : "text-destructive",
+            block.ok ? "text-foreground/60" : "text-negative",
           )}
         >
           ← {block.name}: {block.text}
@@ -240,7 +243,7 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
       );
     case "turn":
       return (
-        <p className="border-t pt-2 text-xs tracking-wide text-muted-foreground uppercase">
+        <p className="border-t pt-2 text-xs tracking-wide text-foreground/60 uppercase">
           {block.text}
         </p>
       );
@@ -249,6 +252,6 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
       return <p className="text-sm font-medium">&rarr; {block.text}</p>;
     default:
       // `notice` and `done`: the runner speaking rather than the model.
-      return <p className="text-xs text-muted-foreground">{block.text}</p>;
+      return <p className="text-xs text-foreground/60">{block.text}</p>;
   }
 });
