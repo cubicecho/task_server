@@ -197,7 +197,7 @@ function RadioGroup({
           // measures a percentage width as the content's and then resolves it against the total,
           // which pushed the group's neighbours out of the row by their own width.
           "h-10 self-stretch flex-row gap-1 rounded-md border bg-background p-1",
-          ariaInvalid === true ? "border-negative" : "border-foreground/15",
+          ariaInvalid === true ? "border-negative" : "border-foreground/50",
         )
       : stacked;
 
@@ -310,7 +310,7 @@ function RadioGroupItem({
       className={cn(
         "cube-rn-view",
         "h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-        checked ? "border-active" : "border-foreground/15",
+        checked ? "border-active" : "border-foreground/50",
         group.invalid && "border-negative",
       )}
     >
@@ -335,7 +335,7 @@ function RadioGroupItem({
       return cn(
         "min-w-0 flex-1 items-center gap-1.5 rounded-lg border p-3",
         // The border alone says checked: a tinted fill takes the muted description under 4.5:1.
-        checked ? "border-active bg-background" : "border-foreground/15 bg-background",
+        checked ? "border-active bg-background" : "border-foreground/50 bg-background",
         "focus-visible:bg-hover",
         group.invalid && "border-negative",
       );
@@ -359,7 +359,7 @@ function RadioGroupItem({
               id={labelId}
               className={cn(
                 "cube-rn-text",
-                "truncate text-sm font-medium",
+                "truncate text-sm font-semibold",
                 checked ? "text-active-foreground" : "text-foreground/60",
               )}
             >
@@ -377,7 +377,7 @@ function RadioGroupItem({
           ) : null}
           <span
             id={labelId}
-            className="cube-rn-text text-center text-foreground text-sm font-medium"
+            className="cube-rn-text text-center text-foreground text-sm font-semibold"
           >
             {label}
           </span>

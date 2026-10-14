@@ -10,15 +10,18 @@ import {
   type RunsQuery,
   RunsStatusEnum,
 } from "@/__generated__/graphql/graphql";
+import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
+import { Disclosure } from "@/components/disclosure";
 import { DisclosureRow } from "@/components/disclosure-row";
-import { OptionSelect } from "@/components/option-select";
+import { List } from "@/components/list";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CodeBlock } from "@/components/ui/code";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Play, RefreshCw, Square, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -54,7 +57,7 @@ function Provenance({ trigger }: { trigger: Run["trigger"] }) {
     return null;
   }
   const label = trigger.kind === "cron" ? trigger.cron : `/webhooks/${trigger.event}`;
-  return <span className="shrink-0 font-mono text-muted-foreground text-xs">{label}</span>;
+  return <span className="shrink-0 font-mono text-foreground/60 text-xs">{label}</span>;
 }
 
 /** Tool names as chips, red where the call failed. */
@@ -71,7 +74,7 @@ function ToolChips({ calls }: { calls: unknown }) {
           key={`${tool.name}-${index}`}
           className={cn(
             "rounded-md border px-2 py-0.5 font-mono text-xs",
-            tool.ok ? "text-muted-foreground" : "border-destructive text-destructive",
+            tool.ok ? "text-foreground/60" : "border-negative text-negative",
           )}
         >
           {tool.name}
@@ -93,32 +96,30 @@ function HookNotes({ notes }: { notes: unknown }) {
   }
   const failed = list.filter((note) => note.error).length;
   return (
-    <details className="text-xs">
-      <summary
-        className={cn("cursor-pointer", failed ? "text-destructive" : "text-muted-foreground")}
-      >
-        {list.length} hook note(s){failed ? `, ${failed} failed` : ""}
-      </summary>
-      <ul className="mt-1 flex flex-col gap-2">
-        {list.map((note, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: notes are only ever appended, and one hook may leave two
-          <li key={`${note.hookId}-${index}`} className="flex flex-col gap-0.5">
-            <span className="font-mono text-muted-foreground">
-              {note.source}/{note.hookId} · {note.event}
-              {note.tokens ? ` · ${note.tokens} tokens` : ""}
-            </span>
-            <pre
-              className={cn(
-                "overflow-x-auto whitespace-pre-wrap",
-                note.error && "text-destructive",
+    <Disclosure
+      title={`${list.length} hook note(s)${failed ? `, ${failed} failed` : ""}`}
+      titleClassName={cn("text-xs", failed && "text-negative")}
+      contentSlot={
+        <List
+          label="Hook notes"
+          divided={false}
+          contentSlot={list.map((note, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: notes are only ever appended, and one hook may leave two
+            <div key={`${note.hookId}-${index}`} className="flex flex-col gap-0.5 text-xs">
+              <span className="font-mono text-foreground/60">
+                {note.source}/{note.hookId} · {note.event}
+                {note.tokens ? ` · ${note.tokens} tokens` : ""}
+              </span>
+              {note.error ? (
+                <p className="whitespace-pre-wrap text-negative">{note.error}</p>
+              ) : (
+                <CodeBlock content={note.text ?? ""} wrap maxHeight="md" />
               )}
-            >
-              {note.error ?? note.text}
-            </pre>
-          </li>
-        ))}
-      </ul>
-    </details>
+            </div>
+          ))}
+        />
+      }
+    />
   );
 }
 
@@ -141,12 +142,12 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
             <Badge variant={STATUS_VARIANT[step.status] ?? "secondary"}>{step.status}</Badge>
             <span className="font-medium text-sm">{step.name}</span>
             {step.kind === "decision" ? (
-              <span className="font-mono text-muted-foreground text-xs">
+              <span className="font-mono text-foreground/60 text-xs">
                 → {step.branch || "(undecided)"}
               </span>
             ) : null}
             {step.totalTokens ? (
-              <span className="text-muted-foreground text-xs">{step.totalTokens} tokens</span>
+              <span className="text-foreground/60 text-xs">{step.totalTokens} tokens</span>
             ) : null}
           </div>
           <ToolChips calls={step.toolCalls} />
@@ -173,12 +174,10 @@ function Payload({ payload }: { payload: unknown }) {
     return null;
   }
   return (
-    <details className="text-sm">
-      <summary className="cursor-pointer text-muted-foreground">Event payload</summary>
-      <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-xs">
-        {JSON.stringify(payload, null, 2)}
-      </pre>
-    </details>
+    <Disclosure
+      title="Event payload"
+      contentSlot={<CodeBlock content={JSON.stringify(payload, null, 2)} maxHeight="lg" />}
+    />
   );
 }
 
@@ -219,7 +218,7 @@ function RunDetail({
     <>
       <RunSteps steps={found.steps} />
       {/* The run failed before or between steps — nothing above says why. */}
-      {run.error ? <p className="text-destructive text-sm">{run.error}</p> : null}
+      {run.error ? <p className="text-negative text-sm">{run.error}</p> : null}
     </>
   ) : (
     <>
@@ -287,7 +286,7 @@ function FilterBar({
 
       {/* A rule under the first row of each of these: "any" is how the filter is turned off, not
           one of the things it filters to, and without it the two read as peers. */}
-      <OptionSelect
+      <Combobox
         aria-label="Status"
         className="w-36"
         value={filters.status}
@@ -299,7 +298,7 @@ function FilterBar({
         ]}
       />
 
-      <OptionSelect
+      <Combobox
         aria-label="Task"
         className="w-44"
         value={filters.taskId}
@@ -311,7 +310,7 @@ function FilterBar({
         ]}
       />
 
-      <OptionSelect
+      <Combobox
         aria-label="Time window"
         className="w-40"
         value={filters.window}
@@ -449,7 +448,7 @@ export function RunsRoute() {
                 title={run.task.name}
                 meta={
                   <>
-                    <span className="shrink-0 font-normal text-muted-foreground text-xs">
+                    <span className="shrink-0 font-normal text-foreground/60 text-xs">
                       {new Date(run.startedAt).toLocaleString()}
                       {skipped || queued ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
                       {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
@@ -498,7 +497,7 @@ export function RunsRoute() {
                     {/* A run in flight has no stored output yet — this is the run itself, live. */}
                     {running ? <RunStream runId={run.id} /> : null}
                     {skipped ? (
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-foreground/60 text-sm">
                         {run.attempts > 1
                           ? `The trigger fired ${run.attempts} times while this task was already running, so nothing was started.`
                           : "The trigger fired while this task was already running, so nothing was started."}{" "}
@@ -508,7 +507,7 @@ export function RunsRoute() {
                       </p>
                     ) : null}
                     {queued ? (
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-foreground/60 text-sm">
                         {run.attempts > 1
                           ? `The trigger fired ${run.attempts} times while the server was at its limit, and this row stands for all of them.`
                           : "The trigger fired while the server was at its limit."}{" "}

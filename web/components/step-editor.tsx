@@ -1,8 +1,9 @@
 import { GitBranch } from "lucide-react";
+import { Combobox } from "@/components/combobox";
+import { Disclosure } from "@/components/disclosure";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
-import { OptionSelect } from "@/components/option-select";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
@@ -172,9 +173,9 @@ function StepCard({
   };
 
   return (
-    <div className="rounded-lg border bg-card">
+    <div className="rounded-lg border bg-secondary">
       <div className="flex items-center gap-2 border-b px-3 py-2">
-        <span className="shrink-0 rounded-md border px-2 py-0.5 text-xs text-muted-foreground">
+        <span className="shrink-0 rounded-md border px-2 py-0.5 text-xs text-foreground/60">
           {decision ? "decision" : "step"}
         </span>
         <Input
@@ -256,10 +257,7 @@ function StepCard({
                     // biome-ignore lint/suspicious/noArrayIndexKey: no id, and the list is positional
                     <div key={index} className="flex items-center gap-1">
                       <Input
-                        className={cn(
-                          "h-8 w-40 font-mono",
-                          duplicate(index) && "border-destructive",
-                        )}
+                        className={cn("h-8 w-40 font-mono", duplicate(index) && "border-negative")}
                         value={label}
                         onChange={(event) => setCase(index, event.target.value)}
                         placeholder="error"
@@ -279,7 +277,7 @@ function StepCard({
                 {/* Said here rather than at save time: the server refuses the whole flow over it,
                     and by then it is a message about a step you have scrolled away from. */}
                 {step.cases.some((_, index) => duplicate(index)) ? (
-                  <p className="text-destructive text-xs">
+                  <p className="text-negative text-xs">
                     Two cases spelling the same thing are one case. Rename or remove one.
                   </p>
                 ) : null}
@@ -288,65 +286,64 @@ function StepCard({
           />
         ) : null}
 
-        <details className="text-sm">
-          <summary className="cursor-pointer text-xs text-muted-foreground">
-            Model, system prompt, context
-          </summary>
-          <FieldRow
-            className="mt-3"
-            perRow={3}
-            contentSlot={
-              <>
-                <FormField
-                  label="Model"
-                  // The function form: `ModelSelect` puts the id on whichever of its two controls
-                  // is on screen.
-                  controlSlot={(wired) => (
-                    <ModelSelect
-                      {...wired}
-                      value={step.model}
-                      onValueChange={(model) => patch({ model })}
-                      defaultLabel="Same as the task"
-                    />
-                  )}
-                />
-                <FormField
-                  label="System prompt"
-                  controlSlot={
-                    <Input
-                      value={step.systemPrompt}
-                      onChange={(event) => patch({ systemPrompt: event.target.value })}
-                      placeholder="(same as the task)"
-                    />
-                  }
-                />
-                <FormField
-                  label="Sees"
-                  // Still the function form: the control spreads what it is handed onto the
-                  // trigger, and the trigger is the only element a Radix select renders.
-                  controlSlot={(wired) => (
-                    <OptionSelect
-                      {...wired}
-                      value={step.context}
-                      onValueChange={(context) => patch({ context: context as StepContext })}
-                      options={CONTEXTS.map((context) => ({
-                        value: context,
-                        label: CONTEXT_LABELS[context],
-                      }))}
-                    />
-                  )}
-                />
-              </>
-            }
-          />
-        </details>
+        <Disclosure
+          title="Model, system prompt, context"
+          contentSlot={
+            <FieldRow
+              perRow={3}
+              contentSlot={
+                <>
+                  <FormField
+                    label="Model"
+                    // The function form: `ModelSelect` puts the id on whichever of its two controls
+                    // is on screen.
+                    controlSlot={(wired) => (
+                      <ModelSelect
+                        {...wired}
+                        value={step.model}
+                        onValueChange={(model) => patch({ model })}
+                        defaultLabel="Same as the task"
+                      />
+                    )}
+                  />
+                  <FormField
+                    label="System prompt"
+                    controlSlot={
+                      <Input
+                        value={step.systemPrompt}
+                        onChange={(event) => patch({ systemPrompt: event.target.value })}
+                        placeholder="(same as the task)"
+                      />
+                    }
+                  />
+                  <FormField
+                    label="Sees"
+                    // Still the function form: the control spreads what it is handed onto the
+                    // trigger, and the trigger is the only element a Radix select renders.
+                    controlSlot={(wired) => (
+                      <Combobox
+                        {...wired}
+                        value={step.context}
+                        onValueChange={(context) => patch({ context: context as StepContext })}
+                        options={CONTEXTS.map((context) => ({
+                          value: context,
+                          label: CONTEXT_LABELS[context],
+                        }))}
+                      />
+                    )}
+                  />
+                </>
+              }
+            />
+          }
+        />
 
         {decision
           ? arms.map((arm, index) => (
               // Keyed by position: two cases can briefly share a name while one is being typed.
               // biome-ignore lint/suspicious/noArrayIndexKey: the arms follow `cases` positionally
               <div key={index} className="border-l-2 pl-3">
-                <p className="mb-2 font-mono text-xs text-muted-foreground">
+                <p className="mb-2 font-mono text-xs text-foreground/60">
                   {arm.case === DEFAULT_BRANCH
                     ? "default — anything else"
                     : arm.case || "(unnamed)"}

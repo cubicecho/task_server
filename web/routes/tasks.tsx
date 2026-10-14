@@ -192,7 +192,7 @@ export function TasksRoute() {
                   </ItemActions>
                 </div>
 
-                <div className="flex flex-wrap gap-2 text-muted-foreground text-xs">
+                <div className="flex flex-wrap gap-2 text-foreground/60 text-xs">
                   {task.triggers.length === 0 ? (
                     <span>No triggers — it only runs when you press play.</span>
                   ) : null}

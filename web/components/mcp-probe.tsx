@@ -21,7 +21,7 @@ export function McpProbeResult({ probe, className }: { probe: McpProbe; classNam
     <div
       className={cn(
         "flex flex-col gap-2 rounded-md border p-3 text-sm",
-        !probe.ok && "border-destructive",
+        !probe.ok && "border-negative",
         className,
       )}
     >
@@ -29,7 +29,7 @@ export function McpProbeResult({ probe, className }: { probe: McpProbe; classNam
         {probe.ok ? (
           <CircleCheck className="size-4" aria-hidden />
         ) : (
-          <XCircle className="size-4 text-destructive" aria-hidden />
+          <XCircle className="size-4 text-negative" aria-hidden />
         )}
         {probe.ok ? `Connected — ${probe.tools.length} tool(s)` : "Could not connect"}
       </div>
@@ -39,14 +39,14 @@ export function McpProbeResult({ probe, className }: { probe: McpProbe; classNam
             <span
               key={tool.name}
               title={tool.description}
-              className="rounded-md border px-2 py-0.5 font-mono text-muted-foreground text-xs"
+              className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
             >
               {tool.name}
             </span>
           ))}
         </div>
       ) : (
-        <p className="whitespace-pre-wrap font-mono text-destructive text-xs">{probe.error}</p>
+        <p className="whitespace-pre-wrap font-mono text-negative text-xs">{probe.error}</p>
       )}
     </div>
   );

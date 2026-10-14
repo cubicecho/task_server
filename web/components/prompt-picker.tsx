@@ -175,14 +175,14 @@ function PromptDialog({
                   key={`${prompt.server}/${prompt.name}`}
                   type="button"
                   onClick={() => pick(prompt)}
-                  className="flex flex-col gap-1 rounded-lg border bg-card p-3 text-left hover:bg-accent"
+                  className="flex flex-col gap-1 rounded-lg border bg-secondary p-3 text-left hover:bg-hover"
                 >
                   <div className="flex items-center gap-2">
                     <span className="flex-1 font-medium text-sm">{titleOf(prompt)}</span>
                     <Badge variant="secondary">{prompt.serverLabel}</Badge>
                   </div>
                   {prompt.description ? (
-                    <span className="text-muted-foreground text-sm">{prompt.description}</span>
+                    <span className="text-foreground/60 text-sm">{prompt.description}</span>
                   ) : null}
                 </button>
               ))}
@@ -192,7 +192,7 @@ function PromptDialog({
           {/* Said here rather than as a toast: the dialog is still open, and this is where the
               arguments that may be wrong are. */}
           {expand.error ? (
-            <p className="text-destructive text-sm">
+            <p className="text-negative text-sm">
               {expand.error.message || "That prompt could not be expanded."}
             </p>
           ) : null}

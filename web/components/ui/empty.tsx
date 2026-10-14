@@ -18,7 +18,7 @@ const Empty = React.forwardRef<HTMLDivElement, ViewProps>(({ className, ...props
     data-slot="empty"
     className={cn(
       "cube-rn-view",
-      "w-full min-w-0 items-center justify-center gap-3 rounded-lg border-dashed border-foreground/10 py-10",
+      "w-full min-w-0 items-center justify-center gap-3 rounded-lg border border-dashed border-foreground/10 py-10",
       className,
     )}
     {...(props as React.ComponentPropsWithoutRef<"div">)}
@@ -92,7 +92,7 @@ const EmptyTitle = React.forwardRef<HTMLSpanElement, TextProps>(({ className, ..
   <span
     ref={ref as React.Ref<HTMLSpanElement>}
     data-slot="empty-title"
-    className={cn("cube-rn-text", "font-medium text-sm text-foreground", className)}
+    className={cn("cube-rn-text", "font-semibold text-sm text-foreground", className)}
     {...(props as React.ComponentPropsWithoutRef<"span">)}
   />
 ));

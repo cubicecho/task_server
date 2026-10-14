@@ -5,6 +5,7 @@ import { StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphq
 import { PageLayout } from "@/components/page-layout";
 import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
+import { StatTile } from "@/components/stat-tile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Play, RefreshCw } from "@/components/ui/icons";
@@ -21,7 +22,6 @@ import {
   WRONG,
 } from "@/lib/task-health";
 import { useRunTask } from "@/lib/use-task-run";
-import { cn } from "@/lib/utils";
 
 type Failure = StatusQuery["failures"][number];
 type Server = StatusQuery["mcpStatus"][number];
@@ -44,12 +44,12 @@ const LABELS: Record<Health, { label: string; blurb: string; tone: string }> = {
     blurb:
       "A firing was refused and nothing has run since: the task was already running, and a " +
       "second copy of work in flight is not something to queue.",
-    tone: "text-destructive",
+    tone: "text-negative",
   },
   broken: {
     label: "Broken",
     blurb: "The last run ended in an error. A cron task will try again; a webhook waits.",
-    tone: "text-destructive",
+    tone: "text-negative",
   },
   running: { label: "Running", blurb: "In flight right now.", tone: "" },
   waiting: {
@@ -76,7 +76,7 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
   if (health === "refused" && collision) {
     const firings = collision.attempts === 1 ? "One firing" : `${collision.attempts} firings`;
     return (
-      <ItemDescription className="text-destructive">
+      <ItemDescription className="text-negative">
         {firings} turned away, the last at {when(collision.finishedAt ?? collision.startedAt)}.{" "}
         {collision.error}
       </ItemDescription>
@@ -84,7 +84,7 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
   }
   if (health === "broken" && last) {
     return (
-      <ItemDescription className="line-clamp-3 text-destructive">
+      <ItemDescription className="line-clamp-3 text-negative">
         {last.error || NO_REASON}
       </ItemDescription>
     );
@@ -152,44 +152,13 @@ function FailureRow({ failure }: { failure: Failure }) {
           ) : (
             <span>(deleted task)</span>
           )}
-          <span className="font-normal text-muted-foreground text-xs">
-            {when(failure.startedAt)}
-          </span>
+          <span className="font-normal text-foreground/60 text-xs">{when(failure.startedAt)}</span>
         </ItemTitle>
-        <ItemDescription className="line-clamp-2 text-destructive">
+        <ItemDescription className="line-clamp-2 text-negative">
           {failure.error || NO_REASON}
         </ItemDescription>
       </ItemContent>
     </Item>
-  );
-}
-
-function Tile({
-  health,
-  count,
-  selected,
-  onSelect,
-}: {
-  health: Health;
-  count: number;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const { label, blurb, tone } = LABELS[health];
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      title={blurb}
-      onClick={onSelect}
-      className={cn(
-        "rounded-md border px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected && "border-primary bg-accent",
-      )}
-    >
-      <div className={cn("font-semibold text-2xl tabular-nums", count > 0 && tone)}>{count}</div>
-      <div className="text-muted-foreground text-xs">{label}</div>
-    </button>
   );
 }
 
@@ -250,19 +219,18 @@ export function StatusRoute() {
 
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
             {HEALTH.map((health) => (
-              <Tile
+              <StatTile
                 key={health}
-                health={health}
-                count={counts[health]}
+                label={LABELS[health].label}
+                value={counts[health]}
+                valueClassName={counts[health] > 0 ? LABELS[health].tone : undefined}
                 selected={selected === health}
-                onSelect={() => setSelected(selected === health ? null : health)}
+                onClick={() => setSelected(selected === health ? null : health)}
               />
             ))}
           </div>
 
-          {selected ? (
-            <p className="text-muted-foreground text-sm">{LABELS[selected].blurb}</p>
-          ) : null}
+          {selected ? <p className="text-foreground/60 text-sm">{LABELS[selected].blurb}</p> : null}
 
           {unreachable.length > 0 ? (
             <Section
@@ -275,7 +243,7 @@ export function StatusRoute() {
                       {server.label || server.slug}
                       <Badge variant="destructive">{server.status}</Badge>
                     </ItemTitle>
-                    <ItemDescription className="line-clamp-2 text-destructive">
+                    <ItemDescription className="line-clamp-2 text-negative">
                       {server.error}
                     </ItemDescription>
                   </ItemContent>
@@ -297,7 +265,7 @@ export function StatusRoute() {
           ))}
 
           {!status.isPending && shown.length === 0 ? (
-            <p className="text-muted-foreground text-sm">{emptyNote()}</p>
+            <p className="text-foreground/60 text-sm">{emptyNote()}</p>
           ) : null}
 
           {unexplained.length > 0 ? (

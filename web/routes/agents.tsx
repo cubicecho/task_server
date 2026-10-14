@@ -159,14 +159,14 @@ export function AgentsRoute() {
 
                 <div className="flex flex-wrap gap-1">
                   {said.length === 0 ? (
-                    <span className="text-muted-foreground text-xs">
+                    <span className="text-foreground/60 text-xs">
                       Overrides nothing — a task on it runs exactly as one on Settings.
                     </span>
                   ) : (
                     said.map((one) => (
                       <span
                         key={one}
-                        className="rounded-md border px-2 py-0.5 font-mono text-muted-foreground text-xs"
+                        className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
                       >
                         {one}
                       </span>

@@ -8,12 +8,17 @@ import {
   TestMcpServerDocument,
   UpdateMcpServerDocument,
 } from "@/__generated__/graphql/graphql";
-import { InputField, SwitchField, TextareaField, useAppForm } from "@/components/app-form";
+import {
+  ComboboxField,
+  InputField,
+  SwitchField,
+  TextareaField,
+  useAppForm,
+} from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
-import { MultiSelectField } from "@/components/multi-select-field";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -305,7 +310,8 @@ export function McpDialog({
             }
           </form.Subscribe>
 
-          <MultiSelectField
+          <ComboboxField
+            multiple
             form={form}
             name="hiddenTools"
             label="Hidden tools"

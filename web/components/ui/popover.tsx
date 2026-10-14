@@ -8,6 +8,12 @@ import type {
   PopoverSectionProps,
   PopoverTriggerProps,
 } from "@/components/ui/popover-base";
+import {
+  POPOVER_CONTENT_CLASS,
+  POPOVER_DESCRIPTION_CLASS,
+  POPOVER_HEADER_CLASS,
+  POPOVER_TITLE_CLASS,
+} from "@/components/ui/popover-base";
 import { cn } from "@/lib/utils";
 
 /** The shared contract, widened to what the radix part (or element) underneath accepts. */
@@ -58,7 +64,8 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-72 rounded-md border bg-secondary p-4 text-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          POPOVER_CONTENT_CLASS,
+          "z-50 text-foreground outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className,
         )}
         {...props}
@@ -101,7 +108,7 @@ function PopoverHeader({
   return (
     <div
       data-slot="popover-header"
-      className={cn("flex flex-col gap-1 text-sm", className)}
+      className={cn(POPOVER_HEADER_CLASS, "flex flex-col", className)}
       {...props}
     />
   );
@@ -112,7 +119,9 @@ function PopoverTitle({
   className,
   ...props
 }: Wide<PopoverSectionProps, React.ComponentProps<"div">>) {
-  return <div data-slot="popover-title" className={cn("font-medium", className)} {...props} />;
+  return (
+    <div data-slot="popover-title" className={cn(POPOVER_TITLE_CLASS, className)} {...props} />
+  );
 }
 
 /** The muted line under the popover's title. */
@@ -121,7 +130,11 @@ function PopoverDescription({
   ...props
 }: Wide<PopoverSectionProps, React.ComponentProps<"p">>) {
   return (
-    <p data-slot="popover-description" className={cn("text-foreground/60", className)} {...props} />
+    <p
+      data-slot="popover-description"
+      className={cn(POPOVER_DESCRIPTION_CLASS, className)}
+      {...props}
+    />
   );
 }
 

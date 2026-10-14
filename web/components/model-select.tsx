@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { List } from "lucide-react";
 import { useState } from "react";
 import { ModelsDocument } from "@/__generated__/graphql/graphql";
-import { OptionSelect, type SelectEntry } from "@/components/option-select";
+import { Combobox } from "@/components/combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
+import type { SelectEntry } from "@/lib/select-options";
 
 // Radix refuses an empty item value, so the two non-model choices carry sentinels.
 const DEFAULT = "__default__";
@@ -89,9 +90,7 @@ export function ModelSelect({
     ...(defaultLabel ? [{ value: DEFAULT, label: defaultLabel }] : []),
     ...names.map((name) => ({ value: name, label: name, className: "font-mono" })),
     ...(models.isFetching && names.length === 0 ? [{ note: "Loading…" }] : []),
-    ...(models.error
-      ? [{ note: models.error.message, className: "text-destructive text-xs" }]
-      : []),
+    ...(models.error ? [{ note: models.error.message, className: "text-negative text-xs" }] : []),
     { separator: true },
     // The search hides a row its words do not match, and the words of a model nobody listed are
     // never this row's — so it answers to the word the empty message tells the reader to type.
@@ -99,7 +98,7 @@ export function ModelSelect({
   ];
 
   return (
-    <OptionSelect
+    <Combobox
       {...wired}
       options={options}
       value={value || (defaultLabel ? DEFAULT : "")}

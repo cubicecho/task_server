@@ -305,7 +305,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
             >
               {(hasWebhook) =>
                 hasWebhook ? (
-                  <p className="text-muted-foreground text-sm">
+                  <p className="text-foreground/60 text-sm">
                     Write <code>{"{{event}}"}</code> to place the body of the webhook that started
                     the run. A run started any other way renders it as a note saying there was none.
                   </p>
@@ -330,7 +330,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
                   <>
                     {agent.name}
                     {agent.description ? (
-                      <span className="text-muted-foreground"> — {agent.description}</span>
+                      <span className="text-foreground/60"> — {agent.description}</span>
                     ) : null}
                   </>
                 ),

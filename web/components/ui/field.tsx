@@ -43,7 +43,7 @@ function FieldLegend({
       data-slot="field-legend"
       className={cn(
         "cube-rn-text",
-        "mb-3 font-medium text-foreground",
+        "mb-3 font-semibold text-foreground",
         variant === "legend" ? "text-base" : "text-sm",
         className,
       )}
@@ -131,7 +131,7 @@ function FieldError({
   errors,
   ...props
 }: TextProps & { errors?: readonly FieldErrorEntry[] | undefined }) {
-  const classes = cn("text-negative text-sm font-medium", className);
+  const classes = cn("text-negative text-sm font-semibold", className);
   const messages = [
     ...new Set(
       (errors ?? [])
@@ -195,7 +195,7 @@ function FieldTitle({ className, ...props }: TextProps) {
   return (
     <span
       data-slot="field-label"
-      className={cn("cube-rn-text", "text-foreground text-sm font-medium", className)}
+      className={cn("cube-rn-text", "text-foreground text-sm font-semibold", className)}
       {...(props as React.ComponentPropsWithoutRef<"span">)}
     />
   );

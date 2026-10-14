@@ -121,7 +121,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 <span
                   className={cn(
                     "cube-rn-text",
-                    `text-sm font-medium ${TONE_TEXT_CLASS[toast.tone]}`,
+                    `text-sm font-semibold ${TONE_TEXT_CLASS[toast.tone]}`,
                   )}
                 >
                   ×

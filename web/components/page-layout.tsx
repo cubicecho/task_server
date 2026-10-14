@@ -93,9 +93,7 @@ export function PageLayout({
       scrollRef={scrollRef}
       onScroll={onScroll}
       className={cn("h-full", className)}
-      // Room under the header's rule, and between the rows and sections a page stacks in its body:
-      // every route passes a fragment, and the body is a flex column with no gap of its own.
-      contentClassName={cn("gap-4 py-4", contentClassName)}
+      contentClassName={contentClassName}
       footerClassName={footerClassName}
       headerSlot={
         <PageHeader

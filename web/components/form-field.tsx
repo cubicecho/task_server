@@ -23,7 +23,7 @@ import { cn, type SlotNode } from "@/lib/utils";
  */
 const LOADING_BOX = {
   vertical: "h-9 w-full rounded-md",
-  horizontal: "size-4 rounded-[4px]",
+  horizontal: "size-4 rounded-sm",
 } as const;
 
 /**

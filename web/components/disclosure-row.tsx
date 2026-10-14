@@ -66,7 +66,7 @@ export function DisclosureRow({
         onClick={() => onOpenChange(!open)}
         className={cn(
           "cube-rn-view cube-rn-pressable",
-          "min-w-0 flex-1 flex-row items-start gap-2 rounded",
+          "min-w-0 flex-1 flex-row items-start gap-2 rounded-sm",
           "text-left focus-visible:bg-hover focus-visible:outline-none",
         )}
       >
@@ -85,7 +85,7 @@ export function DisclosureRow({
               data-slot="disclosure-row-title"
               className={cn(
                 "cube-rn-text",
-                "min-w-0 shrink font-medium text-foreground text-sm leading-snug",
+                "min-w-0 shrink font-semibold text-foreground text-sm leading-snug",
                 // `truncate` is the ellipsis on the web; on device it is `numberOfLines`, which is
                 // what `line-clamp-1` becomes and what `truncate` does not.
                 "truncate",

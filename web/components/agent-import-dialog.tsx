@@ -45,8 +45,8 @@ function Lines({ lines, tone }: { lines: string[]; tone?: "refusal" }) {
     <ul
       className={
         tone === "refusal"
-          ? "list-disc space-y-1 pl-5 text-destructive text-sm"
-          : "list-disc space-y-1 pl-5 text-muted-foreground text-sm"
+          ? "list-disc space-y-1 pl-5 text-negative text-sm"
+          : "list-disc space-y-1 pl-5 text-foreground/60 text-sm"
       }
     >
       {lines.map((line) => (
@@ -72,7 +72,7 @@ function bundledNote(server: Bundled) {
         <span>Sets headers: {server.headerNames.join(", ")}</span>
       ) : null}
       {server.problems.map((problem) => (
-        <span key={problem} className="text-destructive">
+        <span key={problem} className="text-negative">
           {problem}
         </span>
       ))}
@@ -279,18 +279,18 @@ export function AgentImportDialog({
                         placeholder={shown.agent.name}
                       />
                       {shown.agent.description ? (
-                        <p className="text-muted-foreground text-sm">{shown.agent.description}</p>
+                        <p className="text-foreground/60 text-sm">{shown.agent.description}</p>
                       ) : null}
                       <div className="flex flex-wrap gap-1">
                         {overrides(shown.agent).length === 0 ? (
-                          <span className="text-muted-foreground text-xs">
+                          <span className="text-foreground/60 text-xs">
                             Overrides nothing — a task on it runs exactly as one on Settings.
                           </span>
                         ) : (
                           overrides(shown.agent).map((one) => (
                             <span
                               key={one}
-                              className="rounded-md border px-2 py-0.5 font-mono text-muted-foreground text-xs"
+                              className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
                             >
                               {one}
                             </span>
@@ -300,7 +300,7 @@ export function AgentImportDialog({
                       <div className="flex flex-wrap items-center gap-1 text-sm">
                         {shown.servers ? (
                           <>
-                            <span className="text-muted-foreground">Reaches only</span>
+                            <span className="text-foreground/60">Reaches only</span>
                             {shown.servers.map((server) => (
                               <Badge key={server.slug} variant="outline">
                                 {server.label || server.slug}
@@ -309,7 +309,7 @@ export function AgentImportDialog({
                             ))}
                           </>
                         ) : (
-                          <span className="text-muted-foreground">
+                          <span className="text-foreground/60">
                             Reaches every enabled MCP server.
                           </span>
                         )}

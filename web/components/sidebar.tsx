@@ -441,9 +441,10 @@ function IconMarkers({
         // Hung off the item's top corner, in the 8px the icon leaves above it, so the count sits
         // over the glyph's corner rather than over the glyph — and by little enough that it never
         // reaches a neighbour's icon. The text is its own element because a badge's label is 12px
-        // on a 16px line, which is taller than that corner.
+        // on a 16px line, which is taller than that corner: here it is 12px on a 12px line, since a
+        // count is digits with nothing hanging below them, and 12px is the floor of the type scale.
         <Badge variant="secondary" className={cn("-right-1.5 -top-1.5 absolute px-1 py-0", ring)}>
-          <span className="cube-rn-text font-medium text-[10px] text-foreground leading-3 tabular-nums">
+          <span className="cube-rn-text font-semibold text-xs text-foreground leading-3 tabular-nums">
             {count}
           </span>
         </Badge>
@@ -515,7 +516,7 @@ function SidebarNavItemBody({
           <span
             data-slot="sidebar-nav-item-initial"
             aria-hidden
-            className={cn("cube-rn-text", "font-medium text-sm", text)}
+            className={cn("cube-rn-text", "font-semibold text-sm", text)}
           >
             {Array.from(label.trim())[0]?.toUpperCase()}
           </span>
@@ -537,7 +538,7 @@ function SidebarNavItemBody({
         className={cn(
           "cube-rn-text",
           "min-w-0 flex-1 truncate text-sm",
-          active && "font-medium",
+          active && "font-semibold",
           text,
         )}
       >

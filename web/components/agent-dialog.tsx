@@ -8,11 +8,16 @@ import {
   SetAgentApiKeyDocument,
   UpdateAgentDocument,
 } from "@/__generated__/graphql/graphql";
-import { InputField, NumberField, TextareaField, useAppForm } from "@/components/app-form";
+import {
+  ComboboxField,
+  InputField,
+  NumberField,
+  TextareaField,
+  useAppForm,
+} from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
 import { FieldRow } from "@/components/field-row";
 import { ModelSelectField } from "@/components/model-select-field";
-import { MultiSelectField } from "@/components/multi-select-field";
 import { PasswordField } from "@/components/password-field";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Button } from "@/components/ui/button";
@@ -284,7 +289,8 @@ export function AgentDialog({
           {servers.length === 0 ? null : (
             <form.Subscribe selector={(state) => state.values.mcpServerIds.length}>
               {(picked) => (
-                <MultiSelectField
+                <ComboboxField
+                  multiple
                   form={form}
                   name="mcpServerIds"
                   label="MCP servers"

@@ -2,11 +2,12 @@ import type { ReactNode } from "react";
 import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, Plus, Trash2 } from "@/components/ui/icons";
+import { CopyButton } from "@/components/ui/copy-button";
+import { Copy, Plus, Trash2 } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/toast";
 import { triggerProblem } from "@/lib/triggers";
-import { useCopy } from "@/lib/use-copy";
 
 /**
  * The two things that can start a task: a schedule, and a webhook.
@@ -129,7 +130,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
         contentSlot={
           <>
             {cron.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
+              <p className="text-foreground/60 text-sm">
                 No schedule — the task only runs when you press play.
               </p>
             ) : null}
@@ -171,12 +172,12 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
               />
             ))}
 
-            <div className="flex gap-2 text-muted-foreground text-xs">
+            <div className="flex gap-2 text-foreground/60 text-xs">
               {CRON_EXAMPLES.map((example) => (
                 <button
                   key={example.cron}
                   type="button"
-                  className="rounded-md border px-2 py-1 hover:bg-accent"
+                  className="rounded-md border px-2 py-1 hover:bg-hover"
                   onClick={() => add({ ...emptyTrigger("cron"), cron: example.cron })}
                 >
                   {example.label} <span className="font-mono">{example.cron}</span>
@@ -201,11 +202,11 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
         contentSlot={
           <>
             {webhooks.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
+              <p className="text-foreground/60 text-sm">
                 No webhooks — nothing outside can start this task.
               </p>
             ) : (
-              <p className="text-muted-foreground text-sm">
+              <p className="text-foreground/60 text-sm">
                 A <code className="font-mono">POST</code> to one of these runs the task. There is no
                 secret beyond the address itself, so treat the URL as one and generate a new id
                 rather than picking a memorable one for anything you would rather strangers could
@@ -251,7 +252,7 @@ function TriggerRow({
         {content(problem ? { "aria-invalid": true, "aria-describedby": id } : {})}
       </div>
       {problem ? (
-        <p id={id} role="alert" className="text-destructive text-sm">
+        <p id={id} role="alert" className="text-negative text-sm">
           {problem}
         </p>
       ) : null}
@@ -299,18 +300,16 @@ function WebhookRow({
   onRegenerate: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
-  const { copied, copy } = useCopy();
+  const toast = useToast();
 
   return (
     <TriggerRow
       trigger={trigger}
       content={(invalid) => (
         <>
-          <div className="flex min-w-0 flex-1 items-center rounded-md border bg-muted/40 pl-3 font-mono text-sm">
+          <div className="flex min-w-0 flex-1 items-center rounded-md border bg-foreground/10 pl-3 font-mono text-sm">
             {/* The origin is shown but not editable: it is where this page came from, not a setting. */}
-            <span className="shrink-0 text-muted-foreground">
-              {window.location.origin}/webhooks/
-            </span>
+            <span className="shrink-0 text-foreground/60">{window.location.origin}/webhooks/</span>
             <Input
               id={`webhook-${trigger.key}`}
               className="border-0 bg-transparent font-mono shadow-none focus-visible:ring-0"
@@ -322,15 +321,24 @@ function WebhookRow({
               {...invalid}
             />
           </div>
-          <Button
-            aria-label={copied ? "Copied" : "Copy the URL"}
-            variant="outline"
-            size="icon"
-            disabled={!trigger.event}
-            hint={trigger.event ? undefined : "Give the webhook an id first"}
-            onClick={() => void copy(webhookUrl(trigger.event))}
-            iconSlot={copied ? <Check /> : <Copy />}
-          />
+          {trigger.event ? (
+            <CopyButton
+              value={webhookUrl(trigger.event)}
+              label="Copy the URL"
+              size="icon"
+              onError={() => toast("Could not copy. Select the text and copy it by hand.")}
+            />
+          ) : (
+            // CopyButton takes no `disabled` and no `hint`, and an empty id has nothing to copy.
+            <Button
+              aria-label="Copy the URL"
+              variant="outline"
+              size="icon"
+              disabled
+              hint="Give the webhook an id first"
+              iconSlot={<Copy />}
+            />
+          )}
           <Button variant="outline" size="sm" onClick={onRegenerate} content="New id" />
           <TriggerSwitch trigger={trigger} onChange={onToggle} />
           <Button

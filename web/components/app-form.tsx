@@ -1,10 +1,16 @@
-import type { DeepKeys } from "@tanstack/react-form";
+import type { DeepKeys, DeepValue } from "@tanstack/react-form";
 import { createFormHook, createFormHookContexts, useStore } from "@tanstack/react-form";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type {
+  ComboboxMultipleProps,
+  ComboboxSingleProps,
+  SelectEntry,
+  SelectOption,
+  SelectSeparatorEntry,
+} from "@/components/combobox";
+import { Combobox } from "@/components/combobox";
 import { FormField } from "@/components/form-field";
-import type { SelectEntry, SelectOption, SelectSeparatorEntry } from "@/components/option-select";
-import { OptionSelect } from "@/components/option-select";
 import { Button, type ButtonPropsWithout } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -18,6 +24,8 @@ import {
   type NamesOfType,
   type ValuesOf,
 } from "@/lib/form-binding";
+import { numberText, parseNumber } from "@/lib/number-draft";
+import { menuValueOf, storedValueOf, withEmptyOption } from "@/lib/select-options";
 
 /** TanStack Form's contexts, which the bound fields read their field and form from. */
 export const { fieldContext, formContext, useFieldContext, useFormContext } =
@@ -32,24 +40,27 @@ export type FieldProps = Omit<ComponentProps<typeof FormField>, "controlSlot" | 
  * still have both halves typed. The alternative is nesting one of them under a prop of its own,
  * which reads worse at every call site to save this list.
  *
- * A key added to `FormField` and forgotten here lands on the control instead, where React will
- * say so: `loadingClassName` is not an attribute of `<input>`.
+ * Written as a record over `FieldProps` rather than a list, so a key added to `FormField` and
+ * not here, or one misspelt here, fails the typecheck instead of landing on the control.
  */
-const FIELD_KEYS = new Set<string>([
-  "label",
-  "description",
-  "required",
-  "action",
-  "loading",
-  "htmlFor",
-  "asGroup",
-  "orientation",
-  "className",
-  "labelClassName",
-  "descriptionClassName",
-  "errorClassName",
-  "loadingClassName",
-]);
+const FIELD_KEY_RECORD: Record<keyof FieldProps, true> = {
+  label: true,
+  description: true,
+  descriptionPlacement: true,
+  descriptionIconSlot: true,
+  required: true,
+  actionSlot: true,
+  loading: true,
+  htmlFor: true,
+  asGroup: true,
+  orientation: true,
+  className: true,
+  labelClassName: true,
+  descriptionClassName: true,
+  errorClassName: true,
+  loadingClassName: true,
+};
+const FIELD_KEYS = new Set<string>(Object.keys(FIELD_KEY_RECORD));
 
 /**
  * Splits one flat prop list into the half `FormField` draws and the half the control takes.
@@ -119,22 +130,6 @@ function BoundInputField(props: InputFieldProps) {
   );
 }
 
-/**
- * What a number input's box says, as a number — or nothing, for empty and for the half-typed
- * states a person passes through on the way to one.
- *
- * `""`, `"-"` and `"1e"` are all "not a number yet", not zero: coercing them would make the
- * store say `0` while the box says `-`, and a required-field validator pass on an empty box.
- */
-function parseNumber(text: string): number | null {
-  const trimmed = text.trim();
-  if (trimmed === "") {
-    return null;
-  }
-  const parsed = Number(trimmed);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
 type NumberFieldProps = FieldProps &
   Omit<
     ComponentProps<typeof Input>,
@@ -162,10 +157,6 @@ function BoundNumberField(props: NumberFieldProps) {
   const [draft, setDraft] = useState<string | undefined>(undefined);
 
   const stored = field.state.value ?? null;
-  // `String`, not the raw number: the DOM `<input>` this was written against took either, and
-  // `TextInput` takes only a string — so the registry's `Input` does too, on both platforms.
-  const storedText = stored === null ? "" : String(stored);
-  const value = draft !== undefined && parseNumber(draft) === stored ? draft : storedText;
 
   return (
     <FormField
@@ -178,7 +169,7 @@ function BoundNumberField(props: NumberFieldProps) {
           inputMode="decimal"
           {...input}
           type="number"
-          value={value}
+          value={numberText(draft, stored)}
           onBlur={() => {
             // The draft has served its purpose once focus leaves: `1.` should settle to `1`.
             setDraft(undefined);
@@ -244,7 +235,7 @@ type SelectFieldProps = FieldProps & {
   options: readonly SelectEntry[];
   placeholder?: string | undefined;
   triggerClassName?: string | undefined;
-  /** A search box above the list, for the long one. `OptionSelect`'s own prop, passed through. */
+  /** A search box above the list, for the long one. `Combobox`'s own prop, passed through. */
   searchable?: boolean | undefined;
   searchPlaceholder?: string | undefined;
   /**
@@ -254,10 +245,21 @@ type SelectFieldProps = FieldProps & {
    * this component exists to end.
    */
   onOpenChange?: ((open: boolean) => void) | undefined;
+  /**
+   * Adds a first row for "nothing", which writes `null`. The field then holds `string | null`,
+   * and reads `null`, `undefined` and `""` as that row.
+   */
+  clearable?: boolean | undefined;
+  /**
+   * What the row for "nothing" says. Read only when `clearable`.
+   *
+   * @defaultValue `"None"`
+   */
+  emptyLabel?: string | undefined;
 };
 
 /**
- * The one that needs `FormField`'s function form, because `OptionSelect` is a `Popover`-shaped control
+ * The one that needs `FormField`'s function form, because `Combobox` is a `Popover`-shaped control
  * whose root renders no DOM: the id and the aria attributes belong on the trigger, and the
  * control is what knows where that is. Every hand-written select field in these apps puts them
  * on the root instead, silently, leaving a trigger with no `aria-invalid` and an error message
@@ -270,21 +272,27 @@ function BoundSelectField({
   searchable,
   searchPlaceholder,
   onOpenChange,
+  clearable = false,
+  emptyLabel = "None",
   ...rest
 }: SelectFieldProps) {
-  const field = useFieldContext<string>();
+  const field = useFieldContext<string | null>();
   const error = useFieldError();
+  const entries = useMemo(
+    () => (clearable ? withEmptyOption(options, emptyLabel) : options),
+    [options, clearable, emptyLabel],
+  );
 
   return (
     <FormField
       {...rest}
       error={error}
       controlSlot={(wired) => (
-        <OptionSelect
+        <Combobox
           {...wired}
-          options={options}
-          value={field.state.value ?? ""}
-          onValueChange={field.handleChange}
+          options={entries}
+          value={clearable ? menuValueOf(field.state.value) : (field.state.value ?? "")}
+          onValueChange={(next) => field.handleChange(clearable ? storedValueOf(next) : next)}
           onBlur={field.handleBlur}
           placeholder={placeholder}
           searchable={searchable}
@@ -294,6 +302,111 @@ function BoundSelectField({
         />
       )}
     />
+  );
+}
+
+/** What a bound combobox wires itself, so a call site does not. */
+type ComboboxWired =
+  | "id"
+  | "value"
+  | "onValueChange"
+  | "onBlur"
+  | "className"
+  | "aria-describedby"
+  | "aria-invalid"
+  | "aria-required";
+
+type SingleComboboxFieldProps = FieldProps &
+  Omit<ComboboxSingleProps, ComboboxWired> & {
+    /** The trigger's class. `className` is the field's, as on every bound field. */
+    triggerClassName?: string | undefined;
+    /**
+     * Adds a first row for "nothing", which writes `null`. The field then holds `string | null`,
+     * and reads `null`, `undefined` and `""` as that row.
+     */
+    clearable?: boolean | undefined;
+    /**
+     * What the row for "nothing" says. Read only when `clearable`.
+     *
+     * @defaultValue `"None"`
+     */
+    emptyLabel?: string | undefined;
+  };
+
+type MultipleComboboxFieldProps = FieldProps &
+  Omit<ComboboxMultipleProps, ComboboxWired> & {
+    /** The trigger's class. `className` is the field's, as on every bound field. */
+    triggerClassName?: string | undefined;
+  };
+
+function BoundSingleComboboxField(props: SingleComboboxFieldProps) {
+  const [
+    fieldProps,
+    { triggerClassName, options, clearable = false, emptyLabel = "None", ...control },
+  ] = splitProps(props);
+  const field = useFieldContext<string | null>();
+  const error = useFieldError();
+  const entries = useMemo(
+    () => (clearable ? withEmptyOption(options, emptyLabel) : options),
+    [options, clearable, emptyLabel],
+  );
+
+  return (
+    <FormField
+      {...fieldProps}
+      error={error}
+      // The function form, for the reason `SelectField` uses it: the id has to land on the trigger.
+      controlSlot={(wired) => (
+        <Combobox
+          {...control}
+          {...wired}
+          options={entries}
+          className={triggerClassName}
+          value={clearable ? menuValueOf(field.state.value) : (field.state.value ?? "")}
+          onValueChange={(next) => {
+            field.handleChange(clearable ? storedValueOf(next) : next);
+            // A popover control has no blur that means "done with this field": focus goes into
+            // the portal and comes back. Choosing is the interaction, so choosing marks it
+            // touched, or a required-and-empty message can never appear before submit.
+            field.handleBlur();
+          }}
+        />
+      )}
+    />
+  );
+}
+
+function BoundMultipleComboboxField(props: MultipleComboboxFieldProps) {
+  const [fieldProps, { multiple: _multiple, triggerClassName, ...control }] = splitProps(props);
+  const field = useFieldContext<readonly string[] | null>();
+  const error = useFieldError();
+
+  return (
+    <FormField
+      {...fieldProps}
+      error={error}
+      controlSlot={(wired) => (
+        <Combobox
+          {...control}
+          {...wired}
+          multiple
+          className={triggerClassName}
+          value={field.state.value ?? []}
+          onValueChange={(next) => {
+            field.handleChange(next);
+            field.handleBlur();
+          }}
+        />
+      )}
+    />
+  );
+}
+
+function BoundComboboxField(props: SingleComboboxFieldProps | MultipleComboboxFieldProps) {
+  return props.multiple === true ? (
+    <BoundMultipleComboboxField {...props} />
+  ) : (
+    <BoundSingleComboboxField {...props} />
   );
 }
 
@@ -517,7 +630,7 @@ export function bindToForm<TProps extends object, TValue = unknown>(
  * <InputField form={form} name="title" label="Title" required />
  * ```
  *
- * `type="number"` writes a number back to the store, not a numeric string. `name` is checked
+ * It writes a string whatever its `type`: a number is {@link NumberField}. `name` is checked
  * against the form's values, so a renamed field breaks the build rather than going quiet.
  */
 export const InputField = bindToForm<InputFieldProps, string>(BoundInputField, "InputField");
@@ -540,8 +653,57 @@ export const TextareaField = bindToForm<TextareaFieldProps, string>(
   "TextareaField",
 );
 
-/** A select, as one line. Takes its choices as `options`, not as children. */
-export const SelectField = bindToForm<SelectFieldProps, string>(BoundSelectField, "SelectField");
+/**
+ * Lets `clearable` through only over a field that can hold the `null` it writes. A field typed
+ * `string` would be handed a value its schema never listed, and find out at the server.
+ */
+type ClearableOver<TValues, TName extends DeepKeys<TValues>> =
+  null extends DeepValue<TValues, TName> ? boolean | undefined : false | undefined;
+
+/**
+ * A select, as one line. Takes its choices as `options`, not as children.
+ *
+ * ```tsx
+ * <SelectField form={form} name="owner" label="Owner" options={PEOPLE} clearable emptyLabel="Nobody" />
+ * ```
+ *
+ * `clearable` is a type error unless the field named can hold `null`.
+ */
+export const SelectField = bindToForm<SelectFieldProps, string>(
+  BoundSelectField,
+  "SelectField",
+) as <TForm extends BindableForm, TName extends NamesOfType<ValuesOf<TForm>, string>>(
+  props: Omit<ControlPropsOf<SelectFieldProps>, "clearable"> &
+    FormBinding<TForm, TName> & { clearable?: ClearableOver<ValuesOf<TForm>, TName> },
+) => ReactNode;
+
+/** `ComboboxField`'s two call shapes: `multiple` decides which fields `name` may be. */
+type ComboboxFieldComponent = {
+  <TForm extends BindableForm, TName extends NamesOfType<ValuesOf<TForm>, readonly string[]>>(
+    props: ControlPropsOf<MultipleComboboxFieldProps> & FormBinding<TForm, TName>,
+  ): ReactNode;
+  <TForm extends BindableForm, TName extends NamesOfType<ValuesOf<TForm>, string>>(
+    props: Omit<ControlPropsOf<SingleComboboxFieldProps>, "clearable"> &
+      FormBinding<TForm, TName> & { clearable?: ClearableOver<ValuesOf<TForm>, TName> },
+  ): ReactNode;
+};
+
+/**
+ * A combobox, as one line: `Combobox` with every prop it takes, over a field holding one of the
+ * options' values, or a list of them with `multiple`.
+ *
+ * ```tsx
+ * <ComboboxField form={form} name="model" label="Model" options={models} searchable />
+ * <ComboboxField form={form} name="tags" label="Tags" options={tags} multiple onCreateOption={create} />
+ * ```
+ *
+ * `multiple` over a field that is not a list of strings is a type error, and so is leaving it
+ * off over one that is. `clearable` is checked as on {@link SelectField}.
+ */
+export const ComboboxField = bindToForm<
+  SingleComboboxFieldProps | MultipleComboboxFieldProps,
+  string | readonly string[]
+>(BoundComboboxField, "ComboboxField") as ComboboxFieldComponent;
 
 /** A checkbox and its caption, as one line. Horizontal, because a 16px box is not a row. */
 export const CheckboxField = bindToForm<CheckboxFieldProps, boolean>(
@@ -556,4 +718,4 @@ export type { SelectEntry, SelectOption, SelectSeparatorEntry };
 // Local bindings rather than `export … from`: the shadcn CLI rewrites import declarations on
 // install and leaves re-export declarations alone, so the `from` form would ship a path into
 // `control/` that does not exist in a consumer's tree. See AGENTS.md.
-export { OptionSelect };
+export { Combobox };

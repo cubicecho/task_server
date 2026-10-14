@@ -21,7 +21,9 @@ import { QueryError } from "@/components/query-state";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
-import { Check, CircleCheck, Copy } from "@/components/ui/icons";
+import { CodeBlock } from "@/components/ui/code";
+import { CopyButton } from "@/components/ui/copy-button";
+import { CircleCheck } from "@/components/ui/icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { describeFor } from "@/lib/docs";
@@ -35,7 +37,6 @@ import {
   toForm,
   toRow,
 } from "@/lib/settings-form";
-import { useCopy } from "@/lib/use-copy";
 
 /**
  * Where an agent reaches this server.
@@ -69,23 +70,21 @@ const DESCRIPTION =
 const FORM_ID = "settings";
 
 function Snippet({ label, text }: { label: string; text: string }) {
-  const { copied, copy } = useCopy();
+  const toast = useToast();
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium text-sm">{label}</h3>
-        <Button
-          variant="outline"
-          size="xs"
-          onClick={() => void copy(text)}
-          iconSlot={copied ? <Check /> : <Copy />}
-          content={copied ? "Copied" : "Copy"}
-        />
-      </div>
-      <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs">
-        <code>{text}</code>
-      </pre>
+      <h3 className="font-medium text-sm">{label}</h3>
+      <CodeBlock
+        content={text}
+        actionSlot={
+          <CopyButton
+            value={text}
+            label={`Copy the ${label} snippet`}
+            onError={() => toast("Could not copy. Select the text and copy it by hand.")}
+          />
+        }
+      />
     </div>
   );
 }
@@ -273,7 +272,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                   {section.label}
                   {dirty.includes(section.key) ? (
                     <>
-                      <span aria-hidden className="size-1.5 rounded-full bg-primary" />
+                      <span aria-hidden className="size-1.5 rounded-full bg-info" />
                       <span className="sr-only">(unsaved changes)</span>
                     </>
                   ) : null}
@@ -332,7 +331,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                         content={endpointAction(applyEndpoint.isPending, endpointPending)}
                       />
                       {endpointPending ? (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-foreground/60">
                           Not applied yet — the model lists are still the stored endpoint's.
                         </p>
                       ) : null}
@@ -342,20 +341,17 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                       <div className="flex items-start gap-2 text-sm">
                         {probe.ok ? (
                           <CircleCheck
-                            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                            className="mt-0.5 size-4 shrink-0 text-foreground/60"
                             aria-hidden
                           />
                         ) : (
-                          <XCircle
-                            className="mt-0.5 size-4 shrink-0 text-destructive"
-                            aria-hidden
-                          />
+                          <XCircle className="mt-0.5 size-4 shrink-0 text-negative" aria-hidden />
                         )}
                         <p
                           className={
                             probe.ok
-                              ? "text-muted-foreground"
-                              : "whitespace-pre-wrap font-mono text-xs text-destructive"
+                              ? "text-foreground/60"
+                              : "whitespace-pre-wrap font-mono text-xs text-negative"
                           }
                         >
                           {probe.ok ? `Connected — ${probe.detail}` : probe.detail}

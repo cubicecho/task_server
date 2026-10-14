@@ -232,4 +232,4 @@ export const INPUT_TRAILING_PAD_CLASS = "pr-9";
 
 /** The input's box: border, background, height and type. */
 export const INPUT_CLASS =
-  "border-foreground/15 bg-background text-foreground placeholder:text-foreground/60 focus:border-active flex h-10 w-full rounded-md border px-3 py-2 text-sm focus:outline-none";
+  "border-foreground/50 bg-background text-foreground placeholder:text-foreground/60 focus:border-active flex h-10 w-full rounded-md border px-3 py-2 text-sm focus:outline-none";
