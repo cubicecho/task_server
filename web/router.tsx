@@ -64,14 +64,31 @@ const mcpRoute = createRoute({
   getParentRoute: () => rootRoute,
   // Not `/mcp`: that path is the MCP endpoint the server answers on, and in dev the vite
   // proxy would hand this page to it.
-  path: "/servers",
+  path: "/settings/servers",
   component: lazyRouteComponent(() => import("@/routes/mcp"), "McpRoute"),
 });
 
 const agentsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/agents",
+  path: "/settings/agents",
   component: lazyRouteComponent(() => import("@/routes/agents"), "AgentsRoute"),
+});
+
+// Where the two pages were before they moved under Settings, so a bookmark still lands.
+const oldMcpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/servers",
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/servers", replace: true });
+  },
+});
+
+const oldAgentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agents",
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/agents", replace: true });
+  },
 });
 
 const settingsRoute = createRoute({
@@ -94,6 +111,8 @@ export const router = createRouter({
     runsRoute,
     mcpRoute,
     agentsRoute,
+    oldMcpRoute,
+    oldAgentsRoute,
     settingsRoute,
   ]),
   defaultPreload: "intent",

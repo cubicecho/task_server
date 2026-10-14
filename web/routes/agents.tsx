@@ -12,6 +12,7 @@ import { AgentImportDialog } from "@/components/agent-import-dialog";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
+import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,142 +63,154 @@ export function AgentsRoute() {
   const rows = agents.data?.agents ?? [];
 
   return (
-    <PageLayout
-      title="Agent profiles"
-      description="A named set of overrides for Settings, that a task can be pointed at."
-      actionSlot={
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setImporting(true)}
-            iconSlot={<Upload />}
-            content="Import"
-          />
-          <Button
-            variant="positive"
-            onClick={() => setCreating(true)}
-            iconSlot={<Plus />}
-            content="New profile"
-          />
-        </div>
-      }
+    <SettingsTabsRoot
+      current="agents"
       contentSlot={
-        <>
-          <QueryState
-            query={agents}
-            what="your agent profiles"
-            count={rows.length}
-            emptySlot={
-              <Empty>
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <Bot />
-                  </EmptyMedia>
-                  <EmptyTitle>No profiles</EmptyTitle>
-                  <EmptyDescription>
-                    Every task runs on Settings, which is all a server with one model needs.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            }
-          />
+        <PageLayout
+          title="Settings"
+          description="Agent profiles: a named set of overrides for Settings, that a task can be pointed at."
+          headerContentSlot={<SettingsTabList />}
+          actionSlot={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setImporting(true)}
+                iconSlot={<Upload />}
+                content="Import"
+              />
+              <Button
+                variant="positive"
+                onClick={() => setCreating(true)}
+                iconSlot={<Plus />}
+                content="New profile"
+              />
+            </div>
+          }
+          contentSlot={
+            <>
+              <QueryState
+                query={agents}
+                what="your agent profiles"
+                count={rows.length}
+                emptySlot={
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <Bot />
+                      </EmptyMedia>
+                      <EmptyTitle>No profiles</EmptyTitle>
+                      <EmptyDescription>
+                        Every task runs on Settings, which is all a server with one model needs.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                }
+              />
 
-          {rows.map((agent) => {
-            const scoped = stringList(agent.mcpServerIds);
-            const said = overrides(agent);
-            return (
-              <Item key={agent.id} variant="outline" className="flex-col items-stretch gap-3">
-                <div className="flex w-full items-center gap-3">
-                  <ItemContent>
-                    <ItemTitle>
-                      <span className="truncate">{agent.name}</span>
-                      <Badge variant="outline">
-                        {agent.tasks.length === 1 ? "1 task" : `${agent.tasks.length} tasks`}
-                      </Badge>
-                      <Badge variant="outline">
-                        {scoped.length
-                          ? `${scoped.length} of ${servers.length} servers`
-                          : "all servers"}
-                      </Badge>
-                    </ItemTitle>
-                    {agent.description ? (
-                      <ItemDescription className="truncate">{agent.description}</ItemDescription>
-                    ) : null}
-                  </ItemContent>
-                  <ItemActions className="gap-1">
-                    <Button
-                      aria-label="Edit"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setEditing(agent)}
-                      iconSlot={<Pencil />}
-                    />
-                    <Button
-                      aria-label="Export"
-                      hint="Save as an agent spec file. It carries no API key."
-                      variant="outline"
-                      size="icon"
-                      disabled={exportSpec.isPending}
-                      onClick={() => exportSpec.mutate(agent)}
-                      iconSlot={<Download />}
-                    />
-                    <ConfirmButton
-                      aria-label="Delete"
-                      variant="destructive-outline"
-                      size="icon"
-                      title={`Delete ${agent.name}?`}
-                      description={
-                        agent.tasks.length
-                          ? `The ${agent.tasks.length === 1 ? "task" : `${agent.tasks.length} tasks`} on it fall back to Settings — a different endpoint, key and model.`
-                          : "Nothing runs on it, so nothing changes but the list."
-                      }
-                      onConfirm={() => remove.mutate(agent.id)}
-                      iconSlot={<Trash2 />}
-                    />
-                  </ItemActions>
-                </div>
+              {rows.map((agent) => {
+                const scoped = stringList(agent.mcpServerIds);
+                const said = overrides(agent);
+                return (
+                  <Item key={agent.id} variant="outline" className="flex-col items-stretch gap-3">
+                    <div className="flex w-full items-center gap-3">
+                      <ItemContent>
+                        <ItemTitle>
+                          <span className="truncate">{agent.name}</span>
+                          <Badge variant="outline">
+                            {agent.tasks.length === 1 ? "1 task" : `${agent.tasks.length} tasks`}
+                          </Badge>
+                          <Badge variant="outline">
+                            {scoped.length
+                              ? `${scoped.length} of ${servers.length} servers`
+                              : "all servers"}
+                          </Badge>
+                        </ItemTitle>
+                        {agent.description ? (
+                          <ItemDescription className="truncate">
+                            {agent.description}
+                          </ItemDescription>
+                        ) : null}
+                      </ItemContent>
+                      <ItemActions className="gap-1">
+                        <Button
+                          aria-label="Edit"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setEditing(agent)}
+                          iconSlot={<Pencil />}
+                        />
+                        <Button
+                          aria-label="Export"
+                          hint="Save as an agent spec file. It carries no API key."
+                          variant="outline"
+                          size="icon"
+                          disabled={exportSpec.isPending}
+                          onClick={() => exportSpec.mutate(agent)}
+                          iconSlot={<Download />}
+                        />
+                        <ConfirmButton
+                          aria-label="Delete"
+                          variant="destructive-outline"
+                          size="icon"
+                          title={`Delete ${agent.name}?`}
+                          description={
+                            agent.tasks.length
+                              ? `The ${agent.tasks.length === 1 ? "task" : `${agent.tasks.length} tasks`} on it fall back to Settings — a different endpoint, key and model.`
+                              : "Nothing runs on it, so nothing changes but the list."
+                          }
+                          onConfirm={() => remove.mutate(agent.id)}
+                          iconSlot={<Trash2 />}
+                        />
+                      </ItemActions>
+                    </div>
 
-                <div className="flex flex-wrap gap-1">
-                  {said.length === 0 ? (
-                    <span className="text-foreground/60 text-xs">
-                      Overrides nothing — a task on it runs exactly as one on Settings.
-                    </span>
-                  ) : (
-                    said.map((one) => (
-                      <span
-                        key={one}
-                        className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
-                      >
-                        {one}
-                      </span>
-                    ))
-                  )}
-                </div>
-              </Item>
-            );
-          })}
+                    <div className="flex flex-wrap gap-1">
+                      {said.length === 0 ? (
+                        <span className="text-foreground/60 text-xs">
+                          Overrides nothing — a task on it runs exactly as one on Settings.
+                        </span>
+                      ) : (
+                        said.map((one) => (
+                          <span
+                            key={one}
+                            className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
+                          >
+                            {one}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </Item>
+                );
+              })}
 
-          {importing ? (
-            <AgentImportDialog
-              onClose={() => setImporting(false)}
-              onSaved={() => {
-                refresh();
-                // An import may have created the servers the document bundled.
-                queryClient.invalidateQueries({ queryKey: ["mcp"] });
-              }}
-            />
-          ) : creating ? (
-            <AgentDialog servers={servers} onClose={() => setCreating(false)} onSaved={refresh} />
-          ) : null}
-          {editing && !creating ? (
-            <AgentDialog
-              agent={editing}
-              servers={servers}
-              onClose={() => setEditing(null)}
-              onSaved={refresh}
-            />
-          ) : null}
-        </>
+              {importing ? (
+                <AgentImportDialog
+                  onClose={() => setImporting(false)}
+                  onSaved={() => {
+                    refresh();
+                    // An import may have created the servers the document bundled.
+                    queryClient.invalidateQueries({ queryKey: ["mcp"] });
+                  }}
+                />
+              ) : creating ? (
+                <AgentDialog
+                  servers={servers}
+                  onClose={() => setCreating(false)}
+                  onSaved={refresh}
+                />
+              ) : null}
+              {editing && !creating ? (
+                <AgentDialog
+                  agent={editing}
+                  servers={servers}
+                  onClose={() => setEditing(null)}
+                  onSaved={refresh}
+                />
+              ) : null}
+            </>
+          }
+        />
       }
     />
   );

@@ -251,7 +251,7 @@ export function StatusRoute() {
                     <Button
                       size="sm"
                       variant="outline"
-                      linkSlot={<Link to="/servers" />}
+                      linkSlot={<Link to="/settings/servers" />}
                       content="Servers"
                     />
                   </ItemActions>
