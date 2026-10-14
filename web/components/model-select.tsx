@@ -93,7 +93,9 @@ export function ModelSelect({
       ? [{ note: models.error.message, className: "text-destructive text-xs" }]
       : []),
     { separator: true },
-    { value: CUSTOM, label: "Type a name…" },
+    // The search hides a row its words do not match, and the words of a model nobody listed are
+    // never this row's — so it answers to the word the empty message tells the reader to type.
+    { value: CUSTOM, label: "Type a name…", keywords: ["custom"] },
   ];
 
   return (
@@ -110,6 +112,11 @@ export function ModelSelect({
       }}
       onOpenChange={(open) => open && setOpened(true)}
       placeholder="Select a model"
+      // An endpoint can list a few hundred models, which is a scroll rather than a choice.
+      searchable
+      searchPlaceholder="Filter models…"
+      searchLabel="Filter models"
+      emptyMessage='No listed model matches. Search "custom" to type a name.'
     />
   );
 }
