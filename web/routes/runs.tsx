@@ -10,15 +10,18 @@ import {
   type RunsQuery,
   RunsStatusEnum,
 } from "@/__generated__/graphql/graphql";
+import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
+import { Disclosure } from "@/components/disclosure";
 import { DisclosureRow } from "@/components/disclosure-row";
-import { OptionSelect } from "@/components/option-select";
+import { List } from "@/components/list";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CodeBlock } from "@/components/ui/code";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Play, RefreshCw, Square, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -93,27 +96,30 @@ function HookNotes({ notes }: { notes: unknown }) {
   }
   const failed = list.filter((note) => note.error).length;
   return (
-    <details className="text-xs">
-      <summary className={cn("cursor-pointer", failed ? "text-negative" : "text-foreground/60")}>
-        {list.length} hook note(s){failed ? `, ${failed} failed` : ""}
-      </summary>
-      <ul className="mt-1 flex flex-col gap-2">
-        {list.map((note, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: notes are only ever appended, and one hook may leave two
-          <li key={`${note.hookId}-${index}`} className="flex flex-col gap-0.5">
-            <span className="font-mono text-foreground/60">
-              {note.source}/{note.hookId} · {note.event}
-              {note.tokens ? ` · ${note.tokens} tokens` : ""}
-            </span>
-            <pre
-              className={cn("overflow-x-auto whitespace-pre-wrap", note.error && "text-negative")}
-            >
-              {note.error ?? note.text}
-            </pre>
-          </li>
-        ))}
-      </ul>
-    </details>
+    <Disclosure
+      title={`${list.length} hook note(s)${failed ? `, ${failed} failed` : ""}`}
+      titleClassName={cn("text-xs", failed && "text-negative")}
+      contentSlot={
+        <List
+          label="Hook notes"
+          divided={false}
+          contentSlot={list.map((note, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: notes are only ever appended, and one hook may leave two
+            <div key={`${note.hookId}-${index}`} className="flex flex-col gap-0.5 text-xs">
+              <span className="font-mono text-foreground/60">
+                {note.source}/{note.hookId} · {note.event}
+                {note.tokens ? ` · ${note.tokens} tokens` : ""}
+              </span>
+              {note.error ? (
+                <p className="whitespace-pre-wrap text-negative">{note.error}</p>
+              ) : (
+                <CodeBlock content={note.text ?? ""} wrap maxHeight="md" />
+              )}
+            </div>
+          ))}
+        />
+      }
+    />
   );
 }
 
@@ -168,12 +174,10 @@ function Payload({ payload }: { payload: unknown }) {
     return null;
   }
   return (
-    <details className="text-sm">
-      <summary className="cursor-pointer text-foreground/60">Event payload</summary>
-      <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-xs">
-        {JSON.stringify(payload, null, 2)}
-      </pre>
-    </details>
+    <Disclosure
+      title="Event payload"
+      contentSlot={<CodeBlock content={JSON.stringify(payload, null, 2)} maxHeight="lg" />}
+    />
   );
 }
 
@@ -282,7 +286,7 @@ function FilterBar({
 
       {/* A rule under the first row of each of these: "any" is how the filter is turned off, not
           one of the things it filters to, and without it the two read as peers. */}
-      <OptionSelect
+      <Combobox
         aria-label="Status"
         className="w-36"
         value={filters.status}
@@ -294,7 +298,7 @@ function FilterBar({
         ]}
       />
 
-      <OptionSelect
+      <Combobox
         aria-label="Task"
         className="w-44"
         value={filters.taskId}
@@ -306,7 +310,7 @@ function FilterBar({
         ]}
       />
 
-      <OptionSelect
+      <Combobox
         aria-label="Time window"
         className="w-40"
         value={filters.window}

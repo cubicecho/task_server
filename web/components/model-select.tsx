@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { List } from "lucide-react";
 import { useState } from "react";
 import { ModelsDocument } from "@/__generated__/graphql/graphql";
-import { OptionSelect, type SelectEntry } from "@/components/option-select";
+import { Combobox } from "@/components/combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
+import type { SelectEntry } from "@/lib/select-options";
 
 // Radix refuses an empty item value, so the two non-model choices carry sentinels.
 const DEFAULT = "__default__";
@@ -97,7 +98,7 @@ export function ModelSelect({
   ];
 
   return (
-    <OptionSelect
+    <Combobox
       {...wired}
       options={options}
       value={value || (defaultLabel ? DEFAULT : "")}

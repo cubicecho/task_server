@@ -2,11 +2,12 @@ import type { ReactNode } from "react";
 import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, Plus, Trash2 } from "@/components/ui/icons";
+import { CopyButton } from "@/components/ui/copy-button";
+import { Copy, Plus, Trash2 } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/toast";
 import { triggerProblem } from "@/lib/triggers";
-import { useCopy } from "@/lib/use-copy";
 
 /**
  * The two things that can start a task: a schedule, and a webhook.
@@ -299,7 +300,7 @@ function WebhookRow({
   onRegenerate: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
-  const { copied, copy } = useCopy();
+  const toast = useToast();
 
   return (
     <TriggerRow
@@ -320,15 +321,24 @@ function WebhookRow({
               {...invalid}
             />
           </div>
-          <Button
-            aria-label={copied ? "Copied" : "Copy the URL"}
-            variant="outline"
-            size="icon"
-            disabled={!trigger.event}
-            hint={trigger.event ? undefined : "Give the webhook an id first"}
-            onClick={() => void copy(webhookUrl(trigger.event))}
-            iconSlot={copied ? <Check /> : <Copy />}
-          />
+          {trigger.event ? (
+            <CopyButton
+              value={webhookUrl(trigger.event)}
+              label="Copy the URL"
+              size="icon"
+              onError={() => toast("Could not copy. Select the text and copy it by hand.")}
+            />
+          ) : (
+            // CopyButton takes no `disabled` and no `hint`, and an empty id has nothing to copy.
+            <Button
+              aria-label="Copy the URL"
+              variant="outline"
+              size="icon"
+              disabled
+              hint="Give the webhook an id first"
+              iconSlot={<Copy />}
+            />
+          )}
           <Button variant="outline" size="sm" onClick={onRegenerate} content="New id" />
           <TriggerSwitch trigger={trigger} onChange={onToggle} />
           <Button

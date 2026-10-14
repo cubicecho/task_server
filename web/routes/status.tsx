@@ -5,6 +5,7 @@ import { StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphq
 import { PageLayout } from "@/components/page-layout";
 import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
+import { StatTile } from "@/components/stat-tile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Play, RefreshCw } from "@/components/ui/icons";
@@ -21,7 +22,6 @@ import {
   WRONG,
 } from "@/lib/task-health";
 import { useRunTask } from "@/lib/use-task-run";
-import { cn } from "@/lib/utils";
 
 type Failure = StatusQuery["failures"][number];
 type Server = StatusQuery["mcpStatus"][number];
@@ -162,35 +162,6 @@ function FailureRow({ failure }: { failure: Failure }) {
   );
 }
 
-function Tile({
-  health,
-  count,
-  selected,
-  onSelect,
-}: {
-  health: Health;
-  count: number;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const { label, blurb, tone } = LABELS[health];
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      title={blurb}
-      onClick={onSelect}
-      className={cn(
-        "rounded-md border px-3 py-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-active",
-        selected && "border-active",
-      )}
-    >
-      <div className={cn("font-semibold text-2xl tabular-nums", count > 0 && tone)}>{count}</div>
-      <div className="text-foreground/60 text-xs">{label}</div>
-    </button>
-  );
-}
-
 export function StatusRoute() {
   const [selected, setSelected] = useState<Health | null>(null);
   const queryClient = useQueryClient();
@@ -248,12 +219,13 @@ export function StatusRoute() {
 
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
             {HEALTH.map((health) => (
-              <Tile
+              <StatTile
                 key={health}
-                health={health}
-                count={counts[health]}
+                label={LABELS[health].label}
+                value={counts[health]}
+                valueClassName={counts[health] > 0 ? LABELS[health].tone : undefined}
                 selected={selected === health}
-                onSelect={() => setSelected(selected === health ? null : health)}
+                onClick={() => setSelected(selected === health ? null : health)}
               />
             ))}
           </div>

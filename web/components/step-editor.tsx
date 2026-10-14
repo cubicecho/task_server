@@ -1,8 +1,9 @@
 import { GitBranch } from "lucide-react";
+import { Combobox } from "@/components/combobox";
+import { Disclosure } from "@/components/disclosure";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
-import { OptionSelect } from "@/components/option-select";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
@@ -285,58 +286,57 @@ function StepCard({
           />
         ) : null}
 
-        <details className="text-sm">
-          <summary className="cursor-pointer text-xs text-foreground/60">
-            Model, system prompt, context
-          </summary>
-          <FieldRow
-            className="mt-3"
-            perRow={3}
-            contentSlot={
-              <>
-                <FormField
-                  label="Model"
-                  // The function form: `ModelSelect` puts the id on whichever of its two controls
-                  // is on screen.
-                  controlSlot={(wired) => (
-                    <ModelSelect
-                      {...wired}
-                      value={step.model}
-                      onValueChange={(model) => patch({ model })}
-                      defaultLabel="Same as the task"
-                    />
-                  )}
-                />
-                <FormField
-                  label="System prompt"
-                  controlSlot={
-                    <Input
-                      value={step.systemPrompt}
-                      onChange={(event) => patch({ systemPrompt: event.target.value })}
-                      placeholder="(same as the task)"
-                    />
-                  }
-                />
-                <FormField
-                  label="Sees"
-                  // Still the function form: the control spreads what it is handed onto the
-                  // trigger, and the trigger is the only element a Radix select renders.
-                  controlSlot={(wired) => (
-                    <OptionSelect
-                      {...wired}
-                      value={step.context}
-                      onValueChange={(context) => patch({ context: context as StepContext })}
-                      options={CONTEXTS.map((context) => ({
-                        value: context,
-                        label: CONTEXT_LABELS[context],
-                      }))}
-                    />
-                  )}
-                />
-              </>
-            }
-          />
-        </details>
+        <Disclosure
+          title="Model, system prompt, context"
+          contentSlot={
+            <FieldRow
+              perRow={3}
+              contentSlot={
+                <>
+                  <FormField
+                    label="Model"
+                    // The function form: `ModelSelect` puts the id on whichever of its two controls
+                    // is on screen.
+                    controlSlot={(wired) => (
+                      <ModelSelect
+                        {...wired}
+                        value={step.model}
+                        onValueChange={(model) => patch({ model })}
+                        defaultLabel="Same as the task"
+                      />
+                    )}
+                  />
+                  <FormField
+                    label="System prompt"
+                    controlSlot={
+                      <Input
+                        value={step.systemPrompt}
+                        onChange={(event) => patch({ systemPrompt: event.target.value })}
+                        placeholder="(same as the task)"
+                      />
+                    }
+                  />
+                  <FormField
+                    label="Sees"
+                    // Still the function form: the control spreads what it is handed onto the
+                    // trigger, and the trigger is the only element a Radix select renders.
+                    controlSlot={(wired) => (
+                      <Combobox
+                        {...wired}
+                        value={step.context}
+                        onValueChange={(context) => patch({ context: context as StepContext })}
+                        options={CONTEXTS.map((context) => ({
+                          value: context,
+                          label: CONTEXT_LABELS[context],
+                        }))}
+                      />
+                    )}
+                  />
+                </>
+              }
+            />
+          }
+        />
 
         {decision
           ? arms.map((arm, index) => (
