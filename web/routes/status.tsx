@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphql";
+import { List } from "@/components/list";
 import { PageLayout } from "@/components/page-layout";
 import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
@@ -260,9 +261,13 @@ export function StatusRoute() {
             />
           ) : null}
 
-          {shown.map((task) => (
-            <TaskRow key={task.id} task={task} health={taskHealth(task)} />
-          ))}
+          <List
+            label="Tasks"
+            divided={false}
+            contentSlot={shown.map((task) => (
+              <TaskRow key={task.id} task={task} health={taskHealth(task)} />
+            ))}
+          />
 
           {!status.isPending && shown.length === 0 ? (
             <p className="text-foreground/60 text-sm">{emptyNote()}</p>

@@ -10,6 +10,7 @@ import {
   UpdateMcpServerDocument,
 } from "@/__generated__/graphql/graphql";
 import { ConfirmButton } from "@/components/confirm-button";
+import { List } from "@/components/list";
 import { McpDialog } from "@/components/mcp-dialog";
 import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
 import { PageLayout } from "@/components/page-layout";
@@ -133,87 +134,95 @@ export function McpRoute() {
                 }
               />
 
-              {rows.map((server) => {
-                const status = statusOf(server.id);
-                const tools = status?.tools ?? [];
-                const age = status?.startedAt ? uptime(status.startedAt) : null;
-                const probe = probes[server.id];
-                return (
-                  <Item key={server.id} variant="outline" className="flex-col items-stretch gap-3">
-                    <div className="flex w-full items-center gap-3">
-                      <ItemContent className={server.enabled ? undefined : "opacity-50"}>
-                        <ItemTitle>
-                          <span className="truncate font-mono">{server.slug}</span>
-                          <Badge variant="outline">{server.transport}</Badge>
-                          <Badge variant={status?.status === "ready" ? "secondary" : "outline"}>
-                            {status?.status ?? "unknown"}
-                          </Badge>
-                          {tools.length ? (
-                            <span className="font-normal text-foreground/60 text-xs">
-                              {tools.length} tool(s)
-                            </span>
-                          ) : null}
-                          {/* Only while connected: a pid or an age for a server that is not running
+              <List
+                label="MCP servers"
+                divided={false}
+                contentSlot={rows.map((server) => {
+                  const status = statusOf(server.id);
+                  const tools = status?.tools ?? [];
+                  const age = status?.startedAt ? uptime(status.startedAt) : null;
+                  const probe = probes[server.id];
+                  return (
+                    <Item
+                      key={server.id}
+                      variant="outline"
+                      className="flex-col items-stretch gap-3"
+                    >
+                      <div className="flex w-full items-center gap-3">
+                        <ItemContent className={server.enabled ? undefined : "opacity-50"}>
+                          <ItemTitle>
+                            <span className="truncate font-mono">{server.slug}</span>
+                            <Badge variant="outline">{server.transport}</Badge>
+                            <Badge variant={status?.status === "ready" ? "secondary" : "outline"}>
+                              {status?.status ?? "unknown"}
+                            </Badge>
+                            {tools.length ? (
+                              <span className="font-normal text-foreground/60 text-xs">
+                                {tools.length} tool(s)
+                              </span>
+                            ) : null}
+                            {/* Only while connected: a pid or an age for a server that is not running
                             names a process that has exited, and a reused pid names someone else's. */}
-                          {age ? (
-                            <span
-                              className="font-normal text-foreground/60 text-xs"
-                              title={`connected ${new Date(status?.startedAt ?? "").toLocaleString()}`}
-                            >
-                              up {age}
-                              {status?.pid ? ` · pid ${status.pid}` : ""}
-                            </span>
-                          ) : null}
-                        </ItemTitle>
-                        <ItemDescription className="truncate font-mono text-xs">
-                          {server.transport === "stdio"
-                            ? [server.command, ...(toConnection(server).args ?? [])].join(" ")
-                            : server.url}
-                        </ItemDescription>
-                      </ItemContent>
-                      <ItemActions className="gap-1">
-                        <Switch
-                          checked={server.enabled}
-                          onCheckedChange={(enabled) => toggle.mutate({ id: server.id, enabled })}
-                          aria-label={`Enable ${server.slug}`}
-                        />
-                        <Button
-                          aria-label="Test connection"
-                          variant="outline"
-                          size="icon"
-                          onClick={() => test.mutate(server)}
-                          disabled={test.isPending && test.variables?.id === server.id}
-                          iconSlot={<PlugZap />}
-                        />
-                        <Button
-                          aria-label="Edit"
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setEditing(server)}
-                          iconSlot={<Pencil />}
-                        />
-                        <ConfirmButton
-                          aria-label="Delete"
-                          variant="destructive-outline"
-                          size="icon"
-                          title={`Delete ${server.slug}?`}
-                          description="Every task loses its tools, and any profile scoped to it falls back to the servers that are left."
-                          onConfirm={() => remove.mutate(server.id)}
-                          iconSlot={<Trash2 />}
-                        />
-                      </ItemActions>
-                    </div>
+                            {age ? (
+                              <span
+                                className="font-normal text-foreground/60 text-xs"
+                                title={`connected ${new Date(status?.startedAt ?? "").toLocaleString()}`}
+                              >
+                                up {age}
+                                {status?.pid ? ` · pid ${status.pid}` : ""}
+                              </span>
+                            ) : null}
+                          </ItemTitle>
+                          <ItemDescription className="truncate font-mono text-xs">
+                            {server.transport === "stdio"
+                              ? [server.command, ...(toConnection(server).args ?? [])].join(" ")
+                              : server.url}
+                          </ItemDescription>
+                        </ItemContent>
+                        <ItemActions className="gap-1">
+                          <Switch
+                            checked={server.enabled}
+                            onCheckedChange={(enabled) => toggle.mutate({ id: server.id, enabled })}
+                            aria-label={`Enable ${server.slug}`}
+                          />
+                          <Button
+                            aria-label="Test connection"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => test.mutate(server)}
+                            disabled={test.isPending && test.variables?.id === server.id}
+                            iconSlot={<PlugZap />}
+                          />
+                          <Button
+                            aria-label="Edit"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setEditing(server)}
+                            iconSlot={<Pencil />}
+                          />
+                          <ConfirmButton
+                            aria-label="Delete"
+                            variant="destructive-outline"
+                            size="icon"
+                            title={`Delete ${server.slug}?`}
+                            description="Every task loses its tools, and any profile scoped to it falls back to the servers that are left."
+                            onConfirm={() => remove.mutate(server.id)}
+                            iconSlot={<Trash2 />}
+                          />
+                        </ItemActions>
+                      </div>
 
-                    {status?.error ? (
-                      <p className="whitespace-pre-wrap font-mono text-negative text-xs">
-                        {status.error}
-                      </p>
-                    ) : null}
+                      {status?.error ? (
+                        <p className="whitespace-pre-wrap font-mono text-negative text-xs">
+                          {status.error}
+                        </p>
+                      ) : null}
 
-                    {probe ? <McpProbeResult probe={probe} /> : null}
-                  </Item>
-                );
-              })}
+                      {probe ? <McpProbeResult probe={probe} /> : null}
+                    </Item>
+                  );
+                })}
+              />
 
               {creating ? <McpDialog onClose={() => setCreating(false)} onSaved={refresh} /> : null}
               {editing && !creating ? (
