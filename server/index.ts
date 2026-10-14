@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import express from "express";
 import { createYoga } from "graphql-yoga";
+import { mountClientApp } from "./client-app.ts";
 import { ensureSchema } from "./db/migrate.ts";
 import type { GraphContext } from "./graphql/permissions.ts";
 import { schema } from "./graphql/schema.ts";
@@ -47,8 +48,7 @@ mountWebhooks(app);
 // In production the built client is served from the same origin.
 const dist = path.join(ROOT, "dist");
 if (fs.existsSync(dist)) {
-  app.use(express.static(dist));
-  app.get(/^(?!\/(graphql|mcp)$).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
+  mountClientApp(app, dist);
 }
 
 app.use(
