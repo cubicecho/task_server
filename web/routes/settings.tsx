@@ -1,6 +1,6 @@
 import { useStore } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { XCircle } from "lucide-react";
 import { useState } from "react";
 import {
@@ -20,23 +20,16 @@ import { PasswordField } from "@/components/password-field";
 import { QueryError } from "@/components/query-state";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Section } from "@/components/section";
+import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code";
 import { CopyButton } from "@/components/ui/copy-button";
 import { CircleCheck } from "@/components/ui/icons";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
-import {
-  dirtySections,
-  SETTINGS_SECTIONS,
-  type SettingsForm,
-  type SettingsSection,
-  sectionLabel,
-  toForm,
-  toRow,
-} from "@/lib/settings-form";
+import { dirtySections, type SettingsForm, sectionLabel, toForm, toRow } from "@/lib/settings-form";
 
 /**
  * Where an agent reaches this server.
@@ -124,6 +117,7 @@ export function SettingsRoute() {
       <PageLayout
         title={TITLE}
         description={DESCRIPTION}
+        headerContentSlot={<SettingsTabsRoot current="model" contentSlot={<SettingsTabList />} />}
         loading={settings.isPending}
         contentSlot={
           settings.isError ? (
@@ -154,7 +148,6 @@ export function SettingsRoute() {
 function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { tab = "model" } = useSearch({ from: "/settings" });
   const [probe, setProbe] = useState<Probe>(null);
 
@@ -233,9 +226,6 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
 
   const endpointPending = values.baseUrl !== row.baseUrl || Boolean(values.apiKey);
 
-  const open = (next: string) =>
-    navigate({ to: "/settings", search: { tab: next as SettingsSection }, replace: true });
-
   // In the header, where the task editor keeps its Save, so it is in reach from every tab. The
   // dot on each tab says which panels the unsaved changes are on.
   const actions = (
@@ -259,281 +249,277 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
   const panel = "flex flex-col gap-6 data-[state=inactive]:hidden";
 
   return (
-    <PageLayout
-      title={TITLE}
-      description={DESCRIPTION}
-      actionSlot={actions}
+    <SettingsTabsRoot
+      current={tab}
       contentSlot={
-        <Tabs value={tab} onValueChange={open}>
-          <div className="max-w-full overflow-x-auto pb-2">
-            <TabsList>
-              {SETTINGS_SECTIONS.map((section) => (
-                <TabsTrigger key={section.key} value={section.key}>
-                  {section.label}
-                  {dirty.includes(section.key) ? (
-                    <>
-                      <span aria-hidden className="size-1.5 rounded-full bg-info" />
-                      <span className="sr-only">(unsaved changes)</span>
-                    </>
-                  ) : null}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
+        <PageLayout
+          title={TITLE}
+          description={DESCRIPTION}
+          headerContentSlot={<SettingsTabList dirty={dirty} />}
+          actionSlot={actions}
+          contentSlot={
+            <>
+              <form
+                id={FORM_ID}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  form.handleSubmit();
+                }}
+              >
+                <TabsContent value="model" forceMount className={panel}>
+                  <Section
+                    title="Endpoint"
+                    description={
+                      <>
+                        Every task uses this one unless its{" "}
+                        <Link to="/settings/agents" className="underline">
+                          agent profile
+                        </Link>{" "}
+                        names an endpoint of its own.
+                      </>
+                    }
+                    contentSlot={
+                      <div className="flex flex-col gap-4">
+                        <InputField
+                          form={form}
+                          name="baseUrl"
+                          label="Base URL"
+                          description={doc("baseUrl")}
+                          placeholder="http://localhost:11434/v1"
+                          autoComplete="off"
+                        />
+                        <PasswordField
+                          form={form}
+                          name="apiKey"
+                          label="API key"
+                          autoComplete="new-password"
+                          placeholder="unchanged — leave blank to keep the stored key"
+                        />
 
-          <form
-            id={FORM_ID}
-            onSubmit={(event) => {
-              event.preventDefault();
-              form.handleSubmit();
-            }}
-          >
-            <TabsContent value="model" forceMount className={panel}>
-              <Section
-                title="Endpoint"
-                description={
-                  <>
-                    Every task uses this one unless its{" "}
-                    <Link to="/agents" className="underline">
-                      agent profile
-                    </Link>{" "}
-                    names an endpoint of its own.
-                  </>
-                }
-                contentSlot={
-                  <div className="flex flex-col gap-4">
-                    <InputField
-                      form={form}
-                      name="baseUrl"
-                      label="Base URL"
-                      description={doc("baseUrl")}
-                      placeholder="http://localhost:11434/v1"
-                      autoComplete="off"
-                    />
-                    <PasswordField
-                      form={form}
-                      name="apiKey"
-                      label="API key"
-                      autoComplete="new-password"
-                      placeholder="unchanged — leave blank to keep the stored key"
-                    />
-
-                    {/* Its own button rather than the bar's job, because these are the two
+                        {/* Its own button rather than the bar's job, because these are the two
                         fields something else on the page depends on: the model pickers ask the
                         stored endpoint, not the one in the boxes. */}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Button
-                        variant="outline"
-                        disabled={applyEndpoint.isPending}
-                        onClick={() =>
-                          applyEndpoint.mutate({ baseUrl: values.baseUrl, apiKey: values.apiKey })
-                        }
-                        content={endpointAction(applyEndpoint.isPending, endpointPending)}
-                      />
-                      {endpointPending ? (
-                        <p className="text-xs text-foreground/60">
-                          Not applied yet — the model lists are still the stored endpoint's.
-                        </p>
-                      ) : null}
-                    </div>
-
-                    {probe ? (
-                      <div className="flex items-start gap-2 text-sm">
-                        {probe.ok ? (
-                          <CircleCheck
-                            className="mt-0.5 size-4 shrink-0 text-foreground/60"
-                            aria-hidden
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Button
+                            variant="outline"
+                            disabled={applyEndpoint.isPending}
+                            onClick={() =>
+                              applyEndpoint.mutate({
+                                baseUrl: values.baseUrl,
+                                apiKey: values.apiKey,
+                              })
+                            }
+                            content={endpointAction(applyEndpoint.isPending, endpointPending)}
                           />
-                        ) : (
-                          <XCircle className="mt-0.5 size-4 shrink-0 text-negative" aria-hidden />
-                        )}
-                        <p
-                          className={
-                            probe.ok
-                              ? "text-foreground/60"
-                              : "whitespace-pre-wrap font-mono text-xs text-negative"
-                          }
-                        >
-                          {probe.ok ? `Connected — ${probe.detail}` : probe.detail}
-                        </p>
+                          {endpointPending ? (
+                            <p className="text-xs text-foreground/60">
+                              Not applied yet — the model lists are still the stored endpoint's.
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {probe ? (
+                          <div className="flex items-start gap-2 text-sm">
+                            {probe.ok ? (
+                              <CircleCheck
+                                className="mt-0.5 size-4 shrink-0 text-foreground/60"
+                                aria-hidden
+                              />
+                            ) : (
+                              <XCircle
+                                className="mt-0.5 size-4 shrink-0 text-negative"
+                                aria-hidden
+                              />
+                            )}
+                            <p
+                              className={
+                                probe.ok
+                                  ? "text-foreground/60"
+                                  : "whitespace-pre-wrap font-mono text-xs text-negative"
+                              }
+                            >
+                              {probe.ok ? `Connected — ${probe.detail}` : probe.detail}
+                            </p>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                }
-              />
-
-              <Section
-                title="Model"
-                contentSlot={
-                  <div className="flex flex-col gap-4">
-                    <ModelSelectField
-                      form={form}
-                      name="model"
-                      label="Default model"
-                      description={doc("model")}
-                    />
-                    <TextareaField
-                      form={form}
-                      name="systemPrompt"
-                      label="Default system prompt"
-                      description={doc("systemPrompt")}
-                      rows={3}
-                    />
-                  </div>
-                }
-              />
-            </TabsContent>
-
-            <TabsContent value="limits" forceMount className={panel}>
-              <Section
-                title="Limits"
-                description="What one run may spend."
-                contentSlot={
-                  <FieldRow
-                    perRow={3}
-                    contentSlot={
-                      <>
-                        <NumberField
-                          form={form}
-                          name="maxTokens"
-                          label="Max tokens"
-                          description={doc("maxTokens")}
-                          validators={number}
-                        />
-                        <NumberField
-                          form={form}
-                          name="temperature"
-                          label="Temperature"
-                          description={doc("temperature")}
-                          step="0.1"
-                          validators={number}
-                        />
-                        <NumberField
-                          form={form}
-                          name="maxToolIterations"
-                          label="Max tool steps"
-                          description={doc("maxToolIterations")}
-                          validators={number}
-                        />
-                      </>
                     }
                   />
-                }
-              />
 
-              <Section
-                title="Resilience"
-                description="What a request does when the endpoint goes quiet or falls over."
-                contentSlot={
-                  <FieldRow
+                  <Section
+                    title="Model"
                     contentSlot={
-                      <>
-                        <NumberField
+                      <div className="flex flex-col gap-4">
+                        <ModelSelectField
                           form={form}
-                          name="requestTimeoutSeconds"
-                          label="Silence before giving up (s)"
-                          description={doc("requestTimeoutSeconds")}
-                          validators={number}
+                          name="model"
+                          label="Default model"
+                          description={doc("model")}
                         />
-                        <NumberField
+                        <TextareaField
                           form={form}
-                          name="maxRetries"
-                          label="Retries"
-                          description={doc("maxRetries")}
-                          validators={number}
+                          name="systemPrompt"
+                          label="Default system prompt"
+                          description={doc("systemPrompt")}
+                          rows={3}
                         />
-                      </>
+                      </div>
                     }
                   />
-                }
-              />
-            </TabsContent>
+                </TabsContent>
 
-            <TabsContent value="tools" forceMount className={panel}>
-              <Section
-                title="MCP tools"
-                contentSlot={
-                  <div className="flex flex-col gap-4">
-                    <RadioGroupField
-                      form={form}
-                      name="toolDiscovery"
-                      label="Tool discovery"
-                      description={doc("toolDiscovery")}
-                      options={[
-                        {
-                          value: SettingsToolDiscoveryEnum.Eager,
-                          label: "Eager",
-                          description: "Send every definition every time.",
-                        },
-                        {
-                          value: SettingsToolDiscoveryEnum.Ondemand,
-                          label: "On demand",
-                          description: "Load definitions as the run asks for them.",
-                        },
-                      ]}
-                    />
-                    <ModelSelectField
-                      form={form}
-                      name="toolSelectModel"
-                      label="Tool-picking model"
-                      description={doc("toolSelectModel")}
-                      defaultLabel="Same model as the task"
-                    />
-                  </div>
-                }
-              />
-            </TabsContent>
-
-            <TabsContent value="server" forceMount className={panel}>
-              <Section
-                title="Housekeeping"
-                description="What this process does on its own, with no trigger asking."
-                contentSlot={
-                  <FieldRow
+                <TabsContent value="limits" forceMount className={panel}>
+                  <Section
+                    title="Limits"
+                    description="What one run may spend."
                     contentSlot={
-                      <>
-                        <NumberField
-                          form={form}
-                          name="maxConcurrentRuns"
-                          label="Runs at once"
-                          description={doc("maxConcurrentRuns")}
-                          validators={number}
-                        />
-                        <NumberField
-                          form={form}
-                          name="runRetentionDays"
-                          label="Keep runs for (days)"
-                          description={doc("runRetentionDays")}
-                          validators={number}
-                        />
-                      </>
+                      <FieldRow
+                        perRow={3}
+                        contentSlot={
+                          <>
+                            <NumberField
+                              form={form}
+                              name="maxTokens"
+                              label="Max tokens"
+                              description={doc("maxTokens")}
+                              validators={number}
+                            />
+                            <NumberField
+                              form={form}
+                              name="temperature"
+                              label="Temperature"
+                              description={doc("temperature")}
+                              step="0.1"
+                              validators={number}
+                            />
+                            <NumberField
+                              form={form}
+                              name="maxToolIterations"
+                              label="Max tool steps"
+                              description={doc("maxToolIterations")}
+                              validators={number}
+                            />
+                          </>
+                        }
+                      />
                     }
                   />
-                }
-              />
-            </TabsContent>
-          </form>
 
-          {/* Outside the form: it edits nothing, and a button inside one is a submit. */}
-          <TabsContent value="connect" forceMount className={panel}>
-            <Section
-              title="Connect an agent"
-              description={
-                <>
-                  This server's own API is served as MCP tools at <code>{ENDPOINT}</code>, so an
-                  assistant elsewhere can list the tasks, add one, run it and watch the run. There
-                  is no authentication: anyone who can reach the port can do all of that.
-                </>
-              }
-              contentSlot={
-                <div className="flex flex-col gap-4">
-                  <Snippet label=".mcp.json" text={MCP_JSON} />
-                  <Snippet label="Claude Code" text={CLAUDE_CLI} />
-                </div>
-              }
-            />
-          </TabsContent>
-        </Tabs>
+                  <Section
+                    title="Resilience"
+                    description="What a request does when the endpoint goes quiet or falls over."
+                    contentSlot={
+                      <FieldRow
+                        contentSlot={
+                          <>
+                            <NumberField
+                              form={form}
+                              name="requestTimeoutSeconds"
+                              label="Silence before giving up (s)"
+                              description={doc("requestTimeoutSeconds")}
+                              validators={number}
+                            />
+                            <NumberField
+                              form={form}
+                              name="maxRetries"
+                              label="Retries"
+                              description={doc("maxRetries")}
+                              validators={number}
+                            />
+                          </>
+                        }
+                      />
+                    }
+                  />
+                </TabsContent>
+
+                <TabsContent value="tools" forceMount className={panel}>
+                  <Section
+                    title="MCP tools"
+                    contentSlot={
+                      <div className="flex flex-col gap-4">
+                        <RadioGroupField
+                          form={form}
+                          name="toolDiscovery"
+                          label="Tool discovery"
+                          description={doc("toolDiscovery")}
+                          options={[
+                            {
+                              value: SettingsToolDiscoveryEnum.Eager,
+                              label: "Eager",
+                              description: "Send every definition every time.",
+                            },
+                            {
+                              value: SettingsToolDiscoveryEnum.Ondemand,
+                              label: "On demand",
+                              description: "Load definitions as the run asks for them.",
+                            },
+                          ]}
+                        />
+                        <ModelSelectField
+                          form={form}
+                          name="toolSelectModel"
+                          label="Tool-picking model"
+                          description={doc("toolSelectModel")}
+                          defaultLabel="Same model as the task"
+                        />
+                      </div>
+                    }
+                  />
+                </TabsContent>
+
+                <TabsContent value="server" forceMount className={panel}>
+                  <Section
+                    title="Housekeeping"
+                    description="What this process does on its own, with no trigger asking."
+                    contentSlot={
+                      <FieldRow
+                        contentSlot={
+                          <>
+                            <NumberField
+                              form={form}
+                              name="maxConcurrentRuns"
+                              label="Runs at once"
+                              description={doc("maxConcurrentRuns")}
+                              validators={number}
+                            />
+                            <NumberField
+                              form={form}
+                              name="runRetentionDays"
+                              label="Keep runs for (days)"
+                              description={doc("runRetentionDays")}
+                              validators={number}
+                            />
+                          </>
+                        }
+                      />
+                    }
+                  />
+                </TabsContent>
+              </form>
+
+              {/* Outside the form: it edits nothing, and a button inside one is a submit. */}
+              <TabsContent value="connect" forceMount className={panel}>
+                <Section
+                  title="Connect an agent"
+                  description={
+                    <>
+                      This server's own API is served as MCP tools at <code>{ENDPOINT}</code>, so an
+                      assistant elsewhere can list the tasks, add one, run it and watch the run.
+                      There is no authentication: anyone who can reach the port can do all of that.
+                    </>
+                  }
+                  contentSlot={
+                    <div className="flex flex-col gap-4">
+                      <Snippet label=".mcp.json" text={MCP_JSON} />
+                      <Snippet label="Claude Code" text={CLAUDE_CLI} />
+                    </div>
+                  }
+                />
+              </TabsContent>
+            </>
+          }
+        />
       }
     />
   );

@@ -597,9 +597,14 @@ render off the DOM.
 **The shell is cubeui's `Sidebar`, and the links are `createLink` over its rows.**
 `app-shell.tsx` hands `SidebarLayout` a `Sidebar` of `SidebarNavItem`s and, for under `md`, the
 same list as `BarNavItem`s in `navSlot` — the sidebar is hidden there and the bar takes its
-place, which is why `NAV` is one array read twice. Neither row knows a router: TanStack's
-`createLink` wraps each, so `to` is typed against the route tree and `active` is this file's to
-say.
+place, which is why `NAV` is one array read twice. Settings sits apart from it in the
+sidebar's `footerSlot`, as telos keeps it, and is the bar's last icon; Agents and MCP servers
+are not places of their own but tabs of Settings (`/settings/agents`, `/settings/servers`, the
+old paths redirecting), in the one row with the settings row's own panels — never a second row of
+tabs under the first. `SettingsTabsRoot` wraps each page so the list in its `headerContentSlot`
+and the panels in its body are one set of tabs. Neither row
+knows a router: TanStack's `createLink` wraps each, so `to` is typed against the route tree and
+`active` is this file's to say.
 
 **A toast is `useToast()`, and it is a hook.** `ToastProvider` wraps the app in `main.tsx`;
 `const toast = useToast()` gives `toast(message, tone?)`, where the tone defaults to `error` and
