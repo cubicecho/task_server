@@ -116,7 +116,7 @@ const BADGE_INK = {
 } satisfies Record<BadgeVariant, string>;
 
 /** The label's type and colour, per variant. */
-export const badgeTextVariants = cva("text-xs font-medium", {
+export const badgeTextVariants = cva("text-xs font-semibold", {
   variants: {
     variant: { ...BADGE_INK, link: "text-info underline-offset-4" },
   },
@@ -133,7 +133,7 @@ export const badgeInkVariants = cva("", {
 });
 
 /** The label's class when `backgroundColor` replaced the variant's own. */
-export const badgeTextFallback = "text-xs font-medium text-foreground";
+export const badgeTextFallback = "text-xs font-semibold text-foreground";
 
 /** `badgeInkVariants`' counterpart, for when `backgroundColor` replaced the variant's own. */
 export const badgeInkFallback = "text-foreground";

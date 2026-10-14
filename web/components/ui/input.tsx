@@ -114,7 +114,7 @@ function Input({
       {...props}
       className={cn(
         INPUT_CLASS,
-        "file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-negative aria-invalid:focus:border-active",
+        "file:border-0 file:bg-transparent file:text-sm file:font-semibold disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-negative aria-invalid:focus:border-active",
         leadingSlot != null && INPUT_LEADING_PAD_CLASS,
         trailingSlot != null && INPUT_TRAILING_PAD_CLASS,
         className,

@@ -1,5 +1,5 @@
+import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Slot } from "radix-ui";
 import * as React from "react";
 import { IconClassContext } from "@/components/ui/icons-base";
 import { Spinner } from "@/components/ui/spinner";
@@ -9,7 +9,7 @@ import { cn, type SlotNode } from "@/lib/utils";
 
 /** The button's container classes for each `variant` and `size`. */
 const buttonVariants = cva(
-  "inline-flex flex-row items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex flex-row items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-colors focus-visible:outline-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -30,7 +30,7 @@ const buttonVariants = cva(
         "info-outline":
           "border border-info/40 bg-transparent text-info hover:bg-info/10 focus-visible:bg-info/10",
         outline:
-          "border border-foreground/15 bg-background text-foreground hover:bg-hover focus-visible:bg-hover",
+          "border border-foreground/50 bg-background text-foreground hover:bg-hover focus-visible:bg-hover",
         secondary: "bg-foreground/10 text-foreground hover:bg-hover focus-visible:bg-hover",
         ghost:
           "text-foreground/60 hover:bg-hover hover:text-foreground focus-visible:bg-hover focus-visible:text-foreground",
@@ -65,7 +65,7 @@ const buttonVariants = cva(
  * native reads this one, because a `<Text>` inherits nothing from the `View`
  * above it.
  */
-const buttonTextVariants = cva("font-medium", {
+const buttonTextVariants = cva("font-semibold", {
   variants: {
     size: {
       default: "text-sm",
@@ -299,11 +299,11 @@ const ButtonBody = React.forwardRef<HTMLButtonElement, ButtonBodyProps>(
       // one child. Inside, the provider was the child: `Slot` merged the classes and
       // the press onto it, it dropped them, and the caller's `<a>` rendered unstyled (#156).
       <IconClassContext.Provider value={labelClass}>
-        {/* `Slot.Root` is declared over `HTMLAttributes<HTMLElement>` because radix ships
+        {/* `Slot` is declared over `HTMLAttributes<HTMLElement>` because radix ships
             for the DOM, but it renders nothing itself — it clones its child with these
             props merged in. The element that receives them is the caller's, so the DOM
             typing describes neither side, and the cast is the honest way to say so. */}
-        <Slot.Root
+        <Slot
           className={styling}
           {...({
             ...props,
@@ -314,7 +314,7 @@ const ButtonBody = React.forwardRef<HTMLButtonElement, ButtonBodyProps>(
           ref={ref as unknown as React.Ref<HTMLElement>}
         >
           {React.cloneElement(linkSlot, undefined, leading, labelled, trailingSlot)}
-        </Slot.Root>
+        </Slot>
       </IconClassContext.Provider>
     );
   },

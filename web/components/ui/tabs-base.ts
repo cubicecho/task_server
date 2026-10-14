@@ -58,11 +58,11 @@ export type TabsContentProps = {
  * scrolls sideways, and the two platforms centre a row that can overflow differently.
  */
 export const TABS_LIST_CLASS =
-  "h-10 items-center rounded-md border border-foreground/15 bg-background p-1";
+  "h-10 items-center rounded-md border border-foreground/50 bg-background p-1";
 /** The list's own `p-1`, kept clear of a tab brought into view so it does not sit on the border. */
 export const TABS_LIST_INSET = 4;
 /** A row, so an icon sits beside the label. `gap-1.5` is shadcn's own. */
 export const TABS_TRIGGER_CLASS =
   "flex-row items-center justify-center gap-1.5 rounded-sm px-3 py-1.5";
 /** The type of a tab's label. */
-export const TABS_TRIGGER_TEXT_CLASS = "text-sm font-medium";
+export const TABS_TRIGGER_TEXT_CLASS = "text-sm font-semibold";

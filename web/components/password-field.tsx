@@ -7,7 +7,7 @@ import {
   useFieldError,
 } from "@/components/app-form";
 import { FormField } from "@/components/form-field";
-import { PasswordInput } from "@/components/password-input";
+import { PasswordInput, revealLabelsFor } from "@/components/password-input";
 
 type PasswordFieldProps = FieldProps &
   Omit<ComponentProps<typeof PasswordInput>, "id" | "value" | "onChangeText" | "onBlur">;
@@ -16,6 +16,7 @@ function BoundPasswordField(props: PasswordFieldProps) {
   const [fieldProps, input] = splitProps(props);
   const field = useFieldContext<string | null>();
   const error = useFieldError();
+  const revealLabels = revealLabelsFor(fieldProps.label);
 
   return (
     <FormField
@@ -28,6 +29,8 @@ function BoundPasswordField(props: PasswordFieldProps) {
         <PasswordInput
           {...input}
           {...wired}
+          showLabel={input.showLabel ?? revealLabels.showLabel}
+          hideLabel={input.hideLabel ?? revealLabels.hideLabel}
           value={field.state.value ?? ""}
           onBlur={field.handleBlur}
           onChangeText={(text) => field.handleChange(text)}
@@ -47,6 +50,9 @@ function BoundPasswordField(props: PasswordFieldProps) {
  * It is not `<InputField type="password">`, and the difference is the reveal button — see
  * {@link PasswordInput}. A field whose only difference from `InputField` were the `type` would be
  * a variant wearing a component's clothes, and this registry has a rule about that.
+ *
+ * A string `label` names the button too, "Show API key" and "Hide API key", unless `showLabel`
+ * or `hideLabel` says otherwise.
  */
 export const PasswordField = bindToForm<PasswordFieldProps, string>(
   BoundPasswordField,

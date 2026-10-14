@@ -22,6 +22,19 @@ export function cn(...inputs: ClassValue[]): string {
 export const HOVER_REVEAL = "opacity-0 transition-opacity group-hover:opacity-100";
 
 /**
+ * A field whose value was refused, on device: the web halves draw the same thing from the
+ * `aria-invalid` attribute (`aria-invalid:border-negative`), which React Native has no variant
+ * for. Focus still wins while the value is being fixed. Here rather than in one field's base so
+ * Input, Textarea and Select share it without installing each other.
+ */
+export const FIELD_INVALID_CLASS = "border-negative focus:border-active";
+
+/** Whether an `aria-invalid` value says the field is invalid. */
+export function isInvalid(value: boolean | "true" | "false" | undefined): boolean {
+  return value === true || value === "true";
+}
+
+/**
  * What a prop whose name ends in `Slot` takes: an element, several, or nothing.
  *
  * Not a string and not a number. React Native draws text only inside a `<Text>`, so a bare string

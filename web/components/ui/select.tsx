@@ -2,6 +2,8 @@ import { Select as SelectPrimitive } from "radix-ui";
 import type { ComponentPropsWithRef, ElementType } from "react";
 import { Check, ChevronDown, ChevronUp } from "@/components/ui/icons";
 import {
+  SELECT_CONTENT_CLASS,
+  SELECT_ICON_CLASS,
   SELECT_ITEM_CLASS,
   SELECT_ITEM_TEXT_CLASS,
   SELECT_LABEL_CLASS,
@@ -83,7 +85,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="h-4 w-4 opacity-50" />
+        <ChevronDown className={SELECT_ICON_CLASS} />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -105,7 +107,8 @@ function SelectContent({
         align={align}
         {...props}
         className={cn(
-          "bg-secondary text-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border shadow-md",
+          "text-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 relative z-50 max-h-(--radix-select-content-available-height) min-w-32 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto",
+          SELECT_CONTENT_CLASS,
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className,
