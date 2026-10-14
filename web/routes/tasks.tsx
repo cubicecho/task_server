@@ -22,7 +22,14 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Pencil, Play, Plus, Square, Trash2 } from "@/components/ui/icons";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemFooter,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
@@ -135,69 +142,67 @@ export function TasksRoute() {
                 lastRun?.status === "running" ||
                 (run.isPending && run.variables?.taskId === task.id);
               return (
-                <Item key={task.id} variant="outline" className="flex-col items-stretch gap-3">
-                  <div className="flex w-full items-start justify-between gap-3">
-                    <ItemContent>
-                      <ItemTitle>
-                        <span className="truncate">{task.name}</span>
-                        {lastRun ? (
-                          <Badge variant={STATUS_VARIANT[lastRun.status] ?? "secondary"}>
-                            {lastRun.status}
-                          </Badge>
-                        ) : null}
-                      </ItemTitle>
-                      <ItemDescription className="line-clamp-2">{task.prompt}</ItemDescription>
-                    </ItemContent>
-                    <ItemActions className="gap-1">
-                      <Switch
-                        checked={task.enabled}
-                        onCheckedChange={() => toggle.mutate(task)}
-                        aria-label="Enabled"
-                      />
-                      {running ? (
-                        <Button
-                          aria-label="Stop this run"
-                          variant="outline"
-                          size="icon"
-                          // Only this card's button. `isPending` alone is true for the whole list
-                          // while any one task is being started or stopped, which greyed out every
-                          // other row's control along with the one that was clicked.
-                          disabled={stop.isPending && stop.variables === task.id}
-                          onClick={() => stop.mutate(task.id)}
-                          iconSlot={<Square />}
-                        />
-                      ) : (
-                        <Button
-                          aria-label="Run now"
-                          variant="outline"
-                          size="icon"
-                          disabled={run.isPending && run.variables?.taskId === task.id}
-                          onClick={() => press(task)}
-                          iconSlot={<Play />}
-                        />
-                      )}
+                <Item key={task.id} variant="outline">
+                  <ItemContent>
+                    <ItemTitle>
+                      <span className="truncate">{task.name}</span>
+                      {lastRun ? (
+                        <Badge variant={STATUS_VARIANT[lastRun.status] ?? "secondary"}>
+                          {lastRun.status}
+                        </Badge>
+                      ) : null}
+                    </ItemTitle>
+                    <ItemDescription className="line-clamp-2">{task.prompt}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions className="gap-1">
+                    <Switch
+                      checked={task.enabled}
+                      onCheckedChange={() => toggle.mutate(task)}
+                      aria-label="Enabled"
+                    />
+                    {running ? (
                       <Button
-                        aria-label="Edit"
+                        aria-label="Stop this run"
                         variant="outline"
                         size="icon"
-                        linkSlot={<Link to="/tasks/$taskId" params={{ taskId: task.id }} />}
-                        iconSlot={<Pencil />}
+                        // Only this card's button. `isPending` alone is true for the whole list
+                        // while any one task is being started or stopped, which greyed out every
+                        // other row's control along with the one that was clicked.
+                        disabled={stop.isPending && stop.variables === task.id}
+                        onClick={() => stop.mutate(task.id)}
+                        iconSlot={<Square />}
                       />
-                      <ConfirmButton
-                        aria-label="Delete"
-                        variant="destructive-outline"
+                    ) : (
+                      <Button
+                        aria-label="Run now"
+                        variant="outline"
                         size="icon"
-                        hint={running ? "Stop the run before deleting" : undefined}
-                        disabled={running}
-                        title={`Delete ${task.name}?`}
-                        description="Its triggers and its whole run history go with it, output included."
-                        onConfirm={() => remove.mutate(task.id)}
-                        iconSlot={<Trash2 />}
+                        disabled={run.isPending && run.variables?.taskId === task.id}
+                        onClick={() => press(task)}
+                        iconSlot={<Play />}
                       />
-                    </ItemActions>
-                  </div>
+                    )}
+                    <Button
+                      aria-label="Edit"
+                      variant="outline"
+                      size="icon"
+                      linkSlot={<Link to="/tasks/$taskId" params={{ taskId: task.id }} />}
+                      iconSlot={<Pencil />}
+                    />
+                    <ConfirmButton
+                      aria-label="Delete"
+                      variant="destructive-outline"
+                      size="icon"
+                      hint={running ? "Stop the run before deleting" : undefined}
+                      disabled={running}
+                      title={`Delete ${task.name}?`}
+                      description="Its triggers and its whole run history go with it, output included."
+                      onConfirm={() => remove.mutate(task.id)}
+                      iconSlot={<Trash2 />}
+                    />
+                  </ItemActions>
 
-                  <div className="flex flex-wrap gap-2 text-foreground/60 text-xs">
+                  <ItemFooter className="flex-wrap justify-start gap-2 text-foreground/60 text-xs">
                     {task.triggers.length === 0 ? (
                       <span>No triggers — it only runs when you press play.</span>
                     ) : null}
@@ -226,7 +231,7 @@ export function TasksRoute() {
                       );
                     })}
                     {task.model ? <span className="px-1 py-1">model: {task.model}</span> : null}
-                  </div>
+                  </ItemFooter>
                 </Item>
               );
             })}
