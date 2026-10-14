@@ -88,7 +88,7 @@ export function TasksRoute() {
   // Offered twice: in the header always, and in the empty state where it is the only thing to do.
   const newTask = (
     <Button
-      variant="info"
+      variant="positive"
       linkSlot={<Link to="/tasks/new" />}
       iconSlot={<Plus />}
       content="New task"
