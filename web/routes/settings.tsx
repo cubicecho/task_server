@@ -1,7 +1,6 @@
 import { useStore } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearch } from "@tanstack/react-router";
-import { XCircle } from "lucide-react";
 import { useState } from "react";
 import {
   ModelsDocument,
@@ -21,6 +20,7 @@ import { QueryError } from "@/components/query-state";
 import { RadioGroupField } from "@/components/radio-group-field";
 import { Section } from "@/components/section";
 import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -319,28 +319,18 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                         </div>
 
                         {probe ? (
-                          <div className="flex items-start gap-2 text-sm">
-                            {probe.ok ? (
-                              <CircleCheck
-                                className="mt-0.5 size-4 shrink-0 text-foreground/60"
-                                aria-hidden
-                              />
-                            ) : (
-                              <XCircle
-                                className="mt-0.5 size-4 shrink-0 text-negative"
-                                aria-hidden
-                              />
-                            )}
-                            <p
-                              className={
-                                probe.ok
-                                  ? "text-foreground/60"
-                                  : "whitespace-pre-wrap font-mono text-xs text-negative"
-                              }
-                            >
-                              {probe.ok ? `Connected — ${probe.detail}` : probe.detail}
-                            </p>
-                          </div>
+                          <Alert
+                            variant={probe.ok ? "default" : "destructive"}
+                            iconSlot={probe.ok ? <CircleCheck /> : undefined}
+                            title={probe.ok ? `Connected — ${probe.detail}` : "Could not connect"}
+                            description={
+                              probe.ok ? undefined : (
+                                <span className="whitespace-pre-wrap font-mono text-xs">
+                                  {probe.detail}
+                                </span>
+                              )
+                            }
+                          />
                         ) : null}
                       </div>
                     }

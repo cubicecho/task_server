@@ -8,7 +8,9 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { DialogLayout } from "@/components/dialog-layout";
 import { FormField } from "@/components/form-field";
-import { Badge } from "@/components/ui/badge";
+import { List } from "@/components/list";
+import { ListItem } from "@/components/list-item";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
@@ -169,32 +171,27 @@ function PromptDialog({
               />
             ))
           ) : (
-            <div className="flex flex-col gap-2">
-              {prompts.map((prompt) => (
-                <button
+            <List
+              label="MCP prompts"
+              contentSlot={prompts.map((prompt) => (
+                <ListItem
                   key={`${prompt.server}/${prompt.name}`}
-                  type="button"
                   onClick={() => pick(prompt)}
-                  className="flex flex-col gap-1 rounded-lg border bg-secondary p-3 text-left hover:bg-hover"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="flex-1 font-medium text-sm">{titleOf(prompt)}</span>
-                    <Badge variant="secondary">{prompt.serverLabel}</Badge>
-                  </div>
-                  {prompt.description ? (
-                    <span className="text-foreground/60 text-sm">{prompt.description}</span>
-                  ) : null}
-                </button>
+                  title={titleOf(prompt)}
+                  description={prompt.description || undefined}
+                  meta={prompt.serverLabel}
+                />
               ))}
-            </div>
+            />
           )}
 
           {/* Said here rather than as a toast: the dialog is still open, and this is where the
               arguments that may be wrong are. */}
           {expand.error ? (
-            <p className="text-negative text-sm">
-              {expand.error.message || "That prompt could not be expanded."}
-            </p>
+            <Alert
+              variant="destructive"
+              description={expand.error.message || "That prompt could not be expanded."}
+            />
           ) : null}
         </div>
       }

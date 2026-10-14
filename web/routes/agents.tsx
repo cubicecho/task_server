@@ -11,18 +11,12 @@ import { AgentDialog } from "@/components/agent-dialog";
 import { AgentImportDialog } from "@/components/agent-import-dialog";
 import { ConfirmButton } from "@/components/confirm-button";
 import { List } from "@/components/list";
+import { EmptyState } from "@/components/page";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Download, Pencil, Plus, Trash2, Upload } from "@/components/ui/icons";
 import {
   Item,
@@ -101,17 +95,11 @@ export function AgentsRoute() {
                 what="your agent profiles"
                 count={rows.length}
                 emptySlot={
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <Bot />
-                      </EmptyMedia>
-                      <EmptyTitle>No profiles</EmptyTitle>
-                      <EmptyDescription>
-                        Every task runs on Settings, which is all a server with one model needs.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
+                  <EmptyState
+                    icon={Bot}
+                    title="No profiles"
+                    description="Every task runs on Settings, which is all a server with one model needs."
+                  />
                 }
               />
 
@@ -180,12 +168,9 @@ export function AgentsRoute() {
                           </span>
                         ) : (
                           said.map((one) => (
-                            <span
-                              key={one}
-                              className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
-                            >
+                            <Badge key={one} variant="outline" className="font-mono font-normal">
                               {one}
-                            </span>
+                            </Badge>
                           ))
                         )}
                       </ItemFooter>

@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isSettingsSection, SETTINGS_SECTIONS, type SettingsSection } from "@/lib/settings-form";
 import type { SlotNode } from "@/lib/utils";
@@ -57,20 +58,18 @@ export function SettingsTabsRoot({
 /** The row under every settings page's title. A dot marks a panel holding unsaved changes. */
 export function SettingsTabList({ dirty = [] }: { dirty?: readonly SettingsTab[] }) {
   return (
-    <div className="max-w-full overflow-x-auto">
-      <TabsList aria-label="Settings">
-        {TABS.map((tab) => (
-          <TabsTrigger key={tab.key} value={tab.key}>
-            {tab.label}
-            {dirty.includes(tab.key) ? (
-              <>
-                <span aria-hidden className="size-1.5 rounded-full bg-info" />
-                <span className="sr-only">(unsaved changes)</span>
-              </>
-            ) : null}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </div>
+    <TabsList aria-label="Settings">
+      {TABS.map((tab) => (
+        <TabsTrigger
+          key={tab.key}
+          value={tab.key}
+          trailingSlot={
+            dirty.includes(tab.key) ? <Badge variant="info" label="Unsaved changes" /> : undefined
+          }
+        >
+          {tab.label}
+        </TabsTrigger>
+      ))}
+    </TabsList>
   );
 }

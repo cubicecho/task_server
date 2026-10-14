@@ -1,7 +1,7 @@
 import { useStore } from "@tanstack/react-form";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { FileUp, ScanSearch } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   AgentSpecPreviewDocument,
   type AgentSpecPreviewQuery,
@@ -11,8 +11,10 @@ import { CheckboxField, InputField, TextareaField, useAppForm } from "@/componen
 import { DialogLayout } from "@/components/dialog-layout";
 import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FilePickerButton } from "@/components/ui/file-picker";
 import { useToast } from "@/components/ui/toast";
 import { initialTicks, mayImport, overrides, readSpec, tickedSlugs } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
@@ -40,15 +42,9 @@ interface Draft {
 }
 
 /** What a list of the server's own sentences looks like, three times over. */
-function Lines({ lines, tone }: { lines: string[]; tone?: "refusal" }) {
+function Lines({ lines }: { lines: string[] }) {
   return (
-    <ul
-      className={
-        tone === "refusal"
-          ? "list-disc space-y-1 pl-5 text-negative text-sm"
-          : "list-disc space-y-1 pl-5 text-foreground/60 text-sm"
-      }
-    >
+    <ul className="list-disc space-y-1 pl-5 text-sm">
       {lines.map((line) => (
         <li key={line}>{line}</li>
       ))}
@@ -100,7 +96,6 @@ export function AgentImportDialog({
 }) {
   const toast = useToast();
   const [read, setRead] = useState<Read | null>(null);
-  const picker = useRef<HTMLInputElement>(null);
 
   const save = useMutation({
     mutationFn: (draft: Draft) => {
@@ -171,11 +166,7 @@ export function AgentImportDialog({
   const shown = current ? preview.data?.agentSpecPreview : undefined;
   const settled = !preview.isFetching && !preview.isPlaceholderData;
 
-  const choose = async (file: File | undefined) => {
-    if (!file) {
-      return;
-    }
-    const text = await file.text();
+  const choose = (text: string) => {
     form.setFieldValue("text", text);
     reading.mutate(text);
   };
@@ -215,25 +206,13 @@ export function AgentImportDialog({
             }}
           />
           <div className="flex justify-end gap-2">
-            <input
-              ref={picker}
-              type="file"
+            <FilePickerButton
+              label="Choose a file"
               accept=".json,application/json"
-              className="hidden"
-              aria-label="Agent spec file"
-              onChange={(event) => {
-                choose(event.target.files?.[0]);
-                // The same file chosen twice is still a choice, and an input that kept its value
-                // would not say so.
-                event.target.value = "";
-              }}
-            />
-            <Button
               variant="outline"
               size="sm"
-              onClick={() => picker.current?.click()}
+              onPick={choose}
               iconSlot={<FileUp />}
-              content="Choose a file"
             />
             <Button
               variant="outline"
@@ -258,10 +237,10 @@ export function AgentImportDialog({
           {shown ? (
             <>
               {shown.refusals.length ? (
-                <Section
+                <Alert
+                  variant="destructive"
                   title="Cannot be imported"
-                  divider
-                  contentSlot={<Lines lines={shown.refusals} tone="refusal" />}
+                  description={<Lines lines={shown.refusals} />}
                 />
               ) : null}
 
@@ -288,12 +267,9 @@ export function AgentImportDialog({
                           </span>
                         ) : (
                           overrides(shown.agent).map((one) => (
-                            <span
-                              key={one}
-                              className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
-                            >
+                            <Badge key={one} variant="outline" className="font-mono font-normal">
                               {one}
-                            </span>
+                            </Badge>
                           ))
                         )}
                       </div>
@@ -341,10 +317,10 @@ export function AgentImportDialog({
               ) : null}
 
               {shown.warnings.length ? (
-                <Section
+                <Alert
+                  variant="warning"
                   title="Worth knowing"
-                  divider
-                  contentSlot={<Lines lines={shown.warnings} />}
+                  description={<Lines lines={shown.warnings} />}
                 />
               ) : null}
 

@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
+import { FormField } from "@/components/form-field";
+import { EmptyState } from "@/components/page";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -130,9 +132,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
         contentSlot={
           <>
             {cron.length === 0 ? (
-              <p className="text-foreground/60 text-sm">
-                No schedule — the task only runs when you press play.
-              </p>
+              <EmptyState compact title="No schedule — the task only runs when you press play." />
             ) : null}
 
             {cron.map((trigger) => (
@@ -172,16 +172,17 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
               />
             ))}
 
-            <div className="flex gap-2 text-foreground/60 text-xs">
+            <div className="flex flex-wrap gap-2">
               {CRON_EXAMPLES.map((example) => (
-                <button
+                <Button
                   key={example.cron}
-                  type="button"
-                  className="rounded-md border px-2 py-1 hover:bg-hover"
+                  variant="outline"
+                  size="sm"
+                  hint={example.cron}
                   onClick={() => add({ ...emptyTrigger("cron"), cron: example.cron })}
-                >
-                  {example.label} <span className="font-mono">{example.cron}</span>
-                </button>
+                  iconSlot={<Plus />}
+                  content={example.label}
+                />
               ))}
             </div>
           </>
@@ -202,9 +203,7 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
         contentSlot={
           <>
             {webhooks.length === 0 ? (
-              <p className="text-foreground/60 text-sm">
-                No webhooks — nothing outside can start this task.
-              </p>
+              <EmptyState compact title="No webhooks — nothing outside can start this task." />
             ) : (
               <p className="text-foreground/60 text-sm">
                 A <code className="font-mono">POST</code> to one of these runs the task. There is no
@@ -231,32 +230,30 @@ export function TriggerEditor({ triggers, onChange, onRemoveSaved }: EditorProps
   );
 }
 
+/** What `FormField` wires onto a control. The registry does not export its own name for it. */
+type Wired = Pick<
+  ComponentProps<"input">,
+  "id" | "aria-labelledby" | "aria-describedby" | "aria-invalid" | "aria-required"
+>;
+
 /**
  * One trigger's controls in a row, with the reason it cannot be saved underneath.
  *
- * `content` is handed what the row's own input has to carry for that reason to be announced
- * with it, and nothing when there is none.
+ * `content` is handed what `FormField` wires onto a control — the error's id among it — for the
+ * row's own input to carry, so the reason is announced with the input it is about.
  */
 function TriggerRow({
   trigger,
   content,
 }: {
   trigger: DraftTrigger;
-  content: (invalid: { "aria-invalid"?: true; "aria-describedby"?: string }) => ReactNode;
+  content: (wired: Wired) => ReactNode;
 }) {
-  const problem = triggerProblem(trigger);
-  const id = `trigger-problem-${trigger.key}`;
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        {content(problem ? { "aria-invalid": true, "aria-describedby": id } : {})}
-      </div>
-      {problem ? (
-        <p id={id} role="alert" className="text-negative text-sm">
-          {problem}
-        </p>
-      ) : null}
-    </div>
+    <FormField
+      error={triggerProblem(trigger)}
+      controlSlot={(wired) => <div className="flex items-center gap-2">{content(wired)}</div>}
+    />
   );
 }
 
@@ -311,7 +308,6 @@ function WebhookRow({
             {/* The origin is shown but not editable: it is where this page came from, not a setting. */}
             <span className="shrink-0 text-foreground/60">{window.location.origin}/webhooks/</span>
             <Input
-              id={`webhook-${trigger.key}`}
               className="border-0 bg-transparent font-mono shadow-none focus-visible:ring-0"
               value={trigger.event}
               onChange={(input) => onChange(input.target.value.trim())}
