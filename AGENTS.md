@@ -558,9 +558,9 @@ copies a shell into `web/components/` rewritten against the local aliases — th
 dependency, and an installed file is this repo's to edit. What is here: `PageLayout` (every
 route's header, trail, action row and body), `DialogLayout` (title, body, `footerSlot` for a side
 control and `footerActionsSlot` for cancel/confirm, and the unsaved-changes guard), `Section`,
-`CardLayout`, `SplitLayout`, `QueryState` with `QueryError`, `DisclosureRow`, `ConfirmButton`,
-`FormField`, `FieldRow`, `OptionSelect`, `MultiSelect`, `PasswordInput`, `ModelSelect`'s field
-wrapper — and, since the registry began shipping its own, every primitive under
+`CardLayout`, `SplitLayout`, `QueryState` with `QueryError`, `Disclosure`, `DisclosureRow`,
+`List`, `StatTile`, `ConfirmButton`, `FormField`, `FieldRow`, `Combobox`, `PasswordInput`,
+`ModelSelect`'s field wrapper, `CodeBlock` and `CopyButton` — and, since the registry began shipping its own, every primitive under
 `web/components/ui/`. **No cubeui component takes `children`** — the body is `contentSlot`, and
 every other place an element goes is a prop ending in `Slot` (`actionSlot`, `emptySlot`,
 `iconSlot`, `breadcrumbsSlot`, `controlSlot`…), which is what stops a shell from being subclassed
@@ -614,14 +614,16 @@ is handed the dialog's own `close`, which is the one Escape, the overlay and the
 `onClose` — which is what all three did — Cancel was the fourth way out of a dialog and the only
 one that skipped the ask, which is also the one people click.
 
-**`OptionSelect` takes `options`, and it is not shadcn's `Select`.** The primitive at
-`@/components/ui/select` takes seven parts to assemble; the control at
-`@/components/option-select` takes a list — `{ value, label }`, plus `{ separator: true }` for a
-rule and `group` for a heading ([cubeui#5](https://github.com/cubicecho/cubeui/issues/5),
+**A choice from a list is `Combobox`, and it takes `options`.** The primitive at
+`@/components/ui/select` takes seven parts to assemble; the control at `@/components/combobox`
+takes a list — `SelectEntry` from `@/lib/select-options`: `{ value, label }`, plus
+`{ separator: true }` for a rule and `group` for a heading
+([cubeui#5](https://github.com/cubicecho/cubeui/issues/5),
 [#10](https://github.com/cubicecho/cubeui/issues/10)) — and spreads the rest of its props onto the
-trigger, which is the only element Radix's select root actually renders. That is what `FormField`'s
-function form hands a control, so it drops into one without a wrapper. The runs filter bar and the
-step editor's "Sees" are on it. So is `ModelSelect`, which fetches `/models` when the menu opens
+trigger. That is what `FormField`'s function form hands a control, so it drops into one without a
+wrapper. `multiple` makes it the many-of-a-list control, chips on the trigger and a Clear in the
+menu; the local `OptionSelect`, `MultiSelect` and `MultiSelectField` it replaced are gone, so do
+not reinstall them. The runs filter bar and the step editor's "Sees" are on it. So is `ModelSelect`, which fetches `/models` when the menu opens
 and says "Loading…" or the endpoint's error in it: `onOpenChange` is how it hears the opening, and
 a `{ note }` entry is a row that is not a choice — hidden from the listbox and announced from a
 status region beside the trigger, rather than a disabled option the keyboard walks onto
@@ -642,14 +644,29 @@ behind `@types/react`; read the `package.json` diff. And the linter is off for
 `web/components/ui/**` in `biome.json` for the reason it is off upstream — the files are vendored,
 and which of Biome's rules an update trips is not this repo's question to answer per rule.
 
+**App code names the meaning tokens, not shadcn's.** `primary`, `destructive`, `accent`,
+`muted`, `card` and `ring` are aliases the registry keeps so `web/components/ui/` reads the way
+shadcn wrote it, and they stay there. Outside it a colour says what it is: `text-foreground/60`
+for muted text (muted is an opacity, `/10` to `/90`, not a colour), `negative` for an error,
+`hover`, `active` for a focus ring, `secondary` for a raised surface, and `positive`, `warning`
+and `info` for state. A chosen card is ringed with `border-active`, not filled. `Badge` is the one
+exception: its variant is still called `destructive`.
+
+**A copy is `CopyButton`, and it says its own failure through `onError`.** It falls back to
+`execCommand` where `navigator.clipboard` is missing, which is every plain-http LAN address this
+server is likely reached on, and passes `onError` a toast rather than claiming a copy that did
+not happen. It takes no `disabled` and no `hint`, so a copy that has nothing to copy yet is a
+disabled `Button` with the `Copy` glyph in its place (`trigger-editor.tsx`).
+
 **Forms are `@tanstack/react-form`, through `web/components/app-form.tsx`.** Every field is one
 line, taking the form and the name — `<InputField form={form} name="name" label="Name" required
 validators={…} />` — and the error lands under the input as it is typed rather than as a toast on
 the way out. `name` is checked against the store, so a renamed field is a build error. That is the
 form to write: `form.AppField` with a render prop is the escape hatch for a field that has to read
 a sibling, and there is none of it in this app. The bound controls are `InputField`, `NumberField`,
-`TextareaField`, `SelectField`, `CheckboxField` and `SwitchField` from `app-form.tsx`, plus
-`ModelSelectField`, `MultiSelectField`, `PasswordField` and `RadioGroupField` from their own files,
+`TextareaField`, `SelectField`, `ComboboxField` (`multiple` for a list of ids), `CheckboxField`
+and `SwitchField` from `app-form.tsx`, plus `ModelSelectField`, `PasswordField` and
+`RadioGroupField` from their own files,
 used exactly the same way.
 
 Nothing at a call site writes `id`, `aria-describedby`, `aria-invalid`, or a `disabled` that
