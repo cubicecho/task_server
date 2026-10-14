@@ -74,7 +74,7 @@ export function AgentsRoute() {
             content="Import"
           />
           <Button
-            variant="info"
+            variant="positive"
             onClick={() => setCreating(true)}
             iconSlot={<Plus />}
             content="New profile"

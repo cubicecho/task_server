@@ -13,13 +13,13 @@ import {
   UpdateSettingsDocument,
 } from "@/__generated__/graphql/graphql";
 import { InputField, NumberField, TextareaField, useAppForm } from "@/components/app-form";
-import { CardLayout } from "@/components/card-layout";
 import { FieldRow } from "@/components/field-row";
 import { ModelSelectField } from "@/components/model-select-field";
 import { PageLayout } from "@/components/page-layout";
 import { PasswordField } from "@/components/password-field";
 import { QueryError } from "@/components/query-state";
 import { RadioGroupField } from "@/components/radio-group-field";
+import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { Check, CircleCheck, Copy } from "@/components/ui/icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -125,7 +125,6 @@ export function SettingsRoute() {
       <PageLayout
         title={TITLE}
         description={DESCRIPTION}
-        width="prose"
         loading={settings.isPending}
         contentSlot={
           settings.isError ? (
@@ -238,41 +237,36 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
   const open = (next: string) =>
     navigate({ to: "/settings", search: { tab: next as SettingsSection }, replace: true });
 
-  // Pinned under the scroller, and only there when there is something to do with it: the page
-  // is panels long, and a Save past the end of one of them is a Save you scroll to.
-  const bar =
-    dirty.length > 0 ? (
-      <div className="flex flex-wrap items-center gap-3 py-3">
-        <p className="flex-1 text-sm text-muted-foreground">
-          Unsaved changes on {dirty.map(sectionLabel).join(", ")}
-        </p>
-        <Button
-          variant="outline"
-          disabled={save.isPending}
-          onClick={() => {
-            form.reset(toForm(row));
-            setProbe(null);
-          }}
-          content="Revert"
-        />
-        <form.AppForm>
-          <form.SubmitButton variant="positive" form={FORM_ID} />
-        </form.AppForm>
-      </div>
-    ) : null;
+  // In the header, where the task editor keeps its Save, so it is in reach from every tab. The
+  // dot on each tab says which panels the unsaved changes are on.
+  const actions = (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        disabled={save.isPending || dirty.length === 0}
+        hint={dirty.length > 0 ? `Unsaved: ${dirty.map(sectionLabel).join(", ")}` : undefined}
+        onClick={() => {
+          form.reset(toForm(row));
+          setProbe(null);
+        }}
+        content="Revert"
+      />
+      <form.AppForm>
+        <form.SubmitButton variant="positive" form={FORM_ID} disabled={dirty.length === 0} />
+      </form.AppForm>
+    </div>
+  );
 
-  const panel = "flex flex-col gap-4 data-[state=inactive]:hidden";
+  const panel = "flex flex-col gap-6 data-[state=inactive]:hidden";
 
   return (
     <PageLayout
       title={TITLE}
       description={DESCRIPTION}
-      width="prose"
-      footerSlot={bar}
-      footerClassName="border-t"
+      actionSlot={actions}
       contentSlot={
         <Tabs value={tab} onValueChange={open}>
-          <div className="max-w-full overflow-x-auto">
+          <div className="max-w-full overflow-x-auto pb-2">
             <TabsList>
               {SETTINGS_SECTIONS.map((section) => (
                 <TabsTrigger key={section.key} value={section.key}>
@@ -296,7 +290,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
             }}
           >
             <TabsContent value="model" forceMount className={panel}>
-              <CardLayout
+              <Section
                 title="Endpoint"
                 description={
                   <>
@@ -372,7 +366,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                 }
               />
 
-              <CardLayout
+              <Section
                 title="Model"
                 contentSlot={
                   <div className="flex flex-col gap-4">
@@ -395,7 +389,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
             </TabsContent>
 
             <TabsContent value="limits" forceMount className={panel}>
-              <CardLayout
+              <Section
                 title="Limits"
                 description="What one run may spend."
                 contentSlot={
@@ -431,7 +425,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                 }
               />
 
-              <CardLayout
+              <Section
                 title="Resilience"
                 description="What a request does when the endpoint goes quiet or falls over."
                 contentSlot={
@@ -460,7 +454,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
             </TabsContent>
 
             <TabsContent value="tools" forceMount className={panel}>
-              <CardLayout
+              <Section
                 title="MCP tools"
                 contentSlot={
                   <div className="flex flex-col gap-4">
@@ -495,7 +489,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
             </TabsContent>
 
             <TabsContent value="server" forceMount className={panel}>
-              <CardLayout
+              <Section
                 title="Housekeeping"
                 description="What this process does on its own, with no trigger asking."
                 contentSlot={
@@ -526,7 +520,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
 
           {/* Outside the form: it edits nothing, and a button inside one is a submit. */}
           <TabsContent value="connect" forceMount className={panel}>
-            <CardLayout
+            <Section
               title="Connect an agent"
               description={
                 <>

@@ -579,10 +579,10 @@ button reaches nobody. `type` defaults to `button`, so a row action inside a `<f
 submit it. `ConfirmButton` is a `Button` with `title`, `description` and `onConfirm` in place of
 `onClick`.
 
-**A button's variant says what pressing it does, and the table is cubeui's.** `info` makes
-something (New task, New server, New profile) and `info-outline` adds a row to what is already
-open (Add, Add step, Add case); `positive` saves — every `form.SubmitButton` but the run
-dialog's, which starts a run rather than keeping anything; `destructive-outline` deletes or
+**A button's variant says what pressing it does.** `positive` makes or keeps something — the
+New buttons (New task, New server, New profile) and every `form.SubmitButton` but the run
+dialog's, which starts a run rather than keeping anything; `info-outline` adds a row to what is
+already open (Add, Add step, Add case); `destructive-outline` deletes or
 removes, `ConfirmButton` included; `outline` is everything quiet — Cancel, a row's edit and play
 icons, Test connection, Import. `default` is for the one emphasis nothing else names. `ghost`,
 `link` and `secondary` are not picked here: the first two exist for porting, and the third is

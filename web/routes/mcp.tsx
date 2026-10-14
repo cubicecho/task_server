@@ -100,7 +100,7 @@ export function McpRoute() {
             content="Reconnect all"
           />
           <Button
-            variant="info"
+            variant="positive"
             onClick={() => setCreating(true)}
             iconSlot={<Plus />}
             content="New server"
