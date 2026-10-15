@@ -1,7 +1,7 @@
-import { XCircle } from "lucide-react";
 import type { TestMcpServerMutation } from "@/__generated__/graphql/graphql";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { CircleCheck } from "@/components/ui/icons";
-import { cn } from "@/lib/utils";
 
 /**
  * The probe as the document selects it. graphql-codegen 7 emits types for operations only, so
@@ -17,37 +17,35 @@ export type McpProbe = TestMcpServerMutation["testMcpServer"];
  * only one of them bolded the heading, and only one drew a red border around a failure.
  */
 export function McpProbeResult({ probe, className }: { probe: McpProbe; className?: string }) {
+  if (!probe.ok) {
+    return (
+      <Alert
+        variant="destructive"
+        title="Could not connect"
+        description={<span className="whitespace-pre-wrap font-mono text-xs">{probe.error}</span>}
+        className={className}
+      />
+    );
+  }
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-2 rounded-md border p-3 text-sm",
-        !probe.ok && "border-negative",
-        className,
-      )}
-    >
-      <div className="flex items-center gap-2 font-medium">
-        {probe.ok ? (
-          <CircleCheck className="size-4" aria-hidden />
-        ) : (
-          <XCircle className="size-4 text-negative" aria-hidden />
-        )}
-        {probe.ok ? `Connected — ${probe.tools.length} tool(s)` : "Could not connect"}
-      </div>
-      {probe.ok ? (
-        <div className="flex flex-wrap gap-1">
+    <Alert
+      iconSlot={<CircleCheck />}
+      title={`Connected — ${probe.tools.length} tool(s)`}
+      description={
+        <span className="flex flex-wrap gap-1 pt-1">
           {probe.tools.map((tool) => (
-            <span
+            <Badge
               key={tool.name}
               title={tool.description}
-              className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
+              variant="outline"
+              className="font-mono font-normal"
             >
               {tool.name}
-            </span>
+            </Badge>
           ))}
-        </div>
-      ) : (
-        <p className="whitespace-pre-wrap font-mono text-negative text-xs">{probe.error}</p>
-      )}
-    </div>
+        </span>
+      }
+      className={className}
+    />
   );
 }

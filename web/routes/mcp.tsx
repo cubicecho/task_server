@@ -13,18 +13,13 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { List } from "@/components/list";
 import { McpDialog } from "@/components/mcp-dialog";
 import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
+import { EmptyState } from "@/components/page";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Pencil, Plug, Plus, RefreshCw, Trash2 } from "@/components/ui/icons";
 import {
   Item,
@@ -127,17 +122,11 @@ export function McpRoute() {
                 what="your MCP servers"
                 count={rows.length}
                 emptySlot={
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <Plug />
-                      </EmptyMedia>
-                      <EmptyTitle>No servers yet</EmptyTitle>
-                      <EmptyDescription>
-                        Without one a task can think, but not act.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
+                  <EmptyState
+                    iconSlot={<Plug />}
+                    title="No servers yet"
+                    description="Without one a task can think, but not act."
+                  />
                 }
               />
 
@@ -214,10 +203,15 @@ export function McpRoute() {
                       </ItemActions>
 
                       {status?.error ? (
-                        <ItemFooter>
-                          <p className="whitespace-pre-wrap font-mono text-negative text-xs">
-                            {status.error}
-                          </p>
+                        <ItemFooter className="flex-col items-stretch">
+                          <Alert
+                            variant="destructive"
+                            description={
+                              <span className="whitespace-pre-wrap font-mono text-xs">
+                                {status.error}
+                              </span>
+                            }
+                          />
                         </ItemFooter>
                       ) : null}
 

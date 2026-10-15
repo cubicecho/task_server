@@ -3,7 +3,7 @@
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import type * as React from "react";
 import { type ButtonProps, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { bridgePress, cn } from "@/lib/utils";
 
 /** The root of a dialog that must be answered: it holds the open state. */
 function AlertDialog({ ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
@@ -12,9 +12,19 @@ function AlertDialog({ ...props }: React.ComponentProps<typeof AlertDialogPrimit
 
 /** The element that opens the alert dialog. */
 function AlertDialogTrigger({
+  asChild,
+  children,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
-  return <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />;
+  return (
+    <AlertDialogPrimitive.Trigger
+      data-slot="alert-dialog-trigger"
+      asChild={asChild ?? false}
+      {...props}
+    >
+      {asChild ? bridgePress(children) : children}
+    </AlertDialogPrimitive.Trigger>
+  );
 }
 
 /** Where the alert dialog is mounted, outside the tree that opened it. */

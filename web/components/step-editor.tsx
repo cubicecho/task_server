@@ -1,4 +1,5 @@
 import { GitBranch } from "lucide-react";
+import { CardLayout } from "@/components/card-layout";
 import { Combobox } from "@/components/combobox";
 import { Disclosure } from "@/components/disclosure";
 import { FieldRow } from "@/components/field-row";
@@ -6,6 +7,7 @@ import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { Section } from "@/components/section";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, Plus, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -173,190 +175,204 @@ function StepCard({
   };
 
   return (
-    <div className="rounded-lg border bg-secondary">
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <span className="shrink-0 rounded-md border px-2 py-0.5 text-xs text-foreground/60">
-          {decision ? "decision" : "step"}
-        </span>
-        <Input
-          className="h-8 border-0 px-1 font-medium shadow-none focus-visible:ring-0"
-          value={step.name}
-          onChange={(event) => patch({ name: event.target.value })}
-          placeholder={decision ? "Name this decision" : "Name this step"}
-          aria-label={decision ? "Decision name" : "Step name"}
-        />
-        <Switch
-          checked={step.enabled}
-          onCheckedChange={(enabled) => patch({ enabled })}
-          aria-label="Enabled"
-          title={step.enabled ? "Runs" : "Skipped"}
-        />
-        <Button
-          aria-label="Move up"
-          variant="outline"
-          size="icon"
-          disabled={first}
-          onClick={() => onMove(-1)}
-          iconSlot={<ChevronUp />}
-        />
-        <Button
-          aria-label="Move down"
-          variant="outline"
-          size="icon"
-          disabled={last}
-          onClick={() => onMove(1)}
-          iconSlot={<ChevronDown />}
-        />
-        <Button
-          aria-label={decision ? "Remove this decision" : "Remove this step"}
-          variant="destructive-outline"
-          size="icon"
-          onClick={onRemove}
-          iconSlot={<Trash2 />}
-        />
-      </div>
-
-      <div className="flex flex-col gap-3 p-3">
-        <Textarea
-          value={step.prompt}
-          onChange={(event) => patch({ prompt: event.target.value })}
-          rows={3}
-          aria-label={decision ? "What is being decided" : "Prompt"}
-          placeholder={
-            decision
-              ? "Do any of these report an application error?"
-              : "Write what came back to ~/notes/errors.md — {{previous}}"
-          }
-        />
-
-        {/* A flex child of the column above rather than a row of its own: the picker draws
-            nothing where no MCP server offers prompts, and an empty wrapper would still take
-            the column's gap on every step of every flow. */}
-        <McpPromptButton
-          className="self-end"
-          onInsert={(text) => patch({ prompt: withPrompt(step.prompt, text) })}
-        />
-
-        {decision ? (
-          <Section
-            title="Cases"
-            actionSlot={
-              <Button
-                variant="info-outline"
-                size="sm"
-                onClick={() => patch({ cases: [...step.cases, ""] })}
-                iconSlot={<Plus />}
-                content="Add case"
+    <CardLayout
+      title={step.name || (decision ? "Unnamed decision" : "Unnamed step")}
+      iconSlot={decision ? <GitBranch /> : undefined}
+      actionSlot={
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{decision ? "decision" : "step"}</Badge>
+          <Switch
+            checked={step.enabled}
+            onCheckedChange={(enabled) => patch({ enabled })}
+            aria-label="Enabled"
+            title={step.enabled ? "Runs" : "Skipped"}
+          />
+          <Button
+            aria-label="Move up"
+            variant="outline"
+            size="icon"
+            disabled={first}
+            onClick={() => onMove(-1)}
+            iconSlot={<ChevronUp />}
+          />
+          <Button
+            aria-label="Move down"
+            variant="outline"
+            size="icon"
+            disabled={last}
+            onClick={() => onMove(1)}
+            iconSlot={<ChevronDown />}
+          />
+          <Button
+            aria-label={decision ? "Remove this decision" : "Remove this step"}
+            variant="destructive-outline"
+            size="icon"
+            onClick={onRemove}
+            iconSlot={<Trash2 />}
+          />
+        </div>
+      }
+      contentClassName="flex flex-col gap-3"
+      contentSlot={
+        <>
+          <FormField
+            label="Name"
+            controlSlot={
+              <Input
+                value={step.name}
+                onChange={(event) => patch({ name: event.target.value })}
+                placeholder={decision ? "Name this decision" : "Name this step"}
               />
             }
-            contentSlot={
-              <>
-                <div className="flex flex-wrap gap-2">
-                  {step.cases.map((label, index) => (
-                    // Cases are reordered by nothing and renamed in place, so the index is stable.
-                    // biome-ignore lint/suspicious/noArrayIndexKey: no id, and the list is positional
-                    <div key={index} className="flex items-center gap-1">
-                      <Input
-                        className={cn("h-8 w-40 font-mono", duplicate(index) && "border-negative")}
-                        value={label}
-                        onChange={(event) => setCase(index, event.target.value)}
-                        placeholder="error"
-                        aria-label={`Case ${index + 1}`}
-                        aria-invalid={duplicate(index)}
-                      />
-                      <Button
-                        aria-label="Remove this case"
-                        variant="destructive-outline"
-                        size="icon"
-                        onClick={() => dropCase(index)}
-                        iconSlot={<X />}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {/* Said here rather than at save time: the server refuses the whole flow over it,
-                    and by then it is a message about a step you have scrolled away from. */}
-                {step.cases.some((_, index) => duplicate(index)) ? (
-                  <p className="text-negative text-xs">
-                    Two cases spelling the same thing are one case. Rename or remove one.
-                  </p>
-                ) : null}
-              </>
+          />
+          <FormField
+            label={decision ? "What is being decided" : "Prompt"}
+            controlSlot={
+              <Textarea
+                value={step.prompt}
+                onChange={(event) => patch({ prompt: event.target.value })}
+                rows={3}
+                placeholder={
+                  decision
+                    ? "Do any of these report an application error?"
+                    : "Write what came back to ~/notes/errors.md — {{previous}}"
+                }
+              />
             }
           />
-        ) : null}
 
-        <Disclosure
-          title="Model, system prompt, context"
-          contentSlot={
-            <FieldRow
-              perRow={3}
+          {/* A flex child of the column above rather than a row of its own: the picker draws
+            nothing where no MCP server offers prompts, and an empty wrapper would still take
+            the column's gap on every step of every flow. */}
+          <McpPromptButton
+            className="self-end"
+            onInsert={(text) => patch({ prompt: withPrompt(step.prompt, text) })}
+          />
+
+          {decision ? (
+            <Section
+              title="Cases"
+              actionSlot={
+                <Button
+                  variant="info-outline"
+                  size="sm"
+                  onClick={() => patch({ cases: [...step.cases, ""] })}
+                  iconSlot={<Plus />}
+                  content="Add case"
+                />
+              }
               contentSlot={
                 <>
-                  <FormField
-                    label="Model"
-                    // The function form: `ModelSelect` puts the id on whichever of its two controls
-                    // is on screen.
-                    controlSlot={(wired) => (
-                      <ModelSelect
-                        {...wired}
-                        value={step.model}
-                        onValueChange={(model) => patch({ model })}
-                        defaultLabel="Same as the task"
-                      />
-                    )}
-                  />
-                  <FormField
-                    label="System prompt"
-                    controlSlot={
-                      <Input
-                        value={step.systemPrompt}
-                        onChange={(event) => patch({ systemPrompt: event.target.value })}
-                        placeholder="(same as the task)"
-                      />
-                    }
-                  />
-                  <FormField
-                    label="Sees"
-                    // Still the function form: the control spreads what it is handed onto the
-                    // trigger, and the trigger is the only element a Radix select renders.
-                    controlSlot={(wired) => (
-                      <Combobox
-                        {...wired}
-                        value={step.context}
-                        onValueChange={(context) => patch({ context: context as StepContext })}
-                        options={CONTEXTS.map((context) => ({
-                          value: context,
-                          label: CONTEXT_LABELS[context],
-                        }))}
-                      />
-                    )}
-                  />
+                  <div className="flex flex-wrap gap-2">
+                    {step.cases.map((label, index) => (
+                      // Cases are reordered by nothing and renamed in place, so the index is stable.
+                      // biome-ignore lint/suspicious/noArrayIndexKey: no id, and the list is positional
+                      <div key={index} className="flex items-center gap-1">
+                        <Input
+                          className={cn(
+                            "h-8 w-40 font-mono",
+                            duplicate(index) && "border-negative",
+                          )}
+                          value={label}
+                          onChange={(event) => setCase(index, event.target.value)}
+                          placeholder="error"
+                          aria-label={`Case ${index + 1}`}
+                          aria-invalid={duplicate(index)}
+                        />
+                        <Button
+                          aria-label="Remove this case"
+                          variant="destructive-outline"
+                          size="icon"
+                          onClick={() => dropCase(index)}
+                          iconSlot={<X />}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {/* Said here rather than at save time: the server refuses the whole flow over it,
+                    and by then it is a message about a step you have scrolled away from. */}
+                  {step.cases.some((_, index) => duplicate(index)) ? (
+                    <p className="text-negative text-xs">
+                      Two cases spelling the same thing are one case. Rename or remove one.
+                    </p>
+                  ) : null}
                 </>
               }
             />
-          }
-        />
+          ) : null}
 
-        {decision
-          ? arms.map((arm, index) => (
-              // Keyed by position: two cases can briefly share a name while one is being typed.
-              // biome-ignore lint/suspicious/noArrayIndexKey: the arms follow `cases` positionally
-              <div key={index} className="border-l-2 pl-3">
-                <p className="mb-2 font-mono text-xs text-foreground/60">
-                  {arm.case === DEFAULT_BRANCH
-                    ? "default — anything else"
-                    : arm.case || "(unnamed)"}
-                </p>
-                <StepList
-                  steps={arm.steps}
-                  depth={depth + 1}
-                  onChange={(steps) => setArm(arm.case, steps)}
-                />
-              </div>
-            ))
-          : null}
-      </div>
-    </div>
+          <Disclosure
+            title="Model, system prompt, context"
+            contentSlot={
+              <FieldRow
+                perRow={3}
+                contentSlot={
+                  <>
+                    <FormField
+                      label="Model"
+                      // The function form: `ModelSelect` puts the id on whichever of its two controls
+                      // is on screen.
+                      controlSlot={(wired) => (
+                        <ModelSelect
+                          {...wired}
+                          value={step.model}
+                          onValueChange={(model) => patch({ model })}
+                          defaultLabel="Same as the task"
+                        />
+                      )}
+                    />
+                    <FormField
+                      label="System prompt"
+                      controlSlot={
+                        <Input
+                          value={step.systemPrompt}
+                          onChange={(event) => patch({ systemPrompt: event.target.value })}
+                          placeholder="(same as the task)"
+                        />
+                      }
+                    />
+                    <FormField
+                      label="Sees"
+                      // Still the function form: the control spreads what it is handed onto the
+                      // trigger, and the trigger is the only element a Radix select renders.
+                      controlSlot={(wired) => (
+                        <Combobox
+                          {...wired}
+                          value={step.context}
+                          onValueChange={(context) => patch({ context: context as StepContext })}
+                          options={CONTEXTS.map((context) => ({
+                            value: context,
+                            label: CONTEXT_LABELS[context],
+                          }))}
+                        />
+                      )}
+                    />
+                  </>
+                }
+              />
+            }
+          />
+
+          {decision
+            ? arms.map((arm, index) => (
+                // Keyed by position: two cases can briefly share a name while one is being typed.
+                // biome-ignore lint/suspicious/noArrayIndexKey: the arms follow `cases` positionally
+                <div key={index} className="border-l-2 pl-3">
+                  <p className="mb-2 font-mono text-xs text-foreground/60">
+                    {arm.case === DEFAULT_BRANCH
+                      ? "default — anything else"
+                      : arm.case || "(unnamed)"}
+                  </p>
+                  <StepList
+                    steps={arm.steps}
+                    depth={depth + 1}
+                    onChange={(steps) => setArm(arm.case, steps)}
+                  />
+                </div>
+              ))
+            : null}
+        </>
+      }
+    />
   );
 }

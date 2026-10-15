@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from "@/components/ui/icons";
+import { IconClassContext } from "@/components/ui/icons-base";
 import { cn } from "@/lib/utils";
 
 /** What kind of message a toast is, which picks its colour and how long it stays. */
@@ -20,18 +22,17 @@ const DURATION_MS: Record<ToastTone, number> = {
   info: 3000,
 };
 
-const TONE_CLASS: Record<ToastTone, string> = {
-  error: "bg-negative",
-  warning: "bg-warning",
-  positive: "bg-positive",
-  info: "bg-info",
-};
-
-const TONE_TEXT_CLASS: Record<ToastTone, string> = {
-  error: "text-negative-foreground",
-  warning: "text-warning-foreground",
-  positive: "text-positive-foreground",
-  info: "text-info-foreground",
+/**
+ * The tone's glyph and its ink: the only place the tone's hue reaches the toast. The box is a
+ * raised surface and the words are the foreground, so a toast does not read as a filled button —
+ * which a block of `bg-negative` with white text beside an ✕ was — and the tone is said by a shape
+ * as well as a colour.
+ */
+const TONE_ICON: Record<ToastTone, { glyph: ReactNode; ink: string }> = {
+  error: { glyph: <CircleAlert />, ink: "text-negative" },
+  warning: { glyph: <TriangleAlert />, ink: "text-warning" },
+  positive: { glyph: <CircleCheck />, ink: "text-positive" },
+  info: { glyph: <Info />, ink: "text-info" },
 };
 
 /**
@@ -45,6 +46,8 @@ const VIEWPORT_STYLE = {
   position: "fixed",
   right: 16,
   bottom: 16,
+  width: 384,
+  maxWidth: "calc(100vw - 32px)",
   zIndex: 50,
 } as React.CSSProperties;
 
@@ -100,35 +103,35 @@ export function ToastProvider({ children }: { children: ReactNode }) {
            * was true on device, where the role told the screen reader it was looking at a
            * message and not at something to activate.
            */}
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              role="alert"
-              className={cn(
-                "cube-rn-view",
-                `max-w-sm flex-row items-start gap-3 rounded-lg px-4 py-3 shadow-lg ${TONE_CLASS[toast.tone]}`,
-              )}
-            >
-              <span className={cn("cube-rn-text", `flex-1 text-sm ${TONE_TEXT_CLASS[toast.tone]}`)}>
-                {toast.message}
-              </span>
-              <button
-                type="button"
-                onClick={() => dismiss(toast.id)}
-                aria-label="Dismiss"
-                className="cube-rn-view cube-rn-pressable shrink-0"
+          {toasts.map((toast) => {
+            const { glyph, ink } = TONE_ICON[toast.tone];
+            return (
+              <div
+                key={toast.id}
+                role="alert"
+                className="cube-rn-view w-full flex-row items-start gap-3 rounded-lg border border-foreground/10 bg-secondary px-4 py-3 shadow-lg"
               >
-                <span
-                  className={cn(
-                    "cube-rn-text",
-                    `text-sm font-semibold ${TONE_TEXT_CLASS[toast.tone]}`,
-                  )}
+                <div aria-hidden className={cn("cube-rn-view", "mt-0.5 shrink-0", ink)}>
+                  <IconClassContext.Provider value={cn("size-4 shrink-0", ink)}>
+                    {glyph}
+                  </IconClassContext.Provider>
+                </div>
+                <span className="cube-rn-text flex-1 text-sm text-foreground">{toast.message}</span>
+                <button
+                  type="button"
+                  onClick={() => dismiss(toast.id)}
+                  aria-label="Dismiss"
+                  // The ink is on the press target too, not only in the context: the glyph draws in
+                  // `currentColor`, and a `<button>` resets that to the UA's black.
+                  className="cube-rn-view cube-rn-pressable -m-1 shrink-0 rounded-md p-1 text-foreground/60"
                 >
-                  ×
-                </span>
-              </button>
-            </div>
-          ))}
+                  <IconClassContext.Provider value="size-4 text-foreground/60">
+                    <X />
+                  </IconClassContext.Provider>
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </ToastContext.Provider>

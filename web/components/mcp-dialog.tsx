@@ -323,9 +323,7 @@ export function McpDialog({
               hint: tool.description ?? undefined,
             }))}
             // A server that is not connected lists nothing, and a name can still be typed.
-            onCreateOption={(name) =>
-              form.setFieldValue("hiddenTools", (hidden) => [...new Set([...hidden, name.trim()])])
-            }
+            freeText
             createLabel="Hide"
           />
 
@@ -369,12 +367,8 @@ export function McpDialog({
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
             {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
-                server would refuse. Passing `disabled` tightens the store's own two reasons. */}
-            <form.Subscribe selector={(state) => state.isDefaultValue}>
-              {(untouched) => (
-                <form.SubmitButton variant="positive" form="mcp-server" disabled={untouched} />
-              )}
-            </form.Subscribe>
+                server would refuse. */}
+            <form.SubmitButton variant="positive" form="mcp-server" requireChanges />
           </form.AppForm>
         </>
       )}

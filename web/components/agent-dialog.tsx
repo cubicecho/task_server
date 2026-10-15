@@ -333,12 +333,8 @@ export function AgentDialog({
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
             {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
-                server would refuse. Passing `disabled` tightens the store's own two reasons. */}
-            <form.Subscribe selector={(state) => state.isDefaultValue}>
-              {(untouched) => (
-                <form.SubmitButton variant="positive" form="agent-profile" disabled={untouched} />
-              )}
-            </form.Subscribe>
+                server would refuse. */}
+            <form.SubmitButton variant="positive" form="agent-profile" requireChanges />
           </form.AppForm>
         </>
       )}

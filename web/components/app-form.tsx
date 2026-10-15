@@ -1,7 +1,7 @@
 import type { DeepKeys, DeepValue } from "@tanstack/react-form";
 import { createFormHook, createFormHookContexts, useStore } from "@tanstack/react-form";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type {
   ComboboxMultipleProps,
   ComboboxSingleProps,
@@ -134,7 +134,13 @@ type NumberFieldProps = FieldProps &
   Omit<
     ComponentProps<typeof Input>,
     "id" | "value" | "defaultValue" | "onChange" | "onChangeText" | "onBlur" | "type"
-  >;
+  > & {
+    /**
+     * Whole numbers only: the digits keypad on device, a step of 1 on the web, and a fraction such
+     * as `1.5` stores `null` (as a half-typed `-` does) for a validator to report, not a rounding.
+     */
+    integer?: boolean | undefined;
+  };
 
 /**
  * A number input whose store stays numeric.
@@ -150,7 +156,7 @@ type NumberFieldProps = FieldProps &
  * is kept as a draft and shown while it still *means* the stored number; anything that replaces
  * the value from outside wins, because then it no longer does.
  */
-function BoundNumberField(props: NumberFieldProps) {
+function BoundNumberField({ integer = false, ...props }: NumberFieldProps) {
   const [fieldProps, input] = splitProps(props);
   const field = useFieldContext<number | null>();
   const error = useFieldError();
@@ -166,10 +172,11 @@ function BoundNumberField(props: NumberFieldProps) {
         <Input
           // `inputMode` is what gets a phone keypad; `type` is what gets the spinners and the
           // browser's own numeric parsing. They are not the same knob and both are wanted.
-          inputMode="decimal"
+          inputMode={integer ? "numeric" : "decimal"}
+          {...(integer ? { step: 1 } : {})}
           {...input}
           type="number"
-          value={numberText(draft, stored)}
+          value={numberText(draft, stored, integer)}
           onBlur={() => {
             // The draft has served its purpose once focus leaves: `1.` should settle to `1`.
             setDraft(undefined);
@@ -177,7 +184,7 @@ function BoundNumberField(props: NumberFieldProps) {
           }}
           onChangeText={(text) => {
             setDraft(text);
-            field.handleChange(parseNumber(text));
+            field.handleChange(parseNumber(text, integer));
           }}
         />
       }
@@ -376,10 +383,40 @@ function BoundSingleComboboxField(props: SingleComboboxFieldProps) {
   );
 }
 
+/**
+ * A `freeText` menu's refusal, put on the field as its error while it stands and taken off after,
+ * so the field turns red and says why as it does for a validator's message. Only its own message
+ * is taken off: a validator's error that replaced it in the meantime stays.
+ */
+function useRefusalError(field: ReturnType<typeof useFieldContext<readonly string[] | null>>) {
+  const shown = useRef<string | undefined>(undefined);
+  return useCallback(
+    (message: string | undefined) => {
+      const standing = field.state.meta.errorMap.onChange;
+      if (message !== undefined) {
+        if (standing === message) {
+          return;
+        }
+        shown.current = message;
+        field.setMeta((prev) => ({
+          ...prev,
+          isTouched: true,
+          errorMap: { ...prev.errorMap, onChange: message },
+        }));
+      } else if (shown.current !== undefined && standing === shown.current) {
+        shown.current = undefined;
+        field.setErrorMap({ onChange: undefined });
+      }
+    },
+    [field],
+  );
+}
+
 function BoundMultipleComboboxField(props: MultipleComboboxFieldProps) {
   const [fieldProps, { multiple: _multiple, triggerClassName, ...control }] = splitProps(props);
   const field = useFieldContext<readonly string[] | null>();
   const error = useFieldError();
+  const onRefusalChange = useRefusalError(field);
 
   return (
     <FormField
@@ -388,6 +425,7 @@ function BoundMultipleComboboxField(props: MultipleComboboxFieldProps) {
       controlSlot={(wired) => (
         <Combobox
           {...control}
+          {...(control.freeText === true ? { onRefusalChange } : {})}
           {...wired}
           multiple
           className={triggerClassName}
@@ -471,6 +509,13 @@ function BoundSwitchField(props: SwitchFieldProps) {
 type SubmitButtonProps = ButtonPropsWithout<"type" | "loading" | "loadingLabel"> & {
   /** What it says mid-flight. The label is replaced, not appended to. */
   pendingLabel?: string | undefined;
+  /**
+   * Disabled while every value is still its default, for an edit form whose Save means nothing
+   * until something changes. Read from the store's `isDefaultValue`, not `isDirty`, so a value
+   * typed and typed back disables it again. Off by default: a create form, or one replaying what
+   * is already in the box, is right to submit untouched.
+   */
+  requireChanges?: boolean | undefined;
 };
 
 /**
@@ -482,10 +527,10 @@ type SubmitButtonProps = ButtonPropsWithout<"type" | "loading" | "loadingLabel">
  *
  * `disabled` is a third reason, not a replacement for the two: it is OR-ed in, so a caller can
  * only ever *tighten* the guard. The reasons the store cannot know are real ones — a mutation in
- * flight on the other half of the screen, a settings form that is valid but unchanged — and
- * without a way to say them the whole component gets dropped for a hand-written
- * `<Button type="submit">` that re-derives `canSubmit` and `isSubmitting`, which is the
- * duplication this exists to remove.
+ * flight on the other half of the screen — and without a way to say them the whole component gets
+ * dropped for a hand-written `<Button type="submit">` that re-derives `canSubmit` and
+ * `isSubmitting`, which is the duplication this exists to remove. A form that is valid but
+ * unchanged is a reason the store does know, and `requireChanges` says it.
  *
  * Inside a `<form>`, or naming one with `form="…"`, it is a submit control and the form's own
  * `onSubmit` runs. With no form to submit — a dialog's `footerActionsSlot`, a card's footer —
@@ -496,12 +541,14 @@ export function SubmitButton({
   content = "Save",
   pendingLabel = "Saving…",
   disabled,
+  requireChanges = false,
   onClick,
   ...props
 }: SubmitButtonProps) {
   const form = useFormContext();
   const canSubmit = useStore(form.store, (state) => state.canSubmit);
   const isSubmitting = useStore(form.store, (state) => state.isSubmitting);
+  const untouched = useStore(form.store, (state) => state.isDefaultValue);
 
   // Ahead of the spread as well as OR-ed, so that neither a caller nor a future prop can put a
   // `disabled={false}` back over the store's answer.
@@ -516,7 +563,7 @@ export function SubmitButton({
           form.handleSubmit();
         }
       }}
-      disabled={disabled || canSubmit === false}
+      disabled={disabled || canSubmit === false || (requireChanges && untouched)}
       loading={isSubmitting}
       loadingLabel={pendingLabel}
       content={content}

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { ListChecks } from "lucide-react";
 import { useState } from "react";
 import {
   DeleteTaskDocument,
@@ -9,18 +10,12 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { ConfirmButton } from "@/components/confirm-button";
 import { List } from "@/components/list";
+import { EmptyState } from "@/components/page";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import { Pencil, Play, Plus, Square, Trash2 } from "@/components/ui/icons";
 import {
   Item,
@@ -115,15 +110,12 @@ export function TasksRoute() {
             what="your tasks"
             count={rows.length}
             emptySlot={
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>No tasks yet</EmptyTitle>
-                  <EmptyDescription>
-                    Create one, give it a cron expression, and it runs on its own.
-                  </EmptyDescription>
-                </EmptyHeader>
-                <EmptyContent>{newTask}</EmptyContent>
-              </Empty>
+              <EmptyState
+                iconSlot={<ListChecks />}
+                title="No tasks yet"
+                description="Create one, give it a cron expression, and it runs on its own."
+                actionSlot={newTask}
+              />
             }
           />
 
@@ -212,25 +204,30 @@ export function TasksRoute() {
                       // fault, when it is simply a different kind of trigger.
                       if (trigger.kind === "event") {
                         return (
-                          <span key={trigger.id} className="rounded-md border px-2 py-1 font-mono">
+                          <Badge
+                            key={trigger.id}
+                            variant="outline"
+                            className="font-mono font-normal"
+                          >
                             POST /webhooks/{trigger.event}
-                          </span>
+                          </Badge>
                         );
                       }
                       const next = nextRuns.get(trigger.id);
                       return (
-                        <span
+                        <Badge
                           key={trigger.id}
-                          className="rounded-md border px-2 py-1 font-mono"
+                          variant="outline"
+                          className="font-mono font-normal"
                           title={next ? `next: ${new Date(next).toLocaleString()}` : undefined}
                         >
                           {trigger.cron}
                           {trigger.timezone ? ` (${trigger.timezone})` : ""}
                           {next ? ` · next ${new Date(next).toLocaleString()}` : " · not scheduled"}
-                        </span>
+                        </Badge>
                       );
                     })}
-                    {task.model ? <span className="px-1 py-1">model: {task.model}</span> : null}
+                    {task.model ? <span>model: {task.model}</span> : null}
                   </ItemFooter>
                 </Item>
               );

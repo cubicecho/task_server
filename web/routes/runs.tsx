@@ -1,5 +1,6 @@
 import type { HookNote } from "@cubicecho/agent-core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { History } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   DeleteRunDocument,
@@ -15,14 +16,15 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { Disclosure } from "@/components/disclosure";
 import { DisclosureRow } from "@/components/disclosure-row";
 import { List } from "@/components/list";
+import { EmptyState } from "@/components/page";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Play, RefreshCw, Square, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
@@ -69,16 +71,14 @@ function ToolChips({ calls }: { calls: unknown }) {
   return (
     <div className="flex flex-wrap gap-1">
       {tools.map((tool, index) => (
-        <span
+        <Badge
           // biome-ignore lint/suspicious/noArrayIndexKey: a finished run's tool list never changes, and the same tool may appear in it twice
           key={`${tool.name}-${index}`}
-          className={cn(
-            "rounded-md border px-2 py-0.5 font-mono text-xs",
-            tool.ok ? "text-foreground/60" : "border-negative text-negative",
-          )}
+          variant={tool.ok ? "outline" : "destructive"}
+          className="font-mono font-normal"
         >
           {tool.name}
-        </span>
+        </Badge>
       ))}
     </div>
   );
@@ -111,7 +111,7 @@ function HookNotes({ notes }: { notes: unknown }) {
                 {note.tokens ? ` · ${note.tokens} tokens` : ""}
               </span>
               {note.error ? (
-                <p className="whitespace-pre-wrap text-negative">{note.error}</p>
+                <Alert variant="destructive" description={note.error} />
               ) : (
                 <CodeBlock content={note.text ?? ""} wrap maxHeight="md" />
               )}
@@ -152,11 +152,8 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
           </div>
           <ToolChips calls={step.toolCalls} />
           <HookNotes notes={step.hooks} />
-          {step.error || step.output ? (
-            <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-              {step.error || step.output}
-            </pre>
-          ) : null}
+          {step.error ? <Alert variant="destructive" description={step.error} /> : null}
+          {!step.error && step.output ? <CodeBlock content={step.output} wrap /> : null}
         </li>
       ))}
     </ol>
@@ -218,14 +215,16 @@ function RunDetail({
     <>
       <RunSteps steps={found.steps} />
       {/* The run failed before or between steps — nothing above says why. */}
-      {run.error ? <p className="text-negative text-sm">{run.error}</p> : null}
+      {run.error ? <Alert variant="destructive" description={run.error} /> : null}
     </>
   ) : (
     <>
       <ToolChips calls={found.toolCalls} />
-      <pre className="overflow-x-auto whitespace-pre-wrap text-sm">
-        {run.error || run.output || NO_OUTPUT}
-      </pre>
+      {run.error ? (
+        <Alert variant="destructive" description={run.error} />
+      ) : (
+        <CodeBlock content={run.output || NO_OUTPUT} wrap />
+      )}
     </>
   );
 
@@ -416,16 +415,15 @@ export function RunsRoute() {
             what="the run history"
             count={rows.length}
             emptySlot={
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>{filtered ? "No matches" : "Nothing has run yet"}</EmptyTitle>
-                  <EmptyDescription>
-                    {filtered
-                      ? "No runs match these filters."
-                      : "A run appears here the moment a task starts — by schedule, by webhook, or by hand."}
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
+              <EmptyState
+                iconSlot={<History />}
+                title={filtered ? "No matches" : "Nothing has run yet"}
+                description={
+                  filtered
+                    ? "No runs match these filters."
+                    : "A run appears here the moment a task starts — by schedule, by webhook, or by hand."
+                }
+              />
             }
           />
 
