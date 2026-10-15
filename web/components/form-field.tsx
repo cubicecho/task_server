@@ -1,6 +1,6 @@
-import { CircleQuestionMark } from "lucide-react";
 import type { ReactNode } from "react";
 import { cloneElement, isValidElement, useId } from "react";
+import { DescriptionHint, DescriptionHintText } from "@/components/ui/description-hint";
 import {
   Field,
   FieldContent,
@@ -9,7 +9,6 @@ import {
   FieldLabel,
   FieldTitle,
 } from "@/components/ui/field";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, type SlotNode } from "@/lib/utils";
 
@@ -30,7 +29,7 @@ const LOADING_BOX = {
  * What the shell wires onto the control, handed straight to the caller when `controlSlot` is a
  * function. The names are the DOM's, so the whole object spreads onto an element.
  */
-type ControlProps = {
+export type ControlProps = {
   id: string;
   /** Only ever set under {@link FormFieldProps.asGroup} — otherwise the `<label>` does this job. */
   "aria-labelledby": string | undefined;
@@ -47,7 +46,7 @@ type ControlProps = {
  * and its swatch row is a `radiogroup` that the label, being a `<label>`, cannot also name, so the
  * row points back at the label's `id` with `aria-labelledby`.
  */
-type FieldParts = {
+export type FieldParts = {
   /** The label's `id`, whenever there is a label; the `FieldTitle`'s under `asGroup`. */
   labelId: string | undefined;
 };
@@ -332,35 +331,18 @@ export function FormField({
   // Beside the label rather than inside it: `FieldLabel` renders a real `<label>`, and a button
   // nested in one is a button whose click the label also claims.
   //
-  // `type="button"` is not decoration. The default for a `<button>` inside a `<form>` is
-  // `submit`, so a help icon written without it is a help icon that submits the form — which is
-  // exactly how it is written by hand, because it works fine in the story and fails in the app.
-  //
-  // Radix gives the content `role="dialog"`, and a dialog with no accessible name is an axe
-  // failure and a screen reader announcing "dialog" — so the trigger's name is reused for it
-  // rather than left to the paragraph inside, which is the description, not the name.
-  const helpName = typeof label === "string" ? `About ${label}` : "About this field";
+  // The same button and pane as `CardLayout`, `Section`, `SettingRow` and the native fields: a
+  // `type="button"`, so it never submits the form it sits in, and one name — "About <label>" — on
+  // the button and on the pane, which Radix makes a `dialog` that is announced by its name.
   const help =
     description && descriptionPlacement === "popover" ? (
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            data-slot="form-field-description-trigger"
-            type="button"
-            aria-label={helpName}
-            className="shrink-0 rounded-full text-foreground/60 outline-none transition-colors hover:text-foreground focus-visible:text-foreground [&_svg]:size-3.5"
-          >
-            {descriptionIconSlot ?? <CircleQuestionMark aria-hidden />}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          aria-label={helpName}
-          className="max-w-xs text-balance text-sm leading-relaxed"
-        >
-          {description}
-        </PopoverContent>
-      </Popover>
+      <DescriptionHint
+        data-slot="form-field-description-trigger"
+        label={label}
+        fallbackName="About this field"
+        description={description}
+        iconSlot={descriptionIconSlot}
+      />
     ) : null;
 
   // Only drawn when there is a second thing on the row. A label on its own is the row.
@@ -391,9 +373,7 @@ export function FormField({
           there is one a screen reader can never reach. Same span, same id, same announcement;
           only the visible copy comes and goes. */}
       {description && descriptionPlacement === "popover" ? (
-        <span id={descriptionId} className="sr-only">
-          {description}
-        </span>
+        <DescriptionHintText id={descriptionId}>{description}</DescriptionHintText>
       ) : null}
       {/* `FieldError` is already the `role="alert"` this shell used to draw by hand. Announcing
           matters more here than in shadcn's own forms: those sit downstream of react-hook-form,

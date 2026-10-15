@@ -29,7 +29,7 @@ type CardProps = ViewProps & {
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className, accentColor, accentLabel, onClick: onPress, children, ...props }, ref) => {
     const classes = cn(
-      "rounded-lg border border-foreground/10 bg-secondary text-foreground shadow-sm",
+      "rounded-lg border border-foreground/10 bg-secondary text-foreground",
       accentColor && "relative overflow-hidden",
       className,
     );
