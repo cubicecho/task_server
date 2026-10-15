@@ -644,13 +644,14 @@ beside it — there is no shadcn copy left to put back, and all of them import `
 generated: `web/index.css` imports the first straight after `tailwindcss`, and it is the palette
 — this app defines no colours of its own, and a colour a component names (`neutral`, `hover`,
 `info`, `positive`…) exists nowhere else. Three things to check afterwards. The CLI rewrites
-dependency ranges to what an item declares, and one of them pinned `@types/react-dom` a minor
-behind `@types/react`; read the `package.json` diff. And the linter is off for
+dependency ranges to what an item declares, and one of them pins `@types/react-dom` a minor
+behind `@types/react` (`~19.2.0`) on every refresh; read the `package.json` diff and put the
+caret back. And the linter is off for
 `web/components/ui/**` in `biome.json` for the reason it is off upstream — the files are vendored,
 and which of Biome's rules an update trips is not this repo's question to answer per rule.
-And `-o` overwrites local edits to a shell without asking: `PageLayout`'s `gap-4 py-4` on the
-body, which keeps list rows and sections apart, has been lost to a refresh once already; read
-the diff of every file under `web/components/` the command touched.
+And `-o` overwrites local edits to a shell without asking — `PageLayout`'s `gap-4 py-4` on the
+body was lost to a refresh once, before it moved upstream — so read the diff of every file under
+`web/components/` the command touched.
 
 **App code names the meaning tokens, not shadcn's.** `primary`, `destructive`, `accent`,
 `muted`, `card` and `ring` are aliases the registry keeps so `web/components/ui/` reads the way
@@ -679,9 +680,11 @@ used exactly the same way.
 
 Nothing at a call site writes `id`, `aria-describedby`, `aria-invalid`, or a `disabled` that
 re-derives `canSubmit`/`isSubmitting` — `FormField` and `SubmitButton` own those. `SubmitButton`'s
-own `disabled` is OR-ed with the store's two, so it can only tighten: the two edit dialogs pass
-the store's `isDefaultValue`, because a form that holds what it opened with has nothing to save.
-The run dialog does not — replaying the body already in the box is the whole feature. A dialog
+own `disabled` is OR-ed with the store's two, so it can only tighten. The two edit dialogs pass
+`requireChanges`, which adds the store's `isDefaultValue`, because a form that holds what it
+opened with has nothing to save. The run dialog does not — replaying the body already in the box
+is the whole feature. A `NumberField` over an integer column takes `integer`, which stores a
+fraction as `null`, so its validator says "whole number" rather than "number". A dialog
 passes `() => !form.state.isDefaultValue` to `DialogLayout`'s `hasUnsavedChanges`: a function, so
 it is read at the click and subscribes to nothing, and `isDefaultValue` rather than `isDirty`,
 which stays true for a field typed into and back out of and so asks about edits that are gone.

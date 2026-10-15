@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { ColorDot } from "@/components/ui/color-dot";
@@ -117,8 +117,31 @@ type ComboboxSharedProps = Omit<
    * new row came back with. Passing it draws the search menu, since the name has to be typed.
    */
   onCreateOption?: ((name: string) => void) | undefined;
-  /** What the create row says, before the quoted name. */
+  /**
+   * What the create row says, before the quoted name.
+   *
+   * @defaultValue `"Use"` for one value with `freeText`, `"Add"` otherwise
+   */
   createLabel?: string | undefined;
+  /**
+   * Hold what was typed, not only what is listed: the options are suggestions, not a closed set.
+   * The create row writes the typed text as the value itself, so no `onCreateOption` is needed
+   * (and one passed beside it is not called), and a held value no option covers is drawn as its
+   * own text. With `multiple` it is a tag input: each typed value is a chip, and one already held
+   * (ignoring case) is refused, with the reason said in the menu.
+   */
+  freeText?: boolean | undefined;
+  /**
+   * What the menu says when the text typed into a `freeText` `multiple` combobox is already held.
+   *
+   * @defaultValue “text” is already added.
+   */
+  duplicateMessage?: ((text: string) => string) | undefined;
+  /**
+   * Told the refusal's message when the menu starts refusing what was typed, and `undefined` when
+   * it stops. What `ComboboxField` puts on the field as its error.
+   */
+  onRefusalChange?: ((message: string | undefined) => void) | undefined;
 };
 
 /** A combobox holding one value. */
@@ -320,6 +343,8 @@ function OptionRow({
 type SearchMenuProps = Pick<
   ComboboxSharedProps,
   | "options"
+  | "duplicateMessage"
+  | "onRefusalChange"
   | "open"
   | "onOpenChange"
   | "className"
@@ -338,6 +363,8 @@ type SearchMenuProps = Pick<
   onPick: (value: string) => void;
   /** A single combobox is done once a row is chosen; a `multiple` one stays open for the next. */
   closeOnPick: boolean;
+  /** Whether typing a held value's text is refused: a `freeText` `multiple` combobox. */
+  refuseHeld?: boolean | undefined;
   /** What the trigger shows: the chosen label, the chips, or the placeholder. */
   triggerSlot: ReactNode;
   /** Under the list, inside the menu: the Clear button of a `multiple` combobox. */
@@ -373,6 +400,9 @@ function SearchMenu({
   emptyMessage = "No matches.",
   onCreateOption,
   createLabel = "Add",
+  refuseHeld = false,
+  duplicateMessage = (text) => `“${text}” is already added.`,
+  onRefusalChange,
   trigger,
 }: SearchMenuProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
@@ -381,7 +411,27 @@ function SearchMenu({
   const rowId = useId();
   const isOpen = open ?? uncontrolledOpen;
   const blocks = useMemo(() => blocksOf(options), [options]);
-  const canCreate = Boolean(onCreateOption) && isAddableOptionName(search, options);
+  const typed = search.trim();
+  // A held value's own text, typed again. Its row is in the list (ticked), so the create row is
+  // gone already; what is missing without this is being told why.
+  const heldAgain =
+    refuseHeld && typed !== ""
+      ? options.find(
+          (entry): entry is SelectOption =>
+            "value" in entry &&
+            selected.includes(entry.value) &&
+            optionText(entry).trim().toLocaleLowerCase() === typed.toLocaleLowerCase(),
+        )
+      : undefined;
+  const refusal = heldAgain === undefined ? undefined : duplicateMessage(typed);
+  const canCreate =
+    Boolean(onCreateOption) && refusal === undefined && isAddableOptionName(search, options);
+
+  // An effect, because the refusal is derived from what is typed and the field's error is state
+  // the field owns. Closing the menu clears the search, and with it the refusal.
+  useEffect(() => {
+    onRefusalChange?.(refusal);
+  }, [refusal, onRefusalChange]);
 
   const setOpen = (next: boolean) => {
     setUncontrolledOpen(next);
@@ -499,6 +549,22 @@ function SearchMenu({
             ) : null}
           </CommandList>
         </Command>
+        {refuseHeld ? (
+          // In the tree from the moment the menu opens, so the text arriving is what is read out.
+          // Beside the list and not in it: a listbox may own only options and groups.
+          <div
+            role="status"
+            aria-live="polite"
+            data-slot="combobox-refusal"
+            className="cube-rn-view"
+          >
+            {refusal === undefined ? null : (
+              <span className="cube-rn-text border-foreground/10 border-t px-3 py-2 text-foreground text-sm">
+                {refusal}
+              </span>
+            )}
+          </div>
+        ) : null}
         {footerSlot}
       </PopoverContent>
     </Popover>
@@ -524,23 +590,32 @@ function SingleCombobox({
   emptyMessage,
   onCreateOption,
   createLabel,
+  freeText = false,
+  duplicateMessage: _duplicateMessage,
+  onRefusalChange: _onRefusalChange,
   ...props
 }: ComboboxSingleProps) {
+  // A typed value is drawn as a row of its own, ticked, so the trigger and the menu read it the
+  // way they read a listed one.
+  const listed = useMemo(
+    () => (freeText && value ? withOrphanOptions(options, [value]) : options),
+    [freeText, options, value],
+  );
   const blocks = useMemo(() => blocksOf(options), [options]);
   // Handed to `SelectValue` rather than left for the select to find. Radix mirrors the chosen
   // item's text into the trigger by itself, but the device's sheet is not mounted while it is
   // closed and has nothing to mirror from, so the label is looked up here, once, for both.
   const chosen = useMemo(
-    () => options.find((entry): entry is SelectOption => "value" in entry && entry.value === value),
-    [options, value],
+    () => listed.find((entry): entry is SelectOption => "value" in entry && entry.value === value),
+    [listed, value],
   );
   const selected = useMemo(() => (chosen === undefined ? [] : [chosen.value]), [chosen]);
 
-  if (searchable || onCreateOption !== undefined) {
+  if (searchable || freeText || onCreateOption !== undefined) {
     return (
       <>
         <SearchMenu
-          options={options}
+          options={listed}
           selected={selected}
           onPick={onValueChange}
           closeOnPick
@@ -554,8 +629,8 @@ function SingleCombobox({
           searchLabel={searchLabel}
           popoverLabel={popoverLabel}
           emptyMessage={emptyMessage}
-          onCreateOption={onCreateOption}
-          createLabel={createLabel}
+          onCreateOption={freeText ? onValueChange : onCreateOption}
+          createLabel={createLabel ?? (freeText ? "Use" : undefined)}
           // The select trigger's props are the button's on the web and a subset of them on
           // device, so they are the same wiring on a different element.
           trigger={props as ButtonProps}
@@ -649,6 +724,9 @@ function MultipleCombobox({
   createLabel,
   maxDisplay = DEFAULT_MAX_DISPLAY,
   clearable = true,
+  freeText = false,
+  duplicateMessage,
+  onRefusalChange,
   ...props
 }: ComboboxMultipleProps) {
   const merged = useMemo(() => withOrphanOptions(options, value), [options, value]);
@@ -689,8 +767,11 @@ function MultipleCombobox({
         searchLabel={searchLabel}
         popoverLabel={popoverLabel}
         emptyMessage={emptyMessage}
-        onCreateOption={onCreateOption}
+        onCreateOption={freeText ? (name) => onValueChange([...value, name]) : onCreateOption}
         createLabel={createLabel}
+        refuseHeld={freeText}
+        duplicateMessage={duplicateMessage}
+        onRefusalChange={onRefusalChange}
         trigger={props as ButtonProps}
         triggerSlot={
           <div className="cube-rn-view min-w-0 flex-1 flex-row flex-wrap items-center gap-1">

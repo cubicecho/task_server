@@ -96,7 +96,7 @@ export function AgentsRoute() {
                 count={rows.length}
                 emptySlot={
                   <EmptyState
-                    icon={Bot}
+                    iconSlot={<Bot />}
                     title="No profiles"
                     description="Every task runs on Settings, which is all a server with one model needs."
                   />

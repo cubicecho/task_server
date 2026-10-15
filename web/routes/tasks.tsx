@@ -111,7 +111,7 @@ export function TasksRoute() {
             count={rows.length}
             emptySlot={
               <EmptyState
-                icon={ListChecks}
+                iconSlot={<ListChecks />}
                 title="No tasks yet"
                 description="Create one, give it a cron expression, and it runs on its own."
                 actionSlot={newTask}
