@@ -97,6 +97,12 @@ const number = {
     value == null ? "A number is required." : undefined,
 };
 
+/** An `integer` field stores a fraction as `null` too, so the one message has to cover both. */
+const wholeNumber = {
+  onChange: ({ value }: { value: number | null }) =>
+    value == null ? "A whole number is required." : undefined,
+};
+
 /** What the endpoint button says: mid-flight, about to change the endpoint, or just asking again. */
 function endpointAction(connecting: boolean, unapplied: boolean): string {
   if (connecting) {
@@ -372,7 +378,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                               name="maxTokens"
                               label="Max tokens"
                               description={doc("maxTokens")}
-                              validators={number}
+                              integer
+                              validators={wholeNumber}
                             />
                             <NumberField
                               form={form}
@@ -387,7 +394,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                               name="maxToolIterations"
                               label="Max tool steps"
                               description={doc("maxToolIterations")}
-                              validators={number}
+                              integer
+                              validators={wholeNumber}
                             />
                           </>
                         }
@@ -407,14 +415,16 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                               name="requestTimeoutSeconds"
                               label="Silence before giving up (s)"
                               description={doc("requestTimeoutSeconds")}
-                              validators={number}
+                              integer
+                              validators={wholeNumber}
                             />
                             <NumberField
                               form={form}
                               name="maxRetries"
                               label="Retries"
                               description={doc("maxRetries")}
-                              validators={number}
+                              integer
+                              validators={wholeNumber}
                             />
                           </>
                         }
@@ -471,14 +481,16 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                               name="maxConcurrentRuns"
                               label="Runs at once"
                               description={doc("maxConcurrentRuns")}
-                              validators={number}
+                              integer
+                              validators={wholeNumber}
                             />
                             <NumberField
                               form={form}
                               name="runRetentionDays"
                               label="Keep runs for (days)"
                               description={doc("runRetentionDays")}
-                              validators={number}
+                              integer
+                              validators={wholeNumber}
                             />
                           </>
                         }

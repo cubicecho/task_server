@@ -123,7 +123,7 @@ export function McpRoute() {
                 count={rows.length}
                 emptySlot={
                   <EmptyState
-                    icon={Plug}
+                    iconSlot={<Plug />}
                     title="No servers yet"
                     description="Without one a task can think, but not act."
                   />

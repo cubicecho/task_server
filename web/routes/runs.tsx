@@ -416,7 +416,7 @@ export function RunsRoute() {
             count={rows.length}
             emptySlot={
               <EmptyState
-                icon={History}
+                iconSlot={<History />}
                 title={filtered ? "No matches" : "Nothing has run yet"}
                 description={
                   filtered
