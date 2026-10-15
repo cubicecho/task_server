@@ -10,6 +10,7 @@ import {
 import { AgentDialog } from "@/components/agent-dialog";
 import { AgentImportDialog } from "@/components/agent-import-dialog";
 import { ConfirmButton } from "@/components/confirm-button";
+import { List } from "@/components/list";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
@@ -23,7 +24,14 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Download, Pencil, Plus, Trash2, Upload } from "@/components/ui/icons";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemFooter,
+  ItemTitle,
+} from "@/components/ui/item";
 import { overrides, saveFile, specFileName, specText } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
 import { stringList } from "@/lib/json";
@@ -107,12 +115,14 @@ export function AgentsRoute() {
                 }
               />
 
-              {rows.map((agent) => {
-                const scoped = stringList(agent.mcpServerIds);
-                const said = overrides(agent);
-                return (
-                  <Item key={agent.id} variant="outline" className="flex-col items-stretch gap-3">
-                    <div className="flex w-full items-center gap-3">
+              <List
+                label="Agent profiles"
+                divided={false}
+                contentSlot={rows.map((agent) => {
+                  const scoped = stringList(agent.mcpServerIds);
+                  const said = overrides(agent);
+                  return (
+                    <Item key={agent.id} variant="outline">
                       <ItemContent>
                         <ItemTitle>
                           <span className="truncate">{agent.name}</span>
@@ -162,27 +172,27 @@ export function AgentsRoute() {
                           iconSlot={<Trash2 />}
                         />
                       </ItemActions>
-                    </div>
 
-                    <div className="flex flex-wrap gap-1">
-                      {said.length === 0 ? (
-                        <span className="text-foreground/60 text-xs">
-                          Overrides nothing — a task on it runs exactly as one on Settings.
-                        </span>
-                      ) : (
-                        said.map((one) => (
-                          <span
-                            key={one}
-                            className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
-                          >
-                            {one}
+                      <ItemFooter className="flex-wrap justify-start gap-1">
+                        {said.length === 0 ? (
+                          <span className="text-foreground/60 text-xs">
+                            Overrides nothing — a task on it runs exactly as one on Settings.
                           </span>
-                        ))
-                      )}
-                    </div>
-                  </Item>
-                );
-              })}
+                        ) : (
+                          said.map((one) => (
+                            <span
+                              key={one}
+                              className="rounded-md border px-2 py-0.5 font-mono text-foreground/60 text-xs"
+                            >
+                              {one}
+                            </span>
+                          ))
+                        )}
+                      </ItemFooter>
+                    </Item>
+                  );
+                })}
+              />
 
               {importing ? (
                 <AgentImportDialog

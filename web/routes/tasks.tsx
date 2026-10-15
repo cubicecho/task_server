@@ -8,6 +8,7 @@ import {
   UpdateTaskDocument,
 } from "@/__generated__/graphql/graphql";
 import { ConfirmButton } from "@/components/confirm-button";
+import { List } from "@/components/list";
 import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
@@ -21,7 +22,14 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Pencil, Play, Plus, Square, Trash2 } from "@/components/ui/icons";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemFooter,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
@@ -119,19 +127,22 @@ export function TasksRoute() {
             }
           />
 
-          {rows.map((task) => {
-            // The last run that actually ran: a `skipped` row is a trigger firing at this very
-            // task while it was busy, so taking it as the latest would hide the run it collided
-            // with — the running one, whose Stop button is the thing someone wants at that
-            // moment. Skips are the Runs page's to show.
-            const lastRun = task.runs[0];
-            // `runTask` resolves only when the run finishes, so the mutation being in flight is
-            // a run in flight too — before the poll has had a chance to see the row.
-            const running =
-              lastRun?.status === "running" || (run.isPending && run.variables?.taskId === task.id);
-            return (
-              <Item key={task.id} variant="outline" className="flex-col items-stretch gap-3">
-                <div className="flex w-full items-start justify-between gap-3">
+          <List
+            label="Tasks"
+            divided={false}
+            contentSlot={rows.map((task) => {
+              // The last run that actually ran: a `skipped` row is a trigger firing at this very
+              // task while it was busy, so taking it as the latest would hide the run it collided
+              // with — the running one, whose Stop button is the thing someone wants at that
+              // moment. Skips are the Runs page's to show.
+              const lastRun = task.runs[0];
+              // `runTask` resolves only when the run finishes, so the mutation being in flight is
+              // a run in flight too — before the poll has had a chance to see the row.
+              const running =
+                lastRun?.status === "running" ||
+                (run.isPending && run.variables?.taskId === task.id);
+              return (
+                <Item key={task.id} variant="outline">
                   <ItemContent>
                     <ItemTitle>
                       <span className="truncate">{task.name}</span>
@@ -190,41 +201,41 @@ export function TasksRoute() {
                       iconSlot={<Trash2 />}
                     />
                   </ItemActions>
-                </div>
 
-                <div className="flex flex-wrap gap-2 text-foreground/60 text-xs">
-                  {task.triggers.length === 0 ? (
-                    <span>No triggers — it only runs when you press play.</span>
-                  ) : null}
-                  {task.triggers.map((trigger) => {
-                    // A webhook has no next time to show and is not waiting on the scheduler: it
-                    // fires when someone posts to it. Saying "not scheduled" of one reads as a
-                    // fault, when it is simply a different kind of trigger.
-                    if (trigger.kind === "event") {
+                  <ItemFooter className="flex-wrap justify-start gap-2 text-foreground/60 text-xs">
+                    {task.triggers.length === 0 ? (
+                      <span>No triggers — it only runs when you press play.</span>
+                    ) : null}
+                    {task.triggers.map((trigger) => {
+                      // A webhook has no next time to show and is not waiting on the scheduler: it
+                      // fires when someone posts to it. Saying "not scheduled" of one reads as a
+                      // fault, when it is simply a different kind of trigger.
+                      if (trigger.kind === "event") {
+                        return (
+                          <span key={trigger.id} className="rounded-md border px-2 py-1 font-mono">
+                            POST /webhooks/{trigger.event}
+                          </span>
+                        );
+                      }
+                      const next = nextRuns.get(trigger.id);
                       return (
-                        <span key={trigger.id} className="rounded-md border px-2 py-1 font-mono">
-                          POST /webhooks/{trigger.event}
+                        <span
+                          key={trigger.id}
+                          className="rounded-md border px-2 py-1 font-mono"
+                          title={next ? `next: ${new Date(next).toLocaleString()}` : undefined}
+                        >
+                          {trigger.cron}
+                          {trigger.timezone ? ` (${trigger.timezone})` : ""}
+                          {next ? ` · next ${new Date(next).toLocaleString()}` : " · not scheduled"}
                         </span>
                       );
-                    }
-                    const next = nextRuns.get(trigger.id);
-                    return (
-                      <span
-                        key={trigger.id}
-                        className="rounded-md border px-2 py-1 font-mono"
-                        title={next ? `next: ${new Date(next).toLocaleString()}` : undefined}
-                      >
-                        {trigger.cron}
-                        {trigger.timezone ? ` (${trigger.timezone})` : ""}
-                        {next ? ` · next ${new Date(next).toLocaleString()}` : " · not scheduled"}
-                      </span>
-                    );
-                  })}
-                  {task.model ? <span className="px-1 py-1">model: {task.model}</span> : null}
-                </div>
-              </Item>
-            );
-          })}
+                    })}
+                    {task.model ? <span className="px-1 py-1">model: {task.model}</span> : null}
+                  </ItemFooter>
+                </Item>
+              );
+            })}
+          />
 
           {askFor ? (
             <RunDialog

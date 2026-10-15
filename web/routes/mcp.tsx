@@ -10,6 +10,7 @@ import {
   UpdateMcpServerDocument,
 } from "@/__generated__/graphql/graphql";
 import { ConfirmButton } from "@/components/confirm-button";
+import { List } from "@/components/list";
 import { McpDialog } from "@/components/mcp-dialog";
 import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
 import { PageLayout } from "@/components/page-layout";
@@ -25,7 +26,14 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Pencil, Plug, Plus, RefreshCw, Trash2 } from "@/components/ui/icons";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemFooter,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
@@ -133,14 +141,16 @@ export function McpRoute() {
                 }
               />
 
-              {rows.map((server) => {
-                const status = statusOf(server.id);
-                const tools = status?.tools ?? [];
-                const age = status?.startedAt ? uptime(status.startedAt) : null;
-                const probe = probes[server.id];
-                return (
-                  <Item key={server.id} variant="outline" className="flex-col items-stretch gap-3">
-                    <div className="flex w-full items-center gap-3">
+              <List
+                label="MCP servers"
+                divided={false}
+                contentSlot={rows.map((server) => {
+                  const status = statusOf(server.id);
+                  const tools = status?.tools ?? [];
+                  const age = status?.startedAt ? uptime(status.startedAt) : null;
+                  const probe = probes[server.id];
+                  return (
+                    <Item key={server.id} variant="outline">
                       <ItemContent className={server.enabled ? undefined : "opacity-50"}>
                         <ItemTitle>
                           <span className="truncate font-mono">{server.slug}</span>
@@ -202,18 +212,24 @@ export function McpRoute() {
                           iconSlot={<Trash2 />}
                         />
                       </ItemActions>
-                    </div>
 
-                    {status?.error ? (
-                      <p className="whitespace-pre-wrap font-mono text-negative text-xs">
-                        {status.error}
-                      </p>
-                    ) : null}
+                      {status?.error ? (
+                        <ItemFooter>
+                          <p className="whitespace-pre-wrap font-mono text-negative text-xs">
+                            {status.error}
+                          </p>
+                        </ItemFooter>
+                      ) : null}
 
-                    {probe ? <McpProbeResult probe={probe} /> : null}
-                  </Item>
-                );
-              })}
+                      {probe ? (
+                        <ItemFooter className="flex-col items-stretch">
+                          <McpProbeResult probe={probe} />
+                        </ItemFooter>
+                      ) : null}
+                    </Item>
+                  );
+                })}
+              />
 
               {creating ? <McpDialog onClose={() => setCreating(false)} onSaved={refresh} /> : null}
               {editing && !creating ? (
