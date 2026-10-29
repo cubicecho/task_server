@@ -45,6 +45,11 @@ type Agent {
   toolSelectModel: String!
 
   """
+  Empty inherits the server default, which is off unless one is set there.
+  """
+  compactionModel: String!
+
+  """
   Seconds of silence before a request is given up on. `-1` inherits the server default; `0` waits forever.
   """
   requestTimeoutSeconds: Int!
@@ -184,6 +189,11 @@ type AgentMinAggregate {
   toolSelectModel: String
 
   """
+  Empty inherits the server default, which is off unless one is set there.
+  """
+  compactionModel: String
+
+  """
   Seconds of silence before a request is given up on. `-1` inherits the server default; `0` waits forever.
   """
   requestTimeoutSeconds: Int
@@ -240,6 +250,11 @@ type AgentMaxAggregate {
   toolSelectModel: String
 
   """
+  Empty inherits the server default, which is off unless one is set there.
+  """
+  compactionModel: String
+
+  """
   Seconds of silence before a request is given up on. `-1` inherits the server default; `0` waits forever.
   """
   requestTimeoutSeconds: Int
@@ -264,6 +279,7 @@ type AgentCountNonNullAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  compactionModel: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
   mcpServerIds: Int!
@@ -283,6 +299,7 @@ type AgentCountDistinctAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  compactionModel: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
   createdAt: Int!
@@ -345,6 +362,11 @@ type AgentGroupKeys {
   Empty inherits the server default. Unused unless discovery is on demand.
   """
   toolSelectModel: String
+
+  """
+  Empty inherits the server default, which is off unless one is set there.
+  """
+  compactionModel: String
 
   """
   Seconds of silence before a request is given up on. `-1` inherits the server default; `0` waits forever.
@@ -1847,6 +1869,11 @@ type Setting {
   toolSelectModel: String!
 
   """
+  Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
+  """
+  compactionModel: String!
+
+  """
   How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
   """
   runRetentionDays: Int!
@@ -1948,6 +1975,11 @@ type SettingMinAggregate {
   toolSelectModel: String
 
   """
+  Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
+  """
+  compactionModel: String
+
+  """
   How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
   """
   runRetentionDays: Int
@@ -2006,6 +2038,11 @@ type SettingMaxAggregate {
   toolSelectModel: String
 
   """
+  Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
+  """
+  compactionModel: String
+
+  """
   How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
   """
   runRetentionDays: Int
@@ -2036,6 +2073,7 @@ type SettingCountNonNullAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  compactionModel: Int!
   runRetentionDays: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -2052,6 +2090,7 @@ type SettingCountDistinctAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  compactionModel: Int!
   runRetentionDays: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -2108,6 +2147,11 @@ type SettingGroupKeys {
   Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
   """
   toolSelectModel: String
+
+  """
+  Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
+  """
+  compactionModel: String
 
   """
   How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
@@ -2174,6 +2218,11 @@ input CreateAgentInput {
   toolSelectModel: String
 
   """
+  Empty inherits the server default, which is off unless one is set there.
+  """
+  compactionModel: String
+
+  """
   Seconds of silence before a request is given up on. `-1` inherits the server default; `0` waits forever.
   """
   requestTimeoutSeconds: Int
@@ -2233,6 +2282,11 @@ input UpdateAgentInput {
   Empty inherits the server default. Unused unless discovery is on demand.
   """
   toolSelectModel: String
+
+  """
+  Empty inherits the server default, which is off unless one is set there.
+  """
+  compactionModel: String
 
   """
   Seconds of silence before a request is given up on. `-1` inherits the server default; `0` waits forever.
@@ -2303,6 +2357,11 @@ input AgentFilters {
   Empty inherits the server default. Unused unless discovery is on demand.
   """
   toolSelectModel: StringFilter
+
+  """
+  Empty inherits the server default, which is off unless one is set there.
+  """
+  compactionModel: StringFilter
 
   """
   Seconds of silence before a request is given up on. `-1` inherits the server default; `0` waits forever.
@@ -2680,6 +2739,7 @@ input AgentOrderBy {
   maxToolIterations: InnerOrder
   toolDiscovery: InnerOrder
   toolSelectModel: InnerOrder
+  compactionModel: InnerOrder
   requestTimeoutSeconds: InnerOrder
   maxRetries: InnerOrder
   mcpServerIds: InnerOrder
@@ -2790,6 +2850,7 @@ input AgentCountNonNullHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  compactionModel: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
   mcpServerIds: AggregateNumberFilter
@@ -2809,6 +2870,7 @@ input AgentCountDistinctHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  compactionModel: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
   createdAt: AggregateNumberFilter
@@ -4202,6 +4264,11 @@ input UpdateSettingInput {
   toolSelectModel: String
 
   """
+  Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
+  """
+  compactionModel: String
+
+  """
   How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
   """
   runRetentionDays: Int
@@ -4267,6 +4334,11 @@ input SettingFilters {
   Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
   """
   toolSelectModel: StringFilter
+
+  """
+  Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
+  """
+  compactionModel: StringFilter
 
   """
   How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every run forever.
@@ -4337,6 +4409,7 @@ input SettingOrderBy {
   maxToolIterations: InnerOrder
   toolDiscovery: InnerOrder
   toolSelectModel: InnerOrder
+  compactionModel: InnerOrder
   runRetentionDays: InnerOrder
   requestTimeoutSeconds: InnerOrder
   maxRetries: InnerOrder
@@ -4405,6 +4478,7 @@ input SettingCountNonNullHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  compactionModel: AggregateNumberFilter
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
@@ -4421,6 +4495,7 @@ input SettingCountDistinctHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  compactionModel: AggregateNumberFilter
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
@@ -4720,6 +4795,7 @@ enum AgentDistinctColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  compactionModel
   requestTimeoutSeconds
   maxRetries
   mcpServerIds
@@ -4740,6 +4816,7 @@ enum AgentGroupByColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  compactionModel
   requestTimeoutSeconds
   maxRetries
   createdAt
@@ -4863,6 +4940,7 @@ enum SettingDistinctColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  compactionModel
   runRetentionDays
   requestTimeoutSeconds
   maxRetries
@@ -4880,6 +4958,7 @@ enum SettingGroupByColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  compactionModel
   runRetentionDays
   requestTimeoutSeconds
   maxRetries
@@ -4933,6 +5012,7 @@ type AgentSpecProfile {
   maxToolIterations: Int!
   toolDiscovery: String!
   toolSelectModel: String!
+  compactionModel: String!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
 }

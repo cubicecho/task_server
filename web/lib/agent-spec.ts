@@ -13,6 +13,7 @@ export interface ProfileColumns {
   maxToolIterations: number;
   toolDiscovery: string;
   toolSelectModel: string;
+  compactionModel: string;
   requestTimeoutSeconds: number;
   maxRetries: number;
 }
@@ -49,6 +50,9 @@ export function overrides(agent: ProfileColumns): string[] {
   }
   if (agent.toolSelectModel) {
     said.push(`picks tools with ${agent.toolSelectModel}`);
+  }
+  if (agent.compactionModel) {
+    said.push(`compacts with ${agent.compactionModel}`);
   }
   if (agent.requestTimeoutSeconds >= 0) {
     said.push(`${agent.requestTimeoutSeconds}s of silence`);

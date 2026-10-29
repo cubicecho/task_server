@@ -85,6 +85,7 @@ export const agents = pgTable("agents", {
     .notNull()
     .default("inherit"),
   toolSelectModel: text().notNull().default(""),
+  compactionModel: text().notNull().default(""),
   requestTimeoutSeconds: integer().notNull().default(-1),
   maxRetries: integer().notNull().default(-1),
   /**
@@ -339,6 +340,13 @@ export const settings = pgTable("settings", {
     .notNull()
     .default("eager"),
   toolSelectModel: text().notNull().default(""),
+  /**
+   * The model that summarises the oldest stretch of a step's transcript once it fills three
+   * quarters of the window, so a long tool loop keeps going instead of failing with
+   * `ContextOverflow`. Empty is off, as it is in min-agent: a summary is a second request the
+   * operator has to choose to pay for, and there is no falling back to the task's own model.
+   */
+  compactionModel: text().notNull().default(""),
   /**
    * A run row holds the whole output and error text, so a task on a five-minute cron writes
    * something over a hundred thousand of them a year. This is the ceiling on that. See

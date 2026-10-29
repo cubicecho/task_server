@@ -12,6 +12,7 @@ fragment AgentFields on Agent {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  compactionModel
   requestTimeoutSeconds
   maxRetries
   mcpServerIds
@@ -67,6 +68,7 @@ query AgentSpecPreview($document: JSON!, $createServers: [String!], $name: Strin
       maxToolIterations
       toolDiscovery
       toolSelectModel
+      compactionModel
       requestTimeoutSeconds
       maxRetries
     }

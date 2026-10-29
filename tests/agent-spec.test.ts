@@ -366,6 +366,7 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     maxToolIterations: -1,
     toolDiscovery: "inherit",
     toolSelectModel: "",
+    compactionModel: "",
     requestTimeoutSeconds: -1,
     maxRetries: -1,
     mcpServerIds: null,
@@ -380,6 +381,7 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     maxToolIterations: 1,
     toolDiscovery: "eager",
     toolSelectModel: "small",
+    compactionModel: "summary",
     requestTimeoutSeconds: 0,
     maxRetries: 0,
   } as const;

@@ -8,6 +8,7 @@ fragment SettingsFields on Setting {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  compactionModel
   requestTimeoutSeconds
   maxRetries
   maxConcurrentRuns

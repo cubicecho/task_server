@@ -431,6 +431,20 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                       />
                     }
                   />
+
+                  <Section
+                    title="Context"
+                    description="What a run does when it fills the model's context window."
+                    contentSlot={
+                      <ModelSelectField
+                        form={form}
+                        name="compactionModel"
+                        label="Compaction model"
+                        description={doc("compactionModel")}
+                        defaultLabel="Off"
+                      />
+                    }
+                  />
                 </TabsContent>
 
                 <TabsContent value="tools" forceMount className={panel}>

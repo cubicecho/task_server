@@ -52,6 +52,7 @@ export interface SettingsForm {
   maxRetries: number | null;
   toolDiscovery: SettingsToolDiscoveryEnum;
   toolSelectModel: string;
+  compactionModel: string;
   maxConcurrentRuns: number | null;
   runRetentionDays: number | null;
 }
@@ -75,6 +76,7 @@ export const SECTION_OF: Record<keyof SettingsForm, Exclude<SettingsSection, "co
   maxRetries: "limits",
   toolDiscovery: "tools",
   toolSelectModel: "tools",
+  compactionModel: "limits",
   maxConcurrentRuns: "server",
   runRetentionDays: "server",
 };
@@ -92,6 +94,7 @@ export const toForm = (row: SettingsFieldsFragment): SettingsForm => ({
   maxRetries: row.maxRetries,
   toolDiscovery: row.toolDiscovery,
   toolSelectModel: row.toolSelectModel,
+  compactionModel: row.compactionModel,
   maxConcurrentRuns: row.maxConcurrentRuns,
   runRetentionDays: row.runRetentionDays,
 });
@@ -112,6 +115,7 @@ export const toRow = (form: SettingsForm): UpdateSettingInput => ({
   maxRetries: form.maxRetries ?? 0,
   toolDiscovery: form.toolDiscovery,
   toolSelectModel: form.toolSelectModel,
+  compactionModel: form.compactionModel,
   maxConcurrentRuns: form.maxConcurrentRuns ?? 0,
   runRetentionDays: form.runRetentionDays ?? 0,
 });
