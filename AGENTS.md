@@ -544,6 +544,15 @@ endpoint that will not say gets no guard, which is what every run had before. An
 step answered in prose is read back with `askJson` against a schema whose only field is an enum
 of the step's arms, so the second opinion cannot name a case that does not exist.
 
+**A step that fills its window clears its old tool results first.** `pruning.ts` is the loop's
+`beforeStep`: past `COMPACT_AT` of a window the endpoint reported, agent-core's
+`pruneToolResults` stubs every result but the latest five, and the fold — when a compaction
+model is set — then plans from what is left. Both rewrite the prefix and cost the prompt cache,
+which is why neither runs a little on every step, and a prune that would win back less than
+`PRUNE_SHARE` of the window is not done at all. It has no column: it makes no request, so there
+is nothing for an operator to choose to pay for, and with no window known it is inert like the
+fold.
+
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
 

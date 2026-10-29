@@ -9,6 +9,7 @@ import {
 } from "@cubicecho/agent-core";
 import type { Settings } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
+import { pruneWhenFilling } from "./pruning.ts";
 
 /** What a step produced and what it cost — and, summed over its steps, what a whole flow did. */
 export interface AgentResult {
@@ -162,6 +163,19 @@ export async function runAgent({
     // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
     // report a window, since there is nothing to plan three quarters of.
     compact: Boolean(config.compactionModel),
+    // Needs no model, so it is on wherever the window is known. It runs ahead of the fold, which
+    // then plans from what is left: a prune that brings the run back under the line spares it the
+    // summary's round trip.
+    beforeStep: (messages, _step, window) => {
+      const pruned = pruneWhenFilling(messages, window);
+      if (pruned) {
+        notice(
+          `cleared ${pruned.cleared} old tool result${pruned.cleared === 1 ? "" : "s"} ` +
+            `(~${pruned.tokens} tokens) as the window filled`,
+        );
+      }
+      return pruned?.messages;
+    },
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {
