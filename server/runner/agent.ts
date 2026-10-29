@@ -4,6 +4,7 @@ import {
   preselect,
   type RunEventInput,
   RunEventKind,
+  type RunMetrics,
   runAgentLoop,
   withContext,
 } from "@cubicecho/agent-core";
@@ -37,6 +38,12 @@ export interface AgentOptions {
   signal?: AbortSignal;
   /** Called as the run happens, for whoever is watching it. See `@cubicecho/agent-core`. */
   onEvent?: (event: RunEventInput) => void;
+  /**
+   * Handed the loop's own metrics once the step has its answer, with the window it was served.
+   * The run's metrics are summed from its events, which carry everything but what `load_tools`
+   * resolved to and which window each step's model had — this is how those two get out.
+   */
+  onMetrics?: (metrics: RunMetrics, contextLength: number) => void;
 }
 
 /**
@@ -99,6 +106,7 @@ export async function runAgent({
   servers,
   signal,
   onEvent,
+  onMetrics,
 }: AgentOptions): Promise<AgentResult> {
   if (!model) {
     throw new Error("No model selected — pick one in Settings.");
@@ -130,7 +138,7 @@ export async function runAgent({
 
   const contextLength = await windowFor({ ...config, model }, signal);
 
-  const { turn, toolCalls, usage } = await runAgentLoop({
+  const { turn, toolCalls, usage, metrics } = await runAgentLoop({
     // A step may run on a model other than the settings row's. The first token gets the same
     // patience as every one after it, where the loop would otherwise wait five times as long.
     config: {
@@ -171,6 +179,8 @@ export async function runAgent({
       onEvent?.(event);
     },
   });
+
+  onMetrics?.(metrics, contextLength);
 
   return {
     output: turn.content,

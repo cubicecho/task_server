@@ -1,4 +1,4 @@
-import type { HookNote } from "@cubicecho/agent-core";
+import type { HookNote, RunMetrics } from "@cubicecho/agent-core";
 import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { defineRelations } from "drizzle-orm";
 import {
@@ -234,6 +234,14 @@ export const runs = pgTable(
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),
+    /**
+     * The run's events summed into agent-core's `RunMetrics`, written with its outcome. The events
+     * themselves are gone a minute after the run ends, and the token columns above say what it
+     * cost but not where — which turn was slow, whether the cache held, how many tool calls failed.
+     * Those columns stay: they are what the list, the filters and the aggregates read, and a jsonb
+     * field is none of the three.
+     */
+    metrics: jsonb().$type<RunMetrics>(),
   },
   (table) => [
     index("runs_task_idx").on(table.taskId),

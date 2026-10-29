@@ -1,4 +1,4 @@
-import type { HookNote } from "@cubicecho/agent-core";
+import type { HookNote, RunMetrics } from "@cubicecho/agent-core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { History } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -21,6 +21,7 @@ import { PageLayout } from "@/components/page-layout";
 import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
+import { StatTile } from "@/components/stat-tile";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -160,6 +161,66 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
   );
 }
 
+const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;
+const seconds = (ms: number) => `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`;
+
+/**
+ * Where a finished run's effort went, from the summary stored with it. Collapsed, and a handful
+ * of figures rather than the whole object: the rest is there for whoever reads the row's JSON.
+ * A figure the endpoint never reported is a dash, not a zero nobody measured.
+ */
+function Metrics({ metrics }: { metrics: unknown }) {
+  if (!metrics) {
+    return null;
+  }
+  const m = metrics as RunMetrics;
+  const failed = Object.entries(m.toolErrors ?? {});
+  const errors = failed.reduce((sum, [, count]) => sum + count, 0);
+  return (
+    <Disclosure
+      title={`Metrics · ${m.turns} turn(s), ${m.toolCalls} tool call(s)`}
+      titleClassName={cn("text-xs", errors && "text-negative")}
+      contentSlot={
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <StatTile label="Turns" value={m.turns} hint={`${m.requests} request(s)`} />
+            <StatTile
+              label="Tool calls"
+              value={m.toolCalls}
+              valueClassName={errors ? "text-negative" : undefined}
+              hint={errors ? `${errors} failed` : `${m.loadCalls} load_tools`}
+            />
+            <StatTile
+              label="Cache hits"
+              value={m.cacheHitRatio === undefined ? "—" : percent(m.cacheHitRatio)}
+              hint={`${m.cacheBreaks} break(s)`}
+            />
+            <StatTile
+              label="Window peak"
+              value={m.largestPromptShare === undefined ? "—" : percent(m.largestPromptShare)}
+              hint={m.largestPrompt ? `${m.largestPrompt} tokens` : undefined}
+            />
+            <StatTile
+              label="First token"
+              value={m.firstTokenMs === undefined ? "—" : seconds(m.firstTokenMs)}
+              hint={m.slowestTurnMs ? `slowest turn ${seconds(m.slowestTurnMs)}` : undefined}
+            />
+          </div>
+          {failed.length ? (
+            <div className="flex flex-wrap gap-1">
+              {failed.map(([name, count]) => (
+                <Badge key={name} variant="destructive" className="font-mono font-normal">
+                  {name} ×{count}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      }
+    />
+  );
+}
+
 /**
  * The webhook body the run was given, which is half of why it did what it did.
  *
@@ -245,6 +306,7 @@ function RunDetail({
         </div>
       )}
       <HookNotes notes={found.hooks} />
+      {withResult ? <Metrics metrics={found.metrics} /> : null}
       {withResult ? result : null}
     </>
   );

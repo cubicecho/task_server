@@ -39,6 +39,7 @@ query RunDetail($id: String!) {
     toolCalls
     payload
     hooks
+    metrics
     steps(orderBy: { position: { direction: asc, priority: 1 } }) {
       id
       position
