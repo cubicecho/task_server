@@ -103,8 +103,8 @@ the format [`@cubicecho/agent-core`](https://github.com/cubicecho/agent-core) de
 file is one any host on that library reads. It holds what the profile overrides and nothing it
 inherits, the slugs of the MCP servers it is narrowed to, and those servers' configs in a
 `bundle` beside it. It holds no API key, and the bundled servers come without their `env` and
-`headers`. A secret written into a server's `args` or `url` is not found and does travel, so
-read a file before sending it.
+`headers`. A secret written into a server's `args` or `url` does travel; the export warns where
+it looks to be one, but the check is a guess, so read a file before sending it.
 
 **Import** takes a pasted document or a chosen file and shows what it would do before anything
 is saved: the profile, what was dropped and why, and each bundled server with the command it
@@ -439,9 +439,9 @@ page. `hiddenTools` hides a server's tools from the model while its hooks can st
 The API is generated from the Drizzle tables by
 [`@vantreeseba/drizzle-graphql`](https://github.com/vantreeseba/drizzle-graphql), so a new
 column is queryable as soon as it exists. Hand-written fields fill the gaps that CRUD cannot
-express: `models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec` and `agentSpecPreview` on
-the query side, `runTask`, `stopTask`, `reconnectMcp`, `setApiKey`, `setAgentApiKey` and
-`importAgentSpec` on the mutation side.
+express: `models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec`, `agentSpecSecrets` and
+`agentSpecPreview` on the query side, `runTask`, `stopTask`, `reconnectMcp`, `setApiKey`,
+`setAgentApiKey` and `importAgentSpec` on the mutation side.
 
 - **`POST /graphql`** — the API, plus GraphiQL in a browser.
 - **`/mcp`** — the same server offered to agents as MCP tools; see below. Not for the web app,

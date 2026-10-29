@@ -154,3 +154,19 @@ export function saveFile(name: string, text: string) {
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * What to tell the person who just saved a document that looks to carry a credential, or `null`
+ * when it does not. The export takes out every field the format keeps one in; what is left is a
+ * token written into a bundled server's command line or url, which travels as written.
+ */
+export function secretWarning(hints: readonly { path: string; server: string }[]): string | null {
+  if (!hints.length) {
+    return null;
+  }
+  // The server is named already, so the path only has to say where inside it.
+  const places = hints.map(
+    ({ path, server }) => `${server} ${path.replace(/^bundle\.mcpServers\[\d+\]\./, "")}`,
+  );
+  return `Check before sharing: this file may carry a credential in ${places.join(", ")}.`;
+}

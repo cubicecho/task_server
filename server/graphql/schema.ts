@@ -32,7 +32,13 @@ import * as mcpPrompts from "../runner/mcp-prompts.ts";
 import { resolveConfig } from "../runner/profile.ts";
 import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
-import { exportAgent, type ImportOptions, importAgent, previewImport } from "./agent-spec.ts";
+import {
+  exportAgent,
+  exportSecrets,
+  type ImportOptions,
+  importAgent,
+  previewImport,
+} from "./agent-spec.ts";
 import { describeColumn, describeTable } from "./docs.ts";
 import { refusal } from "./errors.ts";
 import { NEW_MCP_SERVER, shapeProblems } from "./mcp-server.ts";
@@ -40,6 +46,7 @@ import { permissions } from "./permissions.ts";
 import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./steps.ts";
 import {
   AgentSpecPreviewType,
+  AgentSpecSecretType,
   McpConnectionInput,
   McpProbeType,
   McpPromptType,
@@ -416,6 +423,16 @@ const baseSchema = new GraphQLSchema({
           "not the profile's API key, and not a bundled server's `env` or `headers`.",
         args: { agentId: { type: new GraphQLNonNull(GraphQLString) } },
         resolve: (_source, args: { agentId: string }) => exportAgent(args.agentId),
+      },
+      agentSpecSecrets: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(AgentSpecSecretType))),
+        description:
+          "Where the document `agentSpec` writes for this profile looks to carry a credential " +
+          "the export could not take out: a token among a bundled server's `args` or in its " +
+          "`url`, which travel as written. Empty when nothing looks like one. Read before " +
+          "sharing the file.",
+        args: { agentId: { type: new GraphQLNonNull(GraphQLString) } },
+        resolve: (_source, args: { agentId: string }) => exportSecrets(args.agentId),
       },
       agentSpecPreview: {
         type: new GraphQLNonNull(AgentSpecPreviewType),

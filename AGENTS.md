@@ -93,7 +93,8 @@ one, takes over a lock whose holder is gone, and does nothing at all for a `post
 `./data` with a host process is still on its own — that case is what `DATABASE_URL` is for.
 
 **Hand-written GraphQL fields go in `server/graphql/`**, beside the generated entities:
-`models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec`, `agentSpecPreview` on the query side;
+`models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec`, `agentSpecSecrets`,
+`agentSpecPreview` on the query side;
 `runTask`, `stopTask`, `reconnectMcp`, `setApiKey`, `setAgentApiKey`, `importAgentSpec` on the
 mutation side. Give every one of them a `description` — it is what an agent on `/mcp` reads to
 decide whether to call it.
@@ -403,8 +404,11 @@ without doing it. All three are in `server/graphql/agent-spec.ts`, and the parsi
 redaction and the document's shape are agent-core's — `parseSpec`, `exportSpec` — not rewritten
 here. The export is `agentLayer` with a name on it, so a file says what a run on the profile is
 told and nothing a run is not; it carries no key, and `exportSpec` takes `env` and `headers` off
-every bundled server. It does not look inside `args` or a `url`, so a secret written into a
-command line travels — that is upstream's to change.
+every bundled server. A secret written into a server's `args` or `url` still travels, since
+cutting it would point the document at a different server; `agentSpecSecrets` answers where
+agent-core's `findSpecSecrets` thinks one is — the place and the reason, never the value — and
+the export button says it in a warning once the file is saved. It is a guess both ways, and a
+warning rather than a refusal for that reason.
 
 Four things about the import were decided rather than left, and each has a test in
 `tests/agent-spec.test.ts`:

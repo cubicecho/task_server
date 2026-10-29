@@ -26,12 +26,14 @@ import {
   ItemFooter,
   ItemTitle,
 } from "@/components/ui/item";
-import { overrides, saveFile, specFileName, specText } from "@/lib/agent-spec";
+import { useToast } from "@/components/ui/toast";
+import { overrides, saveFile, secretWarning, specFileName, specText } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
 import { stringList } from "@/lib/json";
 
 export function AgentsRoute() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [editing, setEditing] = useState<AgentFieldsFragment | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -56,8 +58,14 @@ export function AgentsRoute() {
   // reported the way every other pressed button's is.
   const exportSpec = useMutation({
     mutationFn: async (agent: AgentFieldsFragment) => {
-      const { agentSpec } = await request(AgentSpecDocument, { agentId: agent.id });
+      const { agentSpec, agentSpecSecrets } = await request(AgentSpecDocument, {
+        agentId: agent.id,
+      });
       saveFile(specFileName(agent.name), specText(agentSpec));
+      const warning = secretWarning(agentSpecSecrets);
+      if (warning) {
+        toast(warning, "warning");
+      }
     },
   });
 
