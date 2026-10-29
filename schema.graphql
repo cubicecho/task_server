@@ -4740,6 +4740,11 @@ type Query {
   agentSpec(agentId: String!): JSON!
 
   """
+  Where the document `agentSpec` writes for this profile looks to carry a credential the export could not take out: a token among a bundled server's `args` or in its `url`, which travel as written. Empty when nothing looks like one. Read before sharing the file.
+  """
+  agentSpecSecrets(agentId: String!): [AgentSpecSecret!]!
+
+  """
   What `importAgentSpec` would do with the same arguments, without writing anything: the profile it would save, each thing dropped on the way, the MCP servers the document bundles, and any reason the import would be refused. Read this before importing — a bundled server is a command line somebody else wrote.
   """
   agentSpecPreview(
@@ -4977,6 +4982,22 @@ enum SettingGroupByColumn {
   requestTimeoutSeconds
   maxRetries
   maxConcurrentRuns
+}
+
+"""
+A place in an exported agent spec that looks to hold a credential, and never the value. A guess both ways: a bare token with no telling prefix is missed, and a flag merely named like a key is named. A `${VAR}` reference is never named.
+"""
+type AgentSpecSecret {
+  """Where in the document, as `bundle.mcpServers[0].args[2]`."""
+  path: String!
+
+  """The slug of the bundled MCP server it is in."""
+  server: String!
+
+  """
+  Why it was named: `userinfo` (a user or password in a url), `query` (a url parameter named like a credential), `flag` (the value of a flag or header so named), `value` (a value shaped like a key or a bearer token), or `field` (a key of the server so named).
+  """
+  sign: String!
 }
 
 """

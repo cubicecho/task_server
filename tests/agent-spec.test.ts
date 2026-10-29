@@ -10,6 +10,7 @@ import {
   overrides,
   type ProfileColumns,
   readSpec,
+  secretWarning,
   specFileName,
   specText,
   tickedSlugs,
@@ -200,6 +201,54 @@ test("the scope is exported as it runs, not as it reads", async () => {
 test("exporting a profile that is not there says so", async () => {
   const { errors } = await ask(`{ agentSpec(agentId: "nobody") }`);
   expect(errors).toEqual(["There is no agent with id nobody."]);
+});
+
+// The redaction takes `env` and `headers` and nothing else, so a token written into a command
+// line or a url travels with the file. It is not cut — that would point the document at a
+// different server — but the person exporting is told where it is.
+test("a credential the export could not take out is pointed at, never repeated", async () => {
+  await db.insert(tables.mcpServers).values([
+    {
+      id: "srv-args",
+      slug: "github",
+      transport: "stdio",
+      command: "no-such-mcp-server",
+      args: ["--api-key=sk-args-secret", "--stdio", "--token", "${GITHUB_TOKEN}"],
+    },
+    {
+      id: "srv-url",
+      slug: "search",
+      transport: "http",
+      url: "https://search.example/mcp?api_key=url-secret",
+    },
+  ]);
+  await db.insert(tables.agents).values([
+    { id: "leaky", name: "Leaky", mcpServerIds: ["srv-args", "srv-url"] },
+    { id: "clean", name: "Clean" },
+  ]);
+
+  const { data, errors } = await ask<{ agentSpecSecrets: Record<string, string>[] }>(
+    `{ agentSpecSecrets(agentId: "leaky") { path server sign } }`,
+  );
+  expect(errors).toEqual([]);
+  expect(data?.agentSpecSecrets).toEqual([
+    { path: "bundle.mcpServers[0].args[0]", server: "github", sign: "flag" },
+    { path: "bundle.mcpServers[1].url", server: "search", sign: "query" },
+  ]);
+  const text = JSON.stringify(data);
+  expect(text).not.toContain("sk-args-secret");
+  expect(text).not.toContain("url-secret");
+
+  const clean = await ask<{ agentSpecSecrets: unknown[] }>(
+    `{ agentSpecSecrets(agentId: "clean") { path } }`,
+  );
+  expect(clean.data?.agentSpecSecrets).toEqual([]);
+
+  // What the export button says once the file is saved, and that it says nothing for a clean one.
+  expect(secretWarning(data?.agentSpecSecrets as { path: string; server: string }[])).toBe(
+    "Check before sharing: this file may carry a credential in github args[0], search url.",
+  );
+  expect(secretWarning([])).toBeNull();
 });
 
 // A name is whatever somebody typed; a file name is not.

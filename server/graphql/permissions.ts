@@ -219,6 +219,8 @@ export const permissions: PermissionsMap = {
     // A profile written down as a document is the profile, and the bundle beside it is the
     // command line of every MCP server it reaches — both tables above, in one answer.
     agentSpec: canUser(Actions.read, "Agent"),
+    // Where that document's credentials are, which is a map to the same rows.
+    agentSpecSecrets: canUser(Actions.read, "Agent"),
     // Writes nothing, and still answers which slugs are MCP servers here — the preview of a
     // write an agent may not make is not a question an agent has a use for.
     agentSpecPreview: canUser(Actions.create, "Agent"),

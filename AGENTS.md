@@ -93,7 +93,8 @@ one, takes over a lock whose holder is gone, and does nothing at all for a `post
 `./data` with a host process is still on its own — that case is what `DATABASE_URL` is for.
 
 **Hand-written GraphQL fields go in `server/graphql/`**, beside the generated entities:
-`models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec`, `agentSpecPreview` on the query side;
+`models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec`, `agentSpecSecrets`,
+`agentSpecPreview` on the query side;
 `runTask`, `stopTask`, `reconnectMcp`, `setApiKey`, `setAgentApiKey`, `importAgentSpec` on the
 mutation side. Give every one of them a `description` — it is what an agent on `/mcp` reads to
 decide whether to call it.
@@ -403,8 +404,11 @@ without doing it. All three are in `server/graphql/agent-spec.ts`, and the parsi
 redaction and the document's shape are agent-core's — `parseSpec`, `exportSpec` — not rewritten
 here. The export is `agentLayer` with a name on it, so a file says what a run on the profile is
 told and nothing a run is not; it carries no key, and `exportSpec` takes `env` and `headers` off
-every bundled server. It does not look inside `args` or a `url`, so a secret written into a
-command line travels — that is upstream's to change.
+every bundled server. A secret written into a server's `args` or `url` still travels, since
+cutting it would point the document at a different server; `agentSpecSecrets` answers where
+agent-core's `findSpecSecrets` thinks one is — the place and the reason, never the value — and
+the export button says it in a warning once the file is saved. It is a guess both ways, and a
+warning rather than a refusal for that reason.
 
 Four things about the import were decided rather than left, and each has a test in
 `tests/agent-spec.test.ts`:
@@ -549,13 +553,22 @@ the same URL is otherwise sent the downgraded request for as long as the row kee
 **Three more of the loop's answers are taken rather than rebuilt.** A reply cut off at the
 ceiling (`finish_reason: "length"`) is carried on, up to `MAX_CONTINUATIONS` times, instead of
 being stored as the step's answer with its last sentence missing. A request the model cannot
-read is refused before it is sent: `windowFor` in `agent.ts` asks `contextLimitFor` what the
-model's window is and hands it to the loop as `contextLength`, and the run fails with
-`ContextOverflow` and no request made. That lookup takes no signal upstream and waits as long as
-the request timeout, so here it is raced against the run's stop and given five seconds — an
-endpoint that will not say gets no guard, which is what every run had before. And a decision
+read is refused before it is sent: `agent.ts` asks `contextLimitFor` what the model's window is
+and hands it to the loop as `contextLength`, and the run fails with `ContextOverflow` and no
+request made. The lookup takes the run's signal, so a stop ends it, and bounds itself — ten
+seconds, or the request timeout where that is shorter — upstream rather than in a race written
+here; an endpoint that will not say in time gets no guard, which is what every run had before. And a decision
 step answered in prose is read back with `askJson` against a schema whose only field is an enum
 of the step's arms, so the second opinion cannot name a case that does not exist.
+
+**A step that fills its window clears its old tool results first.** `pruning.ts` is the loop's
+`beforeStep`: past `COMPACT_AT` of a window the endpoint reported, agent-core's
+`pruneToolResults` stubs every result but the latest five, and the fold — when a compaction
+model is set — then plans from what is left. Both rewrite the prefix and cost the prompt cache,
+which is why neither runs a little on every step, and a prune that would win back less than
+`PRUNE_SHARE` of the window is not done at all. It has no column: it makes no request, so there
+is nothing for an operator to choose to pay for, and with no window known it is inert like the
+fold.
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.

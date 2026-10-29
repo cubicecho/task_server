@@ -1,4 +1,11 @@
-import { type AgentSpec, exportSpec, parseSpec, type SpecServer } from "@cubicecho/agent-core";
+import {
+  type AgentSpec,
+  exportSpec,
+  findSpecSecrets,
+  parseSpec,
+  type SecretHint,
+  type SpecServer,
+} from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { GraphQLError } from "graphql";
 import { HOOK_EVENTS_FIRED } from "../../shared/hooks.ts";
@@ -75,8 +82,8 @@ function bundled(row: McpServerRow): SpecServer {
  *
  * `exportSpec` is what makes it fit to leave: the bundle's `env` and `headers` go, which are
  * where this server keeps other people's credentials. The profile's own key was never in the
- * layer. `args` and `url` travel as written — a token typed into either is not something this
- * can tell from the rest of a command line.
+ * layer. `args` and `url` travel as written, since cutting a token out of either would point the
+ * document at a different server; `exportSecrets` says where one looks to be.
  *
  * No `id`. The row's id is this database's, and a document that carried one would arrive at
  * its importer with a field that host has to drop.
@@ -118,6 +125,16 @@ export async function exportAgent(agentId: string): Promise<AgentSpec> {
     });
   }
   return agentToSpec(agent, await db.select().from(mcpServers));
+}
+
+/**
+ * The `agentSpecSecrets` query: where the document `agentSpec` writes for this profile looks to
+ * carry a credential the redaction could not take out — a `--api-key` among a bundled server's
+ * `args`, a token in its `url`. agent-core's guess, read off the same document, so it names the
+ * places a person would check before sharing the file and never the values.
+ */
+export async function exportSecrets(agentId: string): Promise<SecretHint[]> {
+  return findSpecSecrets(await exportAgent(agentId));
 }
 
 /** What the operator chose for this import, which the document cannot choose for them. */

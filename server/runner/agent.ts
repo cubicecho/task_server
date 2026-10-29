@@ -1,6 +1,5 @@
 import {
   contextLimitFor,
-  type Endpoint,
   preselect,
   type RunEventInput,
   RunEventKind,
@@ -10,6 +9,7 @@ import {
 } from "@cubicecho/agent-core";
 import type { Settings } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
+import { pruneWhenFilling } from "./pruning.ts";
 
 /** What a step produced and what it cost — and, summed over its steps, what a whole flow did. */
 export interface AgentResult {
@@ -53,41 +53,6 @@ export interface AgentOptions {
  * stops spend a run's budget on the ceiling.
  */
 const MAX_CONTINUATIONS = 2;
-
-/**
- * How long a step waits to be told its model's window. The lookup is a courtesy to the run — it
- * buys an early, legible refusal — so an endpoint slow to list its models is not worth holding
- * the step for; it goes ahead unguarded and the answer is remembered for the next one.
- */
-const WINDOW_LOOKUP_MS = 5_000;
-
-/**
- * What the model will read, in tokens, so a request that cannot fit is refused here with its
- * size rather than by the endpoint a round trip later, in whatever words it has for that.
- *
- * Zero where the endpoint does not say or did not say in time, which guards nothing. agent-core's
- * lookup takes no signal and waits as long as a request may, so both the bound and the stop are
- * raced here: a run stopped while its endpoint sat on `/models` has to end now.
- */
-function windowFor(endpoint: Endpoint & { model: string }, signal?: AbortSignal): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const settle = (window: number) => {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", stop);
-      resolve(window);
-    };
-    const stop = () => {
-      clearTimeout(timer);
-      reject(signal?.reason);
-    };
-    const timer = setTimeout(() => settle(0), WINDOW_LOOKUP_MS);
-    if (signal?.aborted) {
-      return stop();
-    }
-    signal?.addEventListener("abort", stop, { once: true });
-    void contextLimitFor(endpoint).then(settle);
-  });
-}
 
 /**
  * Runs one task to completion: send the prompt, execute whatever MCP tools the model asks
@@ -136,7 +101,10 @@ export async function runAgent({
     notice(`tools picked before the run: ${preselected.join(", ")}`);
   }
 
-  const contextLength = await windowFor({ ...config, model }, signal);
+  // What the model will read, so a request that cannot fit is refused here with its size rather
+  // than by the endpoint a round trip later. Zero where the endpoint does not say, or not within
+  // agent-core's own bound on the lookup, which guards nothing; a stop ends the wait with the run.
+  const contextLength = await contextLimitFor({ ...config, model }, 0, { signal });
 
   const { turn, toolCalls, usage, metrics } = await runAgentLoop({
     // A step may run on a model other than the settings row's. The first token gets the same
@@ -170,6 +138,19 @@ export async function runAgent({
     // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
     // report a window, since there is nothing to plan three quarters of.
     compact: Boolean(config.compactionModel),
+    // Needs no model, so it is on wherever the window is known. It runs ahead of the fold, which
+    // then plans from what is left: a prune that brings the run back under the line spares it the
+    // summary's round trip.
+    beforeStep: (messages, _step, window) => {
+      const pruned = pruneWhenFilling(messages, window);
+      if (pruned) {
+        notice(
+          `cleared ${pruned.cleared} old tool result${pruned.cleared === 1 ? "" : "s"} ` +
+            `(~${pruned.tokens} tokens) as the window filled`,
+        );
+      }
+      return pruned?.messages;
+    },
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {

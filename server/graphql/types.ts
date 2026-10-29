@@ -321,6 +321,31 @@ const AgentSpecBundledType = new GraphQLObjectType({
   },
 });
 
+export const AgentSpecSecretType = new GraphQLObjectType({
+  name: "AgentSpecSecret",
+  description:
+    "A place in an exported agent spec that looks to hold a credential, and never the value. " +
+    "A guess both ways: a bare token with no telling prefix is missed, and a flag merely named " +
+    "like a key is named. A `${VAR}` reference is never named.",
+  fields: {
+    path: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "Where in the document, as `bundle.mcpServers[0].args[2]`.",
+    },
+    server: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The slug of the bundled MCP server it is in.",
+    },
+    sign: {
+      type: new GraphQLNonNull(GraphQLString),
+      description:
+        "Why it was named: `userinfo` (a user or password in a url), `query` (a url parameter " +
+        "named like a credential), `flag` (the value of a flag or header so named), `value` (a " +
+        "value shaped like a key or a bearer token), or `field` (a key of the server so named).",
+    },
+  },
+});
+
 export const AgentSpecPreviewType = new GraphQLObjectType({
   name: "AgentSpecPreview",
   description:
