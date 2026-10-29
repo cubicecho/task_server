@@ -533,6 +533,19 @@ each attempt's `max_tokens` and `temperature` from what that model has refused. 
 an operator pick any name the endpoint lists, so it is one selection away from meeting both.
 `reasoningEffort` is the third and goes unread here: there is no column for an effort to send.
 
+**What was refused outlives the process.** agent-core holds those latches in memory, so each
+restart paid one refused request per endpoint and model to learn them again.
+`server/runner/capabilities.ts` imports `exportCapabilities`' snapshot on boot and writes it when
+a run ends — compared first, so the write is as rare as the lesson rather than one per run, and
+chained so two runs ending together do not race. It lives in `endpoint_capabilities`, a one-row
+table that `exclude.tables` keeps out of the generated schema: it is the runner's cache, not
+configuration, so it is no field on the settings type, no `/mcp` tool and no bytes in the
+listing. The blob names endpoints by digest and carries no key. A snapshot `importCapabilities`
+will not read — a version bump upstream — is logged and overwritten by the next save rather than
+failing boot. A latch is believed for `CAPABILITY_MAX_AGE_MS`, a day from when the endpoint was
+first met, and `expireCapabilities` sweeps on boot and before each save: a server upgraded behind
+the same URL is otherwise sent the downgraded request for as long as the row keeps being saved.
+
 **Three more of the loop's answers are taken rather than rebuilt.** A reply cut off at the
 ceiling (`finish_reason: "length"`) is carried on, up to `MAX_CONTINUATIONS` times, instead of
 being stored as the step's answer with its last sentence missing. A request the model cannot

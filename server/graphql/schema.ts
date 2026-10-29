@@ -90,6 +90,9 @@ const { entities } = buildSchema(db, {
     // triggers, and a flow is written by `setTaskSteps` rather than row at a time regardless.
   },
   exclude: {
+    // The runner's cache of what endpoints refused, not anything a caller configures or reads:
+    // no type, no query, no tool on `/mcp`. See `runner/capabilities.ts`.
+    tables: ["endpointCapabilities"],
     // A key never needs to travel back to the browser; the UI only ever writes one. Both are
     // written by a mutation of their own — `setApiKey` and `setAgentApiKey` — because excluding
     // the column takes it out of the update input as well as out of the row.

@@ -2,6 +2,7 @@ import { emit, errorMessage, type RunEventInput, RunEventKind } from "@cubicecho
 import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Run, runs, type Step, steps, type Task, tasks } from "../db/schema.ts";
+import { persistCapabilities } from "./capabilities.ts";
 import { runFlow } from "./flow.ts";
 import { type HookSession, hookSession } from "./hooks.ts";
 import { loadSettings } from "./llm.ts";
@@ -501,6 +502,8 @@ async function execute({
     inFlight.delete(task.id);
     // The slot is free, so whatever was waiting for one can have it.
     drainSoon();
+    // Whatever the endpoint refused this run, the next boot need not be refused it again.
+    void persistCapabilities();
   }
 }
 
