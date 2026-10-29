@@ -85,6 +85,9 @@ export const agents = pgTable("agents", {
     .notNull()
     .default("inherit"),
   toolSelectModel: text().notNull().default(""),
+  toolExecution: text({ enum: ["inherit", "sequential", "parallel"] })
+    .notNull()
+    .default("inherit"),
   compactionModel: text().notNull().default(""),
   requestTimeoutSeconds: integer().notNull().default(-1),
   maxRetries: integer().notNull().default(-1),
@@ -340,6 +343,17 @@ export const settings = pgTable("settings", {
     .notNull()
     .default("eager"),
   toolSelectModel: text().notNull().default(""),
+  /**
+   * Whether the calls a model asks for in one reply run one after another or all at once. The
+   * results go back in the order the model asked either way. Sequential by default because this
+   * server cannot tell a tool that reads from one that writes: two writes to the same file, or a
+   * create and the update that assumes it, are only safe in the order they were asked. An
+   * operator whose tools are reads turns it on, and a round trip then costs the slowest call
+   * rather than the sum of them.
+   */
+  toolExecution: text({ enum: ["sequential", "parallel"] })
+    .notNull()
+    .default("sequential"),
   /**
    * The model that summarises the oldest stretch of a step's transcript once it fills three
    * quarters of the window, so a long tool loop keeps going instead of failing with

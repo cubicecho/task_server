@@ -156,6 +156,7 @@ test("a column left to inherit is a field the document does not have", async () 
     maxToolIterations: 12,
     toolDiscovery: "ondemand",
     toolSelectModel: "small",
+    toolExecution: "parallel",
     requestTimeoutSeconds: 0,
     maxRetries: 0,
   });
@@ -170,6 +171,7 @@ test("a column left to inherit is a field the document does not have", async () 
     tools: { discovery: "ondemand", maxIterations: 12 },
     retry: { maxRetries: 0 },
     tasks: { toolSelect: { model: "small" } },
+    extensions: { "com.cubicecho.task-server": { toolExecution: "parallel" } },
   });
 });
 
@@ -241,7 +243,7 @@ const PREVIEW = `query ($document: JSON!, $createServers: [String!], $name: Stri
     refusals warnings dropped
     agent {
       name description baseUrl model systemPrompt maxTokens temperature maxToolIterations
-      toolDiscovery toolSelectModel requestTimeoutSeconds maxRetries
+      toolDiscovery toolSelectModel toolExecution requestTimeoutSeconds maxRetries
     }
     servers { slug label created }
     bundled {
@@ -366,6 +368,7 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     maxToolIterations: -1,
     toolDiscovery: "inherit",
     toolSelectModel: "",
+    toolExecution: "inherit",
     compactionModel: "",
     requestTimeoutSeconds: -1,
     maxRetries: -1,
@@ -381,6 +384,7 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     maxToolIterations: 1,
     toolDiscovery: "eager",
     toolSelectModel: "small",
+    toolExecution: "parallel",
     compactionModel: "summary",
     requestTimeoutSeconds: 0,
     maxRetries: 0,
@@ -413,6 +417,12 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
   // `toolDiscovery` has two answers that are not inherit.
   const ondemand = await trip({ toolDiscovery: "ondemand" });
   expect(ondemand.back.toolDiscovery).toBe("ondemand");
+  // And so does `toolExecution`, which travels in this server's own extension.
+  const sequential = await trip({ toolExecution: "sequential" });
+  expect(sequential.spec.extensions).toEqual({
+    "com.cubicecho.task-server": { toolExecution: "sequential" },
+  });
+  expect(sequential.back.toolExecution).toBe("sequential");
 });
 
 // The one value a column holds that the format does not: the parser wants at least one tool
@@ -750,7 +760,10 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     tools: { discovery: "proxy" },
     retry: { loadingTimeoutSeconds: 60 },
     tasks: { title: { model: "tiny" }, toolSelect: { model: "small", maxTokens: 10 } },
-    extensions: { "x-sandbox": { image: "alpine" } },
+    extensions: {
+      "x-sandbox": { image: "alpine" },
+      "com.cubicecho.task-server": { toolExecution: "fast", colour: "red" },
+    },
     futureKey: true,
   };
 
@@ -761,6 +774,8 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     "$schema",
     "futureKey",
     "extensions.x-sandbox",
+    "extensions.com.cubicecho.task-server.toolExecution",
+    "extensions.com.cubicecho.task-server.colour",
     "endpoint.firstTokenSeconds",
     "model.reasoningEffort",
     "model.contextLength",
@@ -780,6 +795,7 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     maxTokens: -1,
     toolDiscovery: "inherit",
     toolSelectModel: "small",
+    toolExecution: "inherit",
   });
   expect(shown.warnings).toContain(
     "prompt: 2 parts are joined into the one system prompt a profile holds",

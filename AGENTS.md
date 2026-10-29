@@ -373,7 +373,14 @@ table of rows; the one thing the resolver does that the old merge did not is tri
 system prompt when a profile is in play. Nothing downstream branches: `agent.ts`, `flow.ts` and `llm.ts` read one `Settings`
 exactly as they always did, which is why per-task endpoints cost the agent loop nothing. Blank
 is inherit, and the sentinel differs by column because zero is a real answer for most of them —
-`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`.
+`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery` and `toolExecution`.
+
+`toolExecution` is the one column a spec has no field for, so it is laid over in
+`resolveConfig` by hand rather than by the resolver, and it travels in an export under this
+server's own extension, `extensions["com.cubicecho.task-server"]` (`SPEC_EXTENSION` in
+`profile.ts`) — the format's place for what a host has a name for and it does not, and kept by
+every reader where an unknown key under `tools` would be dropped on the way back in. The import
+reads that one extension and drops every other, as before.
 
 The key is the one column that is not a plain override. A profile naming a `baseUrl` of its own
 never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`,
@@ -509,7 +516,11 @@ demand lands mid-array and moves every definition after it, where unsorted it is
 the prefix an endpoint cached still matches — and the pool's order is configuration order, so
 there is no shuffle for a sort to undo. Reopen it with evidence that the order moves between
 requests. `dedupeToolCalls: false` leaves two identical calls in one step as two calls, since a
-counter or a "next page" is meant to answer differently the second time. Recovery is on: a call the model wrote into its reply as text — a
+counter or a "next page" is meant to answer differently the second time. `parallel` is the
+operator's, as `settings.toolExecution` (and a profile's): sequential by default, because this
+server cannot tell a tool that reads from one that writes, and two writes run together land in
+whichever order they finish — the results go back to the model in the order it asked either
+way. Recovery is on: a call the model wrote into its reply as text — a
 server whose parser misses the model's template streams it as content — is run as a call rather
 than stored as the step's answer, and the watcher is told in a notice.
 `firstTokenSeconds` is set to `requestTimeoutSeconds`, where the loop would otherwise give the

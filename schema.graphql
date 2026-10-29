@@ -45,6 +45,11 @@ type Agent {
   toolSelectModel: String!
 
   """
+  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  """
+  toolExecution: AgentsToolExecutionEnum!
+
+  """
   Empty inherits the server default, which is off unless one is set there.
   """
   compactionModel: String!
@@ -94,6 +99,17 @@ enum AgentsToolDiscoveryEnum {
 
   """Value: ondemand"""
   ondemand
+}
+
+enum AgentsToolExecutionEnum {
+  """Value: inherit"""
+  inherit
+
+  """Value: sequential"""
+  sequential
+
+  """Value: parallel"""
+  parallel
 }
 
 """
@@ -189,6 +205,11 @@ type AgentMinAggregate {
   toolSelectModel: String
 
   """
+  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  """
+  toolExecution: AgentsToolExecutionEnum
+
+  """
   Empty inherits the server default, which is off unless one is set there.
   """
   compactionModel: String
@@ -250,6 +271,11 @@ type AgentMaxAggregate {
   toolSelectModel: String
 
   """
+  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  """
+  toolExecution: AgentsToolExecutionEnum
+
+  """
   Empty inherits the server default, which is off unless one is set there.
   """
   compactionModel: String
@@ -279,6 +305,7 @@ type AgentCountNonNullAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  toolExecution: Int!
   compactionModel: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -299,6 +326,7 @@ type AgentCountDistinctAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  toolExecution: Int!
   compactionModel: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -362,6 +390,11 @@ type AgentGroupKeys {
   Empty inherits the server default. Unused unless discovery is on demand.
   """
   toolSelectModel: String
+
+  """
+  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  """
+  toolExecution: AgentsToolExecutionEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -1869,6 +1902,11 @@ type Setting {
   toolSelectModel: String!
 
   """
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  """
+  toolExecution: SettingsToolExecutionEnum!
+
+  """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
   """
   compactionModel: String!
@@ -1905,6 +1943,14 @@ enum SettingsToolDiscoveryEnum {
 
   """Value: ondemand"""
   ondemand
+}
+
+enum SettingsToolExecutionEnum {
+  """Value: sequential"""
+  sequential
+
+  """Value: parallel"""
+  parallel
 }
 
 type SettingAggregate {
@@ -1975,6 +2021,11 @@ type SettingMinAggregate {
   toolSelectModel: String
 
   """
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  """
+  toolExecution: SettingsToolExecutionEnum
+
+  """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
   """
   compactionModel: String
@@ -2038,6 +2089,11 @@ type SettingMaxAggregate {
   toolSelectModel: String
 
   """
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  """
+  toolExecution: SettingsToolExecutionEnum
+
+  """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
   """
   compactionModel: String
@@ -2073,6 +2129,7 @@ type SettingCountNonNullAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  toolExecution: Int!
   compactionModel: Int!
   runRetentionDays: Int!
   requestTimeoutSeconds: Int!
@@ -2090,6 +2147,7 @@ type SettingCountDistinctAggregate {
   maxToolIterations: Int!
   toolDiscovery: Int!
   toolSelectModel: Int!
+  toolExecution: Int!
   compactionModel: Int!
   runRetentionDays: Int!
   requestTimeoutSeconds: Int!
@@ -2147,6 +2205,11 @@ type SettingGroupKeys {
   Small model that guesses a run's tools before it starts, so on-demand loading usually costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.
   """
   toolSelectModel: String
+
+  """
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  """
+  toolExecution: SettingsToolExecutionEnum
 
   """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
@@ -2218,6 +2281,11 @@ input CreateAgentInput {
   toolSelectModel: String
 
   """
+  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  """
+  toolExecution: AgentsToolExecutionEnum
+
+  """
   Empty inherits the server default, which is off unless one is set there.
   """
   compactionModel: String
@@ -2282,6 +2350,11 @@ input UpdateAgentInput {
   Empty inherits the server default. Unused unless discovery is on demand.
   """
   toolSelectModel: String
+
+  """
+  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  """
+  toolExecution: AgentsToolExecutionEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -2357,6 +2430,11 @@ input AgentFilters {
   Empty inherits the server default. Unused unless discovery is on demand.
   """
   toolSelectModel: StringFilter
+
+  """
+  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  """
+  toolExecution: AgentsToolExecutionEnumFilter
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -2576,6 +2654,35 @@ input AgentsToolDiscoveryEnumFilter {
   NOT: AgentsToolDiscoveryEnumFilter
 }
 
+input AgentsToolExecutionEnumFilter {
+  """Equal to"""
+  eq: AgentsToolExecutionEnum
+
+  """Not equal to"""
+  ne: AgentsToolExecutionEnum
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [AgentsToolExecutionEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [AgentsToolExecutionEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [AgentsToolExecutionEnumFilter!]
+
+  """Every branch matches"""
+  AND: [AgentsToolExecutionEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: AgentsToolExecutionEnumFilter
+}
+
 input JSONFilter {
   """JSON equality on the whole value"""
   eq: JSON
@@ -2739,6 +2846,7 @@ input AgentOrderBy {
   maxToolIterations: InnerOrder
   toolDiscovery: InnerOrder
   toolSelectModel: InnerOrder
+  toolExecution: InnerOrder
   compactionModel: InnerOrder
   requestTimeoutSeconds: InnerOrder
   maxRetries: InnerOrder
@@ -2850,6 +2958,7 @@ input AgentCountNonNullHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  toolExecution: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
@@ -2870,6 +2979,7 @@ input AgentCountDistinctHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  toolExecution: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
@@ -4264,6 +4374,11 @@ input UpdateSettingInput {
   toolSelectModel: String
 
   """
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  """
+  toolExecution: SettingsToolExecutionEnum
+
+  """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
   """
   compactionModel: String
@@ -4336,6 +4451,11 @@ input SettingFilters {
   toolSelectModel: StringFilter
 
   """
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  """
+  toolExecution: SettingsToolExecutionEnumFilter
+
+  """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
   """
   compactionModel: StringFilter
@@ -4399,6 +4519,35 @@ input SettingsToolDiscoveryEnumFilter {
   NOT: SettingsToolDiscoveryEnumFilter
 }
 
+input SettingsToolExecutionEnumFilter {
+  """Equal to"""
+  eq: SettingsToolExecutionEnum
+
+  """Not equal to"""
+  ne: SettingsToolExecutionEnum
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [SettingsToolExecutionEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [SettingsToolExecutionEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [SettingsToolExecutionEnumFilter!]
+
+  """Every branch matches"""
+  AND: [SettingsToolExecutionEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: SettingsToolExecutionEnumFilter
+}
+
 input SettingOrderBy {
   id: InnerOrder
   baseUrl: InnerOrder
@@ -4409,6 +4558,7 @@ input SettingOrderBy {
   maxToolIterations: InnerOrder
   toolDiscovery: InnerOrder
   toolSelectModel: InnerOrder
+  toolExecution: InnerOrder
   compactionModel: InnerOrder
   runRetentionDays: InnerOrder
   requestTimeoutSeconds: InnerOrder
@@ -4478,6 +4628,7 @@ input SettingCountNonNullHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  toolExecution: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
@@ -4495,6 +4646,7 @@ input SettingCountDistinctHaving {
   maxToolIterations: AggregateNumberFilter
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
+  toolExecution: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
@@ -4795,6 +4947,7 @@ enum AgentDistinctColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  toolExecution
   compactionModel
   requestTimeoutSeconds
   maxRetries
@@ -4816,6 +4969,7 @@ enum AgentGroupByColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  toolExecution
   compactionModel
   requestTimeoutSeconds
   maxRetries
@@ -4940,6 +5094,7 @@ enum SettingDistinctColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  toolExecution
   compactionModel
   runRetentionDays
   requestTimeoutSeconds
@@ -4958,6 +5113,7 @@ enum SettingGroupByColumn {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  toolExecution
   compactionModel
   runRetentionDays
   requestTimeoutSeconds
@@ -5012,6 +5168,7 @@ type AgentSpecProfile {
   maxToolIterations: Int!
   toolDiscovery: String!
   toolSelectModel: String!
+  toolExecution: String!
   compactionModel: String!
   requestTimeoutSeconds: Int!
   maxRetries: Int!

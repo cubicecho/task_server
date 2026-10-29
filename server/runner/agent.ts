@@ -158,6 +158,9 @@ export async function runAgent({
     // calls: a counter or a "next page" is meant to answer differently the second time.
     toolOrder: false,
     dedupeToolCalls: false,
+    // The operator's call, since only they know whether their tools write: results still go back
+    // in the order the model asked, but two writes run together land in the order they finish.
+    parallel: config.toolExecution === "parallel",
     maxContinuations: MAX_CONTINUATIONS,
     // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
     // report a window, since there is nothing to plan three quarters of.
