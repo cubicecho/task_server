@@ -54,6 +54,7 @@ interface Draft {
   maxToolIterations: number | null;
   toolDiscovery: AgentsToolDiscoveryEnum;
   toolSelectModel: string;
+  compactionModel: string;
   requestTimeoutSeconds: number | null;
   maxRetries: number | null;
   mcpServerIds: string[];
@@ -76,6 +77,7 @@ const toDraft = (agent?: AgentFieldsFragment): Draft => ({
   maxToolIterations: shown(agent?.maxToolIterations ?? -1),
   toolDiscovery: agent?.toolDiscovery ?? AgentsToolDiscoveryEnum.Inherit,
   toolSelectModel: agent?.toolSelectModel ?? "",
+  compactionModel: agent?.compactionModel ?? "",
   requestTimeoutSeconds: shown(agent?.requestTimeoutSeconds ?? -1),
   maxRetries: shown(agent?.maxRetries ?? -1),
   // The JSON scalar carries no shape, so this is where it is said what the column holds.
@@ -282,6 +284,15 @@ export function AgentDialog({
             name="toolSelectModel"
             label="Tool-picking model"
             description={doc("toolSelectModel")}
+            defaultLabel="From settings"
+            agentId={agent?.id}
+          />
+
+          <ModelSelectField
+            form={form}
+            name="compactionModel"
+            label="Compaction model"
+            description={doc("compactionModel")}
             defaultLabel="From settings"
             agentId={agent?.id}
           />

@@ -16,6 +16,7 @@ const ROW: SettingsFieldsFragment = {
   maxToolIterations: 20,
   toolDiscovery: SettingsToolDiscoveryEnum.Eager,
   toolSelectModel: "",
+  compactionModel: "",
   requestTimeoutSeconds: 120,
   maxRetries: 2,
   maxConcurrentRuns: 4,

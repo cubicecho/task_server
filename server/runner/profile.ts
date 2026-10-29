@@ -52,7 +52,10 @@ const settingsLayer = (settings: Settings): AgentSpec => ({
   prompt: [{ id: SYSTEM, text: settings.systemPrompt }],
   tools: { discovery: settings.toolDiscovery, maxIterations: settings.maxToolIterations },
   retry: { maxRetries: settings.maxRetries },
-  tasks: { toolSelect: { model: settings.toolSelectModel } },
+  tasks: {
+    toolSelect: { model: settings.toolSelectModel },
+    compaction: { model: settings.compactionModel },
+  },
 });
 
 /**
@@ -67,6 +70,7 @@ const settingsLayer = (settings: Settings): AgentSpec => ({
 export const agentLayer = (agent: Agent): AgentSpec => {
   const prompt = str(agent.systemPrompt);
   const toolSelect = str(agent.toolSelectModel);
+  const compaction = str(agent.compactionModel);
   return {
     spec: AGENT_SPEC,
     endpoint: {
@@ -84,7 +88,14 @@ export const agentLayer = (agent: Agent): AgentSpec => {
       maxIterations: num(agent.maxToolIterations),
     },
     retry: { maxRetries: num(agent.maxRetries) },
-    ...(toolSelect ? { tasks: { toolSelect: { model: toolSelect } } } : {}),
+    ...(toolSelect || compaction
+      ? {
+          tasks: {
+            ...(toolSelect ? { toolSelect: { model: toolSelect } } : {}),
+            ...(compaction ? { compaction: { model: compaction } } : {}),
+          },
+        }
+      : {}),
   };
 };
 
@@ -120,6 +131,8 @@ export function resolveConfig(settings: Settings, agent?: Agent | null): Setting
     // optional there where the settings column always holds one.
     toolDiscovery: merged.toolDiscovery === "proxy" ? settings.toolDiscovery : merged.toolDiscovery,
     toolSelectModel: merged.toolSelectModel,
+    // The resolver leaves out a task whose model is blank, which is the column's own "off".
+    compactionModel: merged.tasks.compaction?.model ?? "",
     requestTimeoutSeconds: merged.requestTimeoutSeconds ?? settings.requestTimeoutSeconds,
     maxRetries: merged.maxRetries,
   };

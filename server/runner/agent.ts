@@ -138,6 +138,11 @@ export async function runAgent({
       model,
       contextLength,
       firstTokenSeconds: config.requestTimeoutSeconds,
+      // On the run's own endpoint, and only when a model is named: the loop has no fallback to
+      // the main model, so an empty column leaves `compact` with nothing to summarise with.
+      ...(config.compactionModel
+        ? { tasks: { compaction: { model: config.compactionModel, endpoint: config } } }
+        : {}),
     },
     system: systemPrompt,
     // The context goes on the step's one question and stays there for the step's whole loop: a
@@ -154,6 +159,9 @@ export async function runAgent({
     toolOrder: false,
     dedupeToolCalls: false,
     maxContinuations: MAX_CONTINUATIONS,
+    // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
+    // report a window, since there is nothing to plan three quarters of.
+    compact: Boolean(config.compactionModel),
     dispatch: (call) => mcp.call(call.name, call.args, { servers }),
     signal,
     onEvent: (event) => {

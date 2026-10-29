@@ -254,6 +254,7 @@ const AgentSpecProfileType = new GraphQLObjectType({
     maxToolIterations: { type: new GraphQLNonNull(GraphQLInt) },
     toolDiscovery: { type: new GraphQLNonNull(GraphQLString) },
     toolSelectModel: { type: new GraphQLNonNull(GraphQLString) },
+    compactionModel: { type: new GraphQLNonNull(GraphQLString) },
     requestTimeoutSeconds: { type: new GraphQLNonNull(GraphQLInt) },
     maxRetries: { type: new GraphQLNonNull(GraphQLInt) },
   },

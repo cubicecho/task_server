@@ -62,6 +62,7 @@ export const COLUMN_DOCS: ColumnDocs = {
     maxToolIterations: "Ceiling on tool round-trips in a run. `-1` inherits the server default.",
     toolDiscovery: "`inherit` uses the server default; otherwise `eager` or `ondemand`.",
     toolSelectModel: "Empty inherits the server default. Unused unless discovery is on demand.",
+    compactionModel: "Empty inherits the server default, which is off unless one is set there.",
     requestTimeoutSeconds:
       "Seconds of silence before a request is given up on. `-1` inherits the server default; " +
       "`0` waits forever.",
@@ -189,6 +190,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     toolSelectModel:
       "Small model that guesses a run's tools before it starts, so on-demand loading usually " +
       "costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.",
+    compactionModel:
+      "Model that summarises the oldest messages once a step fills 75% of the context window, " +
+      "so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.",
     runRetentionDays:
       "How long a finished run is kept, in days. Older runs are deleted hourly. Zero keeps every " +
       "run forever.",

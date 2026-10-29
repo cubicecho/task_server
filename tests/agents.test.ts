@@ -55,6 +55,7 @@ const agent = (over: Partial<Agent> = {}): Agent => ({
   maxToolIterations: -1,
   toolDiscovery: "inherit",
   toolSelectModel: "",
+  compactionModel: "",
   requestTimeoutSeconds: -1,
   maxRetries: -1,
   mcpServerIds: null,
@@ -90,6 +91,7 @@ const GOLDEN: {
       maxToolIterations: 3,
       toolDiscovery: "ondemand",
       toolSelectModel: "tiny",
+      compactionModel: "summary",
       requestTimeoutSeconds: 30,
       maxRetries: 5,
     },
@@ -101,6 +103,7 @@ const GOLDEN: {
       maxToolIterations: 3,
       toolDiscovery: "ondemand",
       toolSelectModel: "tiny",
+      compactionModel: "summary",
       requestTimeoutSeconds: 30,
       maxRetries: 5,
     },
@@ -141,7 +144,13 @@ const GOLDEN: {
   },
   {
     name: "whitespace in every string column",
-    agent: { baseUrl: "  ", model: " \t", systemPrompt: "\n\n", toolSelectModel: " " },
+    agent: {
+      baseUrl: "  ",
+      model: " \t",
+      systemPrompt: "\n\n",
+      toolSelectModel: " ",
+      compactionModel: " ",
+    },
     expected: {},
   },
   {
@@ -163,6 +172,17 @@ const GOLDEN: {
     settings: { systemPrompt: "  server prompt\n" },
     agent: { model: "gpt-5" },
     expected: { model: "gpt-5", systemPrompt: "server prompt" },
+  },
+  {
+    name: "a profile turns compaction on where settings leaves it off",
+    agent: { compactionModel: "summary" },
+    expected: { compactionModel: "summary" },
+  },
+  {
+    name: "a profile that leaves compaction blank inherits the server's",
+    settings: { compactionModel: "summary" },
+    agent: { model: "gpt-5" },
+    expected: { model: "gpt-5" },
   },
   {
     name: "inherit over ondemand",

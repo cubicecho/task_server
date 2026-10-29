@@ -144,9 +144,13 @@ export type ImportedAgent = Pick<
   | "maxToolIterations"
   | "toolDiscovery"
   | "toolSelectModel"
+  | "compactionModel"
   | "requestTimeoutSeconds"
   | "maxRetries"
 >;
+
+/** The side tasks a profile has a column for, each holding a model and nothing else. */
+const SIDE_TASKS: ReadonlySet<string> = new Set(["toolSelect", "compaction"]);
 
 /** One server the profile would be narrowed to. */
 export interface ScopedServer {
@@ -418,13 +422,13 @@ export function planImport(
     drop("tools.discovery", '"proxy" is not a mode this server has, so it is left to inherit');
   }
   for (const [task, said] of Object.entries(spec.tasks ?? {})) {
-    if (task !== "toolSelect") {
+    if (!SIDE_TASKS.has(task)) {
       drop(`tasks.${task}`, "this server runs no such side task");
       continue;
     }
     for (const key of Object.keys(said)) {
       if (key !== "model") {
-        drop(`tasks.toolSelect.${key}`, "tool selection takes a model only");
+        drop(`tasks.${task}.${key}`, "a side task here takes a model only");
       }
     }
   }
@@ -476,6 +480,7 @@ export function planImport(
     maxToolIterations: whole("tools.maxIterations", spec.tools?.maxIterations),
     toolDiscovery: discovery === "eager" || discovery === "ondemand" ? discovery : "inherit",
     toolSelectModel: spec.tasks?.toolSelect?.model?.trim() ?? "",
+    compactionModel: spec.tasks?.compaction?.model?.trim() ?? "",
     requestTimeoutSeconds: whole(
       "endpoint.requestTimeoutSeconds",
       spec.endpoint?.requestTimeoutSeconds,
