@@ -1,4 +1,5 @@
 import {
+  type AgentLoopHooks,
   configureHooks,
   errorMessage,
   gather,
@@ -13,7 +14,6 @@ import {
 } from "@cubicecho/agent-core";
 import { type ToolHook, validateHooks } from "@cubicecho/agent-mcp-pool";
 import { eq, sql } from "drizzle-orm";
-import { unfiredProblems } from "../../shared/hooks.ts";
 import { db } from "../db/client.ts";
 import { runSteps, runs, type Step, type Task } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
@@ -25,8 +25,10 @@ import { mcp } from "./mcp.ts";
  * A run is the session (`{{session.id}}` is the run id) and each executed step is a turn, the
  * task's own prompt being turn 0 with `sessionStart` ahead of it. `sessionEnd` fires once the
  * run has finished, `sessionDelete` for a run deleted by hand, by retention or with its task,
- * and `beforeCompact` never, so a hook bound to it is refused on save. A skipped or queued run
- * fires nothing, and `{{vars.task.id}}` is the key for memory that should outlast one run.
+ * and `beforeCompact` when a step's transcript is folded — which only a step on a compaction
+ * model ever is, and which the loop fires rather than this file (see `compaction`). A skipped or
+ * queued run fires nothing, and `{{vars.task.id}}` is the key for memory that should outlast one
+ * run.
  */
 
 /** Every hook's `{{host}}`, so a server shared with min-agent can tell the two apart. */
@@ -36,9 +38,8 @@ const HOST = "task-server";
 const log = (message: string) => console.warn(`[hooks] ${message}`);
 
 /**
- * What is wrong with a row's hooks, for the write that saves them.
- *
- * The pool's own check, plus the one thing it cannot know: which events this host fires.
+ * What is wrong with a row's hooks, for the write that saves them. The pool's own check: every
+ * event it knows is one this host fires.
  */
 export function hookProblems(hooks: unknown): string[] {
   if (hooks === null || hooks === undefined) {
@@ -47,7 +48,7 @@ export function hookProblems(hooks: unknown): string[] {
   if (!Array.isArray(hooks)) {
     return ["hooks must be a JSON array"];
   }
-  return [...validateHooks(hooks as ToolHook[]), ...unfiredProblems(hooks as Partial<ToolHook>[])];
+  return validateHooks(hooks as ToolHook[]);
 }
 
 /**
@@ -63,7 +64,7 @@ export const HOOK_PREFACE =
 configureHooks({ preface: HOOK_PREFACE });
 
 /** A note as a watcher reads it on the run's event stream. */
-const describe = (note: HookNote) =>
+export const describe = (note: HookNote) =>
   note.error
     ? `hook ${note.source}/${note.hookId} (${note.event}) did nothing: ${note.error}`
     : `hook ${note.source}/${note.hookId} (${note.event}) added ${note.tokens ?? 0} tokens of context`;
@@ -167,6 +168,27 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
           .where(eq(runSteps.id, rowId));
       });
       pending.push(done.catch((error: unknown) => log(`afterTurn: ${errorMessage(error)}`)));
+    },
+
+    /**
+     * The step's hooks as the loop takes them, for the one event it fires on this host's behalf:
+     * `beforeCompact`, told what is about to be summarised away.
+     *
+     * Everything else is filtered out of the runner, because `before` and `after` already fire
+     * `beforeTurn` and `afterTurn` around the whole step, and the loop would otherwise fire them a
+     * second time. `offset` numbers the step's messages from where `exchange` lays them, so a
+     * folded message reaches a memory server under the uuid its `afterTurn` will use. What fails
+     * is told to `onNote` and kept on the step's row with the rest.
+     */
+    compaction(step: HookStep, onNote: (note: HookNote) => void): AgentLoopHooks {
+      return {
+        run: (event, context, options) =>
+          event === HookEvent.BeforeCompact ? run(event, context, options) : Promise.resolve([]),
+        context: { ...contextFor(step), prompt: step.prompt, turn: { index: step.index } },
+        events: [],
+        offset: step.index * 2,
+        onNote,
+      };
     },
 
     /**

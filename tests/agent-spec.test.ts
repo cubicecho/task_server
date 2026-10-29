@@ -730,9 +730,8 @@ test("a bundled server the form would refuse is refused from a file too", async 
   expect(await written()).toEqual({ agents: [], servers: [] });
 });
 
-// The document was written for a host that compacts. Here the hook waits forever, which is
-// worth saying and not worth refusing an agent over — unlike the same hook typed into the form.
-test("a hook this host never fires is a note on import, and still a refusal on a write", async () => {
+// A server's `beforeCompact` arrives as written; an agent-level hook still has nowhere to go.
+test("a beforeCompact hook is imported like any other, and accepted on a write", async () => {
   const hooks = [{ id: "c", on: "beforeCompact", tool: "echo" }];
   const document = {
     spec: SPEC,
@@ -746,12 +745,8 @@ test("a hook this host never fires is a note on import, and still a refusal on a
   const shown = await preview(document, { createServers: ["m"] });
   expect(shown.refusals).toEqual([]);
   expect(shown.bundled[0].problems).toEqual([]);
-  expect(shown.bundled[0].notes).toEqual([
-    'hook "c": task-server never compacts, so beforeCompact never fires — kept as written, ' +
-      "and never called",
-  ]);
-  // The parser says the same of the agent's own hook, and a profile has nowhere to put one.
-  expect(shown.warnings).toContain('hooks[0].on: "beforeCompact" is never fired by this host');
+  expect(shown.bundled[0].notes).toEqual([]);
+  expect(shown.warnings.join("\n")).not.toContain("never fired");
   expect(shown.dropped).toEqual([
     'hooks[0]: "agent-level" — a profile has no hooks here; a hook is set on its MCP server\'s row',
   ]);
@@ -765,7 +760,7 @@ test("a hook this host never fires is a note on import, and still a refusal on a
     }`,
     { hooks },
   );
-  expect(errors[0]).toContain("never compacts");
+  expect(errors).toEqual([]);
 });
 
 test("a document that is not a spec is refused in the parser's words", async () => {

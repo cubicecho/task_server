@@ -1,6 +1,7 @@
 import {
   askJson,
   errorMessage,
+  type HookNote,
   parseJson,
   type RunEventInput,
   RunEventKind,
@@ -11,7 +12,7 @@ import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flo
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
 import { type AgentOptions, type AgentResult, runAgent } from "./agent.ts";
-import type { HookSession, HookStep } from "./hooks.ts";
+import { describe, type HookSession, type HookStep } from "./hooks.ts";
 
 /**
  * A task as a flow: its prompt, then a tree of steps under it.
@@ -352,13 +353,17 @@ export async function runFlow({
     const systemPrompt = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
     // Kept on the row whether the step works or not: a recall that failed is as much a part of
     // why a step went the way it did as one that worked.
-    let noted: Partial<Pick<RunStep, "hooks">> = {};
+    const notes: HookNote[] = [];
+    const noted = (): Partial<Pick<RunStep, "hooks">> => (notes.length ? { hooks: notes } : {});
 
     try {
       const gathered = await hooks?.before(turn, signal, emit);
-      if (gathered?.notes.length) {
-        noted = { hooks: gathered.notes };
-      }
+      notes.push(...(gathered?.notes ?? []));
+      // A `beforeCompact` that failed mid-step is kept beside what `before` noted.
+      const loopHooks = hooks?.compaction(turn, (note) => {
+        notes.push(note);
+        emit({ kind: RunEventKind.Notice, text: describe(note) });
+      });
 
       const agentResult = await runAgent({
         config,
@@ -373,6 +378,7 @@ export async function runFlow({
         signal,
         onEvent: emit,
         onMetrics,
+        hooks: loopHooks,
       });
 
       result.toolCalls.push(...agentResult.toolCalls);
@@ -388,7 +394,7 @@ export async function runFlow({
         branch = await resolveCase(plan, output, emit);
         emit({ kind: RunEventKind.Decision, name: plan.name, text: branch });
       }
-      await close(row.id, { status: "ok", output, branch, ...tokens, ...noted });
+      await close(row.id, { status: "ok", output, branch, ...tokens, ...noted() });
       hooks?.after(turn, output, row.id, emit);
       return branch;
     } catch (error) {
@@ -396,7 +402,7 @@ export async function runFlow({
       await close(row.id, {
         status: stopped ? "stopped" : "error",
         error: stopped ? "" : errorMessage(error),
-        ...noted,
+        ...noted(),
       });
       throw error;
     }

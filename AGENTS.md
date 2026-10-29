@@ -439,11 +439,9 @@ Four things about the import were decided rather than left, and each has a test 
   enabled server and a profile written to reach one would arrive reaching all of them. An
   explicit `servers: []` is refused for the same reason.
 
-A created server goes through the checks every MCP server write does — `shapeProblems` and
-`splitHookProblems` in `server/graphql/mcp-server.ts`, which `vetMcpServer` calls too — with one
-difference that is deliberate: a hook bound to an event this host never fires is a note on an
-import and still a refusal on `createMcpServer`. A document written on a host that compacts is
-not wrong for saying so, and a person typing that hook into this server's form is.
+A created server goes through the checks every MCP server write does — `shapeProblems` in
+`server/graphql/mcp-server.ts` and `hookProblems` in `server/runner/hooks.ts`, which
+`vetMcpServer` calls too — so a server the form would refuse does not get in through a file.
 
 All three fields are the operator's and none is in `TOOLS`: the document is the profile, and the
 bundle beside it is both guarded tables in one answer. The preview is gated as the write is,
@@ -474,8 +472,14 @@ documented config works on all three. `server/runner/hooks.ts` is the mapping: `
 is the run id, each executed step is a turn (the task's own prompt is turn 0, and
 `sessionStart` fires ahead of it), `sessionEnd` fires once the run's outcome is written, and
 `sessionDelete` for a run deleted by hand, with its task, or by retention. `beforeCompact`
-never fires — a step starts from nothing — so the write refuses a hook bound to it rather than
-leave it waiting forever. `{{vars.task.id}}` is the key for memory that should outlast one run.
+fires when a step's transcript is folded, which happens only on a compaction model, and it is the
+one event the *loop* fires: `HookSession.compaction` hands `runAgentLoop` a runner that passes
+`beforeCompact` through and answers every other event with nothing, since `before` and `after`
+already fire `beforeTurn` and `afterTurn` around the whole step and the loop would fire them a
+second time. Its `offset` is `step.index * 2`, where `exchange` lays the step's messages, so a
+folded message reaches a memory server under the uuid its `afterTurn` uses. A `beforeCompact`
+that fails is kept on `run_steps.hooks` with the rest. `{{vars.task.id}}` is the key for memory
+that should outlast one run.
 
 The host side is agent-core's: `gather` before a step, `notify` after, and `withContext` putting
 what was gathered on the step's question with this server's preface, which `hooks.ts` sets once
@@ -575,7 +579,11 @@ of the step's arms, so the second opinion cannot name a case that does not exist
 **A step that fills its window clears its old tool results first.** `pruning.ts` is the loop's
 `beforeStep`: past `COMPACT_AT` of a window the endpoint reported, agent-core's
 `pruneToolResults` stubs every result but the latest five, and the fold — when a compaction
-model is set — then plans from what is left. Both rewrite the prefix and cost the prompt cache,
+model is set — then plans from what is left. A step is one question and a tool loop, and
+agent-core folds inside one since 4.5: the question is kept, the oldest assistant/tool pairs after
+it become a summary at the head, and the tail resumes at an assistant message.
+`tests/compaction.test.ts` runs that end to end, and it is the only test that would notice a fold
+that silently never happens — which is what this wiring did for its first release. Both rewrite the prefix and cost the prompt cache,
 which is why neither runs a little on every step, and a prune that would win back less than
 `PRUNE_SHARE` of the window is not done at all. It has no column: it makes no request, so there
 is nothing for an operator to choose to pay for, and with no window known it is inert like the

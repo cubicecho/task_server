@@ -285,9 +285,6 @@ test("hooks that could never run are refused when the row is saved", async () =>
   ]);
   expect(noReply.errors?.[0]?.message).toContain("reply");
 
-  const compact = await create([{ id: "c", on: "beforeCompact", tool: "echo" }]);
-  expect(compact.errors?.[0]?.message).toContain("never compacts");
-
   const hidden = await create(null, "add");
   expect(hidden.errors?.[0]?.message).toContain("hiddenTools");
 
