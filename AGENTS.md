@@ -546,6 +546,10 @@ of the step's arms, so the second opinion cannot name a case that does not exist
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
+What is kept of them is `runs.metrics`, agent-core's `runMetrics` over the run's events, which
+`server/runner/metrics.ts` collects as the run emits them rather than reading back off the bus —
+the bus caps a run's backlog and drops its oldest, which is exactly the tool calls a summary
+counts.
 
 **Frontend:** shadcn primitives in `web/components/ui/` with no app logic; routes in
 `web/routes/`; `@/` maps to `web/`. Every query goes through `request()` in `web/lib/gql.ts`

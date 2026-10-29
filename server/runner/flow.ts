@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flow.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
-import { type AgentResult, runAgent } from "./agent.ts";
+import { type AgentOptions, type AgentResult, runAgent } from "./agent.ts";
 import type { HookSession, HookStep } from "./hooks.ts";
 
 /**
@@ -259,6 +259,8 @@ export interface FlowOptions {
   hooks?: HookSession;
   signal?: AbortSignal;
   onEvent?: (event: RunEventInput) => void;
+  /** Each step's loop metrics, as `runAgent` hands them over. See `AgentOptions.onMetrics`. */
+  onMetrics?: AgentOptions["onMetrics"];
 }
 
 /**
@@ -279,6 +281,7 @@ export async function runFlow({
   hooks,
   signal,
   onEvent,
+  onMetrics,
 }: FlowOptions): Promise<AgentResult> {
   const context: ContextEntry[] = [];
   const result: AgentResult = {
@@ -369,6 +372,7 @@ export async function runFlow({
         servers,
         signal,
         onEvent: emit,
+        onMetrics,
       });
 
       result.toolCalls.push(...agentResult.toolCalls);

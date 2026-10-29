@@ -133,6 +133,10 @@ export const COLUMN_DOCS: ColumnDocs = {
     hooks:
       "MCP `sessionEnd` hooks that failed, as JSON. Written just after the run finishes. The " +
       "steps' own hooks are on the run's steps.",
+    metrics:
+      "What the run did, summed from its events: turns, requests, tool calls and errors, cache " +
+      "hits, timings and how full the window got, as agent-core's `RunMetrics` JSON. Null until " +
+      "the run has finished, and for one that never started.",
   },
 
   runSteps: {

@@ -5,6 +5,7 @@ import { type Run, runs, type Step, steps, type Task, tasks } from "../db/schema
 import { runFlow } from "./flow.ts";
 import { type HookSession, hookSession } from "./hooks.ts";
 import { loadSettings } from "./llm.ts";
+import { metricsCollector } from "./metrics.ts";
 import { configForTask } from "./profile.ts";
 
 /**
@@ -453,7 +454,9 @@ async function execute({
   controller: AbortController;
 }): Promise<Run> {
   // Everything the run says as it goes, for anyone watching it — see the event bus in `@cubicecho/agent-core`.
-  const onEvent = (event: RunEventInput) => emit(run.id, event);
+  // Kept here as well, for the summary on the row: the bus forgets a run a minute after it ends.
+  const collected = metricsCollector();
+  const onEvent = (event: RunEventInput) => collected.record(emit(run.id, event));
   onEvent({ kind: RunEventKind.Notice, text: `${task.name} started` });
   // Made once the run's scope is known, and ended — not awaited — once its outcome is written:
   // a memory server filing the last step is no reason for the slot to stay taken.
@@ -473,6 +476,7 @@ async function execute({
       hooks,
       signal: controller.signal,
       onEvent,
+      onMetrics: collected.step,
     });
     onEvent({ kind: RunEventKind.Done, ok: true, text: "finished" });
     void hooks.end("ok", result.output);
@@ -483,6 +487,7 @@ async function execute({
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
       totalTokens: result.totalTokens,
+      metrics: collected.metrics(),
     });
   } catch (error) {
     // A stopped run is not a failed one: it did what was asked of it, which was to stop.
@@ -490,13 +495,13 @@ async function execute({
       console.log(`[run] ${task.name}: stopped`);
       onEvent({ kind: RunEventKind.Done, ok: false, text: "stopped" });
       void hooks?.end("stopped", "");
-      return await finish(run.id, { status: "stopped" });
+      return await finish(run.id, { status: "stopped", metrics: collected.metrics() });
     }
     const message = errorMessage(error);
     console.error(`[run] ${task.name}: ${message}`);
     onEvent({ kind: RunEventKind.Done, ok: false, text: message });
     void hooks?.end("error", "");
-    return await finish(run.id, { status: "error", error: message });
+    return await finish(run.id, { status: "error", error: message, metrics: collected.metrics() });
   } finally {
     inFlight.delete(task.id);
     // The slot is free, so whatever was waiting for one can have it.

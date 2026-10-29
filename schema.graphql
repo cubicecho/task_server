@@ -505,6 +505,7 @@ enum RunDistinctColumn {
   promptTokens
   completionTokens
   totalTokens
+  metrics
 }
 
 type TaskAggregate {
@@ -1126,6 +1127,11 @@ type Run {
   totalTokens: Int!
 
   """
+  What the run did, summed from its events: turns, requests, tool calls and errors, cache hits, timings and how full the window got, as agent-core's `RunMetrics` JSON. Null until the run has finished, and for one that never started.
+  """
+  metrics: JSON
+
+  """
   Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
   """
   cursor: String
@@ -1297,6 +1303,7 @@ type RunCountNonNullAggregate {
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
+  metrics: Int!
 }
 
 type RunCountDistinctAggregate {
@@ -3632,6 +3639,11 @@ input RunFilters {
   completionTokens: IntFilter
   totalTokens: IntFilter
 
+  """
+  What the run did, summed from its events: turns, requests, tool calls and errors, cache hits, timings and how full the window got, as agent-core's `RunMetrics` JSON. Null until the run has finished, and for one that never started.
+  """
+  metrics: JSONFilter
+
   """Matches rows whose task matches these filters"""
   task: TaskFilters
 
@@ -3706,6 +3718,7 @@ input RunOrderBy {
   promptTokens: InnerOrder
   completionTokens: InnerOrder
   totalTokens: InnerOrder
+  metrics: InnerOrder
 
   """Order by columns of the related task row"""
   task: TaskOrderBy
@@ -3771,6 +3784,7 @@ input RunCountNonNullHaving {
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
+  metrics: AggregateNumberFilter
 }
 
 input RunCountDistinctHaving {
