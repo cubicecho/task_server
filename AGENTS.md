@@ -540,11 +540,11 @@ an operator pick any name the endpoint lists, so it is one selection away from m
 **Three more of the loop's answers are taken rather than rebuilt.** A reply cut off at the
 ceiling (`finish_reason: "length"`) is carried on, up to `MAX_CONTINUATIONS` times, instead of
 being stored as the step's answer with its last sentence missing. A request the model cannot
-read is refused before it is sent: `windowFor` in `agent.ts` asks `contextLimitFor` what the
-model's window is and hands it to the loop as `contextLength`, and the run fails with
-`ContextOverflow` and no request made. That lookup takes no signal upstream and waits as long as
-the request timeout, so here it is raced against the run's stop and given five seconds — an
-endpoint that will not say gets no guard, which is what every run had before. And a decision
+read is refused before it is sent: `agent.ts` asks `contextLimitFor` what the model's window is
+and hands it to the loop as `contextLength`, and the run fails with `ContextOverflow` and no
+request made. The lookup takes the run's signal, so a stop ends it, and bounds itself — ten
+seconds, or the request timeout where that is shorter — upstream rather than in a race written
+here; an endpoint that will not say in time gets no guard, which is what every run had before. And a decision
 step answered in prose is read back with `askJson` against a schema whose only field is an enum
 of the step's arms, so the second opinion cannot name a case that does not exist.
 
