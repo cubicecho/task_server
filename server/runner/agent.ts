@@ -1,4 +1,5 @@
 import {
+  type AgentLoopHooks,
   contextLimitFor,
   preselect,
   type RunEventInput,
@@ -44,6 +45,8 @@ export interface AgentOptions {
    * resolved to and which window each step's model had — this is how those two get out.
    */
   onMetrics?: (metrics: RunMetrics, contextLength: number) => void;
+  /** The MCP servers' `beforeCompact` hooks for this step, from `HookSession.compaction`. */
+  hooks?: AgentLoopHooks;
 }
 
 /**
@@ -72,6 +75,7 @@ export async function runAgent({
   signal,
   onEvent,
   onMetrics,
+  hooks,
 }: AgentOptions): Promise<AgentResult> {
   if (!model) {
     throw new Error("No model selected — pick one in Settings.");
@@ -141,6 +145,8 @@ export async function runAgent({
     // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
     // report a window, since there is nothing to plan three quarters of.
     compact: Boolean(config.compactionModel),
+    // Only ever `beforeCompact`: see `compaction` in `hooks.ts`.
+    ...(hooks ? { hooks } : {}),
     // Needs no model, so it is on wherever the window is known. It runs ahead of the fold, which
     // then plans from what is left: a prune that brings the run back under the line spares it the
     // summary's round trip.

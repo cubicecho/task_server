@@ -425,12 +425,14 @@ usual use is memory — recall before each step, remember after it:
 | `sessionStart` | Before the first step, alongside its `beforeTurn` |
 | `beforeTurn` | Before each step that executes; `inject: true` puts the result ahead of its prompt |
 | `afterTurn` | Once a step has its output (`{{reply}}`, `{{turn.messages}}`) |
+| `beforeCompact` | When a step fills 75% of its window and the oldest of it is summarised (needs a compaction model) |
 | `sessionEnd` | Once the run has finished (`{{status}}`: `ok`, `stopped` or `error`) |
 | `sessionDelete` | When the run is deleted, by hand, with its task, or by retention |
 
 `{{session.id}}` is the run id, so it changes every run; key memory that should outlast one on
 `{{vars.task.id}}` (also `{{vars.task.name}}`, `{{vars.step.name}}`, `{{vars.trigger}}`).
-`beforeCompact` is refused: a run never compacts. Injected context shares a 2000-token budget per
+`beforeCompact` fires when a step is compacted, which only happens with a compaction model set in
+Settings. Injected context shares a 2000-token budget per
 step. A hook that fails never fails the step — it leaves a note, shown under the step on the Runs
 page. `hiddenTools` hides a server's tools from the model while its hooks can still call them.
 

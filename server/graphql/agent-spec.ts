@@ -8,12 +8,12 @@ import {
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { GraphQLError } from "graphql";
-import { HOOK_EVENTS_FIRED } from "../../shared/hooks.ts";
 import { db } from "../db/client.ts";
 import { type Agent, agents, type McpServerRow, mcpServers } from "../db/schema.ts";
+import { hookProblems } from "../runner/hooks.ts";
 import { mcp } from "../runner/mcp.ts";
 import { agentLayer, SPEC_EXTENSION } from "../runner/profile.ts";
-import { NEW_MCP_SERVER, shapeProblems, splitHookProblems } from "./mcp-server.ts";
+import { NEW_MCP_SERVER, shapeProblems } from "./mcp-server.ts";
 
 /**
  * An agent profile as a document another host can read, and one read back into a profile.
@@ -304,10 +304,12 @@ function readBundled(
     enabled: true,
   };
 
-  const hooks = splitHookProblems(candidate.hooks);
-  const problems = [...shapeProblems({ ...NEW_MCP_SERVER, ...candidate }), ...hooks.broken];
+  const problems = [
+    ...shapeProblems({ ...NEW_MCP_SERVER, ...candidate }),
+    ...hookProblems(candidate.hooks),
+  ];
 
-  const notes = hooks.unfired.map((problem) => `${problem} — kept as written, and never called`);
+  const notes: string[] = [];
   for (const key of Object.keys(held)) {
     if (!SERVER_COLUMNS.has(key)) {
       notes.push(`\`${key}\` has no column here, and is not kept`);
@@ -381,7 +383,6 @@ export function planImport(
 ): ImportPlan {
   const parsed = parseSpec(document, {
     bundle: true,
-    events: HOOK_EVENTS_FIRED,
     understands: [SPEC_EXTENSION],
   });
   const plan: ImportPlan = {
