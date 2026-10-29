@@ -8,6 +8,7 @@ import type { GraphContext } from "./graphql/permissions.ts";
 import { schema } from "./graphql/schema.ts";
 import { mcpHandler, mountMcp } from "./mcp-endpoint.ts";
 import { PORT, ROOT } from "./paths.ts";
+import { persistCapabilities, restoreCapabilities } from "./runner/capabilities.ts";
 import { mcp } from "./runner/mcp.ts";
 import { drainQueue } from "./runner/run.ts";
 import * as cleanup from "./scheduler/cleanup.ts";
@@ -15,6 +16,10 @@ import * as cron from "./scheduler/cron.ts";
 import { mountWebhooks } from "./webhooks.ts";
 
 await ensureSchema();
+
+// What endpoints refused last time, so the first request to each after a restart is not
+// refused again to relearn it. Before the queue drains below, since that is the first request.
+await restoreCapabilities();
 
 // The GraphQL schema comes from the tables, so a column added upstairs changes the API here.
 // In dev that is regenerated into `schema.graphql` and `web/__generated__/graphql/graphql.ts`
@@ -76,6 +81,8 @@ const shutdown = async () => {
   cleanup.stop();
   await mcpHandler.close();
   await mcp.shutdown();
+  // A run cut off here never reaches the save in its own `finally`.
+  await persistCapabilities();
   server.close();
   process.exit(0);
 };

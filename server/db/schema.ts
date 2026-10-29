@@ -372,7 +372,34 @@ export const settings = pgTable("settings", {
   maxConcurrentRuns: integer().notNull().default(4),
 });
 
-export const schema = { agents, tasks, triggers, steps, runs, runSteps, mcpServers, settings };
+/**
+ * What endpoints and models were found to refuse, as agent-core's `exportCapabilities` writes it:
+ * one row, `SETTINGS_ID`, holding the whole snapshot. agent-core latches those refusals in
+ * memory, so without this every restart spends a failed request per endpoint and model learning
+ * them again. See `runner/capabilities.ts`.
+ *
+ * A table of its own rather than a column on `settings`, and kept out of the generated API by
+ * `exclude.tables` in `graphql/schema.ts`: it is the runner's cache, not anything a person or an
+ * agent configures, and a column there would be a field on the settings type and its update
+ * input. The blob names endpoints by digest and holds no key.
+ */
+export const endpointCapabilities = pgTable("endpoint_capabilities", {
+  id: text().primaryKey().default(SETTINGS_ID),
+  snapshot: jsonb().$type<unknown>().notNull(),
+  savedAt: updatedAt(),
+});
+
+export const schema = {
+  agents,
+  tasks,
+  triggers,
+  steps,
+  runs,
+  runSteps,
+  mcpServers,
+  settings,
+  endpointCapabilities,
+};
 
 export const relations = defineRelations(schema, (r) => ({
   agents: {
