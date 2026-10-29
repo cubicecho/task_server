@@ -12,7 +12,7 @@ import { HOOK_EVENTS_FIRED } from "../../shared/hooks.ts";
 import { db } from "../db/client.ts";
 import { type Agent, agents, type McpServerRow, mcpServers } from "../db/schema.ts";
 import { mcp } from "../runner/mcp.ts";
-import { agentLayer } from "../runner/profile.ts";
+import { agentLayer, SPEC_EXTENSION } from "../runner/profile.ts";
 import { NEW_MCP_SERVER, shapeProblems, splitHookProblems } from "./mcp-server.ts";
 
 /**
@@ -161,6 +161,7 @@ export type ImportedAgent = Pick<
   | "maxToolIterations"
   | "toolDiscovery"
   | "toolSelectModel"
+  | "toolExecution"
   | "compactionModel"
   | "requestTimeoutSeconds"
   | "maxRetries"
@@ -222,9 +223,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * The top-level keys of a spec that end up in a row. `hooks`, `extensions`, `id` and `$schema`
- * are named by the format and dropped for reasons of their own, below; anything else in a
- * document is a key from a later version, carried through by the parser and dropped here.
+ * The top-level keys of a spec that end up in a row — `extensions` only under `SPEC_EXTENSION`,
+ * this server's own. `hooks`, `id` and `$schema` are named by the format and dropped for
+ * reasons of their own, below; anything else in a document is a key from a later version,
+ * carried through by the parser and dropped here.
  */
 const READ = new Set([
   "spec",
@@ -238,8 +240,9 @@ const READ = new Set([
   "tasks",
   "bundle",
   "requires",
+  "extensions",
 ]);
-const DROPPED_BY_NAME = new Set(["id", "$schema", "hooks", "extensions"]);
+const DROPPED_BY_NAME = new Set(["id", "$schema", "hooks"]);
 
 /** The keys of a bundled server that have a column in `mcp_servers`. */
 const SERVER_COLUMNS = new Set([
@@ -346,8 +349,8 @@ function readBundled(
  * is saved: the write re-plans inside its transaction and refuses on the same list.
  *
  * `parseSpec` reads the document. Its errors are the reasons a document is not a spec at all
- * and are passed on in its words; its warnings are what it dropped. `understands` is empty, so
- * a document that `requires` an extension is refused — this host implements none. What is
+ * and are passed on in its words; its warnings are what it dropped. `understands` names
+ * `SPEC_EXTENSION` alone, so a document that `requires` any other extension is refused. What is
  * added here is the second loss, between a spec and a row: a profile is the columns of `agents`
  * and nothing else, so a field with no column is listed in `dropped` and gone on re-export.
  * That is accepted, and the list is what keeps it from being silent.
@@ -379,7 +382,7 @@ export function planImport(
   const parsed = parseSpec(document, {
     bundle: true,
     events: HOOK_EVENTS_FIRED,
-    understands: [],
+    understands: [SPEC_EXTENSION],
   });
   const plan: ImportPlan = {
     refusals: [...parsed.errors],
@@ -416,7 +419,28 @@ export function planImport(
     }
   }
   for (const key of Object.keys(spec.extensions ?? {})) {
-    drop(`extensions.${key}`, "this server implements no extension");
+    if (key !== SPEC_EXTENSION) {
+      drop(`extensions.${key}`, "this server implements no extension");
+    }
+  }
+  // This server's own extension: where it writes a column the format has no field for. Read by
+  // hand, since the parser promises only that `extensions` is an object.
+  const own = spec.extensions?.[SPEC_EXTENSION];
+  let execution: ImportedAgent["toolExecution"] = "inherit";
+  if (own !== undefined && !isRecord(own)) {
+    drop(`extensions.${SPEC_EXTENSION}`, "must be an object");
+  }
+  for (const [key, held] of Object.entries(isRecord(own) ? own : {})) {
+    if (key !== "toolExecution") {
+      drop(`extensions.${SPEC_EXTENSION}.${key}`, "a profile has no such setting");
+    } else if (held === "sequential" || held === "parallel") {
+      execution = held;
+    } else {
+      drop(
+        `extensions.${SPEC_EXTENSION}.toolExecution`,
+        'must be "sequential" or "parallel", so it is left to inherit',
+      );
+    }
   }
   for (const [index, hook] of (spec.hooks ?? []).entries()) {
     drop(
@@ -497,6 +521,7 @@ export function planImport(
     maxToolIterations: whole("tools.maxIterations", spec.tools?.maxIterations),
     toolDiscovery: discovery === "eager" || discovery === "ondemand" ? discovery : "inherit",
     toolSelectModel: spec.tasks?.toolSelect?.model?.trim() ?? "",
+    toolExecution: execution,
     compactionModel: spec.tasks?.compaction?.model?.trim() ?? "",
     requestTimeoutSeconds: whole(
       "endpoint.requestTimeoutSeconds",

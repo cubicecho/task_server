@@ -12,6 +12,7 @@ fragment AgentFields on Agent {
   maxToolIterations
   toolDiscovery
   toolSelectModel
+  toolExecution
   compactionModel
   requestTimeoutSeconds
   maxRetries
@@ -73,6 +74,7 @@ query AgentSpecPreview($document: JSON!, $createServers: [String!], $name: Strin
       maxToolIterations
       toolDiscovery
       toolSelectModel
+      toolExecution
       compactionModel
       requestTimeoutSeconds
       maxRetries

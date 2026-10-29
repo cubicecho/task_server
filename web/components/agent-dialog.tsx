@@ -4,6 +4,7 @@ import {
   type AgentFieldsFragment,
   type AgentsQuery,
   AgentsToolDiscoveryEnum,
+  AgentsToolExecutionEnum,
   CreateAgentDocument,
   SetAgentApiKeyDocument,
   UpdateAgentDocument,
@@ -54,6 +55,7 @@ interface Draft {
   maxToolIterations: number | null;
   toolDiscovery: AgentsToolDiscoveryEnum;
   toolSelectModel: string;
+  toolExecution: AgentsToolExecutionEnum;
   compactionModel: string;
   requestTimeoutSeconds: number | null;
   maxRetries: number | null;
@@ -77,6 +79,7 @@ const toDraft = (agent?: AgentFieldsFragment): Draft => ({
   maxToolIterations: shown(agent?.maxToolIterations ?? -1),
   toolDiscovery: agent?.toolDiscovery ?? AgentsToolDiscoveryEnum.Inherit,
   toolSelectModel: agent?.toolSelectModel ?? "",
+  toolExecution: agent?.toolExecution ?? AgentsToolExecutionEnum.Inherit,
   compactionModel: agent?.compactionModel ?? "",
   requestTimeoutSeconds: shown(agent?.requestTimeoutSeconds ?? -1),
   maxRetries: shown(agent?.maxRetries ?? -1),
@@ -286,6 +289,26 @@ export function AgentDialog({
             description={doc("toolSelectModel")}
             defaultLabel="From settings"
             agentId={agent?.id}
+          />
+
+          <RadioGroupField
+            form={form}
+            name="toolExecution"
+            label="Tool calls in one reply"
+            description={doc("toolExecution")}
+            options={[
+              { value: AgentsToolExecutionEnum.Inherit, label: "From settings" },
+              {
+                value: AgentsToolExecutionEnum.Sequential,
+                label: "One at a time",
+                description: "Each call waits for the one before it.",
+              },
+              {
+                value: AgentsToolExecutionEnum.Parallel,
+                label: "All at once",
+                description: "For tools that only read.",
+              },
+            ]}
           />
 
           <ModelSelectField

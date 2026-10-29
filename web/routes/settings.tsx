@@ -9,6 +9,7 @@ import {
   type SettingsFieldsFragment,
   type SettingsQuery,
   SettingsToolDiscoveryEnum,
+  SettingsToolExecutionEnum,
   UpdateSettingsDocument,
 } from "@/__generated__/graphql/graphql";
 import { InputField, NumberField, TextareaField, useAppForm } from "@/components/app-form";
@@ -476,6 +477,24 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                           label="Tool-picking model"
                           description={doc("toolSelectModel")}
                           defaultLabel="Same model as the task"
+                        />
+                        <RadioGroupField
+                          form={form}
+                          name="toolExecution"
+                          label="Tool calls in one reply"
+                          description={doc("toolExecution")}
+                          options={[
+                            {
+                              value: SettingsToolExecutionEnum.Sequential,
+                              label: "One at a time",
+                              description: "Each call waits for the one before it.",
+                            },
+                            {
+                              value: SettingsToolExecutionEnum.Parallel,
+                              label: "All at once",
+                              description: "For tools that only read.",
+                            },
+                          ]}
                         />
                       </div>
                     }

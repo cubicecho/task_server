@@ -1,6 +1,7 @@
 import type {
   SettingsFieldsFragment,
   SettingsToolDiscoveryEnum,
+  SettingsToolExecutionEnum,
   UpdateSettingInput,
 } from "@/__generated__/graphql/graphql";
 
@@ -52,6 +53,7 @@ export interface SettingsForm {
   maxRetries: number | null;
   toolDiscovery: SettingsToolDiscoveryEnum;
   toolSelectModel: string;
+  toolExecution: SettingsToolExecutionEnum;
   compactionModel: string;
   maxConcurrentRuns: number | null;
   runRetentionDays: number | null;
@@ -76,6 +78,7 @@ export const SECTION_OF: Record<keyof SettingsForm, Exclude<SettingsSection, "co
   maxRetries: "limits",
   toolDiscovery: "tools",
   toolSelectModel: "tools",
+  toolExecution: "tools",
   compactionModel: "limits",
   maxConcurrentRuns: "server",
   runRetentionDays: "server",
@@ -94,6 +97,7 @@ export const toForm = (row: SettingsFieldsFragment): SettingsForm => ({
   maxRetries: row.maxRetries,
   toolDiscovery: row.toolDiscovery,
   toolSelectModel: row.toolSelectModel,
+  toolExecution: row.toolExecution,
   compactionModel: row.compactionModel,
   maxConcurrentRuns: row.maxConcurrentRuns,
   runRetentionDays: row.runRetentionDays,
@@ -115,6 +119,7 @@ export const toRow = (form: SettingsForm): UpdateSettingInput => ({
   maxRetries: form.maxRetries ?? 0,
   toolDiscovery: form.toolDiscovery,
   toolSelectModel: form.toolSelectModel,
+  toolExecution: form.toolExecution,
   compactionModel: form.compactionModel,
   maxConcurrentRuns: form.maxConcurrentRuns ?? 0,
   runRetentionDays: form.runRetentionDays ?? 0,

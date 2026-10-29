@@ -23,6 +23,19 @@ export interface RunConfig {
 /** The one id both rows write their system prompt under, so a profile's replaces the server's. */
 const SYSTEM = "system";
 
+/**
+ * Where a spec carries what this server has a column for and the format has no field for. A
+ * spec's `extensions` are a host's own, keyed by reverse domain, and are kept by every reader —
+ * so `toolExecution` survives an export and an import here, where an unknown key under `tools`
+ * would be dropped by the parser on the way back in.
+ */
+export const SPEC_EXTENSION = "com.cubicecho.task-server";
+
+/** What this server keeps under `SPEC_EXTENSION`. */
+export interface TaskServerExtension {
+  toolExecution?: "sequential" | "parallel";
+}
+
 /** `""` is "ask settings" for a string column, which a layer says by leaving the field out. */
 const str = (value: string) => value.trim() || undefined;
 
@@ -71,6 +84,8 @@ export const agentLayer = (agent: Agent): AgentSpec => {
   const prompt = str(agent.systemPrompt);
   const toolSelect = str(agent.toolSelectModel);
   const compaction = str(agent.compactionModel);
+  const own: TaskServerExtension =
+    agent.toolExecution === "inherit" ? {} : { toolExecution: agent.toolExecution };
   return {
     spec: AGENT_SPEC,
     endpoint: {
@@ -96,6 +111,7 @@ export const agentLayer = (agent: Agent): AgentSpec => {
           },
         }
       : {}),
+    ...(Object.keys(own).length ? { extensions: { [SPEC_EXTENSION]: own } } : {}),
   };
 };
 
@@ -131,6 +147,9 @@ export function resolveConfig(settings: Settings, agent?: Agent | null): Setting
     // optional there where the settings column always holds one.
     toolDiscovery: merged.toolDiscovery === "proxy" ? settings.toolDiscovery : merged.toolDiscovery,
     toolSelectModel: merged.toolSelectModel,
+    // Not the resolver's: a spec has no field for it, and `extensions` merge whole by key, so the
+    // laying-over is done here on the two columns rather than on the layers' extension objects.
+    toolExecution: agent.toolExecution === "inherit" ? settings.toolExecution : agent.toolExecution,
     // The resolver leaves out a task whose model is blank, which is the column's own "off".
     compactionModel: merged.tasks.compaction?.model ?? "",
     requestTimeoutSeconds: merged.requestTimeoutSeconds ?? settings.requestTimeoutSeconds,

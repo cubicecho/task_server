@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   type SettingsFieldsFragment,
   SettingsToolDiscoveryEnum,
+  SettingsToolExecutionEnum,
 } from "../web/__generated__/graphql/graphql.ts";
 import { dirtySections, SECTION_OF, toForm, toRow } from "../web/lib/settings-form.ts";
 
@@ -16,6 +17,7 @@ const ROW: SettingsFieldsFragment = {
   maxToolIterations: 20,
   toolDiscovery: SettingsToolDiscoveryEnum.Eager,
   toolSelectModel: "",
+  toolExecution: SettingsToolExecutionEnum.Sequential,
   compactionModel: "",
   requestTimeoutSeconds: 120,
   maxRetries: 2,
