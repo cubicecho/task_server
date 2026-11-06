@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { CircleAlert, CircleCheck, Info, TriangleAlert, X } from "@/components/ui/icons";
 import { IconClassContext } from "@/components/ui/icons-base";
+import { type BottomBarUntil, useBottomBar } from "@/lib/bottom-bar";
 import { cn } from "@/lib/utils";
 
 /** What kind of message a toast is, which picks its colour and how long it stays. */
@@ -51,11 +52,26 @@ const VIEWPORT_STYLE = {
   zIndex: 50,
 } as React.CSSProperties;
 
+/**
+ * How far the stack rises off the bottom while a layout draws a bar there — `SidebarLayout`'s
+ * `barPosition="bottom"` on a phone — so a toast is never laid over the places. The bar's own
+ * `min-h-14`, under the bar's own breakpoint; a margin, which a fixed or absolute box keeps from
+ * the edge it is pinned to. Literal classes, per rule 3.
+ */
+const LIFT: Record<BottomBarUntil, string> = {
+  always: "mb-14",
+  sm: "mb-14 sm:mb-0",
+  md: "mb-14 md:mb-0",
+  lg: "mb-14 lg:mb-0",
+  xl: "mb-14 xl:mb-0",
+};
+
 /** Holds the toasts and draws them over the app. Put it once, near the root. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(0);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const bottomBar = useBottomBar();
 
   const dismiss = useCallback((id: number) => {
     const timer = timers.current.get(id);
@@ -94,7 +110,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={show}>
       {children}
       {toasts.length > 0 && (
-        <div style={VIEWPORT_STYLE} className="cube-rn-view cube-rn-pe-box-none gap-2">
+        <div
+          style={VIEWPORT_STYLE}
+          className={cn("cube-rn-view cube-rn-pe-box-none", "gap-2", bottomBar && LIFT[bottomBar])}
+        >
           {/*
            * The announcement and the dismiss target are two elements, not one. They were one — a
            * `Pressable` with `accessibilityRole="alert"` — and `rn2web` is what showed that to be
@@ -109,9 +128,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <div
                 key={toast.id}
                 role="alert"
-                className="cube-rn-view w-full flex-row items-start gap-3 rounded-lg border border-foreground/10 bg-secondary px-4 py-3 shadow-lg"
+                className="cube-rn-view w-full flex-row items-start gap-3 rounded-lg border border-foreground/10 bg-secondary px-4 py-3 shadow-md"
               >
-                <div aria-hidden className={cn("cube-rn-view", "mt-0.5 shrink-0", ink)}>
+                {/* `[&_svg]:size-4` for the web, where an icon does not read the context below and
+                    drew at its own 24px beside 14px text; the context sizes it on a device. */}
+                <div
+                  aria-hidden
+                  className={cn("cube-rn-view", "mt-0.5 shrink-0 [&_svg]:size-4", ink)}
+                >
                   <IconClassContext.Provider value={cn("size-4 shrink-0", ink)}>
                     {glyph}
                   </IconClassContext.Provider>
@@ -123,7 +147,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   aria-label="Dismiss"
                   // The ink is on the press target too, not only in the context: the glyph draws in
                   // `currentColor`, and a `<button>` resets that to the UA's black.
-                  className="cube-rn-view cube-rn-pressable -m-1 shrink-0 rounded-md p-1 text-foreground/60"
+                  // Under the pointer, the keyboard and a finger it looks the same: hovered.
+                  className="cube-rn-view cube-rn-pressable -m-1 shrink-0 rounded-md p-1 text-foreground/60 hover:bg-hover hover:text-foreground focus-visible:bg-hover focus-visible:text-foreground focus-visible:outline-none active:bg-hover [&_svg]:size-4"
                 >
                   <IconClassContext.Provider value="size-4 text-foreground/60">
                     <X />

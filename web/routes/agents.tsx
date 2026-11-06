@@ -9,6 +9,7 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { AgentDialog } from "@/components/agent-dialog";
 import { AgentImportDialog } from "@/components/agent-import-dialog";
+import { CardLayout } from "@/components/card-layout";
 import { ConfirmButton } from "@/components/confirm-button";
 import { List } from "@/components/list";
 import { EmptyState } from "@/components/page";
@@ -78,6 +79,7 @@ export function AgentsRoute() {
       contentSlot={
         <PageLayout
           title="Settings"
+          width="prose"
           description="Agent profiles: a named set of overrides for Settings, that a task can be pointed at."
           headerContentSlot={<SettingsTabList />}
           actionSlot={
@@ -111,81 +113,94 @@ export function AgentsRoute() {
                 }
               />
 
-              <List
-                label="Agent profiles"
-                divided={false}
-                contentSlot={rows.map((agent) => {
-                  const scoped = stringList(agent.mcpServerIds);
-                  const said = overrides(agent);
-                  return (
-                    <Item key={agent.id} variant="outline">
-                      <ItemContent>
-                        <ItemTitle>
-                          <span className="truncate">{agent.name}</span>
-                          <Badge variant="outline">
-                            {agent.tasks.length === 1 ? "1 task" : `${agent.tasks.length} tasks`}
-                          </Badge>
-                          <Badge variant="outline">
-                            {scoped.length
-                              ? `${scoped.length} of ${servers.length} servers`
-                              : "all servers"}
-                          </Badge>
-                        </ItemTitle>
-                        {agent.description ? (
-                          <ItemDescription className="truncate">
-                            {agent.description}
-                          </ItemDescription>
-                        ) : null}
-                      </ItemContent>
-                      <ItemActions className="gap-1">
-                        <Button
-                          aria-label="Edit"
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setEditing(agent)}
-                          iconSlot={<Pencil />}
-                        />
-                        <Button
-                          aria-label="Export"
-                          hint="Save as an agent spec file. It carries no API key."
-                          variant="outline"
-                          size="icon"
-                          disabled={exportSpec.isPending}
-                          onClick={() => exportSpec.mutate(agent)}
-                          iconSlot={<Download />}
-                        />
-                        <ConfirmButton
-                          aria-label="Delete"
-                          variant="destructive-outline"
-                          size="icon"
-                          title={`Delete ${agent.name}?`}
-                          description={
-                            agent.tasks.length
-                              ? `The ${agent.tasks.length === 1 ? "task" : `${agent.tasks.length} tasks`} on it fall back to Settings — a different endpoint, key and model.`
-                              : "Nothing runs on it, so nothing changes but the list."
-                          }
-                          onConfirm={() => remove.mutate(agent.id)}
-                          iconSlot={<Trash2 />}
-                        />
-                      </ItemActions>
+              {rows.length > 0 ? (
+                <CardLayout
+                  level={2}
+                  title="All profiles"
+                  contentSlot={
+                    <List
+                      label="Agent profiles"
+                      contentSlot={rows.map((agent) => {
+                        const scoped = stringList(agent.mcpServerIds);
+                        const said = overrides(agent);
+                        return (
+                          <Item key={agent.id} size="sm">
+                            <ItemContent>
+                              <ItemTitle>
+                                <span className="truncate">{agent.name}</span>
+                                <Badge variant="outline">
+                                  {agent.tasks.length === 1
+                                    ? "1 task"
+                                    : `${agent.tasks.length} tasks`}
+                                </Badge>
+                                <Badge variant="outline">
+                                  {scoped.length
+                                    ? `${scoped.length} of ${servers.length} servers`
+                                    : "all servers"}
+                                </Badge>
+                              </ItemTitle>
+                              {agent.description ? (
+                                <ItemDescription className="truncate">
+                                  {agent.description}
+                                </ItemDescription>
+                              ) : null}
+                            </ItemContent>
+                            <ItemActions className="gap-1">
+                              <Button
+                                aria-label="Edit"
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setEditing(agent)}
+                                iconSlot={<Pencil />}
+                              />
+                              <Button
+                                aria-label="Export"
+                                hint="Save as an agent spec file. It carries no API key."
+                                variant="outline"
+                                size="icon"
+                                disabled={exportSpec.isPending}
+                                onClick={() => exportSpec.mutate(agent)}
+                                iconSlot={<Download />}
+                              />
+                              <ConfirmButton
+                                aria-label="Delete"
+                                variant="destructive-outline"
+                                size="icon"
+                                title={`Delete ${agent.name}?`}
+                                description={
+                                  agent.tasks.length
+                                    ? `The ${agent.tasks.length === 1 ? "task" : `${agent.tasks.length} tasks`} on it fall back to Settings — a different endpoint, key and model.`
+                                    : "Nothing runs on it, so nothing changes but the list."
+                                }
+                                onConfirm={() => remove.mutate(agent.id)}
+                                iconSlot={<Trash2 />}
+                              />
+                            </ItemActions>
 
-                      <ItemFooter className="flex-wrap justify-start gap-1">
-                        {said.length === 0 ? (
-                          <span className="text-foreground/60 text-xs">
-                            Overrides nothing — a task on it runs exactly as one on Settings.
-                          </span>
-                        ) : (
-                          said.map((one) => (
-                            <Badge key={one} variant="outline" className="font-mono font-normal">
-                              {one}
-                            </Badge>
-                          ))
-                        )}
-                      </ItemFooter>
-                    </Item>
-                  );
-                })}
-              />
+                            <ItemFooter className="flex-wrap justify-start gap-1">
+                              {said.length === 0 ? (
+                                <span className="text-foreground/60 text-xs">
+                                  Overrides nothing — a task on it runs exactly as one on Settings.
+                                </span>
+                              ) : (
+                                said.map((one) => (
+                                  <Badge
+                                    key={one}
+                                    variant="outline"
+                                    className="font-mono font-normal"
+                                  >
+                                    {one}
+                                  </Badge>
+                                ))
+                              )}
+                            </ItemFooter>
+                          </Item>
+                        );
+                      })}
+                    />
+                  }
+                />
+              ) : null}
 
               {importing ? (
                 <AgentImportDialog
