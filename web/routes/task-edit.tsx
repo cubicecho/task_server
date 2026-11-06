@@ -69,6 +69,7 @@ export function TaskEditRoute() {
     return (
       <PageLayout
         title="Task"
+        width="prose"
         description={DESCRIPTION}
         breadcrumbsSlot={<Breadcrumbs />}
         loading={task.isPending}
@@ -250,6 +251,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
   return (
     <PageLayout
       title={task ? "Edit task" : "New task"}
+      width="prose"
       description={DESCRIPTION}
       breadcrumbsSlot={<Breadcrumbs />}
       actionSlot={

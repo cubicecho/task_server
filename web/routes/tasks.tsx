@@ -8,6 +8,7 @@ import {
   TasksDocument,
   UpdateTaskDocument,
 } from "@/__generated__/graphql/graphql";
+import { CardLayout } from "@/components/card-layout";
 import { ConfirmButton } from "@/components/confirm-button";
 import { List } from "@/components/list";
 import { EmptyState } from "@/components/page";
@@ -119,120 +120,131 @@ export function TasksRoute() {
             }
           />
 
-          <List
-            label="Tasks"
-            divided={false}
-            contentSlot={rows.map((task) => {
-              // The last run that actually ran: a `skipped` row is a trigger firing at this very
-              // task while it was busy, so taking it as the latest would hide the run it collided
-              // with — the running one, whose Stop button is the thing someone wants at that
-              // moment. Skips are the Runs page's to show.
-              const lastRun = task.runs[0];
-              // `runTask` resolves only when the run finishes, so the mutation being in flight is
-              // a run in flight too — before the poll has had a chance to see the row.
-              const running =
-                lastRun?.status === "running" ||
-                (run.isPending && run.variables?.taskId === task.id);
-              return (
-                <Item key={task.id} variant="outline">
-                  <ItemContent>
-                    <ItemTitle>
-                      <span className="truncate">{task.name}</span>
-                      {lastRun ? (
-                        <Badge variant={STATUS_VARIANT[lastRun.status] ?? "secondary"}>
-                          {lastRun.status}
-                        </Badge>
-                      ) : null}
-                    </ItemTitle>
-                    <ItemDescription className="line-clamp-2">{task.prompt}</ItemDescription>
-                  </ItemContent>
-                  <ItemActions className="gap-1">
-                    <Switch
-                      checked={task.enabled}
-                      onCheckedChange={() => toggle.mutate(task)}
-                      aria-label="Enabled"
-                    />
-                    {running ? (
-                      <Button
-                        aria-label="Stop this run"
-                        variant="outline"
-                        size="icon"
-                        // Only this card's button. `isPending` alone is true for the whole list
-                        // while any one task is being started or stopped, which greyed out every
-                        // other row's control along with the one that was clicked.
-                        disabled={stop.isPending && stop.variables === task.id}
-                        onClick={() => stop.mutate(task.id)}
-                        iconSlot={<Square />}
-                      />
-                    ) : (
-                      <Button
-                        aria-label="Run now"
-                        variant="outline"
-                        size="icon"
-                        disabled={run.isPending && run.variables?.taskId === task.id}
-                        onClick={() => press(task)}
-                        iconSlot={<Play />}
-                      />
-                    )}
-                    <Button
-                      aria-label="Edit"
-                      variant="outline"
-                      size="icon"
-                      linkSlot={<Link to="/tasks/$taskId" params={{ taskId: task.id }} />}
-                      iconSlot={<Pencil />}
-                    />
-                    <ConfirmButton
-                      aria-label="Delete"
-                      variant="destructive-outline"
-                      size="icon"
-                      hint={running ? "Stop the run before deleting" : undefined}
-                      disabled={running}
-                      title={`Delete ${task.name}?`}
-                      description="Its triggers and its whole run history go with it, output included."
-                      onConfirm={() => remove.mutate(task.id)}
-                      iconSlot={<Trash2 />}
-                    />
-                  </ItemActions>
-
-                  <ItemFooter className="flex-wrap justify-start gap-2 text-foreground/60 text-xs">
-                    {task.triggers.length === 0 ? (
-                      <span>No triggers — it only runs when you press play.</span>
-                    ) : null}
-                    {task.triggers.map((trigger) => {
-                      // A webhook has no next time to show and is not waiting on the scheduler: it
-                      // fires when someone posts to it. Saying "not scheduled" of one reads as a
-                      // fault, when it is simply a different kind of trigger.
-                      if (trigger.kind === "event") {
-                        return (
-                          <Badge
-                            key={trigger.id}
+          {rows.length > 0 ? (
+            <CardLayout
+              level={2}
+              title="All tasks"
+              contentSlot={
+                <List
+                  label="Tasks"
+                  contentSlot={rows.map((task) => {
+                    // The last run that actually ran: a `skipped` row is a trigger firing at this very
+                    // task while it was busy, so taking it as the latest would hide the run it collided
+                    // with — the running one, whose Stop button is the thing someone wants at that
+                    // moment. Skips are the Runs page's to show.
+                    const lastRun = task.runs[0];
+                    // `runTask` resolves only when the run finishes, so the mutation being in flight is
+                    // a run in flight too — before the poll has had a chance to see the row.
+                    const running =
+                      lastRun?.status === "running" ||
+                      (run.isPending && run.variables?.taskId === task.id);
+                    return (
+                      <Item key={task.id} size="sm">
+                        <ItemContent>
+                          <ItemTitle>
+                            <span className="truncate">{task.name}</span>
+                            {lastRun ? (
+                              <Badge variant={STATUS_VARIANT[lastRun.status] ?? "secondary"}>
+                                {lastRun.status}
+                              </Badge>
+                            ) : null}
+                          </ItemTitle>
+                          <ItemDescription className="line-clamp-2">{task.prompt}</ItemDescription>
+                        </ItemContent>
+                        <ItemActions className="gap-1">
+                          <Switch
+                            checked={task.enabled}
+                            onCheckedChange={() => toggle.mutate(task)}
+                            aria-label="Enabled"
+                          />
+                          {running ? (
+                            <Button
+                              aria-label="Stop this run"
+                              variant="outline"
+                              size="icon"
+                              // Only this row's button. `isPending` alone is true for the whole list
+                              // while any one task is being started or stopped, which greyed out every
+                              // other row's control along with the one that was clicked.
+                              disabled={stop.isPending && stop.variables === task.id}
+                              onClick={() => stop.mutate(task.id)}
+                              iconSlot={<Square />}
+                            />
+                          ) : (
+                            <Button
+                              aria-label="Run now"
+                              variant="outline"
+                              size="icon"
+                              disabled={run.isPending && run.variables?.taskId === task.id}
+                              onClick={() => press(task)}
+                              iconSlot={<Play />}
+                            />
+                          )}
+                          <Button
+                            aria-label="Edit"
                             variant="outline"
-                            className="font-mono font-normal"
-                          >
-                            POST /webhooks/{trigger.event}
-                          </Badge>
-                        );
-                      }
-                      const next = nextRuns.get(trigger.id);
-                      return (
-                        <Badge
-                          key={trigger.id}
-                          variant="outline"
-                          className="font-mono font-normal"
-                          title={next ? `next: ${new Date(next).toLocaleString()}` : undefined}
-                        >
-                          {trigger.cron}
-                          {trigger.timezone ? ` (${trigger.timezone})` : ""}
-                          {next ? ` · next ${new Date(next).toLocaleString()}` : " · not scheduled"}
-                        </Badge>
-                      );
-                    })}
-                    {task.model ? <span>model: {task.model}</span> : null}
-                  </ItemFooter>
-                </Item>
-              );
-            })}
-          />
+                            size="icon"
+                            linkSlot={<Link to="/tasks/$taskId" params={{ taskId: task.id }} />}
+                            iconSlot={<Pencil />}
+                          />
+                          <ConfirmButton
+                            aria-label="Delete"
+                            variant="destructive-outline"
+                            size="icon"
+                            hint={running ? "Stop the run before deleting" : undefined}
+                            disabled={running}
+                            title={`Delete ${task.name}?`}
+                            description="Its triggers and its whole run history go with it, output included."
+                            onConfirm={() => remove.mutate(task.id)}
+                            iconSlot={<Trash2 />}
+                          />
+                        </ItemActions>
+
+                        <ItemFooter className="flex-wrap justify-start gap-2 text-foreground/60 text-xs">
+                          {task.triggers.length === 0 ? (
+                            <span>No triggers — it only runs when you press play.</span>
+                          ) : null}
+                          {task.triggers.map((trigger) => {
+                            // A webhook has no next time to show and is not waiting on the scheduler: it
+                            // fires when someone posts to it. Saying "not scheduled" of one reads as a
+                            // fault, when it is simply a different kind of trigger.
+                            if (trigger.kind === "event") {
+                              return (
+                                <Badge
+                                  key={trigger.id}
+                                  variant="outline"
+                                  className="font-mono font-normal"
+                                >
+                                  POST /webhooks/{trigger.event}
+                                </Badge>
+                              );
+                            }
+                            const next = nextRuns.get(trigger.id);
+                            return (
+                              <Badge
+                                key={trigger.id}
+                                variant="outline"
+                                className="font-mono font-normal"
+                                title={
+                                  next ? `next: ${new Date(next).toLocaleString()}` : undefined
+                                }
+                              >
+                                {trigger.cron}
+                                {trigger.timezone ? ` (${trigger.timezone})` : ""}
+                                {next
+                                  ? ` · next ${new Date(next).toLocaleString()}`
+                                  : " · not scheduled"}
+                              </Badge>
+                            );
+                          })}
+                          {task.model ? <span>model: {task.model}</span> : null}
+                        </ItemFooter>
+                      </Item>
+                    );
+                  })}
+                />
+              }
+            />
+          ) : null}
 
           {askFor ? (
             <RunDialog

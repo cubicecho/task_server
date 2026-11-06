@@ -2,10 +2,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphql";
+import { CardLayout } from "@/components/card-layout";
 import { List } from "@/components/list";
+import { EmptyState } from "@/components/page";
 import { PageLayout } from "@/components/page-layout";
 import { QueryError } from "@/components/query-state";
-import { Section } from "@/components/section";
 import { StatTile } from "@/components/stat-tile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,7 +114,7 @@ function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
   const run = useRunTask();
 
   return (
-    <Item variant="outline">
+    <Item size="sm">
       <ItemContent>
         <ItemTitle>
           <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="underline">
@@ -143,7 +144,7 @@ function TaskRow({ task, health }: { task: StatusTask; health: Health }) {
 
 function FailureRow({ failure }: { failure: Failure }) {
   return (
-    <Item variant="outline">
+    <Item size="sm">
       <ItemContent>
         <ItemTitle>
           {failure.task ? (
@@ -231,65 +232,77 @@ export function StatusRoute() {
             ))}
           </div>
 
-          {selected ? <p className="text-foreground/60 text-sm">{LABELS[selected].blurb}</p> : null}
-
           {unreachable.length > 0 ? (
-            <Section
+            <CardLayout
+              level={2}
               title="Unreachable servers"
               description="Enabled, and not reached. Every run since has gone out without these tools, whether or not its prompt was written expecting them."
-              contentSlot={unreachable.map((server) => (
-                <Item key={server.id} variant="outline">
-                  <ItemContent>
-                    <ItemTitle>
-                      {server.label || server.slug}
-                      <Badge variant="destructive">{server.status}</Badge>
-                    </ItemTitle>
-                    <ItemDescription className="line-clamp-2 text-negative">
-                      {server.error}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      linkSlot={<Link to="/settings/servers" />}
-                      content="Servers"
-                    />
-                  </ItemActions>
-                </Item>
-              ))}
+              actionSlot={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  linkSlot={<Link to="/settings/servers" />}
+                  content="Servers"
+                />
+              }
+              contentSlot={
+                <List
+                  label="Unreachable servers"
+                  contentSlot={unreachable.map((server) => (
+                    <Item key={server.id} size="sm">
+                      <ItemContent>
+                        <ItemTitle>
+                          {server.label || server.slug}
+                          <Badge variant="destructive">{server.status}</Badge>
+                        </ItemTitle>
+                        <ItemDescription className="line-clamp-2 text-negative">
+                          {server.error}
+                        </ItemDescription>
+                      </ItemContent>
+                    </Item>
+                  ))}
+                />
+              }
             />
           ) : null}
 
-          <List
-            label="Tasks"
-            divided={false}
-            contentSlot={shown.map((task) => (
-              <TaskRow key={task.id} task={task} health={taskHealth(task)} />
-            ))}
+          {/* The tile's blurb is the card's description: what being in the chosen heap means. */}
+          <CardLayout
+            level={2}
+            title={selected ? LABELS[selected].label : "Needs attention"}
+            description={selected ? LABELS[selected].blurb : undefined}
+            loading={status.isPending}
+            emptySlot={<EmptyState compact title={emptyNote()} />}
+            contentSlot={
+              <List
+                label="Tasks"
+                contentSlot={shown.map((task) => (
+                  <TaskRow key={task.id} task={task} health={taskHealth(task)} />
+                ))}
+              />
+            }
           />
 
-          {!status.isPending && shown.length === 0 ? (
-            <p className="text-foreground/60 text-sm">{emptyNote()}</p>
-          ) : null}
-
           {unexplained.length > 0 ? (
-            <Section
+            <CardLayout
+              level={2}
               title="Unexplained failures"
               description="Runs that broke and whose task has run since, or whose task is gone. Nothing above counts these, and they are worth seeing once."
+              actionSlot={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  linkSlot={<Link to="/runs" />}
+                  content="Every run"
+                />
+              }
               contentSlot={
-                <>
-                  {unexplained.slice(0, 5).map((failure) => (
-                    <FailureRow key={failure.id} failure={failure} />
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="self-start"
-                    linkSlot={<Link to="/runs" />}
-                    content="Every run"
-                  />
-                </>
+                <List
+                  label="Unexplained failures"
+                  contentSlot={unexplained
+                    .slice(0, 5)
+                    .map((failure) => <FailureRow key={failure.id} failure={failure} />)}
+                />
               }
             />
           ) : null}

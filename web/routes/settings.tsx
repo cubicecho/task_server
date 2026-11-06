@@ -13,13 +13,14 @@ import {
   UpdateSettingsDocument,
 } from "@/__generated__/graphql/graphql";
 import { InputField, NumberField, TextareaField, useAppForm } from "@/components/app-form";
+import { CardLayout } from "@/components/card-layout";
 import { FieldRow } from "@/components/field-row";
 import { ModelSelectField } from "@/components/model-select-field";
 import { PageLayout } from "@/components/page-layout";
 import { PasswordField } from "@/components/password-field";
 import { QueryError } from "@/components/query-state";
 import { RadioGroupField } from "@/components/radio-group-field";
-import { Section } from "@/components/section";
+
 import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -123,6 +124,7 @@ export function SettingsRoute() {
     return (
       <PageLayout
         title={TITLE}
+        width="prose"
         description={DESCRIPTION}
         headerContentSlot={<SettingsTabsRoot current="model" contentSlot={<SettingsTabList />} />}
         loading={settings.isPending}
@@ -261,6 +263,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
       contentSlot={
         <PageLayout
           title={TITLE}
+          width="prose"
           description={DESCRIPTION}
           headerContentSlot={<SettingsTabList dirty={dirty} />}
           actionSlot={actions}
@@ -274,7 +277,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                 }}
               >
                 <TabsContent value="model" forceMount className={panel}>
-                  <Section
+                  <CardLayout
+                    level={2}
                     title="Endpoint"
                     description={
                       <>
@@ -343,7 +347,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                     }
                   />
 
-                  <Section
+                  <CardLayout
+                    level={2}
                     title="Model"
                     contentSlot={
                       <div className="flex flex-col gap-4">
@@ -366,7 +371,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                 </TabsContent>
 
                 <TabsContent value="limits" forceMount className={panel}>
-                  <Section
+                  <CardLayout
+                    level={2}
                     title="Limits"
                     description="What one run may spend."
                     contentSlot={
@@ -404,7 +410,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                     }
                   />
 
-                  <Section
+                  <CardLayout
+                    level={2}
                     title="Resilience"
                     description="What a request does when the endpoint goes quiet or falls over."
                     contentSlot={
@@ -433,7 +440,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                     }
                   />
 
-                  <Section
+                  <CardLayout
+                    level={2}
                     title="Context"
                     description="What a run does when it fills the model's context window."
                     contentSlot={
@@ -449,7 +457,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                 </TabsContent>
 
                 <TabsContent value="tools" forceMount className={panel}>
-                  <Section
+                  <CardLayout
+                    level={2}
                     title="MCP tools"
                     contentSlot={
                       <div className="flex flex-col gap-4">
@@ -502,7 +511,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                 </TabsContent>
 
                 <TabsContent value="server" forceMount className={panel}>
-                  <Section
+                  <CardLayout
+                    level={2}
                     title="Housekeeping"
                     description="What this process does on its own, with no trigger asking."
                     contentSlot={
@@ -535,7 +545,8 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
 
               {/* Outside the form: it edits nothing, and a button inside one is a submit. */}
               <TabsContent value="connect" forceMount className={panel}>
-                <Section
+                <CardLayout
+                  level={2}
                   title="Connect an agent"
                   description={
                     <>
