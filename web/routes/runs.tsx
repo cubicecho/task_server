@@ -530,11 +530,7 @@ export function RunsRoute() {
                             <Provenance trigger={run.trigger} />
                           </>
                         }
-                        description={
-                          <span className="line-clamp-2">
-                            {run.error || run.output || NO_OUTPUT}
-                          </span>
-                        }
+                        description={run.error || run.output || NO_OUTPUT}
                         actionSlot={
                           <>
                             {running ? (
