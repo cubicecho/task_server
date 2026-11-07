@@ -10,10 +10,10 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { CardLayout } from "@/components/card-layout";
 import { ConfirmButton } from "@/components/confirm-button";
+import { EmptyState } from "@/components/empty-state";
 import { List } from "@/components/list";
-import { EmptyState } from "@/components/page";
+import { LoadState } from "@/components/load-state";
 import { PageLayout } from "@/components/page-layout";
-import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -106,7 +106,7 @@ export function TasksRoute() {
       actionSlot={newTask}
       contentSlot={
         <>
-          <QueryState
+          <LoadState
             query={tasks}
             what="your tasks"
             count={rows.length}

@@ -1,6 +1,6 @@
 import { createLink, Outlet, useRouterState } from "@tanstack/react-router";
 import { Activity, History, ListChecks, Zap } from "lucide-react";
-import { BarNavItem, Sidebar, SidebarNavItem, SidebarSection } from "@/components/sidebar";
+import { AppBarItem, Sidebar, SidebarItem, SidebarSection } from "@/components/sidebar";
 import { SidebarLayout } from "@/components/split-layout";
 import { Settings } from "@/components/ui/icons";
 
@@ -16,8 +16,8 @@ const NAV = [
 const SETTINGS = { to: "/settings", label: "Settings", icon: Settings } as const;
 
 // The row and the bar's icon name no router; the router supplies the `href` and the click.
-const SidebarLink = createLink(SidebarNavItem);
-const BarLink = createLink(BarNavItem);
+const SidebarLink = createLink(SidebarItem);
+const BarLink = createLink(AppBarItem);
 
 function Brand() {
   return (

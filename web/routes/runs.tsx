@@ -11,14 +11,14 @@ import {
   type RunsQuery,
   RunsStatusEnum,
 } from "@/__generated__/graphql/graphql";
+import { Collapsible } from "@/components/collapsible";
+import { CollapsibleRow } from "@/components/collapsible-row";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
-import { Disclosure } from "@/components/disclosure";
-import { DisclosureRow } from "@/components/disclosure-row";
+import { EmptyState } from "@/components/empty-state";
 import { List } from "@/components/list";
-import { EmptyState } from "@/components/page";
+import { LoadState } from "@/components/load-state";
 import { PageLayout } from "@/components/page-layout";
-import { QueryState } from "@/components/query-state";
 import { RunDialog } from "@/components/run-dialog";
 import { RunStream } from "@/components/run-stream";
 import { StatTile } from "@/components/stat-tile";
@@ -97,7 +97,7 @@ function HookNotes({ notes }: { notes: unknown }) {
   }
   const failed = list.filter((note) => note.error).length;
   return (
-    <Disclosure
+    <Collapsible
       title={`${list.length} hook note(s)${failed ? `, ${failed} failed` : ""}`}
       titleClassName={cn("text-xs", failed && "text-negative")}
       contentSlot={
@@ -177,7 +177,7 @@ function Metrics({ metrics }: { metrics: unknown }) {
   const failed = Object.entries(m.toolErrors ?? {});
   const errors = failed.reduce((sum, [, count]) => sum + count, 0);
   return (
-    <Disclosure
+    <Collapsible
       title={`Metrics · ${m.turns} turn(s), ${m.toolCalls} tool call(s)`}
       titleClassName={cn("text-xs", errors && "text-negative")}
       contentSlot={
@@ -232,7 +232,7 @@ function Payload({ payload }: { payload: unknown }) {
     return null;
   }
   return (
-    <Disclosure
+    <Collapsible
       title="Event payload"
       contentSlot={<CodeBlock content={JSON.stringify(payload, null, 2)} maxHeight="lg" />}
     />
@@ -268,7 +268,7 @@ function RunDetail({
   const found = detail.data?.runs[0];
 
   if (!found) {
-    return <QueryState query={detail} what="this run" count={0} rows={1} />;
+    return <LoadState query={detail} what="this run" count={0} rows={1} />;
   }
 
   const payload = found.payload;
@@ -472,7 +472,7 @@ export function RunsRoute() {
       }
       contentSlot={
         <>
-          <QueryState
+          <LoadState
             query={runs}
             what="the run history"
             count={rows.length}
@@ -501,7 +501,7 @@ export function RunsRoute() {
               // you call it off.
               const queued = run.status === "queued";
               return (
-                <DisclosureRow
+                <CollapsibleRow
                   key={run.id}
                   open={open === run.id}
                   onOpenChange={(next) => setOpen(next ? run.id : null)}

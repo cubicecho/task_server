@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 import type { TaskFieldsFragment } from "@/__generated__/graphql/graphql";
+import { EmptyState } from "@/components/empty-state";
 import { FormField } from "@/components/form-field";
-import { EmptyState } from "@/components/page";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";

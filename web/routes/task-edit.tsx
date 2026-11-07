@@ -15,10 +15,10 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { InputField, SelectField, TextareaField, useAppForm } from "@/components/app-form";
 import { FieldRow } from "@/components/field-row";
+import { LoadError } from "@/components/load-state";
 import { ModelSelectField } from "@/components/model-select-field";
 import { PageLayout } from "@/components/page-layout";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
-import { QueryError } from "@/components/query-state";
 import { Section } from "@/components/section";
 import { StepList } from "@/components/step-editor";
 import { type DraftTrigger, TriggerEditor, toDraftTriggers } from "@/components/trigger-editor";
@@ -71,11 +71,11 @@ export function TaskEditRoute() {
         title="Task"
         width="prose"
         description={DESCRIPTION}
-        breadcrumbsSlot={<Breadcrumbs />}
+        backSlot={<Breadcrumbs />}
         loading={task.isPending}
         contentSlot={
           task.isPending ? null : (
-            <QueryError
+            <LoadError
               // A task that is simply not there is not a failed request, and saying "try again"
               // about it would be a lie — so the absence is phrased as the error it is.
               error={task.error ?? new Error("There is no task with that id.")}
@@ -253,7 +253,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       title={task ? "Edit task" : "New task"}
       width="prose"
       description={DESCRIPTION}
-      breadcrumbsSlot={<Breadcrumbs />}
+      backSlot={<Breadcrumbs />}
       actionSlot={
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate({ to: "/tasks" })} content="Cancel" />

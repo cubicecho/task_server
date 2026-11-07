@@ -607,12 +607,12 @@ copies a shell into `web/components/` rewritten against the local aliases — th
 dependency, and an installed file is this repo's to edit. What is here: `PageLayout` (every
 route's header, trail, action row and body), `DialogLayout` (title, body, `footerSlot` for a side
 control and `footerActionsSlot` for cancel/confirm, and the unsaved-changes guard), `Section`,
-`CardLayout`, `SplitLayout`, `QueryState` with `QueryError`, `Disclosure`, `DisclosureRow`,
+`CardLayout`, `SplitLayout`, `LoadState` with `LoadError`, `Collapsible`, `CollapsibleRow`,
 `List`, `StatTile`, `ConfirmButton`, `FormField`, `FieldRow`, `Combobox`, `PasswordInput`,
 `ModelSelect`'s field wrapper, `CodeBlock` and `CopyButton` — and, since the registry began shipping its own, every primitive under
 `web/components/ui/`. **No cubeui component takes `children`** — the body is `contentSlot`, and
 every other place an element goes is a prop ending in `Slot` (`actionSlot`, `emptySlot`,
-`iconSlot`, `breadcrumbsSlot`, `controlSlot`…), which is what stops a shell from being subclassed
+`iconSlot`, `backSlot`, `controlSlot`…), which is what stops a shell from being subclassed
 by nesting. A slot takes an element, never a bare string; words go in `title`, `description`,
 `label` and `meta`. Never hand-write `mx-auto max-w-3xl` or a
 `<header className="border-b px-6 py-4">`: that is `PageLayout` being re-derived, and the point
@@ -644,8 +644,8 @@ imported from `lucide-react` directly — there is no local wrapper file, which 
 render off the DOM.
 
 **The shell is cubeui's `Sidebar`, and the links are `createLink` over its rows.**
-`app-shell.tsx` hands `SidebarLayout` a `Sidebar` of `SidebarNavItem`s and, for under `md`, the
-same list as `BarNavItem`s in `navSlot` — the sidebar is hidden there and the bar takes its
+`app-shell.tsx` hands `SidebarLayout` a `Sidebar` of `SidebarItem`s and, for under `md`, the
+same list as `AppBarItem`s in `navSlot` — the sidebar is hidden there and the bar takes its
 place, which is why `NAV` is one array read twice. Settings sits apart from it in the
 sidebar's `footerSlot`, as telos keeps it, and is the bar's last icon; Agents and MCP servers
 are not places of their own but tabs of Settings (`/settings/agents`, `/settings/servers`, the

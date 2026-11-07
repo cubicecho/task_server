@@ -11,12 +11,12 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { CardLayout } from "@/components/card-layout";
 import { ConfirmButton } from "@/components/confirm-button";
+import { EmptyState } from "@/components/empty-state";
 import { List } from "@/components/list";
+import { LoadState } from "@/components/load-state";
 import { McpDialog } from "@/components/mcp-dialog";
 import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
-import { EmptyState } from "@/components/page";
 import { PageLayout } from "@/components/page-layout";
-import { QueryState } from "@/components/query-state";
 import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -119,7 +119,7 @@ export function McpRoute() {
           }
           contentSlot={
             <>
-              <QueryState
+              <LoadState
                 query={servers}
                 what="your MCP servers"
                 count={rows.length}

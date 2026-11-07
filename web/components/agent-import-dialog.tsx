@@ -9,7 +9,7 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { CheckboxField, InputField, TextareaField, useAppForm } from "@/components/app-form";
 import { DialogLayout } from "@/components/dialog-layout";
-import { QueryError } from "@/components/query-state";
+import { LoadError } from "@/components/load-state";
 import { Section } from "@/components/section";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -227,11 +227,7 @@ export function AgentImportDialog({
           </div>
 
           {current && preview.isError ? (
-            <QueryError
-              error={preview.error}
-              onRetry={() => preview.refetch()}
-              what="the preview"
-            />
+            <LoadError error={preview.error} onRetry={() => preview.refetch()} what="the preview" />
           ) : null}
 
           {shown ? (
