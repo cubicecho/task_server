@@ -11,6 +11,7 @@ import {
   type RunsQuery,
   RunsStatusEnum,
 } from "@/__generated__/graphql/graphql";
+import { CardLayout } from "@/components/card-layout";
 import { Collapsible } from "@/components/collapsible";
 import { CollapsibleRow } from "@/components/collapsible-row";
 import { Combobox } from "@/components/combobox";
@@ -489,106 +490,119 @@ export function RunsRoute() {
             }
           />
 
-          <List
-            label="Runs"
-            divided={false}
-            contentSlot={rows.map((run) => {
-              const running = run.status === "running";
-              // A trigger that fired at a busy task: a real delivery, and nothing behind it to
-              // open.
-              const skipped = run.status === "skipped";
-              // A firing waiting for a slot. Nothing has happened yet, and deleting the row is how
-              // you call it off.
-              const queued = run.status === "queued";
-              return (
-                <CollapsibleRow
-                  key={run.id}
-                  open={open === run.id}
-                  onOpenChange={(next) => setOpen(next ? run.id : null)}
-                  badgesSlot={
-                    <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>{run.status}</Badge>
-                  }
-                  title={run.task.name}
-                  meta={
-                    <>
-                      <span className="shrink-0 font-normal text-foreground/60 text-xs">
-                        {new Date(run.startedAt).toLocaleString()}
-                        {skipped || queued ? "" : ` · ${duration(run.startedAt, run.finishedAt)}`}
-                        {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
-                        {/* Only worth saying when the row stands for more than the one firing. */}
-                        {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
-                      </span>
-                      <Provenance trigger={run.trigger} />
-                    </>
-                  }
-                  description={
-                    <span className="line-clamp-2">{run.error || run.output || NO_OUTPUT}</span>
-                  }
-                  actionSlot={
-                    <>
-                      {running ? (
-                        <Button
-                          aria-label="Stop this run"
-                          variant="outline"
-                          size="icon"
-                          // Only this row's button: `isPending` alone disabled every other running
-                          // run's Stop while one of them was being stopped.
-                          disabled={stop.isPending && stop.variables === run.taskId}
-                          onClick={() => stop.mutate(run.taskId)}
-                          iconSlot={<Square />}
-                        />
-                      ) : null}
-                      <ConfirmButton
-                        aria-label="Delete"
-                        variant="destructive-outline"
-                        size="icon"
-                        hint={running ? "Stop the run before deleting" : undefined}
-                        disabled={running}
-                        title="Delete this run?"
-                        description={
-                          queued
-                            ? "The firing is called off — it never starts, and nothing is retried in its place."
-                            : "Its output, its steps and the webhook body it was given go with it."
+          {rows.length > 0 ? (
+            <CardLayout
+              level={2}
+              title={filtered ? "Matching runs" : "All runs"}
+              contentSlot={
+                <List
+                  label="Runs"
+                  contentSlot={rows.map((run) => {
+                    const running = run.status === "running";
+                    // A trigger that fired at a busy task: a real delivery, and nothing behind it to
+                    // open.
+                    const skipped = run.status === "skipped";
+                    // A firing waiting for a slot. Nothing has happened yet, and deleting the row is how
+                    // you call it off.
+                    const queued = run.status === "queued";
+                    return (
+                      <CollapsibleRow
+                        key={run.id}
+                        open={open === run.id}
+                        onOpenChange={(next) => setOpen(next ? run.id : null)}
+                        badgesSlot={
+                          <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>
+                            {run.status}
+                          </Badge>
                         }
-                        onConfirm={() => remove.mutate(run.id)}
-                        iconSlot={<Trash2 />}
+                        title={run.task.name}
+                        meta={
+                          <>
+                            <span className="shrink-0 font-normal text-foreground/60 text-xs">
+                              {new Date(run.startedAt).toLocaleString()}
+                              {skipped || queued
+                                ? ""
+                                : ` · ${duration(run.startedAt, run.finishedAt)}`}
+                              {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
+                              {/* Only worth saying when the row stands for more than the one firing. */}
+                              {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
+                            </span>
+                            <Provenance trigger={run.trigger} />
+                          </>
+                        }
+                        description={
+                          <span className="line-clamp-2">
+                            {run.error || run.output || NO_OUTPUT}
+                          </span>
+                        }
+                        actionSlot={
+                          <>
+                            {running ? (
+                              <Button
+                                aria-label="Stop this run"
+                                variant="outline"
+                                size="icon"
+                                // Only this row's button: `isPending` alone disabled every other running
+                                // run's Stop while one of them was being stopped.
+                                disabled={stop.isPending && stop.variables === run.taskId}
+                                onClick={() => stop.mutate(run.taskId)}
+                                iconSlot={<Square />}
+                              />
+                            ) : null}
+                            <ConfirmButton
+                              aria-label="Delete"
+                              variant="destructive-outline"
+                              size="icon"
+                              hint={running ? "Stop the run before deleting" : undefined}
+                              disabled={running}
+                              title="Delete this run?"
+                              description={
+                                queued
+                                  ? "The firing is called off — it never starts, and nothing is retried in its place."
+                                  : "Its output, its steps and the webhook body it was given go with it."
+                              }
+                              onConfirm={() => remove.mutate(run.id)}
+                              iconSlot={<Trash2 />}
+                            />
+                          </>
+                        }
+                        contentSlot={
+                          <>
+                            {/* A run in flight has no stored output yet — this is the run itself, live. */}
+                            {running ? <RunStream runId={run.id} /> : null}
+                            {skipped ? (
+                              <p className="text-foreground/60 text-sm">
+                                {run.attempts > 1
+                                  ? `The trigger fired ${run.attempts} times while this task was already running, so nothing was started.`
+                                  : "The trigger fired while this task was already running, so nothing was started."}{" "}
+                                {/* Not "the run above": the list is newest first, so the run it collided
+                                  with — which started before it — is below. Naming neither is safer. */}
+                                It collided with the run that was already under way.
+                              </p>
+                            ) : null}
+                            {queued ? (
+                              <p className="text-foreground/60 text-sm">
+                                {run.attempts > 1
+                                  ? `The trigger fired ${run.attempts} times while the server was at its limit, and this row stands for all of them.`
+                                  : "The trigger fired while the server was at its limit."}{" "}
+                                It starts on its own when a slot comes back, in this same row — or
+                                delete it to call it off. {run.error}
+                              </p>
+                            ) : null}
+                            <RunDetail
+                              run={run}
+                              withResult={!running && !skipped && !queued}
+                              onReplay={(payload) => setReplay({ run, payload })}
+                            />
+                          </>
+                        }
                       />
-                    </>
-                  }
-                  contentSlot={
-                    <>
-                      {/* A run in flight has no stored output yet — this is the run itself, live. */}
-                      {running ? <RunStream runId={run.id} /> : null}
-                      {skipped ? (
-                        <p className="text-foreground/60 text-sm">
-                          {run.attempts > 1
-                            ? `The trigger fired ${run.attempts} times while this task was already running, so nothing was started.`
-                            : "The trigger fired while this task was already running, so nothing was started."}{" "}
-                          {/* Not "the run above": the list is newest first, so the run it collided
-                            with — which started before it — is below. Naming neither is safer. */}
-                          It collided with the run that was already under way.
-                        </p>
-                      ) : null}
-                      {queued ? (
-                        <p className="text-foreground/60 text-sm">
-                          {run.attempts > 1
-                            ? `The trigger fired ${run.attempts} times while the server was at its limit, and this row stands for all of them.`
-                            : "The trigger fired while the server was at its limit."}{" "}
-                          It starts on its own when a slot comes back, in this same row — or delete
-                          it to call it off. {run.error}
-                        </p>
-                      ) : null}
-                      <RunDetail
-                        run={run}
-                        withResult={!running && !skipped && !queued}
-                        onReplay={(payload) => setReplay({ run, payload })}
-                      />
-                    </>
-                  }
+                    );
+                  })}
                 />
-              );
-            })}
-          />
+              }
+            />
+          ) : null}
 
           {more ? (
             <Button
