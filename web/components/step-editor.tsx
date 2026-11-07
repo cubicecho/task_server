@@ -1,7 +1,7 @@
 import { GitBranch } from "lucide-react";
 import { CardLayout } from "@/components/card-layout";
+import { Collapsible } from "@/components/collapsible";
 import { Combobox } from "@/components/combobox";
-import { Disclosure } from "@/components/disclosure";
 import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
@@ -301,7 +301,7 @@ function StepCard({
             />
           ) : null}
 
-          <Disclosure
+          <Collapsible
             title="Model, system prompt, context"
             contentSlot={
               <FieldRow

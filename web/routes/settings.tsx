@@ -15,18 +15,17 @@ import {
 import { InputField, NumberField, TextareaField, useAppForm } from "@/components/app-form";
 import { CardLayout } from "@/components/card-layout";
 import { FieldRow } from "@/components/field-row";
+import { LoadError } from "@/components/load-state";
 import { ModelSelectField } from "@/components/model-select-field";
 import { PageLayout } from "@/components/page-layout";
 import { PasswordField } from "@/components/password-field";
-import { QueryError } from "@/components/query-state";
-import { RadioGroupField } from "@/components/radio-group-field";
-
 import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code";
 import { CopyButton } from "@/components/ui/copy-button";
 import { CircleCheck } from "@/components/ui/icons";
+import { RadioGroupField } from "@/components/ui/radio-group-field";
 import { TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { describeFor } from "@/lib/docs";
@@ -130,7 +129,7 @@ export function SettingsRoute() {
         loading={settings.isPending}
         contentSlot={
           settings.isError ? (
-            <QueryError
+            <LoadError
               error={settings.error}
               onRetry={() => settings.refetch()}
               what="your settings"

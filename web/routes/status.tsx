@@ -3,10 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { StatusDocument, type StatusQuery } from "@/__generated__/graphql/graphql";
 import { CardLayout } from "@/components/card-layout";
+import { EmptyState } from "@/components/empty-state";
 import { List } from "@/components/list";
-import { EmptyState } from "@/components/page";
+import { LoadError } from "@/components/load-state";
 import { PageLayout } from "@/components/page-layout";
-import { QueryError } from "@/components/query-state";
 import { StatTile } from "@/components/stat-tile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -212,7 +212,7 @@ export function StatusRoute() {
       contentSlot={
         <>
           {status.isError ? (
-            <QueryError
+            <LoadError
               error={status.error}
               onRetry={() => status.refetch()}
               what="the status of your tasks"
