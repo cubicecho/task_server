@@ -15,7 +15,7 @@ import {
 } from "@/__generated__/graphql/graphql";
 import { InputField, SelectField, TextareaField, useAppForm } from "@/components/app-form";
 import { FieldRow } from "@/components/field-row";
-import { LoadError } from "@/components/load-state";
+import { LoadState } from "@/components/load-state";
 import { ModelSelectField } from "@/components/model-select-field";
 import { PageLayout } from "@/components/page-layout";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
@@ -40,7 +40,7 @@ const NO_AGENT = "__settings__";
 const DESCRIPTION = "The prompt is step one. Everything in the flow runs after it, in order.";
 
 /** Back to the list, in the slot a page's back link belongs in. */
-const Breadcrumbs = () => (
+const BackLink = () => (
   <Link to="/tasks" className="flex items-center gap-1 hover:underline">
     <ArrowLeft className="size-3.5" />
     Tasks
@@ -71,18 +71,18 @@ export function TaskEditRoute() {
         title="Task"
         width="prose"
         description={DESCRIPTION}
-        backSlot={<Breadcrumbs />}
+        backSlot={<BackLink />}
         loading={task.isPending}
         contentSlot={
-          task.isPending ? null : (
-            <LoadError
-              // A task that is simply not there is not a failed request, and saying "try again"
-              // about it would be a lie — so the absence is phrased as the error it is.
-              error={task.error ?? new Error("There is no task with that id.")}
-              onRetry={() => task.refetch()}
-              what="that task"
-            />
-          )
+          // A task that is simply not there is not a failed request, so it is said as an absence
+          // rather than as an error with a Try again that could never work.
+          <LoadState
+            query={task}
+            what="that task"
+            record={task.data?.task}
+            notFoundLabel="Task not found"
+            level={2}
+          />
         }
       />
     );
@@ -253,7 +253,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
       title={task ? "Edit task" : "New task"}
       width="prose"
       description={DESCRIPTION}
-      backSlot={<Breadcrumbs />}
+      backSlot={<BackLink />}
       actionSlot={
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate({ to: "/tasks" })} content="Cancel" />
