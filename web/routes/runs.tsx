@@ -1,6 +1,5 @@
 import type { HookNote, RunMetrics } from "@cubicecho/agent-core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { History } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   DeleteRunDocument,
@@ -27,7 +26,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code";
-import { Play, RefreshCw, Square, Trash2, X } from "@/components/ui/icons";
+import { Play, RefreshCw, RotateCcwClock, Square, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
 import {
@@ -479,7 +478,7 @@ export function RunsRoute() {
             count={rows.length}
             emptySlot={
               <EmptyState
-                iconSlot={<History />}
+                iconSlot={<RotateCcwClock />}
                 title={filtered ? "No matches" : "Nothing has run yet"}
                 description={
                   filtered

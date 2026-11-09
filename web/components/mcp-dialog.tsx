@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { ClipboardPaste, PlugZap } from "lucide-react";
+import { ClipboardPaste } from "lucide-react";
 import { useState } from "react";
 import {
   CreateMcpServerDocument,
@@ -20,6 +20,7 @@ import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { type McpProbe, McpProbeResult } from "@/components/mcp-probe";
 import { Button } from "@/components/ui/button";
+import { PlugZap } from "@/components/ui/icons";
 import { RadioGroupField } from "@/components/ui/radio-group-field";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
@@ -368,7 +369,7 @@ export function McpDialog({
           <form.AppForm>
             {/* Nothing typed is nothing to save — and on a new one it is also the empty row the
                 server would refuse. */}
-            <form.SubmitButton variant="positive" form="mcp-server" requireChanges />
+            <form.SubmitButton form="mcp-server" requireChanges />
           </form.AppForm>
         </>
       )}

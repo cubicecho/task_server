@@ -639,7 +639,8 @@ for an icon inside a field's own border.
 
 **Icons come from `@/components/ui/icons`, and the rest straight from `lucide-react`.** The
 registry ships a set and its own controls draw from it, so a glyph in the set is imported from
-there and is the same `Trash2` a shell draws. One outside it (`Bot`, `History`, `Zap`…) is
+there and is the same `Trash2` a shell draws (`Bot`, `Zap` and lucide's `History`, which the set
+calls `RotateCcwClock`, are in it now). One outside it (`ClipboardPaste`, `FileUp`) is
 imported from `lucide-react` directly — there is no local wrapper file, which is for apps that
 render off the DOM.
 

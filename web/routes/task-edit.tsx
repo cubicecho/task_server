@@ -258,7 +258,7 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate({ to: "/tasks" })} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton variant="positive" form="task" />
+            <form.SubmitButton form="task" />
           </form.AppForm>
         </div>
       }

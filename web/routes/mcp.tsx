@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlugZap } from "lucide-react";
 import { useState } from "react";
 import {
   DeleteMcpServerDocument,
@@ -21,7 +20,7 @@ import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Plug, Plus, RefreshCw, Trash2 } from "@/components/ui/icons";
+import { Pencil, Plug, PlugZap, Plus, RefreshCw, Trash2 } from "@/components/ui/icons";
 import {
   Item,
   ItemActions,

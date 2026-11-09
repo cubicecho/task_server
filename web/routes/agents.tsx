@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot } from "lucide-react";
 import { useState } from "react";
 import {
   type AgentFieldsFragment,
@@ -18,7 +17,7 @@ import { PageLayout } from "@/components/page-layout";
 import { SettingsTabList, SettingsTabsRoot } from "@/components/settings-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Pencil, Plus, Trash2, Upload } from "@/components/ui/icons";
+import { Bot, Download, Pencil, Plus, Trash2, Upload } from "@/components/ui/icons";
 import {
   Item,
   ItemActions,

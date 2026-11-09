@@ -249,7 +249,7 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
         content="Revert"
       />
       <form.AppForm>
-        <form.SubmitButton variant="positive" form={FORM_ID} disabled={dirty.length === 0} />
+        <form.SubmitButton form={FORM_ID} disabled={dirty.length === 0} />
       </form.AppForm>
     </div>
   );

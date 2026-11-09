@@ -1,6 +1,6 @@
 import { useStore } from "@tanstack/react-form";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
-import { FileUp, ScanSearch } from "lucide-react";
+import { FileUp } from "lucide-react";
 import { useState } from "react";
 import {
   AgentSpecPreviewDocument,
@@ -15,6 +15,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FilePickerButton } from "@/components/ui/file-picker";
+import { ScanSearch } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast";
 import { initialTicks, mayImport, overrides, readSpec, tickedSlugs } from "@/lib/agent-spec";
 import { request } from "@/lib/gql";
@@ -339,11 +340,10 @@ export function AgentImportDialog({
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
             <form.SubmitButton
-              variant="positive"
               form="agent-import"
-              pendingLabel="Importing…"
+              createLabel="Import"
+              loadingLabel="Importing…"
               disabled={!mayImport(shown, settled)}
-              content="Import"
             />
           </form.AppForm>
         </>
