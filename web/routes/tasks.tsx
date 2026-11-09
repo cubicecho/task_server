@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ListChecks } from "lucide-react";
 import { useState } from "react";
 import {
   DeleteTaskDocument,
@@ -17,7 +16,7 @@ import { PageLayout } from "@/components/page-layout";
 import { RunDialog } from "@/components/run-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Play, Plus, Square, Trash2 } from "@/components/ui/icons";
+import { ListChecks, Pencil, Play, Plus, Square, Trash2 } from "@/components/ui/icons";
 import {
   Item,
   ItemActions,

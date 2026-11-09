@@ -146,7 +146,7 @@ function BodyForm({
         <>
           <Button variant="outline" onClick={close} content="Cancel" />
           <form.AppForm>
-            <form.SubmitButton form="run-body" pendingLabel="Starting…" content="Run" />
+            <form.SubmitButton form="run-body" createLabel="Run" loadingLabel="Starting…" />
           </form.AppForm>
         </>
       )}

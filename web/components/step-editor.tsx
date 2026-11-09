@@ -1,4 +1,3 @@
-import { GitBranch } from "lucide-react";
 import { CardLayout } from "@/components/card-layout";
 import { Collapsible } from "@/components/collapsible";
 import { Combobox } from "@/components/combobox";
@@ -9,7 +8,7 @@ import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, Plus, Trash2, X } from "@/components/ui/icons";
+import { ChevronDown, ChevronUp, GitBranch, Plus, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";

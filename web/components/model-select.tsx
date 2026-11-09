@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { List } from "lucide-react";
 import { useState } from "react";
 import { ModelsDocument } from "@/__generated__/graphql/graphql";
 import { Combobox } from "@/components/combobox";
 import { Button } from "@/components/ui/button";
+import { List } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
 import type { SelectEntry } from "@/lib/select-options";

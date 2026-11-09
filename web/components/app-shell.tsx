@@ -1,13 +1,12 @@
 import { createLink, Outlet, useRouterState } from "@tanstack/react-router";
-import { Activity, History, ListChecks, Zap } from "lucide-react";
 import { AppBarItem, Sidebar, SidebarItem, SidebarSection } from "@/components/sidebar";
 import { SidebarLayout } from "@/components/split-layout";
-import { Settings } from "@/components/ui/icons";
+import { Activity, ListChecks, RotateCcwClock, Settings, Zap } from "@/components/ui/icons";
 
 const NAV = [
   { to: "/status", label: "Status", icon: Activity },
   { to: "/tasks", label: "Tasks", icon: ListChecks },
-  { to: "/runs", label: "Runs", icon: History },
+  { to: "/runs", label: "Runs", icon: RotateCcwClock },
 ] as const;
 
 // At the foot of the sidebar, as telos and the rest of the ecosystem keep it. Agent profiles and

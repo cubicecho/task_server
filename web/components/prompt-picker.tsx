@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import {
   McpPromptDocument,
@@ -12,6 +11,7 @@ import { List } from "@/components/list";
 import { ListItem } from "@/components/list-item";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Sparkles } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
 
