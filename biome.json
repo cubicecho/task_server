@@ -25,9 +25,6 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
-      "correctness": {
-        "noUnusedFunctionParameters": "error"
-      },
       "style": {
         "useConst": "error",
         "noNonNullAssertion": "error",

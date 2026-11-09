@@ -8,10 +8,7 @@
     "strict": true,
     "noEmit": true,
     "noUnusedLocals": true,
-    // Off while the vendored web/lib/utils.ts (cubeui) has an unused `touchTarget(drawn)`
-    // parameter, which fails TS6133. Biome's noUnusedFunctionParameters (an error in biome.json)
-    // covers the rest of the code instead.
-    "noUnusedParameters": false,
+    "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
