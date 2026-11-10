@@ -512,7 +512,8 @@ that rearms on every chunk, not a deadline on the request.
 
 `agent.ts` sends no request of its own. It hands `runAgentLoop` the settings row with the step's
 model laid over it, the pool's tools and catalogue, a `dispatch` that is `mcp.call` under the
-profile's scope, and an `onEvent` that forwards to the run-event bus and copies notices to the
+profile's scope and the signal the loop hands it — dropped, a stop left the tool call running to
+its end — and an `onEvent` that forwards to the run-event bus and copies notices to the
 log. A retry and a capability downgrade both arrive as notices, because a watcher reading an
 unexplained pause wants to be told either way. The step loop, the request body, the silence
 watchdog and the endpoint's latched refusals were all written here once and are not to be
