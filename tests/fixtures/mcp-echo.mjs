@@ -14,7 +14,10 @@ if (process.env.MCP_ECHO_SPAWN_LOG) {
   appendFileSync(process.env.MCP_ECHO_SPAWN_LOG, `${process.pid}\n`);
 }
 
-/** A stdio MCP server with three trivial tools, for the runner tests to connect to. */
+/**
+ * A stdio MCP server with three trivial tools, for the runner tests to connect to — four with
+ * `MCP_ECHO_SLOW`.
+ */
 const tools = [
   { name: "ping", description: "replies pong", inputSchema: { type: "object", properties: {} } },
   {
@@ -32,6 +35,11 @@ const tools = [
       required: ["a", "b"],
     },
   },
+  // A tool that waits for longer than any test does, behind `MCP_ECHO_SLOW` so that the suites
+  // which count this server's tools still see three. It answers only if nobody cancels it.
+  ...(process.env.MCP_ECHO_SLOW
+    ? [{ name: "slow", description: "takes a minute", inputSchema: { type: "object" } }]
+    : []),
 ];
 
 /**
@@ -88,15 +96,35 @@ if (process.env.MCP_ECHO_CLIENT_LOG) {
 server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }));
 // Every call as one JSON line, when a test asks. A hook's call reaches the server and nothing
 // else — it is not a run event and not a tool call on the run — so the child is its witness too.
-server.setRequestHandler(CallToolRequestSchema, (request) => {
+server.setRequestHandler(CallToolRequestSchema, (request, extra) => {
   if (process.env.MCP_ECHO_CALL_LOG) {
     appendFileSync(
       process.env.MCP_ECHO_CALL_LOG,
       `${JSON.stringify({ name: request.params.name, arguments: request.params.arguments ?? {} })}\n`,
     );
   }
+  if (request.params.name === "slow") {
+    return waitForCancel(extra.signal).then(() => reply(request));
+  }
   return reply(request);
 });
+
+/**
+ * Sleeps a minute, or until the client sends `notifications/cancelled` for the request — which
+ * the SDK turns into `signal` aborting. A cancellation reaches the server and nothing else, so it
+ * goes in `MCP_ECHO_CANCEL_LOG` for a test to read, as the calls do above.
+ */
+const waitForCancel = (signal) =>
+  new Promise((resolve) => {
+    const timer = setTimeout(resolve, 60_000);
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer);
+      if (process.env.MCP_ECHO_CANCEL_LOG) {
+        appendFileSync(process.env.MCP_ECHO_CANCEL_LOG, `${String(signal.reason)}\n`);
+      }
+      resolve();
+    });
+  });
 
 const reply = (request) => ({
   content: [

@@ -160,7 +160,10 @@ export async function runAgent({
       }
       return pruned?.messages;
     },
-    dispatch: (call) => mcp.call(call.name, call.args, { servers }),
+    // The loop hands each call the run's signal. Passed on, a stop sends the server the
+    // protocol's `notifications/cancelled` and the call rejects at once; dropped, the tool ran to
+    // its end or the call timeout, and a write the person stopped still landed.
+    dispatch: (call, callSignal) => mcp.call(call.name, call.args, { servers, signal: callSignal }),
     signal,
     onEvent: (event) => {
       if (event.kind === RunEventKind.Notice) {

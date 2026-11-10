@@ -41,7 +41,8 @@ instead of the UI.
   a `POST` arrives at `/webhooks/<its event id>` — see **Webhooks**.
 - **run** — one execution: status, timings, output or error, which tools were called, tokens.
   A run in flight can be called off from either the Runs or the Tasks page (`stopTask`), which
-  aborts the request and finishes the run as `stopped` — neither a success nor a failure.
+  aborts the model request and any tool call it is waiting on — the MCP server is sent the
+  protocol's cancellation — and finishes the run as `stopped`, neither a success nor a failure.
   Neither the run nor its task can be deleted while it is going: both deletes are refused
   server-side until it has stopped. Expanding a running run on the **Runs** page shows it
   happening — see below.
