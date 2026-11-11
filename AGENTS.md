@@ -665,6 +665,14 @@ fold.
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
+A server's `server-log` events are the case in point: `dispatch` hands the pool `onLog:
+report.log` at the row's `logLevel` (null is the server's own default — the pool's spelling, so
+the row reaches it unmapped, and there is no row above it for an `inherit` to mean), and
+`server-logs.ts` keeps what is `warning` or worse on `run_steps.serverLogs`, capped per step. A
+sibling of `hooks` rather than more notes in it, since a hook note is what the host's own calls
+did and these are what a server said during the model's. The pool ties a message to a call only
+when it is the one request in flight on that connection, so a parallel call or a hook on the same
+server goes unheard.
 What is kept of them is `runs.metrics`, agent-core's `runMetrics` over the run's events, which
 `server/runner/metrics.ts` collects as the run emits them rather than reading back off the bus —
 the bus caps a run's backlog and drops its oldest, which is exactly the tool calls a summary

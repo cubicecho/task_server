@@ -17,6 +17,7 @@ import { type AgentOptions, type AgentResult, runAgent } from "./agent.ts";
 import { recordArtifacts } from "./artifacts.ts";
 import { describe, type HookSession, type HookStep } from "./hooks.ts";
 import { readPromptResources } from "./prompt-resources.ts";
+import { serverLogCollector } from "./server-logs.ts";
 
 /**
  * A task as a flow: its prompt, then a tree of steps under it.
@@ -374,10 +375,17 @@ export async function runFlow({
     // is why it did not run at all.
     const notes: HookNote[] = [];
     const reads: ResourceRead[] = [];
-    const noted = (): Partial<Pick<RunStep, "hooks" | "resources">> => ({
-      ...(notes.length ? { hooks: notes } : {}),
-      ...(reads.length ? { resources: reads } : {}),
-    });
+    // What a server complained of during a call is often the whole of why the step failed, so it
+    // is kept on the row on the failing path too.
+    const logs = serverLogCollector();
+    const noted = (): Partial<Pick<RunStep, "hooks" | "resources" | "serverLogs">> => {
+      const serverLogs = logs.entries();
+      return {
+        ...(notes.length ? { hooks: notes } : {}),
+        ...(reads.length ? { resources: reads } : {}),
+        ...(serverLogs.length ? { serverLogs } : {}),
+      };
+    };
 
     try {
       // Inside the `try`, so a read that fails is this step's error on its row, and before the
@@ -420,7 +428,10 @@ export async function runFlow({
         context: gathered?.context,
         servers,
         signal,
-        onEvent: emit,
+        onEvent: (event) => {
+          logs.observe(event);
+          emit(event);
+        },
         onMetrics,
         hooks: loopHooks,
         // Every step of the run on one llama.cpp slot. The loop says which in a notice, which

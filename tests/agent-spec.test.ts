@@ -804,6 +804,23 @@ test("a server bundled as trusted is created untrusted, and the preview says so"
   expect((await written()).servers[0].trustAnnotations).toBe(false);
 });
 
+// How much a server says on this host's run stream is this host's to choose, as its trust is.
+test("a server bundled with a log level is created at the column's default, and says so", async () => {
+  const document = {
+    spec: SPEC,
+    name: "Chatty",
+    tools: { servers: ["c"] },
+    bundle: { mcpServers: [{ slug: "c", url: "http://127.0.0.1:9/mcp", logLevel: "debug" }] },
+  };
+
+  const shown = await preview(document, { createServers: ["c"] });
+  expect(shown.bundled[0].notes).toEqual([
+    "it logged at debug where it was exported; created at warning here",
+  ]);
+  expect((await importSpec(document, { createServers: ["c"] })).errors).toEqual([]);
+  expect((await written()).servers[0].logLevel).toBe("warning");
+});
+
 test("a document that is not a spec is refused in the parser's words", async () => {
   for (const [document, reason] of [
     ["not an object", "spec: must be an object"],

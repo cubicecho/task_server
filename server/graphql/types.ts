@@ -274,8 +274,9 @@ export const RunEventType = new GraphQLObjectType({
       type: new GraphQLNonNull(GraphQLString),
       description:
         "step | decision | turn | thinking | output | tool-call | tool-result | artifact | " +
-        "notice | usage | done. An `artifact` is a tool call linking to something new: `text` " +
-        "is its title or uri, `name` the tool.",
+        "server-log | notice | usage | done. An `artifact` is a tool call linking to something " +
+        "new: `text` is its title or uri, `name` the tool. A `server-log` is what a tool's MCP " +
+        "server logged while the call ran: `text` is the message, `level` how serious.",
     },
     text: { type: new GraphQLNonNull(GraphQLString) },
     name: {
@@ -289,6 +290,16 @@ export const RunEventType = new GraphQLObjectType({
         "written. Empty for what belongs to the run rather than to any one step.",
     },
     ok: { type: GraphQLBoolean },
+    id: {
+      type: GraphQLString,
+      description:
+        "The tool call's id on the tool kinds and `server-log`, which pairs a result or a log " +
+        "with its call when one tool is called twice in a step.",
+    },
+    level: {
+      type: GraphQLString,
+      description: "On `server-log` only: the server's level, `debug` up to `emergency`.",
+    },
   },
 });
 

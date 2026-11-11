@@ -193,8 +193,18 @@ export async function runAgent({
     // `links` answers with the text the model reads and, beside it, the result's `resource_link`s,
     // which the loop collects as the step's artifacts. The text is what a plain call returns, so
     // the model is told exactly what it was told before.
-    dispatch: (call, callSignal) =>
-      mcp.call(call.name, call.args, { servers, signal: callSignal, links: true }),
+    //
+    // `onLog` hands what the server logs during the call to the loop, which makes each message a
+    // `server-log` event under the call's id — for the watcher, never the transcript. The pool
+    // can only tell a message is this call's when it is the one request in flight on that
+    // connection, so beside a parallel call or a hook on the same server it is not heard here.
+    dispatch: (call, callSignal, report) =>
+      mcp.call(call.name, call.args, {
+        servers,
+        signal: callSignal,
+        links: true,
+        onLog: report.log,
+      }),
     signal,
     onEvent: (event) => {
       if (event.kind === RunEventKind.Notice) {
