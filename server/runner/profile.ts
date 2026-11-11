@@ -1,9 +1,9 @@
 import {
   AGENT_SPEC,
   type AgentSpec,
-  NO_KEY,
   ReasoningReplay,
   resolveAgentSpec,
+  resolveApiKey,
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
@@ -147,25 +147,25 @@ export const agentLayer = (agent: Agent): AgentSpec => {
  * The settings row as this agent would have it.
  *
  * The merge is agent-core's `resolveAgentSpec` over two spec layers, and only the columns come
- * back. The key stays here, since a spec carries no credential: an agent naming its own
- * `baseUrl` uses its own key or none, never the operator's or `$OPENAI_API_KEY`, because a
- * credential issued for one endpoint has no business being posted to another. agent-core's
- * `resolveApiKey` is not used: it treats a trailing slash as the same endpoint, which errs
- * toward sending the key.
+ * back. The key is laid over beside it, since a spec carries no credential, and by agent-core's
+ * `resolveApiKey`: an agent naming another `baseUrl` uses its own key or none, never the
+ * operator's or `$OPENAI_API_KEY`, because a credential issued for one endpoint has no business
+ * being posted to another. What counts as another is `normalizeBaseUrl`'s answer — a trailing
+ * slash, the host's case or a default port is the same server, and the key goes to it either way.
  */
 export function resolveConfig(settings: Settings, agent?: Agent | null): Settings {
   if (!agent) {
     return settings;
   }
 
-  const baseUrl = agent.baseUrl.trim();
-  const elsewhere = baseUrl !== "" && baseUrl !== settings.baseUrl;
   const merged = resolveAgentSpec([settingsLayer(settings), agentLayer(agent)]);
 
   return {
     ...settings,
     baseUrl: merged.baseUrl,
-    apiKey: agent.apiKey || (elsewhere ? NO_KEY : settings.apiKey),
+    // No environment: `loadSettings` has already folded `$OPENAI_API_KEY` into the row, and a
+    // second reading of it here would be a second place that decides what the key is.
+    apiKey: resolveApiKey(agent, settings, {}),
     model: merged.model,
     systemPrompt: merged.systemPrompt,
     maxTokens: merged.maxTokens,

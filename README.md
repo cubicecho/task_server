@@ -84,7 +84,8 @@ own never inherits the server's API key or `$OPENAI_API_KEY`: a credential issue
 endpoint has no business being posted to another, and "I pointed a task at a friend's server and
 it sent my OpenAI key" is not a mistake worth being able to make. Such a profile uses its own key
 or none, which is what a local server wants anyway. A profile on the *same* endpoint inherits the
-key like everything else. The key is write-only in both places — `setAgentApiKey` writes it, and
+key like everything else — and the same endpoint is the same server, so `http://host/v1/` is
+`http://host/v1` with a slash on it, not somewhere else. The key is write-only in both places — `setAgentApiKey` writes it, and
 it is excluded from the `Agent` type, so it cannot be read back out of the API.
 
 `mcpServerIds` is which MCP servers a run on the profile may reach, and an empty or absent list is

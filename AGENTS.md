@@ -397,7 +397,9 @@ The key is the one column that is not a plain override. A profile naming a `base
 never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`,
 agent-core's constant for "there is no key here, do not fall through to the environment".
 A credential issued for one endpoint has no business being posted to another. A profile on the
-*same* endpoint inherits it like anything else. agent-core caches a client per endpoint for the
+*same* endpoint inherits it like anything else. The rule is agent-core's `resolveApiKey`, and
+"same" is `normalizeBaseUrl`'s: a trailing slash, the host's case and a default port are the one
+server a key was issued for, and a path in another case is not. agent-core caches a client per endpoint for the
 same reason: two profiles on two servers would otherwise evict each other's connection pool on
 every request.
 

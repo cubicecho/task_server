@@ -285,17 +285,29 @@ const GOLDEN: {
     expected: { apiKey: "other-key" },
   },
   {
+    // agent-core's spelling of "none", which sends what an empty key did: no auth header.
     name: "the same endpoint when the server has no key",
     settings: { apiKey: "" },
     agent: { model: "gpt-5" },
-    expected: { model: "gpt-5" },
+    expected: { model: "gpt-5", apiKey: NO_KEY },
   },
   {
-    // Spelled differently is a different endpoint: the comparison is of the strings, and the
-    // cost of being wrong in the other direction is a key posted somewhere it was not issued for.
+    // A trailing slash is the same server, so the key it was issued for still goes to it.
     name: "the same endpoint with a trailing slash",
     agent: { baseUrl: "http://server:11434/v1/" },
-    expected: { baseUrl: "http://server:11434/v1/", apiKey: NO_KEY },
+    expected: { baseUrl: "http://server:11434/v1/" },
+  },
+  {
+    name: "the same endpoint with the host in capitals and its default port",
+    settings: { baseUrl: "https://api.example.com/v1" },
+    agent: { baseUrl: "HTTPS://API.Example.com:443/v1" },
+    expected: { baseUrl: "HTTPS://API.Example.com:443/v1" },
+  },
+  {
+    // A path's case is the server's to read, so it is another endpoint.
+    name: "a path in another case is another endpoint",
+    agent: { baseUrl: "http://server:11434/V1" },
+    expected: { baseUrl: "http://server:11434/V1", apiKey: NO_KEY },
   },
   {
     name: "a server scope changes nothing in the row",
