@@ -86,7 +86,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     agentId:
       "The agent profile this task runs on. Null runs it on the server's own settings, which " +
       "is the default and what every task did before profiles existed.",
-    prompt: "What the agent is asked to do, each time this task fires.",
+    prompt:
+      "What the agent is asked to do, each time this task fires. " +
+      "`{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.",
     model: "Empty falls back to the default model in settings.",
     systemPrompt: "Empty falls back to the default system prompt in settings.",
     enabled: "A disabled task is never started by a trigger, and can still be run by hand.",
@@ -110,7 +112,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     position: "Where in its sequence this step runs, from 0.",
     kind: "`agent` does the work. `decision` does the work *and* picks the arm to run next.",
     name: "What this step is called, in the run history and in `{{steps.<name>}}`.",
-    prompt: "What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.",
+    prompt:
+      "What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, " +
+      "`{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.",
     cases: "Decision only: the arms it may choose between. `default` is always available.",
     model: "Empty falls back to the task's model, then to settings.",
     systemPrompt: "Empty falls back to the task's system prompt, then to settings.",
@@ -161,6 +165,10 @@ export const COLUMN_DOCS: ColumnDocs = {
     hooks:
       "What MCP hooks did around this step, as JSON: the context each added to the prompt, and " +
       "each that failed. A hook that worked and added nothing is not listed.",
+    resources:
+      "The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: " +
+      "each with when it was read, how many characters went in, whether the cap cut it, and " +
+      "why a read failed. The text is not kept.",
   },
 
   runArtifacts: {

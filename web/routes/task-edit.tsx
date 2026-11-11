@@ -19,6 +19,7 @@ import { LoadState } from "@/components/load-state";
 import { ModelSelectField } from "@/components/model-select-field";
 import { PageLayout } from "@/components/page-layout";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
+import { McpResourceButton } from "@/components/resource-picker";
 import { Section } from "@/components/section";
 import { StepList } from "@/components/step-editor";
 import { TaskProduced } from "@/components/task-produced";
@@ -292,11 +293,18 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
                 // The label row's far end, which is where a control that writes into the field
                 // belongs — beside its name rather than under the box it fills.
                 actionSlot={
-                  <McpPromptButton
-                    onInsert={(text) =>
-                      form.setFieldValue("prompt", (current) => withPrompt(current, text))
-                    }
-                  />
+                  <div className="flex gap-2 empty:hidden">
+                    <McpResourceButton
+                      onInsert={(placeholder) =>
+                        form.setFieldValue("prompt", (current) => withPrompt(current, placeholder))
+                      }
+                    />
+                    <McpPromptButton
+                      onInsert={(text) =>
+                        form.setFieldValue("prompt", (current) => withPrompt(current, text))
+                      }
+                    />
+                  </div>
                 }
                 rows={5}
                 placeholder="Check the build status and summarise anything that broke overnight."

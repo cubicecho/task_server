@@ -52,6 +52,7 @@ import {
   McpConnectionInput,
   McpProbeType,
   McpPromptType,
+  McpResourceEntryType,
   McpResourceType,
   McpServerStatusType,
   RunEventType,
@@ -602,6 +603,61 @@ const baseSchema = new GraphQLSchema({
             );
           } catch (error) {
             throw poolRefusal(error, args.server, UNEXPANDABLE);
+          }
+        },
+      },
+      mcpResources: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpResourceEntryType))),
+        description:
+          "The resources and resource templates the connected MCP servers offer, for the picker " +
+          "that names one in a prompt as `{{resource:<serverSlug>:<uri>}}` — read fresh on " +
+          "every run, unlike an expanded `mcpPrompt`. Empty when no connected server serves " +
+          "any; a server that cannot be listed is left out rather than failing the query.",
+        resolve: () => mcpResources.list(),
+      },
+      mcpResourceCompletion: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))),
+        description:
+          "What the server behind a template from `mcpResources` suggests for one of its " +
+          "variables, given what has been typed into it so far — at most a hundred, in the " +
+          "server's order. Empty, never an error, for a server that cannot complete.",
+        args: {
+          server: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The MCP server row's id, as `mcpResources` reports it.",
+          },
+          uri: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The template's own `uri`, with its variables unfilled.",
+          },
+          variable: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The variable being filled in.",
+          },
+          value: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "What is in it so far. Empty asks for the server's opening suggestions.",
+          },
+          context: {
+            type: GraphQLJSON,
+            description:
+              "The variables already filled in, by name, which a server may narrow by. Absent " +
+              "is the same as none.",
+          },
+        },
+        resolve: async (
+          _source,
+          args: { server: string; uri: string; variable: string; value: string; context?: unknown },
+        ) => {
+          try {
+            return await mcpResources.complete(
+              args.server,
+              args.uri,
+              { name: args.variable, value: args.value },
+              stringRecord(args.context),
+            );
+          } catch (error) {
+            throw poolRefusal(error, args.server, UNREADABLE);
           }
         },
       },

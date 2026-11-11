@@ -6,6 +6,8 @@ import {
   CompleteRequestSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -123,21 +125,50 @@ const expand = {
 const NAMES = ["Ada", "Alan", "Grace"];
 const MOODS = { Ada: ["fond", "wry"] };
 const completions = (argument, context) =>
-  argument.name === "who"
-    ? NAMES.filter((name) => name.toLowerCase().startsWith(argument.value.toLowerCase()))
-    : argument.name === "mood"
-      ? (MOODS[context?.arguments?.who] ?? ["polite"])
-      : [];
+  argument.name === "path"
+    ? ["notes/plan.md", "notes/weekly.md"].filter((path) => path.startsWith(argument.value))
+    : argument.name === "who"
+      ? NAMES.filter((name) => name.toLowerCase().startsWith(argument.value.toLowerCase()))
+      : argument.name === "mood"
+        ? (MOODS[context?.arguments?.who] ?? ["polite"])
+        : [];
 
 /**
  * What `resources/read` answers, behind `MCP_ECHO_RESOURCES` and for the prompts' reason: the
  * capability is what a client checks before it asks, so it moves with the handler. A uri under
- * `bin://` is answered as a blob, and any other as markdown that names the uri it was asked for.
+ * `bin://` is answered as a blob, one under `big://` as more text than a prompt takes, one under
+ * `missing://` as a document the server does not have, and any other as markdown that names the
+ * uri it was asked for. Each read is a line in `MCP_ECHO_READ_LOG`, when a test asks, for the
+ * call log's reason.
  */
-const resource = (uri) =>
-  uri.startsWith("bin://")
-    ? { uri, mimeType: "image/png", blob: "aGk=" }
-    : { uri, mimeType: "text/markdown", text: `# ${uri}\n\nRead back from the echo server.` };
+const resource = (uri) => {
+  if (process.env.MCP_ECHO_READ_LOG) {
+    appendFileSync(process.env.MCP_ECHO_READ_LOG, `${uri}\n`);
+  }
+  if (uri.startsWith("missing://")) {
+    throw new Error(`no resource at ${uri}`);
+  }
+  if (uri.startsWith("bin://")) {
+    return { uri, mimeType: "image/png", blob: "aGk=" };
+  }
+  if (uri.startsWith("big://")) {
+    return { uri, mimeType: "text/plain", text: "x".repeat(100_000) };
+  }
+  return { uri, mimeType: "text/markdown", text: `# ${uri}\n\nRead back from the echo server.` };
+};
+
+/** What `resources/list` and `resources/templates/list` offer, for the picker. */
+const listedResources = [
+  { uri: "doc://notes/plan.md", name: "plan.md", title: "The plan", mimeType: "text/markdown" },
+];
+const listedTemplates = [
+  {
+    uriTemplate: "doc://{+path}",
+    name: "doc",
+    description: "Any document, by its path",
+    mimeType: "text/markdown",
+  },
+];
 
 const server = new Server(
   { name: "echo", version: "0.0.1" },
@@ -287,6 +318,10 @@ if (process.env.MCP_ECHO_COMPLETIONS) {
 if (process.env.MCP_ECHO_RESOURCES) {
   server.setRequestHandler(ReadResourceRequestSchema, (request) => ({
     contents: [resource(request.params.uri)],
+  }));
+  server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: listedResources }));
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({
+    resourceTemplates: listedTemplates,
   }));
 }
 

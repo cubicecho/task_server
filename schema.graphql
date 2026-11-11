@@ -487,7 +487,9 @@ type Task {
   """What this task is called, in the task list and the run history."""
   name: String!
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String!
 
   """
@@ -619,7 +621,9 @@ type TaskMinAggregate {
   """What this task is called, in the task list and the run history."""
   name: String
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String
 
   """
@@ -642,7 +646,9 @@ type TaskMaxAggregate {
   """What this task is called, in the task list and the run history."""
   name: String
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String
 
   """
@@ -700,7 +706,9 @@ type TaskGroupKeys {
   """What this task is called, in the task list and the run history."""
   name: String
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String
 
   """
@@ -932,7 +940,7 @@ type Step {
   name: String!
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String!
 
@@ -1026,7 +1034,7 @@ type StepMinAggregate {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -1069,7 +1077,7 @@ type StepMaxAggregate {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -1158,7 +1166,7 @@ type StepGroupKeys {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -1299,6 +1307,7 @@ enum RunStepDistinctColumn {
   error
   toolCalls
   hooks
+  resources
   promptTokens
   completionTokens
   totalTokens
@@ -1552,6 +1561,11 @@ type RunStep {
   What MCP hooks did around this step, as JSON: the context each added to the prompt, and each that failed. A hook that worked and added nothing is not listed.
   """
   hooks: JSON
+
+  """
+  The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: each with when it was read, how many characters went in, whether the cap cut it, and why a read failed. The text is not kept.
+  """
+  resources: JSON
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1725,6 +1739,7 @@ type RunStepCountNonNullAggregate {
   error: Int!
   toolCalls: Int!
   hooks: Int!
+  resources: Int!
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -3579,7 +3594,9 @@ input CreateTaskInput {
   """What this task is called, in the task list and the run history."""
   name: String!
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String!
 
   """
@@ -3607,7 +3624,9 @@ input UpdateTaskInput {
   """What this task is called, in the task list and the run history."""
   name: String
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String
 
   """
@@ -3644,7 +3663,9 @@ input TaskFilters {
   """What this task is called, in the task list and the run history."""
   name: StringFilter
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: StringFilter
 
   """
@@ -3998,7 +4019,7 @@ input CreateStepInput {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -4049,7 +4070,7 @@ input UpdateStepInput {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -4109,7 +4130,7 @@ input StepFilters {
   name: StringFilter
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: StringFilter
 
@@ -4552,6 +4573,11 @@ input RunStepFilters {
   What MCP hooks did around this step, as JSON: the context each added to the prompt, and each that failed. A hook that worked and added nothing is not listed.
   """
   hooks: JSONFilter
+
+  """
+  The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: each with when it was read, how many characters went in, whether the cap cut it, and why a read failed. The text is not kept.
+  """
+  resources: JSONFilter
   promptTokens: IntFilter
   completionTokens: IntFilter
   totalTokens: IntFilter
@@ -4615,6 +4641,7 @@ input RunStepOrderBy {
   error: InnerOrder
   toolCalls: InnerOrder
   hooks: InnerOrder
+  resources: InnerOrder
   promptTokens: InnerOrder
   completionTokens: InnerOrder
   totalTokens: InnerOrder
@@ -4683,6 +4710,7 @@ input RunStepCountNonNullHaving {
   error: AggregateNumberFilter
   toolCalls: AggregateNumberFilter
   hooks: AggregateNumberFilter
+  resources: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
@@ -5815,6 +5843,33 @@ type Query {
   ): [String!]!
 
   """
+  The resources and resource templates the connected MCP servers offer, for the picker that names one in a prompt as `{{resource:<serverSlug>:<uri>}}` — read fresh on every run, unlike an expanded `mcpPrompt`. Empty when no connected server serves any; a server that cannot be listed is left out rather than failing the query.
+  """
+  mcpResources: [McpResourceEntry!]!
+
+  """
+  What the server behind a template from `mcpResources` suggests for one of its variables, given what has been typed into it so far — at most a hundred, in the server's order. Empty, never an error, for a server that cannot complete.
+  """
+  mcpResourceCompletion(
+    """The MCP server row's id, as `mcpResources` reports it."""
+    server: String!
+
+    """The template's own `uri`, with its variables unfilled."""
+    uri: String!
+
+    """The variable being filled in."""
+    variable: String!
+
+    """What is in it so far. Empty asks for the server's opening suggestions."""
+    value: String!
+
+    """
+    The variables already filled in, by name, which a server may narrow by. Absent is the same as none.
+    """
+    context: JSON
+  ): [String!]!
+
+  """
   One resource read back from an MCP server with `resources/read` — a run's artifact, previewed. Read fresh, so a document edited since the run reads as it is now. Text only: binary contents are named, not sent. Refused with `UNSUPPORTED` for a server that does not serve resources, or is disabled or gone.
   """
   mcpResource(
@@ -6239,6 +6294,34 @@ type McpPromptArgument {
   name: String!
   description: String!
   required: Boolean!
+}
+
+"""
+A resource, or a resource template, a connected MCP server offers — something a prompt can name as `{{resource:<serverSlug>:<uri>}}` to have it read on every run.
+"""
+type McpResourceEntry {
+  """
+  The MCP server row's id, which `mcpResourceCompletion` is addressed with.
+  """
+  server: String!
+
+  """The server's slug, which is what a placeholder names."""
+  serverSlug: String!
+  serverLabel: String!
+
+  """
+  Whether `uri` is an RFC 6570 template whose variables are filled in before it is named — a document by its path, say.
+  """
+  template: Boolean!
+  uri: String!
+  name: String!
+
+  """
+  What the server calls it for a person. Empty where it gave none; show `name`.
+  """
+  title: String!
+  description: String!
+  mimeType: String!
 }
 
 """

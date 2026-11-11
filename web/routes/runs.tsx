@@ -43,6 +43,7 @@ import {
 import { STATUS_VARIANT } from "@/lib/run-status";
 import { useRefreshRuns, useRunTask, useStopTask } from "@/lib/use-task-run";
 import { cn } from "@/lib/utils";
+import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 
 type Run = RunsQuery["runs"][number];
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
@@ -127,6 +128,45 @@ function HookNotes({ notes }: { notes: unknown }) {
 }
 
 /**
+ * The MCP resources a step's prompt named, as they were read for it: when, how much, and whether
+ * the cap cut it. Collapsed for `HookNotes`' reason; the text is not kept, so there is none here.
+ * A failed read is also the step's error, so it is said there in full.
+ */
+function ResourceReads({ reads }: { reads: unknown }) {
+  const list = (reads ?? []) as ResourceRead[];
+  if (list.length === 0) {
+    return null;
+  }
+  const failed = list.filter((read) => read.error).length;
+  return (
+    <Collapsible
+      title={`${list.length} resource(s) read${failed ? `, ${failed} failed` : ""}`}
+      titleClassName={cn("text-xs", failed && "text-negative")}
+      contentSlot={
+        <List
+          label="Resources read"
+          divided={false}
+          contentSlot={list.map((read) => (
+            <span
+              key={`${read.server}:${read.uri}`}
+              className={cn(
+                "font-mono text-xs",
+                read.error ? "text-negative" : "text-foreground/60",
+              )}
+            >
+              {read.server}:{read.uri} · {new Date(read.readAt).toLocaleString()}
+              {read.error
+                ? " · failed"
+                : ` · ${read.chars} chars${read.truncated ? " · cut to fit" : ""}`}
+            </span>
+          ))}
+        />
+      }
+    />
+  );
+}
+
+/**
  * What the run actually did, step by step.
  *
  * Indented by `depth`, so an arm of a decision reads as being inside it — and the arm each
@@ -154,6 +194,7 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
             ) : null}
           </div>
           <ToolChips calls={step.toolCalls} />
+          <ResourceReads reads={step.resources} />
           <HookNotes notes={step.hooks} />
           {step.error ? <Alert variant="destructive" description={step.error} /> : null}
           {!step.error && step.output ? <CodeBlock content={step.output} wrap /> : null}

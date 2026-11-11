@@ -1,21 +1,19 @@
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   McpPromptCompletionDocument,
   McpPromptDocument,
   McpPromptsDocument,
   type McpPromptsQuery,
 } from "@/__generated__/graphql/graphql";
-import { Combobox } from "@/components/combobox";
+import { CompletionField } from "@/components/completion-field";
 import { DialogLayout } from "@/components/dialog-layout";
-import { FormField } from "@/components/form-field";
 import { List } from "@/components/list";
 import { ListItem } from "@/components/list-item";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "@/components/ui/icons";
 import { request } from "@/lib/gql";
-import type { SelectEntry } from "@/lib/select-options";
 
 /**
  * The prompts the connected MCP servers offer, as something you pick and then edit.
@@ -29,9 +27,6 @@ import type { SelectEntry } from "@/lib/select-options";
  */
 
 type McpPrompt = McpPromptsQuery["mcpPrompts"][number];
-
-/** How long typing has to pause before the server is asked what it would suggest. */
-const COMPLETION_DEBOUNCE_MS = 200;
 
 /**
  * Whether there is anything to pick, for the button below.
@@ -231,25 +226,7 @@ function filledBefore(prompt: McpPrompt, index: number, values: Record<string, s
   );
 }
 
-/** `value`, once it has held still for `ms`. */
-function useDebounced<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return settled;
-}
-
-/**
- * One blank of a template: free text, with what the server suggests for it offered as rows.
- *
- * A suggestion is never the only answer — a server that completes a name knows the names it has
- * seen, not the one being typed — so the box holds whatever is typed and the rows are a shortcut.
- * The server is asked only while the menu is open, and only once typing pauses: a template of
- * five blanks would otherwise ask five times on open and once per keystroke after. A server that
- * cannot complete answers with none, and the menu is then just the box.
- */
+/** One blank of a template, with what the server suggests for it. See `CompletionField`. */
 function ArgumentField({
   prompt,
   argument,
@@ -263,67 +240,25 @@ function ArgumentField({
   onChange: (value: string) => void;
   context: Record<string, string>;
 }) {
-  const [opened, setOpened] = useState(false);
-  const [search, setSearch] = useState("");
-  const typed = useDebounced(search, COMPLETION_DEBOUNCE_MS);
-
-  const suggestions = useQuery({
-    queryKey: [
-      "mcp",
-      "prompts",
-      "complete",
-      prompt.server,
-      prompt.name,
-      argument.name,
-      typed,
-      context,
-    ],
-    queryFn: () =>
-      request(McpPromptCompletionDocument, {
-        server: prompt.server,
-        name: prompt.name,
-        argument: argument.name,
-        value: typed,
-        context,
-      }),
-    enabled: opened,
-    // The last answer stays while the next is asked for, filtered by what has been typed since,
-    // rather than the rows blanking on every pause.
-    placeholderData: keepPreviousData,
-    staleTime: 30_000,
-  });
-
-  const options: SelectEntry[] = [
-    ...(suggestions.data?.mcpPromptCompletion ?? []).map((suggestion) => ({
-      value: suggestion,
-      label: suggestion,
-    })),
-    ...(suggestions.isFetching && !suggestions.data ? [{ note: "Asking the server…" }] : []),
-    ...(suggestions.error ? [{ note: suggestions.error.message, className: "text-negative" }] : []),
-  ];
-
   return (
-    <FormField
+    <CompletionField
       label={argument.name}
       required={argument.required}
       description={argument.description || undefined}
-      controlSlot={(wired) => (
-        <Combobox
-          {...wired}
-          freeText
-          searchable
-          options={options}
-          value={value || undefined}
-          onValueChange={onChange}
-          onOpenChange={setOpened}
-          onSearchChange={setSearch}
-          placeholder="Type or pick a suggestion"
-          searchPlaceholder={`${argument.name}…`}
-          searchLabel={argument.name}
-          popoverLabel={`Suggestions for ${argument.name}`}
-          emptyMessage="No suggestions."
-        />
-      )}
+      value={value}
+      onChange={onChange}
+      queryKey={["mcp", "prompts", "complete", prompt.server, prompt.name, argument.name, context]}
+      suggest={async (typed) =>
+        (
+          await request(McpPromptCompletionDocument, {
+            server: prompt.server,
+            name: prompt.name,
+            argument: argument.name,
+            value: typed,
+            context,
+          })
+        ).mcpPromptCompletion
+      }
     />
   );
 }

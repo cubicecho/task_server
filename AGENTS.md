@@ -482,6 +482,29 @@ until cubeui ships one — check a refresh did not drop it.
 its reason — the listing is which servers this one dials and what each is for — and are
 deliberately not in `TOOLS`. An agent writing a task through `/mcp` writes the prompt itself.
 
+**An MCP resource is read into a prompt on every run, never stored as one.** The inverse of a
+prompt: `{{resource:<slug>:<uri>}}` names data whose point is what it says now. The grammar is
+`shared/resource-placeholder.ts`, read by the runner and written by the web app's
+`McpResourceButton` (beside `McpPromptButton`, listing `mcpResources` and filling a template's
+variables through `mcpResourceCompletion`, the pool's `complete()` with a `ref/resource`; the
+template is expanded by the SDK's own `UriTemplate`, in `web/lib/resource-template.ts`). Both
+fields are the operator's and not in `TOOLS`. The free-text blank with suggestions under it is
+`web/components/completion-field.tsx`, shared by both pickers.
+
+`server/runner/prompt-resources.ts` reads them as a step starts, inside `execute`'s `try` and
+before the hooks, so a failure is the step's `error` and `beforeTurn` is told the prompt as sent.
+Four decisions, each with a test in `tests/prompt-resources.test.ts`: a read goes through
+`readResource` with the profile's `servers`, and a slug outside them is refused in the words of
+a slug that is not there, as `call()` refuses a tool; a failed read fails the step before the
+model is asked; each read is capped at `RESOURCE_MAX_CHARS` (40,000, fixed rather than a column)
+with a notice when it cut; and `run_steps.resources` records each read and when, failed ones too,
+but not the text. The text is fenced with agent-core's `untrusted` and the step's system prompt
+gets `UNTRUSTED_PREFACE` — only a step that read something, so the others keep the prompt they
+had. `renderPrompt` stays synchronous and takes the reads as a map; a resource does not set
+`placed`, as `{{event}}` does not. Only the prompt as written is scanned: a placeholder in an
+earlier step's output or a webhook body is passed on as text, since a read it could ask for is
+a read a model or a sender could aim.
+
 **A run's artifact is previewed from its server, fresh.** `mcpResource(serverId, uri)` is the
 Outputs section's Preview on the runs page: `server/runner/mcp-resources.ts` calls the pool's
 `readResource`, which checks the handshake declared `resources` and refuses with `unsupported`
