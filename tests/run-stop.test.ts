@@ -20,6 +20,8 @@ let runner: typeof import("../server/runner/run.ts");
 let cron: typeof import("../server/scheduler/cron.ts");
 /** A model server that accepts the request and never answers, so the run stays in flight. */
 let hang: FakeModel;
+/** A model server that says half a sentence and then nothing, for the last test. */
+let half: FakeModel | undefined;
 let taskId = "";
 
 beforeAll(async () => {
@@ -41,6 +43,7 @@ beforeAll(async () => {
 afterAll(async () => {
   cron.stop();
   await hang.close();
+  await half?.close();
 });
 
 const gql = (source: string, variableValues?: Record<string, unknown>) =>
@@ -113,7 +116,7 @@ test("stopping a task that is not running says so rather than failing", async ()
 
 test("a step stopped mid-answer keeps what it had said", async () => {
   // Says half a sentence and then nothing more, so the stop lands while the reply is in flight.
-  const half = await fakeModel((_body, response) => {
+  half = await fakeModel((_body, response) => {
     response.writeHead(200, { "content-type": "text/event-stream" });
     const chunk = {
       id: "half",
@@ -133,26 +136,22 @@ test("a step stopped mid-answer keeps what it had said", async () => {
   const { db } = await import("../server/db/client.ts");
   const { runSteps, tasks } = await import("../server/db/schema.ts");
   const { eq } = await import("drizzle-orm");
-  try {
-    await useModel(half);
-    const [task] = await db
-      .insert(tasks)
-      .values({ name: "talker", prompt: "say something long" })
-      .returning();
-    const finished = runner.runTask(task.id);
-    await until(() => runner.runningTaskIds().has(task.id));
-    const runs = await gql(`{ runs(where: { taskId: { eq: "${task.id}" } }) { id } }`);
-    const [{ id: runId }] = (runs.data?.runs ?? []) as { id: string }[];
-    await until(() => history(runId).some((event) => event.kind === "output"));
+  // The last test here, so the settings row is left on this model; `afterAll` closes it.
+  await useModel(half);
+  const [task] = await db
+    .insert(tasks)
+    .values({ name: "talker", prompt: "say something long" })
+    .returning();
+  const finished = runner.runTask(task.id);
+  await until(() => runner.runningTaskIds().has(task.id));
+  const runs = await gql(`{ runs(where: { taskId: { eq: "${task.id}" } }) { id } }`);
+  const [{ id: runId }] = (runs.data?.runs ?? []) as { id: string }[];
+  await until(() => history(runId).some((event) => event.kind === "output"));
 
-    expect(runner.stopTask(task.id)).toBe(true);
-    const run = await finished;
-    expect(run.status).toBe("stopped");
+  expect(runner.stopTask(task.id)).toBe(true);
+  const run = await finished;
+  expect(run.status).toBe("stopped");
 
-    const [step] = await db.select().from(runSteps).where(eq(runSteps.runId, runId));
-    expect(step).toMatchObject({ status: "stopped", error: "", output: "The first half of" });
-  } finally {
-    await half.close();
-    await useModel(hang);
-  }
+  const [step] = await db.select().from(runSteps).where(eq(runSteps.runId, runId));
+  expect(step).toMatchObject({ status: "stopped", error: "", output: "The first half of" });
 });
