@@ -96,3 +96,33 @@ query McpPromptCompletion(
     context: $context
   )
 }
+
+query McpResources {
+  mcpResources {
+    server
+    serverSlug
+    serverLabel
+    template
+    uri
+    name
+    title
+    description
+    mimeType
+  }
+}
+
+query McpResourceCompletion(
+  $server: String!
+  $uri: String!
+  $variable: String!
+  $value: String!
+  $context: JSON
+) {
+  mcpResourceCompletion(
+    server: $server
+    uri: $uri
+    variable: $variable
+    value: $value
+    context: $context
+  )
+}

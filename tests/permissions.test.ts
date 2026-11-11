@@ -92,6 +92,8 @@ test("how this server is wired is the operator's too", async () => {
     `{ mcpPromptCompletion(server: "x", name: "greet", argument: "who", value: "A") }`,
     // And what they serve back for a uri, which is any uri a configured server will read.
     `{ mcpResource(serverId: "x", uri: "file:///etc/passwd") { text } }`,
+    `{ mcpResources { uri } }`,
+    `{ mcpResourceCompletion(server: "x", uri: "doc://{path}", variable: "path", value: "") }`,
     `mutation { createMcpServer(values: { slug: "probe", command: "sh" }) { id } }`,
     `mutation { testMcpServer(config: { transport: "stdio", command: "sh" }) { ok } }`,
     `mutation { reconnectMcp { slug } }`,

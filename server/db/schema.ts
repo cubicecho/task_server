@@ -13,6 +13,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 
 /**
  * The whole domain, in one place. Postgres is the only database; `client.ts` chooses which
@@ -300,6 +301,13 @@ export const runSteps = pgTable(
      * only record of what the model was given beyond the step's own prompt.
      */
     hooks: jsonb().$type<HookNote[]>(),
+    /**
+     * The MCP resources this step's prompt named with `{{resource:…}}`, and when each was read.
+     * Kept for `runs.payload`'s reason: what the model was asked depended on them, and a
+     * resource is read fresh on every run, so what it says now is not what it said then. The
+     * text itself is not kept — it is the server's, and a step's history is not a mirror of it.
+     */
+    resources: jsonb().$type<ResourceRead[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),

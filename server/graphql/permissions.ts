@@ -239,6 +239,11 @@ export const permissions: PermissionsMap = {
     // And what those servers will hand back for a uri: a run's artifact, previewed — but the
     // argument is any uri, so it reads whatever a configured server will serve.
     mcpResource: canUser(Actions.read, "McpServer"),
+    // And the listing a person names one of them in a prompt from, with what a server suggests
+    // for a template's variable — `mcpPrompts` and its completion, for resources. An agent
+    // writing a task through `/mcp` writes the placeholder itself.
+    mcpResources: canUser(Actions.read, "McpServer"),
+    mcpResourceCompletion: canUser(Actions.read, "McpServer"),
   },
   Mutation: MUTATIONS,
 

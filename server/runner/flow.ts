@@ -6,14 +6,17 @@ import {
   type RunEventInput,
   RunEventKind,
   tryAsk,
+  UNTRUSTED_PREFACE,
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flow.ts";
+import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
 import { type AgentOptions, type AgentResult, runAgent } from "./agent.ts";
 import { recordArtifacts } from "./artifacts.ts";
 import { describe, type HookSession, type HookStep } from "./hooks.ts";
+import { readPromptResources } from "./prompt-resources.ts";
 
 /**
  * A task as a flow: its prompt, then a tree of steps under it.
@@ -105,8 +108,11 @@ export function buildTree(rows: Step[]): FlowNode[] {
 /** The read-back answers with one case name inside one JSON object, and nothing else. */
 const READ_BACK_MAX_TOKENS = 32;
 
-/** What a prompt can ask for by hand: `{{previous}}`, `{{steps.<name>}}` and `{{event}}`. */
-const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?)\s*\}\}/gi;
+/**
+ * What a prompt can ask for by hand: `{{previous}}`, `{{steps.<name>}}`, `{{event}}` and
+ * `{{resource:<slug>:<uri>}}` — the last spelled as `shared/resource-placeholder.ts` reads it.
+ */
+const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?|resource:[^:}\s]+:.+?)\s*\}\}/gi;
 
 /**
  * The webhook body as a prompt reads it.
@@ -141,12 +147,19 @@ function visibleTo(mode: Step["context"], context: ContextEntry[]): ContextEntry
  * `context` mode allows. A prompt that places them itself with `{{previous}}` or
  * `{{steps.<name>}}` gets the substitution and no preamble, since a second copy would only be
  * something for the model to reconcile. `{{event}}` is the webhook body, not step context, so
- * placing it does not suppress the preamble.
+ * placing it does not suppress the preamble, and nor does a `{{resource:…}}`, for the same
+ * reason.
+ *
+ * `resources` is what `readPromptResources` read for this prompt, fenced, by `resourceKey`. The
+ * reads happen before this is called because they are I/O and can fail the step; one that is not
+ * in the map is said to be missing rather than left as a placeholder the model would read as an
+ * instruction to go and fetch it.
  */
 export function renderPrompt(
   step: Pick<Step, "prompt" | "context">,
   context: ContextEntry[],
   payload?: unknown,
+  resources?: ReadonlyMap<string, string>,
 ): string {
   // One pass says both whether the prompt places its own context and what that reads as —
   // `test` on a global regex would leave `lastIndex` behind for the next call to trip over.
@@ -155,6 +168,10 @@ export function renderPrompt(
     const key = token.toLowerCase();
     if (key === "event") {
       return renderPayload(payload);
+    }
+    if (key.startsWith("resource:")) {
+      const ref = token.slice("resource:".length);
+      return resources?.get(ref) ?? `(the resource ${ref} was not read)`;
     }
     placed = true;
     if (key === "previous") {
@@ -349,21 +366,41 @@ export async function runFlow({
 
     const emit = scope(plan.name);
     const row = await record(plan, "running");
-    const turn: HookStep = {
-      index: executed++,
-      name: plan.name,
-      kind: plan.kind,
-      prompt: renderPrompt(plan, context, payload),
-    };
+    const index = executed++;
     emit({ kind: RunEventKind.Step, name: plan.name, text: plan.kind });
 
-    const systemPrompt = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
     // Kept on the row whether the step works or not: a recall that failed is as much a part of
-    // why a step went the way it did as one that worked.
+    // why a step went the way it did as one that worked, and a resource that could not be read
+    // is why it did not run at all.
     const notes: HookNote[] = [];
-    const noted = (): Partial<Pick<RunStep, "hooks">> => (notes.length ? { hooks: notes } : {});
+    const reads: ResourceRead[] = [];
+    const noted = (): Partial<Pick<RunStep, "hooks" | "resources">> => ({
+      ...(notes.length ? { hooks: notes } : {}),
+      ...(reads.length ? { resources: reads } : {}),
+    });
 
     try {
+      // Inside the `try`, so a read that fails is this step's error on its row, and before the
+      // hooks, which are told the prompt as it was sent — with what was read in it.
+      const fetched = await readPromptResources(plan.prompt, { servers, signal, onEvent: emit });
+      reads.push(...fetched.reads);
+      if (fetched.failure) {
+        throw new Error(fetched.failure);
+      }
+      const turn: HookStep = {
+        index,
+        name: plan.name,
+        kind: plan.kind,
+        prompt: renderPrompt(plan, context, payload, fetched.texts),
+      };
+
+      const configured = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
+      // The standing rule about what an `<untrusted>` block is goes in the system prompt, as
+      // agent-core asks, and only for a step that has one: the rest keep the prompt they had.
+      const systemPrompt = reads.length
+        ? `${configured}\n\n${UNTRUSTED_PREFACE}`.trim()
+        : configured;
+
       const gathered = await hooks?.before(turn, signal, emit);
       notes.push(...(gathered?.notes ?? []));
       // A `beforeCompact` that failed mid-step is kept beside what `before` noted.

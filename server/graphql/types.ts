@@ -103,6 +103,38 @@ export const McpPromptType = new GraphQLObjectType({
   },
 });
 
+export const McpResourceEntryType = new GraphQLObjectType({
+  name: "McpResourceEntry",
+  description:
+    "A resource, or a resource template, a connected MCP server offers — something a prompt " +
+    "can name as `{{resource:<serverSlug>:<uri>}}` to have it read on every run.",
+  fields: {
+    server: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The MCP server row's id, which `mcpResourceCompletion` is addressed with.",
+    },
+    serverSlug: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The server's slug, which is what a placeholder names.",
+    },
+    serverLabel: { type: new GraphQLNonNull(GraphQLString) },
+    template: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description:
+        "Whether `uri` is an RFC 6570 template whose variables are filled in before it is " +
+        "named — a document by its path, say.",
+    },
+    uri: { type: new GraphQLNonNull(GraphQLString) },
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    title: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "What the server calls it for a person. Empty where it gave none; show `name`.",
+    },
+    description: { type: new GraphQLNonNull(GraphQLString) },
+    mimeType: { type: new GraphQLNonNull(GraphQLString) },
+  },
+});
+
 export const McpResourceType = new GraphQLObjectType({
   name: "McpResource",
   description:

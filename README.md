@@ -154,6 +154,9 @@ where the earlier outputs go and does not suppress the preamble. A prompt may as
 a run no webhook started, or one whose body could not be read, it renders as
 `(this run has no event payload)`. See **Webhooks**.
 
+`{{resource:<server slug>:<uri>}}` is the fourth, and is read fresh as each step starts — see
+**MCP resources**. Like `{{event}}`, it leaves the preamble standing.
+
 Flows are capped at 64 executed steps and 8 levels of nesting per run, which is what stops a
 mis-parented tree from running away. Edit one on a task's page, either as cards or as YAML —
 the two are the same tree, and the text tab keeps step ids, so a round trip through it leaves
@@ -204,6 +207,47 @@ The three fields are `mcpPrompts`, `mcpPrompt(server:, name:, args:)` and
 `mcpPromptCompletion(server:, name:, argument:, value:, context:)`, and all are the operator's,
 alongside `mcpStatus`: the listing is which servers this one dials and what each of them is for. They are not on the `/mcp` surface. An agent writing a task through that endpoint
 writes the prompt itself, which is the same text it would have got.
+
+## MCP resources
+
+A prompt is somebody's phrasing, and is copied in so that it cannot change under a working task.
+A **resource** is the opposite case: it is data — a ragdown document of house rules, this week's
+notes — and the point of naming it is to get what it says on the day. So a prompt names it with
+a placeholder, `{{resource:<server slug>:<uri>}}`, and every run reads it again:
+
+```text
+Summarise what changed this week, in the house style:
+
+{{resource:ragdown:ragdown://notes/weekly.md}}
+```
+
+The slug is in it as well as the uri because a uri's scheme is the server's own and says nothing
+about which configured row serves it. Beside the **MCP prompt** button, an **MCP resource**
+button lists what the connected servers serve, resources and resource templates both, fills a
+template's variables with what the server suggests for each, and inserts the placeholder.
+
+At run time, as each step starts and before its hooks, `server/runner/prompt-resources.ts` reads
+every placeholder in that step's prompt — each distinct one once — and puts the text where it was
+named, fenced in `<untrusted source="<slug>:<uri>">` with agent-core's `untrusted`, and the
+fence's standing rule added to that step's system prompt. Only the prompt as written is scanned:
+a placeholder that arrives in an earlier step's output, a webhook body or another resource stays
+text, since nobody who wrote the task wrote it.
+
+- **Scope.** A read is held to the run profile's MCP servers, as its tools are. A slug outside
+  them fails the step in the same words as a slug nothing here has, so a task an agent wrote
+  cannot learn which servers exist beyond its own.
+- **A failed read fails the step**, with the reason, before the model is asked anything: a prompt
+  missing its input is a different prompt.
+- **Size.** Each placeholder is cut to 40,000 characters (`RESOURCE_MAX_CHARS`), head and tail
+  kept around a marker, and the watcher is told in a notice when one was.
+- **What is kept.** `run_steps.resources` records each read — the slug and uri, when, how many
+  characters, whether it was cut, and why one failed — for the reason `runs.payload` is kept: the
+  prompt the model saw depended on it. The text is not kept.
+
+The picker's fields are `mcpResources` and `mcpResourceCompletion(server:, uri:, variable:,
+value:, context:)`, the operator's like `mcpPrompts` and not on `/mcp`. An agent writing a task
+there writes the placeholder itself; the field description of a task's and a step's `prompt`
+says how.
 
 ## Watching a run
 
@@ -763,7 +807,8 @@ them, and reads what happened. Four things it may not touch:
   and `testMcpServer` spawns whatever stdio command it is handed, so it is arbitrary execution on
   this host for anyone who reaches it. `mcpStatus` and `mcpPrompts` are the same list answered
   from the live pool, carrying no credentials but saying just as plainly what this server dials.
-  `mcpResource` reads back whatever uri a configured server will serve, so it is shut with them.
+  `mcpResource` reads back whatever uri a configured server will serve, so it is shut with them,
+  and so are `mcpResources` and `mcpResourceCompletion`, the resource picker's listing.
 - **The agent profiles.** The settings row again in miniature, one per profile: an endpoint, a
   key, and which MCP servers a task on it may reach. An agent that could write one could point a
   task at a model of its choosing and hand it every tool this server has. A task still carries
