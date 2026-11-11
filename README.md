@@ -47,7 +47,8 @@ instead of the UI.
   server-side until it has stopped. Expanding a running run on the **Runs** page shows it
   happening — see below.
 - **run step** — what one step of the flow actually did on one run: its status, output, tools
-  and tokens, and for a decision the arm it took. This is the record of the path a run took,
+  and tokens, and for a decision the arm it took. A step stopped or failed mid-answer keeps what
+  the model had said by then as its output. This is the record of the path a run took,
   and it survives the step being edited or deleted afterwards.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and

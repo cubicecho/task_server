@@ -1,6 +1,7 @@
 import {
   askJson,
   errorMessage,
+  failedRun,
   type HookNote,
   parseJson,
   type RunEventInput,
@@ -474,9 +475,15 @@ export async function runFlow({
       return branch;
     } catch (error) {
       const stopped = signal?.aborted === true;
+      // What the model had said when the request in flight was cut off — the answer a person
+      // watching had been shown, up to the moment they pressed stop. It is no turn the endpoint
+      // would take back, but it is what the step got to, and a row with nothing in it reads as a
+      // step that said nothing.
+      const partial = failedRun(error)?.partial?.content;
       await close(row.id, {
         status: stopped ? "stopped" : "error",
         error: stopped ? "" : errorMessage(error),
+        ...(partial ? { output: partial } : {}),
         ...noted(),
       });
       throw error;

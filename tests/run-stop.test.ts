@@ -1,6 +1,15 @@
+import { history } from "@cubicecho/agent-core";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { dataDir, type FakeModel, hangingModel, refusalCode, until, useModel } from "./helpers.ts";
+import {
+  dataDir,
+  type FakeModel,
+  fakeModel,
+  hangingModel,
+  refusalCode,
+  until,
+  useModel,
+} from "./helpers.ts";
 
 // Loading anything under server/ builds the schema against the live tables, so point the
 // database somewhere disposable first.
@@ -100,4 +109,50 @@ test("stopping a task that is not running says so rather than failing", async ()
   const result = await gql(`mutation S($id: String!) { stopTask(taskId: $id) }`, { id: "nobody" });
   expect(result.errors).toBeUndefined();
   expect(result.data?.stopTask).toBe(false);
+});
+
+test("a step stopped mid-answer keeps what it had said", async () => {
+  // Says half a sentence and then nothing more, so the stop lands while the reply is in flight.
+  const half = await fakeModel((_body, response) => {
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    const chunk = {
+      id: "half",
+      object: "chat.completion.chunk",
+      created: 0,
+      model: "fake",
+      choices: [
+        {
+          index: 0,
+          delta: { role: "assistant", content: "The first half of" },
+          finish_reason: null,
+        },
+      ],
+    };
+    response.write(`data: ${JSON.stringify(chunk)}\n\n`);
+  });
+  const { db } = await import("../server/db/client.ts");
+  const { runSteps, tasks } = await import("../server/db/schema.ts");
+  const { eq } = await import("drizzle-orm");
+  try {
+    await useModel(half);
+    const [task] = await db
+      .insert(tasks)
+      .values({ name: "talker", prompt: "say something long" })
+      .returning();
+    const finished = runner.runTask(task.id);
+    await until(() => runner.runningTaskIds().has(task.id));
+    const runs = await gql(`{ runs(where: { taskId: { eq: "${task.id}" } }) { id } }`);
+    const [{ id: runId }] = (runs.data?.runs ?? []) as { id: string }[];
+    await until(() => history(runId).some((event) => event.kind === "output"));
+
+    expect(runner.stopTask(task.id)).toBe(true);
+    const run = await finished;
+    expect(run.status).toBe("stopped");
+
+    const [step] = await db.select().from(runSteps).where(eq(runSteps.runId, runId));
+    expect(step).toMatchObject({ status: "stopped", error: "", output: "The first half of" });
+  } finally {
+    await half.close();
+    await useModel(hang);
+  }
 });
