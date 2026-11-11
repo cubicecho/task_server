@@ -597,6 +597,18 @@ What is kept of them is `runs.metrics`, agent-core's `runMetrics` over the run's
 the bus caps a run's backlog and drops its oldest, which is exactly the tool calls a summary
 counts.
 
+**What a run made is the `resource_link`s its tools answered with, and nothing else.**
+`dispatch` calls the pool with `links: true`, so the model reads the same text as before and the
+loop collects the links beside it as the step's `artifacts`; `flow.ts` hands them to
+`server/runner/artifacts.ts`, which writes `run_artifacts`. One row per `uri` per run: the loop
+dedupes within a step, and a later step linking the same uri lands on the unique
+`(runId, uri)` index and bumps `count`, with the latest `title` winning. `webUrl` is the producing
+server's `_meta["com.cubicecho/webUrl"]`, since MCP has no field for where a person views a
+thing. Hook calls never reach `dispatch` and are not captured, and links marked for the model
+alone are dropped by the pool. The table is history: `features` gives it no generated writes, it
+goes with its run by cascade, reads are open to an agent, and it is not in `TOOLS`. No regexes
+over result text, and no `record_artifact` tool — see #98 for why.
+
 **Frontend:** shadcn primitives in `web/components/ui/` with no app logic; routes in
 `web/routes/`; `@/` maps to `web/`. Every query goes through `request()` in `web/lib/gql.ts`
 with a typed document — no raw `fetch` in a component — and every mutation invalidates the

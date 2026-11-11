@@ -241,6 +241,13 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
           ← {block.name}: {block.text}
         </p>
       );
+    case "artifact":
+      // Something the run made, said once per uri: the line a person scrolls back to find.
+      return (
+        <p className="text-xs break-all text-info">
+          ✦ made {block.text} <span className="text-foreground/60">· {block.name}</span>
+        </p>
+      );
     case "turn":
       return (
         <p className="border-t pt-2 text-xs tracking-wide text-foreground/60 uppercase">

@@ -40,6 +40,21 @@ const tools = [
   ...(process.env.MCP_ECHO_SLOW
     ? [{ name: "slow", description: "takes a minute", inputSchema: { type: "object" } }]
     : []),
+  // A tool that says what it made the way MCP says it, behind `MCP_ECHO_LINKS` for the same
+  // reason: a `resource_link` to `uri`, with the fields a run's artifact row keeps.
+  ...(process.env.MCP_ECHO_LINKS
+    ? [
+        {
+          name: "write",
+          description: "writes a document and links to it",
+          inputSchema: {
+            type: "object",
+            properties: { uri: { type: "string" }, title: { type: "string" } },
+            required: ["uri"],
+          },
+        },
+      ]
+    : []),
 ];
 
 /**
@@ -106,6 +121,9 @@ server.setRequestHandler(CallToolRequestSchema, (request, extra) => {
   if (request.params.name === "slow") {
     return waitForCancel(extra.signal).then(() => reply(request));
   }
+  if (request.params.name === "write") {
+    return written(request);
+  }
   return reply(request);
 });
 
@@ -125,6 +143,35 @@ const waitForCancel = (signal) =>
       resolve();
     });
   });
+
+/**
+ * `write`'s answer: what the model reads, and a link to what it made beside it. One whose
+ * `audience` leaves out the user is the model's alone, and the host is never handed it.
+ */
+const written = (request) => {
+  const { uri, title } = request.params.arguments ?? {};
+  return {
+    content: [
+      { type: "text", text: `wrote ${uri}` },
+      {
+        type: "resource_link",
+        uri,
+        name: String(uri).split("/").pop(),
+        ...(title ? { title } : {}),
+        mimeType: "text/markdown",
+        description: "a document the echo server wrote",
+        annotations: { audience: ["user", "assistant"], lastModified: "2026-11-01T12:00:00Z" },
+        _meta: { "com.cubicecho/webUrl": `https://echo.test/view?uri=${uri}` },
+      },
+      {
+        type: "resource_link",
+        uri: `${uri}#scratch`,
+        name: "scratch",
+        annotations: { audience: ["assistant"] },
+      },
+    ],
+  };
+};
 
 const reply = (request) => ({
   content: [

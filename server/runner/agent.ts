@@ -2,6 +2,7 @@ import {
   type AgentLoopHooks,
   contextLimitFor,
   preselect,
+  type RunArtifact,
   type RunEventInput,
   RunEventKind,
   type RunMetrics,
@@ -19,6 +20,11 @@ export interface AgentResult {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  /**
+   * What the step's tool calls linked to, one per uri, as the loop collected them. A step's own:
+   * `flow.ts` writes them to `run_artifacts`, which is where they are one per uri for the run.
+   */
+  artifacts: RunArtifact[];
 }
 
 export interface AgentOptions {
@@ -110,7 +116,7 @@ export async function runAgent({
   // agent-core's own bound on the lookup, which guards nothing; a stop ends the wait with the run.
   const contextLength = await contextLimitFor({ ...config, model }, 0, { signal });
 
-  const { turn, toolCalls, usage, metrics } = await runAgentLoop({
+  const { turn, toolCalls, usage, metrics, artifacts } = await runAgentLoop({
     // A step may run on a model other than the settings row's. The first token gets the same
     // patience as every one after it, where the loop would otherwise wait five times as long.
     config: {
@@ -163,7 +169,12 @@ export async function runAgent({
     // The loop hands each call the run's signal. Passed on, a stop sends the server the
     // protocol's `notifications/cancelled` and the call rejects at once; dropped, the tool ran to
     // its end or the call timeout, and a write the person stopped still landed.
-    dispatch: (call, callSignal) => mcp.call(call.name, call.args, { servers, signal: callSignal }),
+    //
+    // `links` answers with the text the model reads and, beside it, the result's `resource_link`s,
+    // which the loop collects as the step's artifacts. The text is what a plain call returns, so
+    // the model is told exactly what it was told before.
+    dispatch: (call, callSignal) =>
+      mcp.call(call.name, call.args, { servers, signal: callSignal, links: true }),
     signal,
     onEvent: (event) => {
       if (event.kind === RunEventKind.Notice) {
@@ -183,5 +194,6 @@ export async function runAgent({
     promptTokens: usage.prompt,
     completionTokens: usage.completion,
     totalTokens: usage.total,
+    artifacts,
   };
 }
