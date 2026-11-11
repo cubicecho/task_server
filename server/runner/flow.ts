@@ -479,13 +479,27 @@ export async function runFlow({
       // watching had been shown, up to the moment they pressed stop. It is no turn the endpoint
       // would take back, but it is what the step got to, and a row with nothing in it reads as a
       // step that said nothing.
-      const partial = failedRun(error)?.partial?.content;
+      const failure = failedRun(error);
+      const partial = failure?.partial?.content;
       await close(row.id, {
         status: stopped ? "stopped" : "error",
         error: stopped ? "" : errorMessage(error),
         ...(partial ? { output: partial } : {}),
         ...noted(),
       });
+      // A step that failed after its tools wrote still wrote: the document a call made before the
+      // budget ran out, or before the stop, exists either way. Only a failure out of the loop
+      // carries them — one after it, in the decision's read-back, was recorded above already.
+      // Logged rather than thrown, so the run is failed for what failed the step.
+      await recordArtifacts({
+        runId,
+        taskId: task.id,
+        runStepId: row.id,
+        artifacts: failure?.artifacts ?? [],
+        servers,
+      }).catch((cause: unknown) =>
+        console.error(`[run] ${plan.name}: artifacts not kept: ${errorMessage(cause)}`),
+      );
       throw error;
     }
   }

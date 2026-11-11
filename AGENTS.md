@@ -696,7 +696,9 @@ counts.
 loop collects the links beside it as the step's `artifacts`; `flow.ts` hands them to
 `server/runner/artifacts.ts`, which writes `run_artifacts`. One row per `uri` per run: the loop
 dedupes within a step, and a later step linking the same uri lands on the unique
-`(runId, uri)` index and bumps `count`, with the latest `title` winning. `webUrl` is the producing
+`(runId, uri)` index and bumps `count`, with the latest `title` winning. A step that fails or is stopped after its tools wrote keeps
+what they wrote too, read off the loop's failure (`failedRun(error).artifacts`): a write made
+before the budget ran out was made. `webUrl` is the producing
 server's `_meta["com.cubicecho/webUrl"]`, since MCP has no field for where a person views a
 thing. Hook calls never reach `dispatch` and are not captured, and links marked for the model
 alone are dropped by the pool. The table is history: `features` gives it no generated writes, it
