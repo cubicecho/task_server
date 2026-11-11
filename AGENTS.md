@@ -673,6 +673,13 @@ sibling of `hooks` rather than more notes in it, since a hook note is what the h
 did and these are what a server said during the model's. The pool ties a message to a call only
 when it is the one request in flight on that connection, so a parallel call or a hook on the same
 server goes unheard.
+An elicitation rides the same path and the same limit: the pool declares the capability
+(`elicitation: true`, no pool-wide handler), `dispatch` hands each call an `onElicit` from
+`elicitations.ts` that answers `decline` — a run is unattended, and `decline` is what lets a
+server act on that — and the question is a notice on the stream and a note on
+`run_steps.elicitations`, its own column because it is neither the host's call nor a server's
+log but something the operator has to fix in the task. Waiting for a person on a watched run, or
+a `waiting` status, were looked at in #107 and not taken.
 What is kept of them is `runs.metrics`, agent-core's `runMetrics` over the run's events, which
 `server/runner/metrics.ts` collects as the run emits them rather than reading back off the bus —
 the bus caps a run's backlog and drops its oldest, which is exactly the tool calls a summary

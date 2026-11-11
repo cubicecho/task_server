@@ -43,6 +43,7 @@ import {
 import { STATUS_VARIANT } from "@/lib/run-status";
 import { useRefreshRuns, useRunTask, useStopTask } from "@/lib/use-task-run";
 import { cn } from "@/lib/utils";
+import { describeElicitation, type ElicitationNote } from "../../shared/elicitations.ts";
 import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 import { isFailure, type ServerLogNote } from "../../shared/server-logs.ts";
 
@@ -207,6 +208,37 @@ function ServerLogs({ logs }: { logs: unknown }) {
 }
 
 /**
+ * What the step's MCP servers stopped to ask for, each declined because nobody was there to
+ * answer. Open rather than collapsed, unlike the notes beside it: this is the one of them that
+ * asks the operator to do something — give the task the values the fields name.
+ */
+function Elicitations({ asked }: { asked: unknown }) {
+  const list = (asked ?? []) as ElicitationNote[];
+  if (list.length === 0) {
+    return null;
+  }
+  return (
+    <Alert
+      variant="warning"
+      title={`A server asked for input ${list.length === 1 ? "once" : `${list.length} times`}`}
+      description={
+        <ul className="flex flex-col gap-1">
+          {list.map((note, index) => (
+            <li
+              // biome-ignore lint/suspicious/noArrayIndexKey: notes are only ever appended, and a server may ask one thing twice
+              key={index}
+              className="text-xs"
+            >
+              <span className="font-mono">{note.tool}</span> · {describeElicitation(note)}
+            </li>
+          ))}
+        </ul>
+      }
+    />
+  );
+}
+
+/**
  * What the run actually did, step by step.
  *
  * Indented by `depth`, so an arm of a decision reads as being inside it — and the arm each
@@ -237,6 +269,7 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
           <ResourceReads reads={step.resources} />
           <HookNotes notes={step.hooks} />
           <ServerLogs logs={step.serverLogs} />
+          <Elicitations asked={step.elicitations} />
           {step.error ? <Alert variant="destructive" description={step.error} /> : null}
           {!step.error && step.output ? <CodeBlock content={step.output} wrap /> : null}
         </li>

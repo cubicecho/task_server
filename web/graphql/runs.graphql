@@ -60,6 +60,7 @@ query RunDetail($id: String!) {
       hooks
       resources
       serverLogs
+      elicitations
     }
     # What the run made, in the order it first linked to each. A step's links are written in one
     # insert and share a `createdAt`, so the uri breaks the tie rather than leaving it to the plan.

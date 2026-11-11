@@ -90,6 +90,18 @@ const tools = [
         },
       ]
     : []),
+  // A tool that stops to ask the client for a folder before it answers, behind `MCP_ECHO_ELICIT`.
+  // It answers with what it was told, so a test reads the client's reply off the tool result —
+  // and the SDK refuses to send the question at all to a client that did not declare it.
+  ...(process.env.MCP_ECHO_ELICIT
+    ? [
+        {
+          name: "ask",
+          description: "asks which folder to write to, then says what it was told",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ]
+    : []),
 ];
 
 /**
@@ -230,6 +242,9 @@ server.setRequestHandler(CallToolRequestSchema, (request, extra) => {
   if (request.params.name === "grumble") {
     return grumble(request);
   }
+  if (request.params.name === "ask") {
+    return ask();
+  }
   return reply(request);
 });
 
@@ -243,6 +258,26 @@ const grumble = async (request) => {
     await server.sendLoggingMessage({ level: "warning", data: `warning ${index + 1}` });
   }
   return reply(request);
+};
+
+/** `ask`: one form, two fields, and the client's answer as the result. */
+const ask = async () => {
+  try {
+    const answer = await server.elicitInput({
+      message: "Which folder should I write to?",
+      requestedSchema: {
+        type: "object",
+        properties: {
+          folder: { type: "string", description: "Where the file goes" },
+          overwrite: { type: "boolean" },
+        },
+        required: ["folder"],
+      },
+    });
+    return { content: [{ type: "text", text: `answered ${answer.action}` }] };
+  } catch (error) {
+    return { content: [{ type: "text", text: `could not ask: ${error.message}` }], isError: true };
+  }
 };
 
 /** `look` and `poke`: a tenth of a second's work, bracketed in the timing log. */

@@ -288,6 +288,25 @@ its connection. Two calls to one server at once — parallel tool execution, or 
 model's call — and neither is told; the messages go to the pool's general handler and reach no
 run. The pool also caps what one call hears at fifty, with a summary for the rest.
 
+### What a server asked
+
+An MCP server can stop in the middle of a tool and ask the client for something — "which
+folder?", "overwrite it?" — which MCP calls elicitation. A run has nobody to ask: it was started
+by a schedule, a webhook, or a person who has since looked away. So task-server declares the
+capability and answers every question **decline**, which tells the server there is no one to
+ask, where a client that never offered would leave it to fail or guess.
+
+Each question is said on the stream as a notice — `server echo asked: Which folder? (fields:
+folder, overwrite) — declined: task-server runs unattended` — and kept on the step as
+`run_steps.elicitations`, up to twenty, with the tool, the server's slug, its message and the
+names of the fields its form asked for. The run detail shows them in a warning under the step:
+the fields are the defaults the task needs and does not have, and the fix is to put them in the
+prompt.
+
+A question is tied to a call the way a log message is, by elimination, so one asked beside
+another call to the same server, or during a hook or a resource read, reaches no handler. The
+pool declines it all the same; it is only not noted.
+
 A run's status is `running`, then one of `ok`, `error` or `stopped`. Two more are rows that have
 not run: `queued` is a firing waiting for a free slot, which becomes `running` in that same row
 when one comes back, and `skipped` never ran at all — a trigger that fired at a task that could

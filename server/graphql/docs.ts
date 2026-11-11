@@ -172,6 +172,10 @@ export const COLUMN_DOCS: ColumnDocs = {
     serverLogs:
       "What MCP servers logged at `warning` or worse during this step's tool calls, as JSON " +
       "`{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.",
+    elicitations:
+      "What MCP servers asked for mid-call during this step, as JSON `{ tool, server, message, " +
+      "fields }`. Each was declined, since a run has nobody to answer: `fields` names the " +
+      "values the task would have to supply.",
   },
 
   runArtifacts: {
