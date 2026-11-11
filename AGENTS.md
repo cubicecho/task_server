@@ -608,10 +608,11 @@ Recovery is on: a call the model wrote into its reply as text — a
 server whose parser misses the model's template streams it as content — is run as a call rather
 than stored as the step's answer, and the watcher is told in a notice.
 `firstTokenSeconds` is set to `requestTimeoutSeconds`, where the loop would otherwise give the
-first token five times the silence it gives the rest. Tool preselection is done here rather than
-by the loop, so it reads the prompt before the hooks' context is put in front of it and the
-watcher is told what was picked
-([agent-core#150](https://github.com/cubicecho/agent-core/issues/150)).
+first token five times the silence it gives the rest. Tool preselection is the loop's
+(`preselect: true`), on the tool-selection model or the step's own where that is blank, and it
+is handed the prompt as written in `preselectQuery`: the hooks' context is already on
+`messages`, and a preselector shown both picks tools for whatever memory recalled. The loop says
+what it picked in a notice, which is what the watcher is told.
 
 The catalogue in the system prompt does not mark what is loaded. It used to, and the loop
 deliberately does not: the system prompt is then the same text on every step, so a load does not

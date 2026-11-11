@@ -1,7 +1,6 @@
 import {
   type AgentLoopHooks,
   contextLimitFor,
-  preselect,
   type RunArtifact,
   type RunEventInput,
   RunEventKind,
@@ -116,21 +115,6 @@ export async function runAgent({
   // `trustAnnotations`. Fails closed: anything the pool cannot vouch for is a write.
   const reads = (call: ToolCallRequest) => mcp.readsOnly(call.name, { servers });
 
-  // Chosen here rather than by the loop, for two things the loop's own preselection does not do:
-  // it reads the prompt as written, before the hooks' context is put in front of it, and the
-  // watcher is told what was picked (agent-core#150). Guessing wrong is cheap — an unused definition costs a few
-  // hundred tokens for one run, and the model can still load what it actually wanted.
-  const preselected =
-    config.toolDiscovery === "ondemand"
-      ? await preselect(config, config.toolSelectModel || model, catalog, prompt, {
-          signal,
-          onNotice: notice,
-        })
-      : [];
-  if (preselected.length) {
-    notice(`tools picked before the run: ${preselected.join(", ")}`);
-  }
-
   // What the model will read, so a request that cannot fit is refused here with its size rather
   // than by the endpoint a round trip later. Zero where the endpoint does not say, or not within
   // agent-core's own bound on the lookup, which guards nothing; a stop ends the wait with the run.
@@ -158,7 +142,14 @@ export async function runAgent({
     messages: withContext([{ role: "user", content: prompt }], 0, context),
     tools: mcp.tools({ servers }),
     catalog,
-    preselected,
+    // On demand, the loop asks the tool-selection model — the step's own where none is set — which
+    // tools the prompt needs, and says what it picked in a notice. It is asked the prompt as
+    // written: the hooks' context is already on `messages`, and tools picked for what memory
+    // recalled are tools for a question nobody asked. Guessing wrong is cheap — an unused
+    // definition costs a few hundred tokens for one run, and the model can still load what it
+    // actually wanted.
+    preselect: true,
+    preselectQuery: prompt,
     // A decision, not a default nobody looked at. Sorted by name, a tool loaded on demand lands
     // mid-array and moves every definition after it, where unsorted it is appended and the
     // prefix an endpoint cached still matches.

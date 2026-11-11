@@ -150,6 +150,40 @@ test("a beforeTurn hook's result is put in front of each step's prompt, and note
   expect(rows[0].output).toBe("one subject");
 });
 
+test("on demand, the tools are picked on the prompt as written, not on what a hook recalled", async () => {
+  const { eq } = await import("drizzle-orm");
+  const discovery = (toolDiscovery: "eager" | "ondemand") =>
+    client.db
+      .update(tables.settings)
+      .set({ toolDiscovery })
+      .where(eq(tables.settings.id, "default"));
+  await discovery("ondemand");
+  try {
+    await echoServer([
+      {
+        id: "recall",
+        on: "beforeTurn",
+        tool: "echo",
+        args: { text: "memories of {{vars.task.name}}" },
+        inject: true,
+      },
+    ]);
+    const { id: taskId } = await task("digest", "list the subjects");
+    replies = ["[]", "listed"];
+
+    const run = await runner.runTask(taskId);
+    expect(run.status, run.error ?? "").toBe("ok");
+
+    // The first request is the preselection, and the second the step itself.
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]).toContain("list the subjects");
+    expect(prompts[0]).not.toContain("memories of digest");
+    expect(prompts[1]).toContain("memories of digest");
+  } finally {
+    await discovery("eager");
+  }
+});
+
 test("afterTurn, sessionStart and sessionEnd reach the server with what the run did", async () => {
   await echoServer(
     [
