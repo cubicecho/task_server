@@ -559,7 +559,7 @@ usual use is memory — recall before each step, remember after it:
 | --- | --- |
 | `sessionStart` | Before the first step, alongside its `beforeTurn` |
 | `beforeTurn` | Before each step that executes; `inject: true` puts the result ahead of its prompt |
-| `afterTurn` | Once a step has its output (`{{reply}}`, `{{turn.messages}}`) |
+| `afterTurn` | Once a step has its output (`{{reply}}`, `{{turn.messages}}`: the prompt, any text beside its tool calls, and the answer) |
 | `beforeCompact` | When a step fills 75% of its window and the oldest of it is summarised (needs a compaction model) |
 | `sessionEnd` | Once the run has finished (`{{status}}`: `ok`, `stopped` or `error`) |
 | `sessionDelete` | When the run is deleted, by hand, with its task, or by retention |
@@ -567,7 +567,14 @@ usual use is memory — recall before each step, remember after it:
 `{{session.id}}` is the run id, so it changes every run; key memory that should outlast one on
 `{{vars.task.id}}` (also `{{vars.task.name}}`, `{{vars.step.name}}`, `{{vars.trigger}}`).
 `beforeCompact` fires when a step is compacted, which only happens with a compaction model set in
-Settings. Injected context shares a 2000-token budget per
+Settings.
+
+Each message in `{{turn.messages}}` carries a uuid, `<run id>:<position>:<digest>`, where the
+position is the message's place in the run as if its steps were one transcript laid end to end.
+**Memory written before 7.20.0 is keyed differently:** a step's prompt and answer were then at
+`2 × step` and `2 × step + 1`, with nothing said beside a tool call. A memory server that
+dedupes on the uuid will not match a turn it stored before the upgrade with the same turn after
+it. Injected context shares a 2000-token budget per
 step. A hook that fails never fails the step — it leaves a note, shown under the step on the Runs
 page. `hiddenTools` hides a server's tools from the model while its hooks can still call them.
 

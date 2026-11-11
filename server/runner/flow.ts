@@ -271,7 +271,7 @@ interface Plan {
  * What a whole flow did, summed over its steps. Its artifacts are not here: a uri two steps
  * linked to is one artifact of the run, and the one place that is so is `run_artifacts`.
  */
-export type FlowResult = Omit<AgentResult, "artifacts">;
+export type FlowResult = Omit<AgentResult, "artifacts" | "afterTurn" | "messageCount">;
 
 export interface FlowOptions {
   runId: string;
@@ -320,6 +320,8 @@ export async function runFlow({
   let position = 0;
   /** How many steps have actually run, which is what the cap is about. */
   let executed = 0;
+  /** Where the next step's question sits among the run's messages. See `HookStep.at`. */
+  let at = 0;
 
   /** Stamps everything a step says with the step it said it in, for whoever is watching. */
   const scope =
@@ -380,6 +382,8 @@ export async function runFlow({
     // A question nobody answered is the likeliest reason a tool failed, so it is kept on failure
     // too.
     const asked: ElicitationNote[] = [];
+    // The step's `afterTurn`, once the loop has fired it.
+    let told: Promise<HookNote[]> | undefined;
     const noted = (): Partial<
       Pick<RunStep, "hooks" | "resources" | "serverLogs" | "elicitations">
     > => {
@@ -405,6 +409,7 @@ export async function runFlow({
         name: plan.name,
         kind: plan.kind,
         prompt: renderPrompt(plan, context, payload, fetched.texts),
+        at,
       };
 
       const configured = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
@@ -417,10 +422,14 @@ export async function runFlow({
       const gathered = await hooks?.before(turn, signal, emit);
       notes.push(...(gathered?.notes ?? []));
       // A `beforeCompact` that failed mid-step is kept beside what `before` noted.
-      const loopHooks = hooks?.compaction(turn, (note) => {
-        notes.push(note);
-        emit({ kind: RunEventKind.Notice, text: describe(note) });
-      });
+      const loopHooks = hooks?.loop(
+        turn,
+        (note) => {
+          notes.push(note);
+          emit({ kind: RunEventKind.Notice, text: describe(note) });
+        },
+        emit,
+      );
 
       const agentResult = await runAgent({
         config,
@@ -447,6 +456,8 @@ export async function runFlow({
         // `emit` puts on the run's stream with the rest.
         session: runId,
       });
+      told = agentResult.afterTurn;
+      at += agentResult.messageCount;
       // Before the decision is read back, which can still fail the step: what the tools made
       // was made either way.
       await recordArtifacts({
@@ -464,14 +475,19 @@ export async function runFlow({
       result.output = agentResult.output;
       context.push({ name: plan.name, output: agentResult.output });
 
-      const { output, artifacts: _artifacts, ...tokens } = agentResult;
+      const {
+        output,
+        artifacts: _artifacts,
+        afterTurn: _afterTurn,
+        messageCount: _messageCount,
+        ...tokens
+      } = agentResult;
       let branch: string | undefined;
       if (plan.kind === "decision") {
         branch = await resolveCase(plan, output, emit);
         emit({ kind: RunEventKind.Decision, name: plan.name, text: branch });
       }
       await close(row.id, { status: "ok", output, branch, ...tokens, ...noted() });
-      hooks?.after(turn, output, row.id, emit);
       return branch;
     } catch (error) {
       const stopped = signal?.aborted === true;
@@ -501,6 +517,12 @@ export async function runFlow({
         console.error(`[run] ${plan.name}: artifacts not kept: ${errorMessage(cause)}`),
       );
       throw error;
+    } finally {
+      // After the row is closed either way, since closing writes its notes whole. A step whose
+      // decision could not be read back had still answered, and the loop told its turn.
+      if (told) {
+        hooks?.after(told, row.id);
+      }
     }
   }
 

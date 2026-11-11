@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { turnMessages } from "@cubicecho/agent-core";
 import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { type GraphQLSchema, graphql } from "graphql";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
-import { completion, replyWith, userPrompt } from "./fixtures/sse.ts";
+import { type Completion, completion, replyWith, userPrompt } from "./fixtures/sse.ts";
 import { dataDir, ECHO_FIXTURE, type FakeModel, fakeModel, until, useModel } from "./helpers.ts";
 
 /**
@@ -19,7 +20,7 @@ const dir = dataDir("hooks");
 
 const callLog = path.join(dir, "calls.log");
 
-let replies: string[] = [];
+let replies: (string | Completion)[] = [];
 let prompts: string[] = [];
 let toolNames: string[][] = [];
 let model: FakeModel;
@@ -70,7 +71,8 @@ beforeAll(async () => {
   model = await fakeModel((body, response) => {
     prompts.push(userPrompt(body));
     toolNames.push((body.tools ?? []).map((tool) => tool.function.name));
-    replyWith(response, completion(replies.shift() ?? ""), body);
+    const next = replies.shift() ?? "";
+    replyWith(response, typeof next === "string" ? completion(next) : next, body);
   });
 
   const { ensureSchema } = await import("../server/db/migrate.ts");
@@ -218,6 +220,91 @@ test("afterTurn, sessionStart and sessionEnd reach the server with what the run 
   expect(log[2].arguments).toEqual({ text: "ok" });
   expect(toolNames[0]).not.toContain("echo__add");
   expect(toolNames[0]).toContain("echo__echo");
+});
+
+/** The uuid a hook is told for one message at `at` among the run's messages. */
+const uuidAt = (runId: string, at: number, role: "user" | "assistant", text: string) =>
+  turnMessages(runId, [{ role, content: text }], 0, undefined, { offset: at })[0].uuid;
+
+test("afterTurn numbers each step's messages from where the steps before it ended", async () => {
+  await echoServer([
+    { id: "recall", on: "beforeTurn", tool: "echo", args: { text: "recalled" }, inject: true },
+    {
+      id: "remember",
+      on: "afterTurn",
+      tool: "echo",
+      args: { text: "turn {{turn.index}}|{{turn.messages}}" },
+    },
+  ]);
+  const { id: taskId } = await task("digest", "list the subjects");
+  await client.db
+    .insert(tables.steps)
+    .values({ taskId, name: "write", prompt: "write them down", position: 0 });
+  replies = [
+    // Text beside a call: the loop tells it as the turn's, at its own place in the transcript.
+    completion({
+      role: "assistant",
+      content: "checking first",
+      tool_calls: [
+        { id: "call-1", type: "function", function: { name: "echo__echo", arguments: "{}" } },
+      ],
+    }),
+    "one subject",
+    "written",
+  ];
+
+  const run = await runner.runTask(taskId);
+  expect(run.status).toBe("ok");
+  await hooks.hooksSettled();
+
+  const told = calls()
+    .map((call) => String(call.arguments.text ?? ""))
+    .filter((text) => text.startsWith("turn "))
+    .map((text) => {
+      const [turn, messages] = text.split(/\|(.*)/s);
+      return { turn, messages: JSON.parse(messages) };
+    });
+  // A later step's prompt as written carries what the steps before it said.
+  const asked = told[1]?.messages[0]?.text ?? "";
+  expect(asked).toMatch(/one subject[\s\S]*write them down$/);
+  // Step 0 ended on four messages — question, the call and its text, the tool's result, the
+  // answer — so step 1's question is the run's fifth, and its uuid cannot be mistaken for any
+  // of step 0's. The tool result is not a turn's message and is skipped, keeping its place.
+  // The question is the prompt as written, not with what `recall` put in front of it.
+  expect(told).toEqual([
+    {
+      turn: "turn 0",
+      messages: [
+        {
+          speaker: "user",
+          text: "list the subjects",
+          uuid: uuidAt(run.id, 0, "user", "list the subjects"),
+        },
+        {
+          speaker: "assistant",
+          text: "checking first",
+          uuid: uuidAt(run.id, 1, "assistant", "checking first"),
+        },
+        {
+          speaker: "assistant",
+          text: "one subject",
+          uuid: uuidAt(run.id, 3, "assistant", "one subject"),
+        },
+      ],
+    },
+    {
+      turn: "turn 1",
+      messages: [
+        {
+          speaker: "user",
+          text: asked,
+          uuid: uuidAt(run.id, 4, "user", asked),
+        },
+        { speaker: "assistant", text: "written", uuid: uuidAt(run.id, 5, "assistant", "written") },
+      ],
+    },
+  ]);
+  expect(JSON.stringify(told)).not.toContain("recalled");
 });
 
 test("a hook that cannot run is noted on the step and never fails the run", async () => {
