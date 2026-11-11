@@ -2,6 +2,7 @@ import { FormApi } from "@tanstack/react-form";
 import { describe, expect, it } from "vitest";
 import {
   type SettingsFieldsFragment,
+  SettingsReasoningReplayEnum,
   SettingsToolDiscoveryEnum,
   SettingsToolExecutionEnum,
 } from "../web/__generated__/graphql/graphql.ts";
@@ -12,6 +13,7 @@ const ROW: SettingsFieldsFragment = {
   baseUrl: "http://localhost:11434/v1",
   model: "llama3.1:8b",
   systemPrompt: "",
+  reasoningReplay: SettingsReasoningReplayEnum.All,
   maxTokens: 4096,
   temperature: 0.2,
   maxToolIterations: 20,

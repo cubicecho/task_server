@@ -59,7 +59,8 @@ instead of the UI.
   run on it may reach. Everything left blank comes from settings, so a server with no profiles
   runs exactly as one that never had them. See **Agent profiles**.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
-  temperature limits, the cap on tool iterations per run, and how MCP tools are discovered.
+  temperature limits, the cap on tool iterations per run, how MCP tools are discovered, and
+  whether the model's thinking is sent back to it (see below).
 
 ## Agent profiles
 
@@ -319,6 +320,15 @@ discovery modes (`@cubicecho/agent-core`):
   the first step opens with that shortlist alone — no catalogue, no `load_tools`, no extra
   round trip. A wrong guess only costs an unused definition for one run, and the model can
   still load whatever it actually wanted.
+
+**Send thinking back to the model** (`reasoningReplay`, on settings and on a profile) says which
+of a thinking model's replies carry their reasoning on the next request: **all turns**, the
+default and agent-core's; **only during tool calls**, gpt-oss harmony's rule for a server that
+renders whatever it is sent; or **never**. gpt-oss, DeepSeek, Qwen3.x and GLM read their earlier
+reasoning between tool calls, and a transcript sent back as the endpoint first saw it keeps its
+prompt cache valid. Never saves context on an endpoint that drops it anyway. The reasoning goes
+back under the field it arrived in, and an endpoint that refuses it is latched and not sent it
+again. In an exported agent spec it is `model.reasoningReplay`.
 
 MCP tool schemas are normalised before they reach the model (`@cubicecho/agent-core`):
 llama.cpp-backed servers compile every tool into one grammar, so a single shape their

@@ -67,6 +67,7 @@ export const COLUMN_DOCS: ColumnDocs = {
     toolDiscovery: "`inherit` uses the server default; otherwise `eager` or `ondemand`.",
     toolSelectModel: "Empty inherits the server default. Unused unless discovery is on demand.",
     toolExecution: "`inherit` uses the server default; otherwise `sequential` or `parallel`.",
+    reasoningReplay: "`inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.",
     compactionModel: "Empty inherits the server default, which is off unless one is set there.",
     requestTimeoutSeconds:
       "Seconds of silence before a request is given up on. `-1` inherits the server default; " +
@@ -224,6 +225,11 @@ export const COLUMN_DOCS: ColumnDocs = {
       "`parallel` runs the calls a model asks for in one reply together, so a step waits for " +
       "the slowest rather than the sum. Results return in the order asked either way. Leave it " +
       "`sequential` if any tool writes: two writes run together finish in no set order.",
+    reasoningReplay:
+      "Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, " +
+      "DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps " +
+      "the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that " +
+      "call tools; `none` saves context on an endpoint that does not use it.",
     compactionModel:
       "Model that summarises the oldest messages once a step fills 75% of the context window, " +
       "so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.",

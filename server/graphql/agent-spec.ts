@@ -12,7 +12,7 @@ import { db } from "../db/client.ts";
 import { type Agent, agents, type McpServerRow, mcpServers } from "../db/schema.ts";
 import { hookProblems } from "../runner/hooks.ts";
 import { mcp } from "../runner/mcp.ts";
-import { agentLayer, SPEC_EXTENSION } from "../runner/profile.ts";
+import { agentLayer, replayColumn, SPEC_EXTENSION } from "../runner/profile.ts";
 import { NEW_MCP_SERVER, shapeProblems } from "./mcp-server.ts";
 
 /**
@@ -162,6 +162,7 @@ export type ImportedAgent = Pick<
   | "toolDiscovery"
   | "toolSelectModel"
   | "toolExecution"
+  | "reasoningReplay"
   | "compactionModel"
   | "requestTimeoutSeconds"
   | "maxRetries"
@@ -519,6 +520,10 @@ export function planImport(
     systemPrompt: texts.join("\n\n"),
     maxTokens: whole("model.maxTokens", spec.model?.maxTokens),
     temperature: spec.model?.temperature ?? -1,
+    // The parser has already dropped a value that is not one of the three, with the reason.
+    reasoningReplay: spec.model?.reasoningReplay
+      ? replayColumn(spec.model.reasoningReplay)
+      : "inherit",
     maxToolIterations: whole("tools.maxIterations", spec.tools?.maxIterations),
     toolDiscovery: discovery === "eager" || discovery === "ondemand" ? discovery : "inherit",
     toolSelectModel: spec.tasks?.toolSelect?.model?.trim() ?? "",

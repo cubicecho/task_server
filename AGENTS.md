@@ -374,7 +374,16 @@ table of rows; the one thing the resolver does that the old merge did not is tri
 system prompt when a profile is in play. Nothing downstream branches: `agent.ts`, `flow.ts` and `llm.ts` read one `Settings`
 exactly as they always did, which is why per-task endpoints cost the agent loop nothing. Blank
 is inherit, and the sentinel differs by column because zero is a real answer for most of them —
-`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery` and `toolExecution`.
+`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`, `toolExecution` and
+`reasoningReplay`.
+
+`reasoningReplay` is agent-core's own `model.reasoningReplay` — which of the model's replies
+carry its thinking back to it — and is laid over by the resolver like any spec field. The one
+wrinkle is a spelling: agent-core's `tool-loop` is `tool_loop` in both columns, because a GraphQL
+enum value cannot hold a hyphen and the driver names one it cannot spell `Option<n>`.
+`replayPolicy` and `replayColumn` in `profile.ts` translate, at the layers, at the import and in
+`agent.ts`, and nowhere else; the typecheck catches a fourth place that forgets, since the
+column's word is not one `ReasoningReplay` accepts. The settings default is `all`, agent-core's.
 
 `toolExecution` is the one column a spec has no field for, so it is laid over in
 `resolveConfig` by hand rather than by the resolver, and it travels in an export under this
