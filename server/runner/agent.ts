@@ -11,6 +11,7 @@ import {
 } from "@cubicecho/agent-core";
 import type { Settings } from "../db/schema.ts";
 import { mcp } from "./mcp.ts";
+import { replayPolicy } from "./profile.ts";
 import { pruneWhenFilling } from "./pruning.ts";
 
 /** What a step produced and what it cost — and, summed over its steps, what a whole flow did. */
@@ -124,6 +125,7 @@ export async function runAgent({
       model,
       contextLength,
       firstTokenSeconds: config.requestTimeoutSeconds,
+      reasoningReplay: replayPolicy(config.reasoningReplay),
       // On the run's own endpoint, and only when a model is named: the loop has no fallback to
       // the main model, so an empty column leaves `compact` with nothing to summarise with.
       ...(config.compactionModel

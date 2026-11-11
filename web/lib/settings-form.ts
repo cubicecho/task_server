@@ -1,5 +1,6 @@
 import type {
   SettingsFieldsFragment,
+  SettingsReasoningReplayEnum,
   SettingsToolDiscoveryEnum,
   SettingsToolExecutionEnum,
   UpdateSettingInput,
@@ -46,6 +47,7 @@ export interface SettingsForm {
   apiKey: string;
   model: string;
   systemPrompt: string;
+  reasoningReplay: SettingsReasoningReplayEnum;
   maxTokens: number | null;
   temperature: number | null;
   maxToolIterations: number | null;
@@ -71,6 +73,7 @@ export const SECTION_OF: Record<keyof SettingsForm, Exclude<SettingsSection, "co
   apiKey: "model",
   model: "model",
   systemPrompt: "model",
+  reasoningReplay: "model",
   maxTokens: "limits",
   temperature: "limits",
   maxToolIterations: "limits",
@@ -90,6 +93,7 @@ export const toForm = (row: SettingsFieldsFragment): SettingsForm => ({
   apiKey: "",
   model: row.model,
   systemPrompt: row.systemPrompt,
+  reasoningReplay: row.reasoningReplay,
   maxTokens: row.maxTokens,
   temperature: row.temperature,
   maxToolIterations: row.maxToolIterations,
@@ -112,6 +116,7 @@ export const toRow = (form: SettingsForm): UpdateSettingInput => ({
   baseUrl: form.baseUrl,
   model: form.model,
   systemPrompt: form.systemPrompt,
+  reasoningReplay: form.reasoningReplay,
   maxTokens: form.maxTokens ?? 0,
   temperature: form.temperature ?? 0,
   maxToolIterations: form.maxToolIterations ?? 0,

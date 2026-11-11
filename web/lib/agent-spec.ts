@@ -8,6 +8,7 @@ export interface ProfileColumns {
   baseUrl: string;
   model: string;
   systemPrompt: string;
+  reasoningReplay: string;
   maxTokens: number;
   temperature: number;
   maxToolIterations: number;
@@ -18,6 +19,13 @@ export interface ProfileColumns {
   requestTimeoutSeconds: number;
   maxRetries: number;
 }
+
+/** How the profile list says a replay policy, which is not a word a person would pick. */
+const REPLAY_PHRASE: Record<string, string> = {
+  all: "thinking sent back",
+  tool_loop: "thinking sent back in tool calls",
+  none: "thinking not sent back",
+};
 
 /**
  * What a profile changes, one phrase per column that is not at its inherit sentinel.
@@ -36,6 +44,9 @@ export function overrides(agent: ProfileColumns): string[] {
   }
   if (agent.systemPrompt) {
     said.push("system prompt");
+  }
+  if (agent.reasoningReplay !== "inherit") {
+    said.push(REPLAY_PHRASE[agent.reasoningReplay] ?? `thinking: ${agent.reasoningReplay}`);
   }
   if (agent.maxTokens >= 0) {
     said.push(`${agent.maxTokens} tokens`);

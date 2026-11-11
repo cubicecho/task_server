@@ -89,6 +89,9 @@ export const agents = pgTable("agents", {
   toolExecution: text({ enum: ["inherit", "sequential", "parallel"] })
     .notNull()
     .default("inherit"),
+  reasoningReplay: text({ enum: ["inherit", "all", "tool_loop", "none"] })
+    .notNull()
+    .default("inherit"),
   compactionModel: text().notNull().default(""),
   requestTimeoutSeconds: integer().notNull().default(-1),
   maxRetries: integer().notNull().default(-1),
@@ -415,6 +418,20 @@ export const settings = pgTable("settings", {
   toolExecution: text({ enum: ["sequential", "parallel"] })
     .notNull()
     .default("sequential"),
+  /**
+   * Which of the model's own replies carry its thinking back to it on the next request —
+   * agent-core's `reasoningReplay`, whose default this is. A thinking model reads its earlier
+   * reasoning between tool calls, and a transcript sent back as the endpoint first saw it keeps
+   * the endpoint's prompt cache valid; stripping it client-side breaks both. `tool-loop` is
+   * gpt-oss harmony's rule, for a server that renders whatever it is sent, and `none` saves the
+   * context on an endpoint that drops it anyway.
+   *
+   * `tool_loop` is agent-core's `tool-loop` respelled, because a GraphQL enum value cannot hold a
+   * hyphen and the driver names one it cannot spell `Option<n>`. `runner/profile.ts` translates.
+   */
+  reasoningReplay: text({ enum: ["all", "tool_loop", "none"] })
+    .notNull()
+    .default("all"),
   /**
    * The model that summarises the oldest stretch of a step's transcript once it fills three
    * quarters of the window, so a long tool loop keeps going instead of failing with

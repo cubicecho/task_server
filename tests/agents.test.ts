@@ -56,6 +56,7 @@ const agent = (over: Partial<Agent> = {}): Agent => ({
   toolDiscovery: "inherit",
   toolSelectModel: "",
   toolExecution: "inherit",
+  reasoningReplay: "inherit",
   compactionModel: "",
   requestTimeoutSeconds: -1,
   maxRetries: -1,
@@ -93,6 +94,7 @@ const GOLDEN: {
       toolDiscovery: "ondemand",
       toolSelectModel: "tiny",
       toolExecution: "parallel",
+      reasoningReplay: "none",
       compactionModel: "summary",
       requestTimeoutSeconds: 30,
       maxRetries: 5,
@@ -106,6 +108,7 @@ const GOLDEN: {
       toolDiscovery: "ondemand",
       toolSelectModel: "tiny",
       toolExecution: "parallel",
+      reasoningReplay: "none",
       compactionModel: "summary",
       requestTimeoutSeconds: 30,
       maxRetries: 5,
@@ -198,6 +201,24 @@ const GOLDEN: {
     settings: { toolExecution: "parallel" },
     agent: { toolExecution: "sequential" },
     expected: { toolExecution: "sequential" },
+  },
+  {
+    name: "inherit over a narrowed replay",
+    settings: { reasoningReplay: "tool_loop" },
+    agent: { reasoningReplay: "inherit" },
+    expected: {},
+  },
+  {
+    // The one value whose column spelling is not agent-core's, so it is translated both ways.
+    name: "tool_loop over all",
+    agent: { reasoningReplay: "tool_loop" },
+    expected: { reasoningReplay: "tool_loop" },
+  },
+  {
+    name: "all over none",
+    settings: { reasoningReplay: "none" },
+    agent: { reasoningReplay: "all" },
+    expected: { reasoningReplay: "all" },
   },
   {
     name: "inherit over ondemand",

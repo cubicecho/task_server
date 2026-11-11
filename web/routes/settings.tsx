@@ -8,6 +8,7 @@ import {
   SettingsDocument,
   type SettingsFieldsFragment,
   type SettingsQuery,
+  SettingsReasoningReplayEnum,
   SettingsToolDiscoveryEnum,
   SettingsToolExecutionEnum,
   UpdateSettingsDocument,
@@ -363,6 +364,29 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                           label="Default system prompt"
                           description={doc("systemPrompt")}
                           rows={3}
+                        />
+                        <RadioGroupField
+                          form={form}
+                          name="reasoningReplay"
+                          label="Send thinking back to the model"
+                          description={doc("reasoningReplay")}
+                          options={[
+                            {
+                              value: SettingsReasoningReplayEnum.All,
+                              label: "All turns",
+                              description: "Every reply keeps its reasoning. The default.",
+                            },
+                            {
+                              value: SettingsReasoningReplayEnum.ToolLoop,
+                              label: "Only during tool calls",
+                              description: "The final answer goes back without it.",
+                            },
+                            {
+                              value: SettingsReasoningReplayEnum.None,
+                              label: "Never",
+                              description: "No reply carries its reasoning back.",
+                            },
+                          ]}
                         />
                       </div>
                     }

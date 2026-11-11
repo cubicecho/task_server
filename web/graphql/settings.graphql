@@ -9,6 +9,7 @@ fragment SettingsFields on Setting {
   toolDiscovery
   toolSelectModel
   toolExecution
+  reasoningReplay
   compactionModel
   requestTimeoutSeconds
   maxRetries

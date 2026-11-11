@@ -158,6 +158,7 @@ test("a column left to inherit is a field the document does not have", async () 
     toolDiscovery: "ondemand",
     toolSelectModel: "small",
     toolExecution: "parallel",
+    reasoningReplay: "tool_loop",
     requestTimeoutSeconds: 0,
     maxRetries: 0,
   });
@@ -167,7 +168,8 @@ test("a column left to inherit is a field the document does not have", async () 
     name: "Full",
     description: "Everything said",
     endpoint: { baseUrl: "http://local:11434/v1", requestTimeoutSeconds: 0 },
-    model: { model: "big", maxTokens: 0, temperature: 0 },
+    // The column's `tool_loop` leaves in agent-core's spelling, which is the format's.
+    model: { model: "big", maxTokens: 0, temperature: 0, reasoningReplay: "tool-loop" },
     prompt: [{ id: "system", text: "Be brief." }],
     tools: { discovery: "ondemand", maxIterations: 12 },
     retry: { maxRetries: 0 },
@@ -292,7 +294,8 @@ const PREVIEW = `query ($document: JSON!, $createServers: [String!], $name: Stri
     refusals warnings dropped
     agent {
       name description baseUrl model systemPrompt maxTokens temperature maxToolIterations
-      toolDiscovery toolSelectModel toolExecution requestTimeoutSeconds maxRetries
+      toolDiscovery toolSelectModel toolExecution reasoningReplay requestTimeoutSeconds
+      maxRetries
     }
     servers { slug label created }
     bundled {
@@ -418,6 +421,7 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     toolDiscovery: "inherit",
     toolSelectModel: "",
     toolExecution: "inherit",
+    reasoningReplay: "inherit",
     compactionModel: "",
     requestTimeoutSeconds: -1,
     maxRetries: -1,
@@ -434,6 +438,7 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     toolDiscovery: "eager",
     toolSelectModel: "small",
     toolExecution: "parallel",
+    reasoningReplay: "none",
     compactionModel: "summary",
     requestTimeoutSeconds: 0,
     maxRetries: 0,
@@ -472,6 +477,15 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     "com.cubicecho.task-server": { toolExecution: "sequential" },
   });
   expect(sequential.back.toolExecution).toBe("sequential");
+  // And `reasoningReplay` three, one of which the column spells differently from the format.
+  for (const [column, field] of [
+    ["all", "all"],
+    ["tool_loop", "tool-loop"],
+  ] as const) {
+    const replay = await trip({ reasoningReplay: column });
+    expect(replay.spec.model).toEqual({ reasoningReplay: field });
+    expect(replay.back.reasoningReplay).toBe(column);
+  }
 });
 
 // The one value a column holds that the format does not: the parser wants at least one tool
@@ -795,7 +809,13 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     id: "researcher",
     name: "Wide",
     endpoint: { baseUrl: "http://local/v1", firstTokenSeconds: 30 },
-    model: { model: "big", maxTokens: 1.5, reasoningEffort: "high", contextLength: 8192 },
+    model: {
+      model: "big",
+      maxTokens: 1.5,
+      reasoningEffort: "high",
+      contextLength: 8192,
+      reasoningReplay: "sometimes",
+    },
     prompt: [
       { id: "persona", text: "You are careful." },
       { id: "rules", text: "Cite." },
@@ -840,10 +860,13 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     toolDiscovery: "inherit",
     toolSelectModel: "small",
     toolExecution: "inherit",
+    reasoningReplay: "inherit",
   });
   expect(shown.warnings).toContain(
     "prompt: 2 parts are joined into the one system prompt a profile holds",
   );
+  // A policy the format has no word for is the parser's to refuse, and it leaves the column.
+  expect(shown.warnings.some((line) => line.startsWith("model.reasoningReplay"))).toBe(true);
 });
 
 test("an imported profile has no key, and the preview says what that means", async () => {

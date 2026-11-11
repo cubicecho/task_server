@@ -1,4 +1,10 @@
-import { AGENT_SPEC, type AgentSpec, NO_KEY, resolveAgentSpec } from "@cubicecho/agent-core";
+import {
+  AGENT_SPEC,
+  type AgentSpec,
+  NO_KEY,
+  ReasoningReplay,
+  resolveAgentSpec,
+} from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Agent, agents, type Settings, type Task } from "../db/schema.ts";
@@ -36,6 +42,20 @@ export interface TaskServerExtension {
   toolExecution?: "sequential" | "parallel";
 }
 
+/** The settings column's spelling of a replay policy, which is the profile column's less `inherit`. */
+export type ReplayColumn = Settings["reasoningReplay"];
+
+/**
+ * A replay column as agent-core spells it. Only `tool_loop` differs: a GraphQL enum value cannot
+ * hold a hyphen, so the column cannot store agent-core's word for it.
+ */
+export const replayPolicy = (column: ReplayColumn): ReasoningReplay =>
+  column === "tool_loop" ? ReasoningReplay.ToolLoop : column;
+
+/** The other way, for what comes back from the resolver and in from a spec. */
+export const replayColumn = (policy: ReasoningReplay): ReplayColumn =>
+  policy === ReasoningReplay.ToolLoop ? "tool_loop" : policy;
+
 /** `""` is "ask settings" for a string column, which a layer says by leaving the field out. */
 const str = (value: string) => value.trim() || undefined;
 
@@ -61,6 +81,7 @@ const settingsLayer = (settings: Settings): AgentSpec => ({
     model: settings.model,
     maxTokens: settings.maxTokens,
     temperature: settings.temperature,
+    reasoningReplay: replayPolicy(settings.reasoningReplay),
   },
   prompt: [{ id: SYSTEM, text: settings.systemPrompt }],
   tools: { discovery: settings.toolDiscovery, maxIterations: settings.maxToolIterations },
@@ -96,6 +117,8 @@ export const agentLayer = (agent: Agent): AgentSpec => {
       model: str(agent.model),
       maxTokens: num(agent.maxTokens),
       temperature: num(agent.temperature),
+      reasoningReplay:
+        agent.reasoningReplay === "inherit" ? undefined : replayPolicy(agent.reasoningReplay),
     },
     ...(prompt ? { prompt: [{ id: SYSTEM, text: prompt }] } : {}),
     tools: {
@@ -142,6 +165,10 @@ export function resolveConfig(settings: Settings, agent?: Agent | null): Setting
     systemPrompt: merged.systemPrompt,
     maxTokens: merged.maxTokens,
     temperature: merged.temperature,
+    // Optional in a spec, where the settings column always holds one.
+    reasoningReplay: merged.reasoningReplay
+      ? replayColumn(merged.reasoningReplay)
+      : settings.reasoningReplay,
     maxToolIterations: merged.maxToolIterations,
     // Wider in a spec than in either row: neither layer can say `proxy`, and the timeout is
     // optional there where the settings column always holds one.

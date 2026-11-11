@@ -105,6 +105,7 @@ export const settingsRow = (over: Partial<Settings> = {}): Settings => ({
   toolDiscovery: "eager",
   toolSelectModel: "",
   toolExecution: "sequential",
+  reasoningReplay: "all",
   compactionModel: "",
   runRetentionDays: 30,
   requestTimeoutSeconds: 0,

@@ -3,6 +3,7 @@ import { useRef } from "react";
 import {
   type AgentFieldsFragment,
   type AgentsQuery,
+  AgentsReasoningReplayEnum,
   AgentsToolDiscoveryEnum,
   AgentsToolExecutionEnum,
   CreateAgentDocument,
@@ -50,6 +51,7 @@ interface Draft {
   apiKey: string;
   model: string;
   systemPrompt: string;
+  reasoningReplay: AgentsReasoningReplayEnum;
   maxTokens: number | null;
   temperature: number | null;
   maxToolIterations: number | null;
@@ -74,6 +76,7 @@ const toDraft = (agent?: AgentFieldsFragment): Draft => ({
   apiKey: "",
   model: agent?.model ?? "",
   systemPrompt: agent?.systemPrompt ?? "",
+  reasoningReplay: agent?.reasoningReplay ?? AgentsReasoningReplayEnum.Inherit,
   maxTokens: shown(agent?.maxTokens ?? -1),
   temperature: shown(agent?.temperature ?? -1),
   maxToolIterations: shown(agent?.maxToolIterations ?? -1),
@@ -221,6 +224,31 @@ export function AgentDialog({
             description={doc("systemPrompt")}
             rows={3}
             placeholder="(from settings)"
+          />
+
+          <RadioGroupField
+            form={form}
+            name="reasoningReplay"
+            label="Send thinking back to the model"
+            description={doc("reasoningReplay")}
+            options={[
+              { value: AgentsReasoningReplayEnum.Inherit, label: "From settings" },
+              {
+                value: AgentsReasoningReplayEnum.All,
+                label: "All turns",
+                description: "Every reply keeps its reasoning.",
+              },
+              {
+                value: AgentsReasoningReplayEnum.ToolLoop,
+                label: "Only during tool calls",
+                description: "The final answer goes back without it.",
+              },
+              {
+                value: AgentsReasoningReplayEnum.None,
+                label: "Never",
+                description: "No reply carries its reasoning back.",
+              },
+            ]}
           />
 
           <FieldRow
