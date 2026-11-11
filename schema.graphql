@@ -1745,7 +1745,7 @@ type RunStepGroupKeys {
 }
 
 """
-Something a run's tool calls linked to as made — an MCP `resource_link` — one row per `uri` per run. Written by the runner; read-only here.
+Something a run's tool calls linked to as made — an MCP `resource_link` — one row per `uri` per run. Written by the runner; read-only here. A link is what its server said then: one since moved or deleted keeps its row, and rows go with their run when retention prunes it.
 """
 type RunArtifact {
   id: String!

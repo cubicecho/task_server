@@ -288,6 +288,25 @@ document the browser sends, printed rather than retyped — against a real datab
 escaped `%`, an enum `eq` and an `OR` across a relation mean what the controls say they mean is
 a question about SQL, and nothing in the browser can answer it.
 
+`/runs?run=<id>` narrows the list to that one run and opens it, which is what a link to a run
+from elsewhere in the app is. The filter bar shows it as a **One run** chip, and taking the chip
+off — or Clear — goes back to every run.
+
+### What a task has made
+
+A run's **Outputs** are the `resource_link`s its tool calls answered with. The task page adds
+**Produced**: the same rows across every run the task has had, one per `uri`, newest first, with
+a link to the run that last touched each — so a weekly task that rewrites one document shows it
+once, not fifty-two times. It is the generated `runArtifacts` list with `distinct: [uri]`, which
+keeps the newest row of each uri before the page is cut, so twenty rows are twenty documents.
+`tests/task-artifacts.test.ts` asks it of a real database. Two things it does not do:
+
+- **A link can go stale.** A row is what the server said when the run linked it. A document
+  moved or deleted on its server keeps its old link here; a move shows up as a new row under the
+  new uri, and the old row stays.
+- **It reaches back only as far as runs are kept.** An artifact goes with its run, so retention
+  (below) prunes this list along with the history.
+
 With several servers connected, tool definitions cost more per request than the task's own
 prompt — they are mostly JSON Schema, and every one is sent on every turn. Settings offers two
 discovery modes (`@cubicecho/agent-core`):

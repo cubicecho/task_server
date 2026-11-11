@@ -4,7 +4,8 @@ import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
 
 /** Every list a run starting, ending, being stopped or being deleted is drawn in. */
-const SHOWN_IN = ["tasks", "runs", "status"];
+// `task-artifacts` too: a deleted run takes its links with it, and a finished one may add some.
+const SHOWN_IN = ["tasks", "runs", "status", "task-artifacts"];
 
 /** Refetches every page that draws a run, for whichever mutation just changed one. */
 export function useRefreshRuns() {

@@ -57,6 +57,11 @@ const taskEditRoute = createRoute({
 const runsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/runs",
+  // `?run=<id>` narrows the list to that run and opens it, so a link can point at one — the
+  // list is newest first a page at a time, and the run a link names may be pages down it.
+  validateSearch: (search: Record<string, unknown>): { run?: string } => ({
+    run: typeof search.run === "string" && search.run ? search.run : undefined,
+  }),
   component: lazyRouteComponent(() => import("@/routes/runs"), "RunsRoute"),
 });
 

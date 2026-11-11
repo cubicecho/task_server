@@ -136,3 +136,29 @@ query LastPayload($taskId: String!) {
     payload
   }
 }
+
+# What a task has made across its runs, for the task page: one row per uri, the row the run that
+# last linked it wrote, newest first. `distinct` keeps the first row of each uri under `orderBy`,
+# before `limit` — so a weekly task rewriting one doc is one row however many runs it has, and a
+# page of twenty is twenty documents. The uri breaks a tie between links one step wrote together;
+# the driver sorts the highest `priority` first, so the tie-break is the lower number.
+query TaskArtifacts($taskId: String!, $limit: Int!) {
+  runArtifacts(
+    where: { taskId: { eq: $taskId } }
+    distinct: [uri]
+    orderBy: { updatedAt: { direction: desc, priority: 2 }, uri: { direction: asc, priority: 1 } }
+    limit: $limit
+  ) {
+    id
+    runId
+    serverId
+    serverSlug
+    uri
+    name
+    title
+    mimeType
+    lastModified
+    webUrl
+    updatedAt
+  }
+}

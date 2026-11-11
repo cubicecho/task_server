@@ -46,7 +46,8 @@ const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
   runSteps: "One step of one run: the path a run actually took through the task's tree.",
   runArtifacts:
     "Something a run's tool calls linked to as made — an MCP `resource_link` — one row per " +
-    "`uri` per run. Written by the runner; read-only here.",
+    "`uri` per run. Written by the runner; read-only here. A link is what its server said then: " +
+    "one since moved or deleted keeps its row, and rows go with their run when retention prunes it.",
   mcpServers: "An MCP server this one dials, and the tools it lends to every run.",
   settings: "The one row of server-wide defaults. Every task falls back to what is here.",
 };

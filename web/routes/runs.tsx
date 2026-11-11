@@ -1,5 +1,6 @@
 import type { HookNote, RunMetrics } from "@cubicecho/agent-core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   DeleteRunDocument,
@@ -347,6 +348,18 @@ function FilterBar({
         className="min-w-56 flex-1"
       />
 
+      {/* Shown only when a link asked for one run: no control above sets it, so this is where it
+          says so, and how it is taken off. */}
+      {filters.runId ? (
+        <Badge
+          variant="outline"
+          onRemove={() => onChange({ runId: null })}
+          removeLabel="Show every run"
+        >
+          One run
+        </Badge>
+      ) : null}
+
       {/* A rule under the first row of each of these: "any" is how the filter is turned off, not
           one of the things it filters to, and without it the two read as peers. */}
       <Combobox
@@ -402,8 +415,11 @@ function FilterBar({
 
 export function RunsRoute() {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const navigate = useNavigate();
+  // A link to one run — from a task's Produced list — arrives as `?run=`, opened and alone.
+  const { run: linked } = useSearch({ from: "/runs" });
+  const [open, setOpen] = useState<string | null>(linked ?? null);
+  const [filters, setFilters] = useState<Filters>({ ...NO_FILTERS, runId: linked ?? null });
   // The run whose body is being replayed, and the body as it stood when the dialog opened.
   const [replay, setReplay] = useState<{ run: Run; payload: unknown } | null>(null);
   const [limit, setLimit] = useState(PAGE);
@@ -442,9 +458,23 @@ export function RunsRoute() {
   // cheaper than counting the table to find out.
   const more = rows.length >= limit;
 
+  // A second link followed while the page is already showing one.
+  useEffect(() => {
+    if (linked) {
+      setFilters({ ...NO_FILTERS, runId: linked });
+      setOpen(linked);
+      setLimit(PAGE);
+    }
+  }, [linked]);
+
   const update = (patch: Partial<Filters>) => {
     setFilters((current) => ({ ...current, ...patch }));
     setLimit(PAGE);
+    // Once the one run is let go of, the address stops naming it, so a reload does not bring
+    // the filter back.
+    if (linked && patch.runId === null) {
+      navigate({ to: "/runs", search: {}, replace: true });
+    }
   };
 
   const refresh = useRefreshRuns();

@@ -40,6 +40,8 @@ export type Filters = {
   window: string;
   /** The cutoff `window` resolved to when it was chosen; null for "any time". */
   from: string | null;
+  /** One run by id, from a link that pointed at it; null for every run. */
+  runId: string | null;
 };
 
 export const NO_FILTERS: Filters = {
@@ -48,6 +50,7 @@ export const NO_FILTERS: Filters = {
   taskId: ANY,
   window: ANY,
   from: null,
+  runId: null,
 };
 
 /** Whether any control is set — which is both what to offer a Clear button for and what to
@@ -56,7 +59,8 @@ export const isFiltered = (filters: Filters) =>
   filters.search !== "" ||
   filters.status !== ANY ||
   filters.taskId !== ANY ||
-  filters.window !== ANY;
+  filters.window !== ANY ||
+  filters.runId !== null;
 
 /**
  * The controls as one `where`, or nothing at all when none of them are set.
@@ -69,6 +73,9 @@ export const isFiltered = (filters: Filters) =>
 export function buildWhere(filters: Filters, search: string): RunFilters | undefined {
   const and: RunFilters[] = [];
 
+  if (filters.runId) {
+    and.push({ id: { eq: filters.runId } });
+  }
   if (filters.taskId !== ANY) {
     and.push({ taskId: { eq: filters.taskId } });
   }

@@ -21,6 +21,7 @@ import { PageLayout } from "@/components/page-layout";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
 import { Section } from "@/components/section";
 import { StepList } from "@/components/step-editor";
+import { TaskProduced } from "@/components/task-produced";
 import { type DraftTrigger, TriggerEditor, toDraftTriggers } from "@/components/trigger-editor";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "@/components/ui/icons";
@@ -263,155 +264,163 @@ function TaskForm({ task }: { task?: TaskDetailFieldsFragment }) {
         </div>
       }
       contentSlot={
-        <form
-          id="task"
-          className="flex flex-col gap-6"
-          onSubmit={(event) => {
-            event.preventDefault();
-            form.handleSubmit();
-          }}
-        >
-          <InputField
-            form={form}
-            name="name"
-            label="Name"
-            required
-            placeholder="Morning brief"
-            validators={required("A task needs a name.")}
-          />
-
-          <div className="flex flex-col gap-2">
-            <TextareaField
-              form={form}
-              name="prompt"
-              label="Prompt"
-              required
-              description={doc("prompt")}
-              // The label row's far end, which is where a control that writes into the field
-              // belongs — beside its name rather than under the box it fills.
-              actionSlot={
-                <McpPromptButton
-                  onInsert={(text) =>
-                    form.setFieldValue("prompt", (current) => withPrompt(current, text))
-                  }
-                />
-              }
-              rows={5}
-              placeholder="Check the build status and summarise anything that broke overnight."
-              validators={required("A task needs a prompt.")}
-            />
-            {/* Only worth saying where there is a webhook to say it about — on a task started by
-                hand or on a schedule the placeholder has nothing to put there. */}
-            <form.Subscribe
-              selector={(state) => state.values.triggers.some((t) => t.kind === "event")}
-            >
-              {(hasWebhook) =>
-                hasWebhook ? (
-                  <p className="text-foreground/60 text-sm">
-                    Write <code>{"{{event}}"}</code> to place the body of the webhook that started
-                    the run. A run started any other way renders it as a note saying there was none.
-                  </p>
-                ) : null
-              }
-            </form.Subscribe>
-          </div>
-
-          <SelectField
-            form={form}
-            name="agentId"
-            label="Agent profile"
-            description={doc("agentId")}
-            options={[
-              { value: NO_AGENT, label: "Server settings" },
-              // A rule, because the first row is not one of the profiles: it is the absence of
-              // one. Flush against them it reads as a profile somebody named "Server settings".
-              { separator: true },
-              ...(agents.data?.agents ?? []).map((agent) => ({
-                value: agent.id,
-                label: (
-                  <>
-                    {agent.name}
-                    {agent.description ? (
-                      <span className="text-foreground/60"> — {agent.description}</span>
-                    ) : null}
-                  </>
-                ),
-              })),
-            ]}
-          />
-
-          {/* The model picker asks the *profile's* endpoint for its models, so it is subscribed
-              to the field above rather than reading a snapshot taken on render. */}
-          <form.Subscribe selector={(state) => state.values.agentId}>
-            {(agentId) => (
-              <FieldRow
-                contentSlot={
-                  <>
-                    <ModelSelectField
-                      form={form}
-                      name="model"
-                      label="Model"
-                      description={
-                        agentId === NO_AGENT
-                          ? doc("model")
-                          : "Empty falls back to the profile above, then to Settings."
-                      }
-                      defaultLabel={
-                        agentId === NO_AGENT ? "Default from Settings" : "Default from the profile"
-                      }
-                      agentId={agentId === NO_AGENT ? undefined : agentId}
-                    />
-                    <InputField
-                      form={form}
-                      name="systemPrompt"
-                      label="System prompt"
-                      description={doc("systemPrompt")}
-                      placeholder="(default from Settings)"
-                    />
-                  </>
-                }
-              />
-            )}
-          </form.Subscribe>
-
-          <form.Field
-            name="triggers"
-            validators={{
-              // The rows say which one and why; this is what holds the Save button.
-              onChange: ({ value }) => value.map(triggerProblem).find(Boolean),
+        <div className="flex flex-col gap-6">
+          <form
+            id="task"
+            className="flex flex-col gap-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              form.handleSubmit();
             }}
           >
-            {(field) => (
-              <TriggerEditor
-                triggers={field.state.value}
-                onChange={field.handleChange}
-                onRemoveSaved={(id) => setRemoved((current) => [...current, id])}
-              />
-            )}
-          </form.Field>
+            <InputField
+              form={form}
+              name="name"
+              label="Name"
+              required
+              placeholder="Morning brief"
+              validators={required("A task needs a name.")}
+            />
 
-          <Section
-            title="Flow"
-            description={
-              <>
-                Each step is shown what came before it. Write <code>{"{{previous}}"}</code> or{" "}
-                <code>{"{{steps.<name>}}"}</code> in a prompt to place that output yourself. A
-                decision runs like any other step — tools included — and then picks which of its
-                cases runs next.
-              </>
-            }
-            contentSlot={
-              <form.Field name="steps">
-                {(field) => (
-                  <StepList
-                    steps={field.state.value as DraftStep[]}
-                    onChange={field.handleChange}
+            <div className="flex flex-col gap-2">
+              <TextareaField
+                form={form}
+                name="prompt"
+                label="Prompt"
+                required
+                description={doc("prompt")}
+                // The label row's far end, which is where a control that writes into the field
+                // belongs — beside its name rather than under the box it fills.
+                actionSlot={
+                  <McpPromptButton
+                    onInsert={(text) =>
+                      form.setFieldValue("prompt", (current) => withPrompt(current, text))
+                    }
                   />
-                )}
-              </form.Field>
-            }
-          />
-        </form>
+                }
+                rows={5}
+                placeholder="Check the build status and summarise anything that broke overnight."
+                validators={required("A task needs a prompt.")}
+              />
+              {/* Only worth saying where there is a webhook to say it about — on a task started by
+                hand or on a schedule the placeholder has nothing to put there. */}
+              <form.Subscribe
+                selector={(state) => state.values.triggers.some((t) => t.kind === "event")}
+              >
+                {(hasWebhook) =>
+                  hasWebhook ? (
+                    <p className="text-foreground/60 text-sm">
+                      Write <code>{"{{event}}"}</code> to place the body of the webhook that started
+                      the run. A run started any other way renders it as a note saying there was
+                      none.
+                    </p>
+                  ) : null
+                }
+              </form.Subscribe>
+            </div>
+
+            <SelectField
+              form={form}
+              name="agentId"
+              label="Agent profile"
+              description={doc("agentId")}
+              options={[
+                { value: NO_AGENT, label: "Server settings" },
+                // A rule, because the first row is not one of the profiles: it is the absence of
+                // one. Flush against them it reads as a profile somebody named "Server settings".
+                { separator: true },
+                ...(agents.data?.agents ?? []).map((agent) => ({
+                  value: agent.id,
+                  label: (
+                    <>
+                      {agent.name}
+                      {agent.description ? (
+                        <span className="text-foreground/60"> — {agent.description}</span>
+                      ) : null}
+                    </>
+                  ),
+                })),
+              ]}
+            />
+
+            {/* The model picker asks the *profile's* endpoint for its models, so it is subscribed
+              to the field above rather than reading a snapshot taken on render. */}
+            <form.Subscribe selector={(state) => state.values.agentId}>
+              {(agentId) => (
+                <FieldRow
+                  contentSlot={
+                    <>
+                      <ModelSelectField
+                        form={form}
+                        name="model"
+                        label="Model"
+                        description={
+                          agentId === NO_AGENT
+                            ? doc("model")
+                            : "Empty falls back to the profile above, then to Settings."
+                        }
+                        defaultLabel={
+                          agentId === NO_AGENT
+                            ? "Default from Settings"
+                            : "Default from the profile"
+                        }
+                        agentId={agentId === NO_AGENT ? undefined : agentId}
+                      />
+                      <InputField
+                        form={form}
+                        name="systemPrompt"
+                        label="System prompt"
+                        description={doc("systemPrompt")}
+                        placeholder="(default from Settings)"
+                      />
+                    </>
+                  }
+                />
+              )}
+            </form.Subscribe>
+
+            <form.Field
+              name="triggers"
+              validators={{
+                // The rows say which one and why; this is what holds the Save button.
+                onChange: ({ value }) => value.map(triggerProblem).find(Boolean),
+              }}
+            >
+              {(field) => (
+                <TriggerEditor
+                  triggers={field.state.value}
+                  onChange={field.handleChange}
+                  onRemoveSaved={(id) => setRemoved((current) => [...current, id])}
+                />
+              )}
+            </form.Field>
+
+            <Section
+              title="Flow"
+              description={
+                <>
+                  Each step is shown what came before it. Write <code>{"{{previous}}"}</code> or{" "}
+                  <code>{"{{steps.<name>}}"}</code> in a prompt to place that output yourself. A
+                  decision runs like any other step — tools included — and then picks which of its
+                  cases runs next.
+                </>
+              }
+              contentSlot={
+                <form.Field name="steps">
+                  {(field) => (
+                    <StepList
+                      steps={field.state.value as DraftStep[]}
+                      onChange={field.handleChange}
+                    />
+                  )}
+                </form.Field>
+              }
+            />
+          </form>
+          {/* Below the form rather than in it: it is history, and nothing in it is saved. A new
+            task has made nothing yet. */}
+          {task ? <TaskProduced taskId={task.id} /> : null}
+        </div>
       }
     />
   );
