@@ -162,6 +162,36 @@ test("two steps returning one uri make one row with count 2", async () => {
   expect(rows[0].updatedAt.getTime()).toBeGreaterThanOrEqual(rows[0].createdAt.getTime());
 });
 
+test("a step that fails after its tools wrote still keeps what they wrote", async () => {
+  await echoServer();
+  const { id: taskId } = await task("runaway", "write until told to stop");
+  const iterations = (maxToolIterations: number) =>
+    client.db
+      .update(tables.settings)
+      .set({ maxToolIterations })
+      .where(eq(tables.settings.id, "default"));
+  const [{ maxToolIterations: before }] = await client.db.select().from(tables.settings);
+  await iterations(1);
+  try {
+    // One round of tools is the budget, and the model asks for a second.
+    replies = [write("doc://notes/a.md", "Notes A"), write("doc://notes/b.md", "B", "call-2")];
+
+    const run = await runner.runTask(taskId);
+    expect(run.status).toBe("error");
+
+    const [step] = await client.db
+      .select()
+      .from(tables.runSteps)
+      .where(eq(tables.runSteps.runId, run.id));
+    expect(step.status).toBe("error");
+    expect(await artifactsOf(run.id)).toMatchObject([
+      { uri: "doc://notes/a.md", title: "Notes A", runStepId: step.id },
+    ]);
+  } finally {
+    await iterations(before);
+  }
+});
+
 test("a result with no links makes no row", async () => {
   await echoServer();
   const { id: taskId } = await task("pinger", "ping the echo server");

@@ -477,7 +477,6 @@ async function execute({
       hooks,
       signal: controller.signal,
       onEvent,
-      onMetrics: collected.step,
     });
     onEvent({ kind: RunEventKind.Done, ok: true, text: "finished" });
     void hooks.end("ok", result.output);

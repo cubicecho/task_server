@@ -47,7 +47,8 @@ instead of the UI.
   server-side until it has stopped. Expanding a running run on the **Runs** page shows it
   happening — see below.
 - **run step** — what one step of the flow actually did on one run: its status, output, tools
-  and tokens, and for a decision the arm it took. This is the record of the path a run took,
+  and tokens, and for a decision the arm it took. A step stopped or failed mid-answer keeps what
+  the model had said by then as its output. This is the record of the path a run took,
   and it survives the step being edited or deleted afterwards.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
@@ -84,7 +85,8 @@ own never inherits the server's API key or `$OPENAI_API_KEY`: a credential issue
 endpoint has no business being posted to another, and "I pointed a task at a friend's server and
 it sent my OpenAI key" is not a mistake worth being able to make. Such a profile uses its own key
 or none, which is what a local server wants anyway. A profile on the *same* endpoint inherits the
-key like everything else. The key is write-only in both places — `setAgentApiKey` writes it, and
+key like everything else — and the same endpoint is the same server, so `http://host/v1/` is
+`http://host/v1` with a slash on it, not somewhere else. The key is write-only in both places — `setAgentApiKey` writes it, and
 it is excluded from the `Agent` type, so it cannot be read back out of the API.
 
 `mcpServerIds` is which MCP servers a run on the profile may reach, and an empty or absent list is

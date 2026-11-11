@@ -397,7 +397,9 @@ The key is the one column that is not a plain override. A profile naming a `base
 never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`,
 agent-core's constant for "there is no key here, do not fall through to the environment".
 A credential issued for one endpoint has no business being posted to another. A profile on the
-*same* endpoint inherits it like anything else. agent-core caches a client per endpoint for the
+*same* endpoint inherits it like anything else. The rule is agent-core's `resolveApiKey`, and
+"same" is `normalizeBaseUrl`'s: a trailing slash, the host's case and a default port are the one
+server a key was issued for, and a path in another case is not. agent-core caches a client per endpoint for the
 same reason: two profiles on two servers would otherwise evict each other's connection pool on
 every request.
 
@@ -524,8 +526,8 @@ is the run id, each executed step is a turn (the task's own prompt is turn 0, an
 `sessionStart` fires ahead of it), `sessionEnd` fires once the run's outcome is written, and
 `sessionDelete` for a run deleted by hand, with its task, or by retention. `beforeCompact`
 fires when a step's transcript is folded, which happens only on a compaction model, and it is the
-one event the *loop* fires: `HookSession.compaction` hands `runAgentLoop` a runner that passes
-`beforeCompact` through and answers every other event with nothing, since `before` and `after`
+one event the *loop* fires: `HookSession.compaction` hands `runAgentLoop` the run's hooks with
+`fire: [HookEvent.BeforeCompact]` and nothing else, since `before` and `after`
 already fire `beforeTurn` and `afterTurn` around the whole step and the loop would fire them a
 second time. Its `offset` is `step.index * 2`, where `exchange` lays the step's messages, so a
 folded message reaches a memory server under the uuid its `afterTurn` uses. A `beforeCompact`
@@ -534,7 +536,8 @@ that should outlast one run.
 
 The host side is agent-core's: `gather` before a step, `notify` after, and `withContext` putting
 what was gathered on the step's question with this server's preface, which `hooks.ts` sets once
-with `configureHooks` rather than passing at each call. What stays here is the
+with `configureHooks` rather than passing at each call; the runner each of them is handed is
+the pool's `hookRunner`, bound to the run's MCP scope. What stays here is the
 mapping and the persistence — each hook that injected or failed leaves a note on
 `run_steps.hooks`, and a failed `sessionEnd` on `runs.hooks`, since run events are gone a minute
 later. `afterTurn` and `sessionEnd` are not awaited by the run; `sessionEnd` waits for the steps'
@@ -606,10 +609,11 @@ Recovery is on: a call the model wrote into its reply as text — a
 server whose parser misses the model's template streams it as content — is run as a call rather
 than stored as the step's answer, and the watcher is told in a notice.
 `firstTokenSeconds` is set to `requestTimeoutSeconds`, where the loop would otherwise give the
-first token five times the silence it gives the rest. Tool preselection is done here rather than
-by the loop, so it reads the prompt before the hooks' context is put in front of it and the
-watcher is told what was picked
-([agent-core#150](https://github.com/cubicecho/agent-core/issues/150)).
+first token five times the silence it gives the rest. Tool preselection is the loop's
+(`preselect: true`), on the tool-selection model or the step's own where that is blank, and it
+is handed the prompt as written in `preselectQuery`: the hooks' context is already on
+`messages`, and a preselector shown both picks tools for whatever memory recalled. The loop says
+what it picked in a notice, which is what the watcher is told.
 
 The catalogue in the system prompt does not mark what is loaded. It used to, and the loop
 deliberately does not: the system prompt is then the same text on every step, so a load does not
@@ -650,14 +654,16 @@ here; an endpoint that will not say in time gets no guard, which is what every r
 step answered in prose is read back with `askJson` against a schema whose only field is an enum
 of the step's arms, so the second opinion cannot name a case that does not exist.
 
-**A step that fills its window clears its old tool results first.** `pruning.ts` is the loop's
-`beforeStep`: past `COMPACT_AT` of a window the endpoint reported, agent-core's
-`pruneToolResults` stubs every result but the latest five, and the fold — when a compaction
-model is set — then plans from what is left. A step is one question and a tool loop, and
+**A step that fills its window clears its old tool results first.** That is the loop's `prune`
+option, given `COMPACT_AT` and `PRUNE_SHARE` as its gate: past that share of a window the endpoint
+reported, every result but the latest five is stubbed, behind a boundary that moves only when
+the window fills again so a request between moves is the last one with its tail added. The fold
+— when a compaction model is set — then plans from what is left, and the boundary moves again
+after a fold, since the cache is already lost. A step is one question and a tool loop, and
 agent-core folds inside one since 4.5: the question is kept, the oldest assistant/tool pairs after
 it become a summary at the head, and the tail resumes at an assistant message.
-`tests/compaction.test.ts` runs that end to end, and it is the only test that would notice a fold
-that silently never happens — which is what this wiring did for its first release. Both rewrite the prefix and cost the prompt cache,
+`tests/compaction.test.ts` runs both end to end, and it is the only test that would notice a fold
+or a prune that silently never happens — which is what the fold's wiring did for its first release. Both rewrite the prefix and cost the prompt cache,
 which is why neither runs a little on every step, and a prune that would win back less than
 `PRUNE_SHARE` of the window is not done at all. It has no column: it makes no request, so there
 is nothing for an operator to choose to pay for, and with no window known it is inert like the
@@ -690,7 +696,9 @@ counts.
 loop collects the links beside it as the step's `artifacts`; `flow.ts` hands them to
 `server/runner/artifacts.ts`, which writes `run_artifacts`. One row per `uri` per run: the loop
 dedupes within a step, and a later step linking the same uri lands on the unique
-`(runId, uri)` index and bumps `count`, with the latest `title` winning. `webUrl` is the producing
+`(runId, uri)` index and bumps `count`, with the latest `title` winning. A step that fails or is stopped after its tools wrote keeps
+what they wrote too, read off the loop's failure (`failedRun(error).artifacts`): a write made
+before the budget ran out was made. `webUrl` is the producing
 server's `_meta["com.cubicecho/webUrl"]`, since MCP has no field for where a person views a
 thing. Hook calls never reach `dispatch` and are not captured, and links marked for the model
 alone are dropped by the pool. The table is history: `features` gives it no generated writes, it

@@ -1,6 +1,7 @@
 import {
   askJson,
   errorMessage,
+  failedRun,
   type HookNote,
   parseJson,
   type RunEventInput,
@@ -14,7 +15,7 @@ import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flo
 import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
-import { type AgentOptions, type AgentResult, runAgent } from "./agent.ts";
+import { type AgentResult, runAgent } from "./agent.ts";
 import { recordArtifacts } from "./artifacts.ts";
 import { describe, type HookSession, type HookStep } from "./hooks.ts";
 import { readPromptResources } from "./prompt-resources.ts";
@@ -286,8 +287,6 @@ export interface FlowOptions {
   hooks?: HookSession;
   signal?: AbortSignal;
   onEvent?: (event: RunEventInput) => void;
-  /** Each step's loop metrics, as `runAgent` hands them over. See `AgentOptions.onMetrics`. */
-  onMetrics?: AgentOptions["onMetrics"];
 }
 
 /**
@@ -308,7 +307,6 @@ export async function runFlow({
   hooks,
   signal,
   onEvent,
-  onMetrics,
 }: FlowOptions): Promise<FlowResult> {
   const context: ContextEntry[] = [];
   const result: FlowResult = {
@@ -439,7 +437,6 @@ export async function runFlow({
           logs.observe(event);
           emit(event);
         },
-        onMetrics,
         onElicitation: (note) => {
           if (asked.length < MAX_STEP_ELICITATIONS) {
             asked.push(note);
@@ -478,11 +475,31 @@ export async function runFlow({
       return branch;
     } catch (error) {
       const stopped = signal?.aborted === true;
+      // What the model had said when the request in flight was cut off — the answer a person
+      // watching had been shown, up to the moment they pressed stop. It is no turn the endpoint
+      // would take back, but it is what the step got to, and a row with nothing in it reads as a
+      // step that said nothing.
+      const failure = failedRun(error);
+      const partial = failure?.partial?.content;
       await close(row.id, {
         status: stopped ? "stopped" : "error",
         error: stopped ? "" : errorMessage(error),
+        ...(partial ? { output: partial } : {}),
         ...noted(),
       });
+      // A step that failed after its tools wrote still wrote: the document a call made before the
+      // budget ran out, or before the stop, exists either way. Only a failure out of the loop
+      // carries them — one after it, in the decision's read-back, was recorded above already.
+      // Logged rather than thrown, so the run is failed for what failed the step.
+      await recordArtifacts({
+        runId,
+        taskId: task.id,
+        runStepId: row.id,
+        artifacts: failure?.artifacts ?? [],
+        servers,
+      }).catch((cause: unknown) =>
+        console.error(`[run] ${plan.name}: artifacts not kept: ${errorMessage(cause)}`),
+      );
       throw error;
     }
   }

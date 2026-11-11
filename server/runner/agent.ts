@@ -1,11 +1,11 @@
 import {
   type AgentLoopHooks,
+  COMPACT_AT,
   contextLimitFor,
-  preselect,
+  PRUNE_SHARE,
   type RunArtifact,
   type RunEventInput,
   RunEventKind,
-  type RunMetrics,
   runAgentLoop,
   type ToolCallRequest,
   withContext,
@@ -15,7 +15,6 @@ import type { Settings } from "../db/schema.ts";
 import { declineUnattended } from "./elicitations.ts";
 import { mcp } from "./mcp.ts";
 import { replayPolicy } from "./profile.ts";
-import { pruneWhenFilling } from "./pruning.ts";
 
 /** What a step produced and what it cost — and, summed over its steps, what a whole flow did. */
 export interface AgentResult {
@@ -49,12 +48,6 @@ export interface AgentOptions {
   signal?: AbortSignal;
   /** Called as the run happens, for whoever is watching it. See `@cubicecho/agent-core`. */
   onEvent?: (event: RunEventInput) => void;
-  /**
-   * Handed the loop's own metrics once the step has its answer, with the window it was served.
-   * The run's metrics are summed from its events, which carry everything but what `load_tools`
-   * resolved to and which window each step's model had — this is how those two get out.
-   */
-  onMetrics?: (metrics: RunMetrics, contextLength: number) => void;
   /**
    * Handed each question a tool call's server asked mid-call, once it has been declined. Said on
    * the stream as a notice either way; this is how the step keeps it.
@@ -95,7 +88,6 @@ export async function runAgent({
   servers,
   signal,
   onEvent,
-  onMetrics,
   onElicitation,
   hooks,
   session,
@@ -116,27 +108,12 @@ export async function runAgent({
   // `trustAnnotations`. Fails closed: anything the pool cannot vouch for is a write.
   const reads = (call: ToolCallRequest) => mcp.readsOnly(call.name, { servers });
 
-  // Chosen here rather than by the loop, for two things the loop's own preselection does not do:
-  // it reads the prompt as written, before the hooks' context is put in front of it, and the
-  // watcher is told what was picked (agent-core#150). Guessing wrong is cheap — an unused definition costs a few
-  // hundred tokens for one run, and the model can still load what it actually wanted.
-  const preselected =
-    config.toolDiscovery === "ondemand"
-      ? await preselect(config, config.toolSelectModel || model, catalog, prompt, {
-          signal,
-          onNotice: notice,
-        })
-      : [];
-  if (preselected.length) {
-    notice(`tools picked before the run: ${preselected.join(", ")}`);
-  }
-
   // What the model will read, so a request that cannot fit is refused here with its size rather
   // than by the endpoint a round trip later. Zero where the endpoint does not say, or not within
   // agent-core's own bound on the lookup, which guards nothing; a stop ends the wait with the run.
   const contextLength = await contextLimitFor({ ...config, model }, 0, { signal });
 
-  const { turn, toolCalls, usage, metrics, artifacts } = await runAgentLoop({
+  const { turn, toolCalls, usage, artifacts } = await runAgentLoop({
     // A step may run on a model other than the settings row's. The first token gets the same
     // patience as every one after it, where the loop would otherwise wait five times as long.
     config: {
@@ -158,7 +135,14 @@ export async function runAgent({
     messages: withContext([{ role: "user", content: prompt }], 0, context),
     tools: mcp.tools({ servers }),
     catalog,
-    preselected,
+    // On demand, the loop asks the tool-selection model — the step's own where none is set — which
+    // tools the prompt needs, and says what it picked in a notice. It is asked the prompt as
+    // written: the hooks' context is already on `messages`, and tools picked for what memory
+    // recalled are tools for a question nobody asked. Guessing wrong is cheap — an unused
+    // definition costs a few hundred tokens for one run, and the model can still load what it
+    // actually wanted.
+    preselect: true,
+    preselectQuery: prompt,
     // A decision, not a default nobody looked at. Sorted by name, a tool loaded on demand lands
     // mid-array and moves every definition after it, where unsorted it is appended and the
     // prefix an endpoint cached still matches.
@@ -181,19 +165,13 @@ export async function runAgent({
     compact: Boolean(config.compactionModel),
     // Only ever `beforeCompact`: see `compaction` in `hooks.ts`.
     ...(hooks ? { hooks } : {}),
-    // Needs no model, so it is on wherever the window is known. It runs ahead of the fold, which
-    // then plans from what is left: a prune that brings the run back under the line spares it the
-    // summary's round trip.
-    beforeStep: (messages, _step, window) => {
-      const pruned = pruneWhenFilling(messages, window);
-      if (pruned) {
-        notice(
-          `cleared ${pruned.cleared} old tool result${pruned.cleared === 1 ? "" : "s"} ` +
-            `(~${pruned.tokens} tokens) as the window filled`,
-        );
-      }
-      return pruned?.messages;
-    },
+    // Needs no model, so it is on wherever the window is known. Old tool results are stubbed
+    // past `COMPACT_AT` of the window, and only for at least `PRUNE_SHARE` of it: the stubs
+    // rewrite the prefix, and a prune that wins back a few hundred tokens costs the endpoint its
+    // cache of everything after them. It runs ahead of the fold, which then plans from what is
+    // left, so a prune that brings the run back under the line spares it the summary's round
+    // trip. Each one is said as a notice.
+    prune: { at: COMPACT_AT, minShare: PRUNE_SHARE },
     // The loop hands each call the run's signal. Passed on, a stop sends the server the
     // protocol's `notifications/cancelled` and the call rejects at once; dropped, the tool ran to
     // its end or the call timeout, and a write the person stopped still landed.
@@ -229,8 +207,6 @@ export async function runAgent({
       onEvent?.(event);
     },
   });
-
-  onMetrics?.(metrics, contextLength);
 
   return {
     output: turn.content,
