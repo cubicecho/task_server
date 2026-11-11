@@ -1,6 +1,6 @@
 import { type GraphQLSchema, graphql, print } from "graphql";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { buildWhere, NO_FILTERS, pickWindow } from "@/lib/run-filters";
+import { buildWhere, isFiltered, NO_FILTERS, pickWindow } from "@/lib/run-filters";
 import { RunsDocument } from "../web/__generated__/graphql/graphql.ts";
 import { dataDir } from "./helpers.ts";
 
@@ -91,7 +91,8 @@ const ask = async (filters: Partial<typeof NO_FILTERS>, search = "", limit = 50)
     variableValues: { where, limit },
   });
   expect(result.errors).toBeUndefined();
-  return (result.data as { runs: { status: string; output: string; error: string }[] }).runs;
+  return (result.data as { runs: { id: string; status: string; output: string; error: string }[] })
+    .runs;
 };
 
 test("no controls set asks for no filter at all, and gets the list newest first", async () => {
@@ -169,4 +170,12 @@ test("the controls narrow each other rather than replacing each other", async ()
     "budget",
   );
   expect(runs.map((run) => run.output)).toEqual(["finished at 100% of budget"]);
+});
+
+// A task's Produced list links to the run that last wrote a document, and that run may be pages
+// down a list that is newest first — so the link narrows to it rather than hoping it is on screen.
+test("a link to one run lists that run and nothing else", async () => {
+  const [, second] = await ask({});
+  expect(isFiltered({ ...NO_FILTERS, runId: second.id })).toBe(true);
+  expect(await ask({ runId: second.id })).toEqual([second]);
 });

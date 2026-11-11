@@ -620,6 +620,14 @@ alone are dropped by the pool. The table is history: `features` gives it no gene
 goes with its run by cascade, reads are open to an agent, and it is not in `TOOLS`. No regexes
 over result text, and no `record_artifact` tool — see #98 for why.
 
+The task page's **Produced** is the same table across runs, and the generated list says it:
+`TaskArtifacts` in `web/graphql/tasks.graphql` asks `runArtifacts` with `distinct: [uri]`, which
+keeps the first row of each uri under `orderBy` *before* `limit`, so the latest per uri, newest
+first, needs no hand-written field and no client-side dedupe. `tests/task-artifacts.test.ts` holds
+that rule against a real database. The driver sorts the highest `priority` first, so a tie-break
+takes the lower number. A row links to its run as `/runs?run=<id>`, which narrows the runs list
+to that run and opens it. Stale links and retention are accepted, and written in `docs.ts`.
+
 **Frontend:** shadcn primitives in `web/components/ui/` with no app logic; routes in
 `web/routes/`; `@/` maps to `web/`. Every query goes through `request()` in `web/lib/gql.ts`
 with a typed document — no raw `fetch` in a component — and every mutation invalidates the
