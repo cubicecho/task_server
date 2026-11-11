@@ -1,4 +1,5 @@
 import { errorMessage, fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
+import { McpPoolError } from "@cubicecho/agent-mcp-pool";
 import { buildSchema, extractFilters, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import { applyPermissions } from "@vantreeseba/graphql-casl";
 import { eq, inArray } from "drizzle-orm";
@@ -29,6 +30,7 @@ import { hookProblems, runsDeleted } from "../runner/hooks.ts";
 import { listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
 import * as mcpPrompts from "../runner/mcp-prompts.ts";
+import * as mcpResources from "../runner/mcp-resources.ts";
 import { resolveConfig } from "../runner/profile.ts";
 import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
@@ -50,6 +52,7 @@ import {
   McpConnectionInput,
   McpProbeType,
   McpPromptType,
+  McpResourceType,
   McpServerStatusType,
   RunEventType,
   ScheduleEntryType,
@@ -58,6 +61,28 @@ import {
 
 /** How much of a run's log `runEvents` hands back when the caller names no limit. */
 const DEFAULT_EVENT_LIMIT = 200;
+
+/** What the pool's refusals to read a resource mean to the person who pressed Preview. */
+const UNREADABLE: Partial<Record<McpPoolError["code"], string>> = {
+  unsupported: "does not serve resources, so nothing it made can be previewed",
+  "unknown-server": "is not configured here any more",
+  disabled: "is disabled",
+};
+
+/**
+ * A refusal the pool can name, as a sentence a dialog can show; anything else as it was thrown.
+ * A plain `Error` reaches the client as "Internal server error", which says nothing about a
+ * server that simply never offered resources. What the server itself answers — a uri it no
+ * longer has — passes through in its own words.
+ */
+function unreadable(error: unknown, serverId: string): unknown {
+  const reason = error instanceof McpPoolError ? UNREADABLE[error.code] : undefined;
+  if (!reason) {
+    return error;
+  }
+  const slug = mcp.state().find((server) => server.id === serverId)?.slug;
+  return refusal("UNSUPPORTED", `The MCP server ${slug ?? serverId} ${reason}.`);
+}
 
 /** `McpConnectionInput` as it arrives: both arms' fields, all of them optional but the transport. */
 type McpConnectionArgs = {
@@ -494,6 +519,29 @@ const baseSchema = new GraphQLSchema({
         },
         resolve: (_source, args: { server: string; name: string; args?: unknown }) =>
           mcpPrompts.get(args.server, args.name, (args.args ?? {}) as Record<string, string>),
+      },
+      mcpResource: {
+        type: new GraphQLNonNull(McpResourceType),
+        description:
+          "One resource read back from an MCP server with `resources/read` — a run's artifact, " +
+          "previewed. Read fresh, so a document edited since the run reads as it is now. Text " +
+          "only: binary contents are named, not sent. Refused with `UNSUPPORTED` for a server " +
+          "that does not serve resources, or is disabled or gone.",
+        args: {
+          serverId: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The MCP server row's id — an artifact's `serverId`.",
+          },
+          uri: { type: new GraphQLNonNull(GraphQLString) },
+        },
+        resolve: async (_source, args: { serverId: string; uri: string }) => {
+          try {
+            const read = await mcpResources.read(args.serverId, args.uri);
+            return { ...read, mimeType: read.mimeType ?? "" };
+          } catch (error) {
+            throw unreadable(error, args.serverId);
+          }
+        },
       },
       schedule: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(ScheduleEntryType))),

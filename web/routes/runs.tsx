@@ -20,6 +20,7 @@ import { List } from "@/components/list";
 import { LoadState } from "@/components/load-state";
 import { PageLayout } from "@/components/page-layout";
 import { RunDialog } from "@/components/run-dialog";
+import { RunOutputs } from "@/components/run-outputs";
 import { RunStream } from "@/components/run-stream";
 import { StatTile } from "@/components/stat-tile";
 import { Alert } from "@/components/ui/alert";
@@ -307,6 +308,7 @@ function RunDetail({
       )}
       <HookNotes notes={found.hooks} />
       {withResult ? <Metrics metrics={found.metrics} /> : null}
+      {withResult ? <RunOutputs detail={found} /> : null}
       {withResult ? result : null}
     </>
   );
@@ -525,6 +527,9 @@ export function RunsRoute() {
                               {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
                               {/* Only worth saying when the row stands for more than the one firing. */}
                               {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
+                              {run.artifactsAggregate.count
+                                ? ` · ${run.artifactsAggregate.count} output${run.artifactsAggregate.count > 1 ? "s" : ""}`
+                                : ""}
                             </span>
                             <Provenance trigger={run.trigger} />
                           </>

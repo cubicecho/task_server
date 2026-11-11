@@ -103,6 +103,32 @@ export const McpPromptType = new GraphQLObjectType({
   },
 });
 
+export const McpResourceType = new GraphQLObjectType({
+  name: "McpResource",
+  description:
+    "One resource read back from the MCP server that serves it, as text and as it is now — not " +
+    "as it was when a run linked to it.",
+  fields: {
+    uri: { type: new GraphQLNonNull(GraphQLString) },
+    mimeType: {
+      type: new GraphQLNonNull(GraphQLString),
+      description:
+        "The contents' type where every part the server answered with agreed on one. Empty " +
+        "where it gave none, or where the parts disagreed.",
+    },
+    text: {
+      type: new GraphQLNonNull(GraphQLString),
+      description:
+        "Text parts verbatim, joined by newlines. A binary part is named with its type and " +
+        "size in brackets, never sent.",
+    },
+    truncated: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description: "Whether `text` was cut to the preview's limit.",
+    },
+  },
+});
+
 export const McpConnectionInput = new GraphQLInputObjectType({
   name: "McpConnectionInput",
   description: "How to reach an MCP server — the connection half of a row, without its identity.",

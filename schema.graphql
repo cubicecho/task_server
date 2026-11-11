@@ -5512,6 +5512,15 @@ type Query {
   ): String!
 
   """
+  One resource read back from an MCP server with `resources/read` — a run's artifact, previewed. Read fresh, so a document edited since the run reads as it is now. Text only: binary contents are named, not sent. Refused with `UNSUPPORTED` for a server that does not serve resources, or is disabled or gone.
+  """
+  mcpResource(
+    """The MCP server row's id — an artifact's `serverId`."""
+    serverId: String!
+    uri: String!
+  ): McpResource!
+
+  """
   When each armed cron trigger fires next, read from the running scheduler rather than the table — so it answers what will happen, not what was asked for. A `cron` trigger missing here is not armed, which usually means it or its task is disabled. `event` triggers never appear; they fire on a webhook, not a clock.
   """
   schedule: [ScheduleEntry!]!
@@ -5915,6 +5924,26 @@ type McpPromptArgument {
   name: String!
   description: String!
   required: Boolean!
+}
+
+"""
+One resource read back from the MCP server that serves it, as text and as it is now — not as it was when a run linked to it.
+"""
+type McpResource {
+  uri: String!
+
+  """
+  The contents' type where every part the server answered with agreed on one. Empty where it gave none, or where the parts disagreed.
+  """
+  mimeType: String!
+
+  """
+  Text parts verbatim, joined by newlines. A binary part is named with its type and size in brackets, never sent.
+  """
+  text: String!
+
+  """Whether `text` was cut to the preview's limit."""
+  truncated: Boolean!
 }
 
 """A cron trigger that is currently armed, and when it next fires."""
