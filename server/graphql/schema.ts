@@ -62,26 +62,53 @@ import {
 /** How much of a run's log `runEvents` hands back when the caller names no limit. */
 const DEFAULT_EVENT_LIMIT = 200;
 
-/** What the pool's refusals to read a resource mean to the person who pressed Preview. */
-const UNREADABLE: Partial<Record<McpPoolError["code"], string>> = {
-  unsupported: "does not serve resources, so nothing it made can be previewed",
+/** The pool's refusals that are about the server row rather than what was asked of it. */
+const GONE: Partial<Record<McpPoolError["code"], string>> = {
   "unknown-server": "is not configured here any more",
   disabled: "is disabled",
 };
+
+/** What the pool's refusals to read a resource mean to the person who pressed Preview. */
+const UNREADABLE = {
+  ...GONE,
+  unsupported: "does not serve resources, so nothing it made can be previewed",
+};
+
+/** And to expand a prompt, for the person who picked one. */
+const UNEXPANDABLE = { ...GONE, unsupported: "does not offer prompts" };
 
 /**
  * A refusal the pool can name, as a sentence a dialog can show; anything else as it was thrown.
  * A plain `Error` reaches the client as "Internal server error", which says nothing about a
  * server that simply never offered resources. What the server itself answers — a uri it no
- * longer has — passes through in its own words.
+ * longer has, a prompt argument missing — passes through in its own words.
  */
-function unreadable(error: unknown, serverId: string): unknown {
-  const reason = error instanceof McpPoolError ? UNREADABLE[error.code] : undefined;
+function poolRefusal(
+  error: unknown,
+  serverId: string,
+  reasons: Partial<Record<McpPoolError["code"], string>>,
+): unknown {
+  const reason = error instanceof McpPoolError ? reasons[error.code] : undefined;
   if (!reason) {
     return error;
   }
   const slug = mcp.state().find((server) => server.id === serverId)?.slug;
   return refusal("UNSUPPORTED", `The MCP server ${slug ?? serverId} ${reason}.`);
+}
+
+/**
+ * A prompt's arguments as a `JSON` argument brings them, cut to what the protocol takes: every
+ * argument is a string, and anything else in the object is not one the template declared.
+ */
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
 }
 
 /** `McpConnectionInput` as it arrives: both arms' fields, all of them optional but the transport. */
@@ -497,7 +524,7 @@ const baseSchema = new GraphQLSchema({
           "author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` " +
           "and the text becomes a task's or a step's prompt, editable before it is saved. " +
           "Empty when no connected server offers any; a server that cannot be listed is left " +
-          "out rather than failing the query.",
+          "out rather than failing the query. Each server's list is read to its last page.",
         resolve: () => mcpPrompts.list(),
       },
       mcpPrompt: {
@@ -505,7 +532,8 @@ const baseSchema = new GraphQLSchema({
         description:
           "One prompt from `mcpPrompts`, expanded with the arguments given and flattened to " +
           "the single string a prompt is. A template that answers with more than one message " +
-          "comes back with its roles labelled.",
+          "comes back with its roles labelled. Refused with `UNSUPPORTED` for a server that " +
+          "does not offer prompts, or is disabled or gone.",
         args: {
           server: {
             type: new GraphQLNonNull(GraphQLString),
@@ -517,8 +545,65 @@ const baseSchema = new GraphQLSchema({
             description: "The prompt's arguments by name. Absent is the same as none.",
           },
         },
-        resolve: (_source, args: { server: string; name: string; args?: unknown }) =>
-          mcpPrompts.get(args.server, args.name, (args.args ?? {}) as Record<string, string>),
+        resolve: async (_source, args: { server: string; name: string; args?: unknown }) => {
+          try {
+            return await mcpPrompts.get(args.server, args.name, stringRecord(args.args));
+          } catch (error) {
+            throw poolRefusal(error, args.server, UNEXPANDABLE);
+          }
+        },
+      },
+      mcpPromptCompletion: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))),
+        description:
+          "What the server behind a prompt from `mcpPrompts` suggests for one of its " +
+          "arguments, given what has been typed into it so far — at most a hundred, in the " +
+          "server's order. Empty, never an error, for a server that cannot complete.",
+        args: {
+          server: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The MCP server row's id, as `mcpPrompts` reports it.",
+          },
+          name: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The prompt's name.",
+          },
+          argument: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The argument being filled in.",
+          },
+          value: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "What is in it so far. Empty asks for the server's opening suggestions.",
+          },
+          context: {
+            type: GraphQLJSON,
+            description:
+              "The arguments already filled in, by name, which a server may narrow by — a " +
+              "folder before the document in it. Absent is the same as none.",
+          },
+        },
+        resolve: async (
+          _source,
+          args: {
+            server: string;
+            name: string;
+            argument: string;
+            value: string;
+            context?: unknown;
+          },
+        ) => {
+          try {
+            return await mcpPrompts.complete(
+              args.server,
+              args.name,
+              { name: args.argument, value: args.value },
+              stringRecord(args.context),
+            );
+          } catch (error) {
+            throw poolRefusal(error, args.server, UNEXPANDABLE);
+          }
+        },
       },
       mcpResource: {
         type: new GraphQLNonNull(McpResourceType),
@@ -539,7 +624,7 @@ const baseSchema = new GraphQLSchema({
             const read = await mcpResources.read(args.serverId, args.uri);
             return { ...read, mimeType: read.mimeType ?? "" };
           } catch (error) {
-            throw unreadable(error, args.serverId);
+            throw poolRefusal(error, args.serverId, UNREADABLE);
           }
         },
       },

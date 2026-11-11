@@ -187,20 +187,22 @@ A template resolved at run time would be a prompt whose text nobody can read bac
 Insert appends after a blank line rather than replacing, since the half-written prompt in the
 box is usually what sent somebody looking for a template.
 
-`server/runner/mcp-prompts.ts` is the whole of the server side. It asks only the servers whose
-handshake declared the `prompts` capability — the SDK refuses to send `prompts/list` to one that
-did not, so a `try` around every server would turn "offers no prompts" into an error per server
-per listing — and it goes through `mcp.client(id)` rather than the pool's tool path — one of the two places in
-this server that reach past tools into the rest of the protocol, the other being the preview of a
-run's outputs. A template
-answers with a list of messages; a picker takes one string. One message unwraps verbatim, several
-are joined with their roles in front (`assistant: …`), and content that carries no text at all —
-an image, a resource link — is named in square brackets rather than dropped, because a gap where
-it was would read as a template that simply said less.
+`server/runner/mcp-prompts.ts` is the whole of the server side, and it is thin: the pool's
+`prompts()`, `expandPrompt()` and `complete()` do the protocol work. Only the servers whose
+handshake declared the `prompts` capability are asked, and each list is read to its last page. A
+template answers with a list of messages; a picker takes one string. One message unwraps
+verbatim, several are joined with their roles in front (`assistant: …`), and content that carries
+no text at all — an image, a resource link — is named in square brackets rather than dropped,
+because a gap where it was would read as a template that simply said less. That rule is the
+pool's `promptText`, shared with every other host that puts a prompt in a box.
 
-The two fields are `mcpPrompts` and `mcpPrompt(server:, name:, args:)`, and both are the
-operator's, alongside `mcpStatus`: the listing is which servers this one dials and what each of
-them is for. They are not on the `/mcp` surface. An agent writing a task through that endpoint
+Each argument is a box you type into, with what the server suggests for it underneath — a server
+that supports completion is asked once typing pauses, and is told the arguments above it, so it
+can narrow a document by the folder already picked. A server that does not just offers nothing.
+
+The three fields are `mcpPrompts`, `mcpPrompt(server:, name:, args:)` and
+`mcpPromptCompletion(server:, name:, argument:, value:, context:)`, and all are the operator's,
+alongside `mcpStatus`: the listing is which servers this one dials and what each of them is for. They are not on the `/mcp` surface. An agent writing a task through that endpoint
 writes the prompt itself, which is the same text it would have got.
 
 ## Watching a run

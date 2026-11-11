@@ -164,8 +164,9 @@ compatibility pass, on-demand tool loading, the step loop that drives all of the
 reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
 `profile.ts` lays an agent profile over settings, `agent.ts` maps one step onto `runAgentLoop`
 and `flow.ts` drives the steps.
-`mcp-prompts.ts` and `mcp-resources.ts` are the two things here that reach past tools into the
-rest of the protocol, and both answer a person rather than a run — see below.
+`mcp-prompts.ts` and `mcp-resources.ts` answer a person rather than a run from the rest of the
+protocol, and neither reaches past the pool to do it: listing, expansion, completion and reads
+are the pool's — see below.
 `mcp.ts` also says who this process is — `clientName` and `clientVersion` are the `clientInfo` of
 every handshake, and the whole of what a dialled server can log or gate on. The version is
 `package.json`'s, the same string `/mcp` answers a client with; left unset the pool reports its
@@ -457,22 +458,29 @@ bundle beside it is both guarded tables in one answer. The preview is gated as t
 since it answers which slugs are servers here.
 
 **An MCP prompt is expanded into a prompt box, not resolved at run time.**
-`server/runner/mcp-prompts.ts` reads `prompts/list` and `prompts/get` off `mcp.client(id)` —
-past the pool's tool path, which only it and the resource preview below do — and the web app's
-`McpPromptButton` sits beside the task prompt and every step's. What the task stores is the
+`server/runner/mcp-prompts.ts` is the pool's `prompts()`, `expandPrompt()` and `complete()` with
+each server's label put on the rows, and the web app's `McpPromptButton` sits beside the task
+prompt and every step's. What the task stores is the
 expanded text: readable on the page, editable afterwards, and unable to change under a working
 task because a server's author rephrased their template. Prompts are the user-controlled half of
 the protocol, so they reach a person as a menu item and never a run as a tool.
 
-Only servers whose handshake declared the `prompts` capability are asked. The SDK refuses to send
-`prompts/list` to one that did not, so a `try` per server would make "offers no prompts" an error
-per server per listing, indistinguishable from a broken one. A template answers with messages and
-a prompt box takes one string: one message unwraps verbatim, several are joined with their roles
-in front, and non-text content is named in brackets rather than dropped.
+The rules are the pool's and are not restated here. `prompts()` asks only the servers whose
+handshake declared `prompts` and reads each list to its last page; a server that fails to answer
+is a server with none in the picker. `expandPrompt()` flattens the messages by `promptText` —
+one verbatim, several with their roles in front, non-text named in brackets — and refuses a
+server that offers no prompts with `unsupported`, which the resolver turns into an `UNSUPPORTED`
+refusal the dialog shows, as it does for the resource preview. `mcpPromptCompletion` is the
+pool's `complete()`: each argument in the picker is a free-text `Combobox` whose rows are what
+the server suggests for the text typed so far, asked once typing pauses and only while the menu
+is open, with the arguments above it as `context` so a server can narrow a later one by an
+earlier one. A server that cannot complete answers none rather than an error. The search text
+reaches the picker through `onSearchChange`, a local addition to the vendored `combobox.tsx`
+until cubeui ships one — check a refresh did not drop it.
 
-`mcpPrompts` and `mcpPrompt` are the operator's, with `mcpStatus` and for its reason — the
-listing is which servers this one dials and what each is for — and are deliberately not in
-`TOOLS`. An agent writing a task through `/mcp` writes the prompt itself.
+`mcpPrompts`, `mcpPrompt` and `mcpPromptCompletion` are the operator's, with `mcpStatus` and for
+its reason — the listing is which servers this one dials and what each is for — and are
+deliberately not in `TOOLS`. An agent writing a task through `/mcp` writes the prompt itself.
 
 **A run's artifact is previewed from its server, fresh.** `mcpResource(serverId, uri)` is the
 Outputs section's Preview on the runs page: `server/runner/mcp-resources.ts` calls the pool's
