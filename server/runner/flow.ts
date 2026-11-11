@@ -12,6 +12,7 @@ import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flo
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
 import { type AgentOptions, type AgentResult, runAgent } from "./agent.ts";
+import { recordArtifacts } from "./artifacts.ts";
 import { describe, type HookSession, type HookStep } from "./hooks.ts";
 
 /**
@@ -246,6 +247,12 @@ interface Plan {
   depth: number;
 }
 
+/**
+ * What a whole flow did, summed over its steps. Its artifacts are not here: a uri two steps
+ * linked to is one artifact of the run, and the one place that is so is `run_artifacts`.
+ */
+export type FlowResult = Omit<AgentResult, "artifacts">;
+
 export interface FlowOptions {
   runId: string;
   task: Task;
@@ -283,9 +290,9 @@ export async function runFlow({
   signal,
   onEvent,
   onMetrics,
-}: FlowOptions): Promise<AgentResult> {
+}: FlowOptions): Promise<FlowResult> {
   const context: ContextEntry[] = [];
-  const result: AgentResult = {
+  const result: FlowResult = {
     output: "",
     toolCalls: [],
     promptTokens: 0,
@@ -380,6 +387,15 @@ export async function runFlow({
         onMetrics,
         hooks: loopHooks,
       });
+      // Before the decision is read back, which can still fail the step: what the tools made
+      // was made either way.
+      await recordArtifacts({
+        runId,
+        taskId: task.id,
+        runStepId: row.id,
+        artifacts: agentResult.artifacts,
+        servers,
+      });
 
       result.toolCalls.push(...agentResult.toolCalls);
       result.promptTokens += agentResult.promptTokens;
@@ -388,7 +404,7 @@ export async function runFlow({
       result.output = agentResult.output;
       context.push({ name: plan.name, output: agentResult.output });
 
-      const { output, ...tokens } = agentResult;
+      const { output, artifacts: _artifacts, ...tokens } = agentResult;
       let branch: string | undefined;
       if (plan.kind === "decision") {
         branch = await resolveCase(plan, output, emit);

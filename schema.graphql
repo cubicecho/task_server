@@ -1183,6 +1183,19 @@ type Run {
     distinct: [RunStepDistinctColumn!]
   ): [RunStep!]!
   stepsAggregate(where: RunStepFilters): RunStepAggregate!
+  artifacts(
+    where: RunArtifactFilters
+    orderBy: RunArtifactOrderBy
+    offset: Int
+    limit: Int
+
+    """
+    Keyset pagination: only return related rows strictly after this cursor (a row's `cursor` field from a previous page of this relation, under the same orderBy).
+    """
+    after: String
+    distinct: [RunArtifactDistinctColumn!]
+  ): [RunArtifact!]!
+  artifactsAggregate(where: RunArtifactFilters): RunArtifactAggregate!
 }
 
 enum RunsStatusEnum {
@@ -1225,6 +1238,27 @@ enum RunStepDistinctColumn {
   promptTokens
   completionTokens
   totalTokens
+}
+
+"""Columns of RunArtifact that a query can be made distinct on"""
+enum RunArtifactDistinctColumn {
+  id
+  runId
+  runStepId
+  taskId
+  serverId
+  serverSlug
+  tool
+  uri
+  name
+  title
+  mimeType
+  description
+  lastModified
+  webUrl
+  count
+  createdAt
+  updatedAt
 }
 
 type RunAggregate {
@@ -1463,6 +1497,19 @@ type RunStep {
   """
   cursor: String
   run(where: RunFilters): Run!
+  artifacts(
+    where: RunArtifactFilters
+    orderBy: RunArtifactOrderBy
+    offset: Int
+    limit: Int
+
+    """
+    Keyset pagination: only return related rows strictly after this cursor (a row's `cursor` field from a previous page of this relation, under the same orderBy).
+    """
+    after: String
+    distinct: [RunArtifactDistinctColumn!]
+  ): [RunArtifact!]!
+  artifactsAggregate(where: RunArtifactFilters): RunArtifactAggregate!
 }
 
 enum RunStepsStatusEnum {
@@ -1695,6 +1742,328 @@ type RunStepGroupKeys {
   promptTokens: Int
   completionTokens: Int
   totalTokens: Int
+}
+
+"""
+Something a run's tool calls linked to as made — an MCP `resource_link` — one row per `uri` per run. Written by the runner; read-only here.
+"""
+type RunArtifact {
+  id: String!
+
+  """The run that produced it."""
+  runId: String!
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: String
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: String!
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: String
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: String!
+
+  """The tool that linked to it, by the server's own name."""
+  tool: String!
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: String!
+
+  """The link's `name`."""
+  name: String!
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: String!
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: String!
+
+  """The link's `description`, where the server gave one."""
+  description: String!
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTime
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: String!
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: Int!
+
+  """When this run first linked to it."""
+  createdAt: DateTime!
+
+  """When this run last linked to it."""
+  updatedAt: DateTime!
+
+  """
+  Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
+  """
+  cursor: String
+  run(where: RunFilters): Run!
+  step(where: RunStepFilters): RunStep
+}
+
+type RunArtifactAggregate {
+  count: Int!
+  avg: RunArtifactAvgAggregate
+  sum: RunArtifactSumAggregate
+  min: RunArtifactMinAggregate
+  max: RunArtifactMaxAggregate
+  countNonNull: RunArtifactCountNonNullAggregate
+  countDistinct: RunArtifactCountDistinctAggregate
+}
+
+type RunArtifactAvgAggregate {
+  count: Float
+}
+
+type RunArtifactSumAggregate {
+  count: Float
+}
+
+type RunArtifactMinAggregate {
+  id: String
+
+  """The run that produced it."""
+  runId: String
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: String
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: String
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: String
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: String
+
+  """The tool that linked to it, by the server's own name."""
+  tool: String
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: String
+
+  """The link's `name`."""
+  name: String
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: String
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: String
+
+  """The link's `description`, where the server gave one."""
+  description: String
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTime
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: String
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: Int
+
+  """When this run first linked to it."""
+  createdAt: DateTime
+
+  """When this run last linked to it."""
+  updatedAt: DateTime
+}
+
+type RunArtifactMaxAggregate {
+  id: String
+
+  """The run that produced it."""
+  runId: String
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: String
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: String
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: String
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: String
+
+  """The tool that linked to it, by the server's own name."""
+  tool: String
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: String
+
+  """The link's `name`."""
+  name: String
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: String
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: String
+
+  """The link's `description`, where the server gave one."""
+  description: String
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTime
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: String
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: Int
+
+  """When this run first linked to it."""
+  createdAt: DateTime
+
+  """When this run last linked to it."""
+  updatedAt: DateTime
+}
+
+type RunArtifactCountNonNullAggregate {
+  id: Int!
+  runId: Int!
+  runStepId: Int!
+  taskId: Int!
+  serverId: Int!
+  serverSlug: Int!
+  tool: Int!
+  uri: Int!
+  name: Int!
+  title: Int!
+  mimeType: Int!
+  description: Int!
+  lastModified: Int!
+  webUrl: Int!
+  count: Int!
+  createdAt: Int!
+  updatedAt: Int!
+}
+
+type RunArtifactCountDistinctAggregate {
+  id: Int!
+  runId: Int!
+  runStepId: Int!
+  taskId: Int!
+  serverId: Int!
+  serverSlug: Int!
+  tool: Int!
+  uri: Int!
+  name: Int!
+  title: Int!
+  mimeType: Int!
+  description: Int!
+  lastModified: Int!
+  webUrl: Int!
+  count: Int!
+  createdAt: Int!
+  updatedAt: Int!
+}
+
+type RunArtifactGroupBy {
+  group: RunArtifactGroupKeys!
+  count: Int!
+  avg: RunArtifactAvgAggregate
+  sum: RunArtifactSumAggregate
+  min: RunArtifactMinAggregate
+  max: RunArtifactMaxAggregate
+  countNonNull: RunArtifactCountNonNullAggregate
+  countDistinct: RunArtifactCountDistinctAggregate
+}
+
+"""
+The grouped column values of one RunArtifact group. A column the query did not group by is null.
+"""
+type RunArtifactGroupKeys {
+  id: String
+
+  """The run that produced it."""
+  runId: String
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: String
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: String
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: String
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: String
+
+  """The tool that linked to it, by the server's own name."""
+  tool: String
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: String
+
+  """The link's `name`."""
+  name: String
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: String
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: String
+
+  """The link's `description`, where the server gave one."""
+  description: String
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTime
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: String
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: Int
+
+  """When this run first linked to it."""
+  createdAt: DateTime
+
+  """When this run last linked to it."""
+  updatedAt: DateTime
 }
 
 """An MCP server this one dials, and the tools it lends to every run."""
@@ -3760,6 +4129,7 @@ input RunFilters {
   """Matches rows whose trigger matches these filters"""
   trigger: TriggerFilters
   steps: RunStepListRelationFilter
+  artifacts: RunArtifactListRelationFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [RunFilters!]
@@ -3809,6 +4179,17 @@ input RunStepListRelationFilter {
 
   """Every related row matches"""
   every: RunStepFilters
+}
+
+input RunArtifactListRelationFilter {
+  """At least one related row matches"""
+  some: RunArtifactFilters
+
+  """No related row matches"""
+  none: RunArtifactFilters
+
+  """Every related row matches"""
+  every: RunArtifactFilters
 }
 
 input RunOrderBy {
@@ -3967,6 +4348,7 @@ input RunStepFilters {
 
   """Matches rows whose run matches these filters"""
   run: RunFilters
+  artifacts: RunArtifactListRelationFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [RunStepFilters!]
@@ -4113,6 +4495,175 @@ input RunStepCountDistinctHaving {
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
+}
+
+input RunArtifactFilters {
+  id: StringFilter
+
+  """The run that produced it."""
+  runId: StringFilter
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: StringFilter
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: StringFilter
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: StringFilter
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: StringFilter
+
+  """The tool that linked to it, by the server's own name."""
+  tool: StringFilter
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: StringFilter
+
+  """The link's `name`."""
+  name: StringFilter
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: StringFilter
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: StringFilter
+
+  """The link's `description`, where the server gave one."""
+  description: StringFilter
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTimeFilter
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: StringFilter
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: IntFilter
+
+  """When this run first linked to it."""
+  createdAt: DateTimeFilter
+
+  """When this run last linked to it."""
+  updatedAt: DateTimeFilter
+
+  """Matches rows whose run matches these filters"""
+  run: RunFilters
+
+  """Matches rows whose step matches these filters"""
+  step: RunStepFilters
+
+  """At least one branch matches; ANDed with any sibling fields"""
+  OR: [RunArtifactFilters!]
+
+  """Every branch matches"""
+  AND: [RunArtifactFilters!]
+
+  """Negates the nested filters"""
+  NOT: RunArtifactFilters
+}
+
+input RunArtifactOrderBy {
+  id: InnerOrder
+  runId: InnerOrder
+  runStepId: InnerOrder
+  taskId: InnerOrder
+  serverId: InnerOrder
+  serverSlug: InnerOrder
+  tool: InnerOrder
+  uri: InnerOrder
+  name: InnerOrder
+  title: InnerOrder
+  mimeType: InnerOrder
+  description: InnerOrder
+  lastModified: InnerOrder
+  webUrl: InnerOrder
+  count: InnerOrder
+  createdAt: InnerOrder
+  updatedAt: InnerOrder
+
+  """Order by columns of the related run row"""
+  run: RunOrderBy
+
+  """Order by columns of the related step row"""
+  step: RunStepOrderBy
+}
+
+"""Filters RunArtifact groups by their aggregated values"""
+input RunArtifactHaving {
+  """Filters groups by how many rows they contain"""
+  count: AggregateNumberFilter
+  avg: RunArtifactAvgHaving
+  sum: RunArtifactSumHaving
+  min: RunArtifactMinHaving
+  max: RunArtifactMaxHaving
+  countNonNull: RunArtifactCountNonNullHaving
+  countDistinct: RunArtifactCountDistinctHaving
+}
+
+input RunArtifactAvgHaving {
+  count: AggregateNumberFilter
+}
+
+input RunArtifactSumHaving {
+  count: AggregateNumberFilter
+}
+
+input RunArtifactMinHaving {
+  count: AggregateNumberFilter
+}
+
+input RunArtifactMaxHaving {
+  count: AggregateNumberFilter
+}
+
+input RunArtifactCountNonNullHaving {
+  id: AggregateNumberFilter
+  runId: AggregateNumberFilter
+  runStepId: AggregateNumberFilter
+  taskId: AggregateNumberFilter
+  serverId: AggregateNumberFilter
+  serverSlug: AggregateNumberFilter
+  tool: AggregateNumberFilter
+  uri: AggregateNumberFilter
+  name: AggregateNumberFilter
+  title: AggregateNumberFilter
+  mimeType: AggregateNumberFilter
+  description: AggregateNumberFilter
+  lastModified: AggregateNumberFilter
+  webUrl: AggregateNumberFilter
+  count: AggregateNumberFilter
+  createdAt: AggregateNumberFilter
+  updatedAt: AggregateNumberFilter
+}
+
+input RunArtifactCountDistinctHaving {
+  id: AggregateNumberFilter
+  runId: AggregateNumberFilter
+  runStepId: AggregateNumberFilter
+  taskId: AggregateNumberFilter
+  serverId: AggregateNumberFilter
+  serverSlug: AggregateNumberFilter
+  tool: AggregateNumberFilter
+  uri: AggregateNumberFilter
+  name: AggregateNumberFilter
+  title: AggregateNumberFilter
+  mimeType: AggregateNumberFilter
+  description: AggregateNumberFilter
+  lastModified: AggregateNumberFilter
+  webUrl: AggregateNumberFilter
+  count: AggregateNumberFilter
+  createdAt: AggregateNumberFilter
+  updatedAt: AggregateNumberFilter
 }
 
 input CreateMcpServerInput {
@@ -4825,6 +5376,32 @@ type Query {
     """Filters the groups after they are aggregated."""
     having: RunStepHaving
   ): [RunStepGroupBy!]!
+  runArtifacts(
+    offset: Int
+    limit: Int
+    orderBy: RunArtifactOrderBy
+    where: RunArtifactFilters
+
+    """
+    Keyset pagination: only return rows strictly after this cursor (a row's `cursor` field from a previous page, under the same orderBy).
+    """
+    after: String
+    distinct: [RunArtifactDistinctColumn!]
+  ): [RunArtifact!]!
+  runArtifact(offset: Int, orderBy: RunArtifactOrderBy, where: RunArtifactFilters): RunArtifact
+  runArtifactsAggregate(where: RunArtifactFilters): RunArtifactAggregate!
+  runArtifactsGroupBy(
+    """
+    Columns to group by. One result row per distinct combination of their values.
+    """
+    groupBy: [RunArtifactGroupByColumn!]!
+
+    """Filters the rows before they are grouped."""
+    where: RunArtifactFilters
+
+    """Filters the groups after they are aggregated."""
+    having: RunArtifactHaving
+  ): [RunArtifactGroupBy!]!
   mcpServers(
     offset: Int
     limit: Int
@@ -5073,6 +5650,27 @@ enum RunStepGroupByColumn {
   promptTokens
   completionTokens
   totalTokens
+}
+
+"""Columns of RunArtifact that a query can group by"""
+enum RunArtifactGroupByColumn {
+  id
+  runId
+  runStepId
+  taskId
+  serverId
+  serverSlug
+  tool
+  uri
+  name
+  title
+  mimeType
+  description
+  lastModified
+  webUrl
+  count
+  createdAt
+  updatedAt
 }
 
 """Columns of McpServer that a query can be made distinct on"""
@@ -5338,7 +5936,7 @@ type RunEvent {
   at: DateTime!
 
   """
-  step | decision | turn | thinking | output | tool-call | tool-result | notice | usage | done.
+  step | decision | turn | thinking | output | tool-call | tool-result | artifact | notice | usage | done. An `artifact` is a tool call linking to something new: `text` is its title or uri, `name` the tool.
   """
   kind: String!
   text: String!

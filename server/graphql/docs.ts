@@ -44,6 +44,9 @@ const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
     "step picks which of its arms runs next.",
   runs: "One execution of a task, with what it produced and what it cost.",
   runSteps: "One step of one run: the path a run actually took through the task's tree.",
+  runArtifacts:
+    "Something a run's tool calls linked to as made — an MCP `resource_link` — one row per " +
+    "`uri` per run. Written by the runner; read-only here.",
   mcpServers: "An MCP server this one dials, and the tools it lends to every run.",
   settings: "The one row of server-wide defaults. Every task falls back to what is here.",
 };
@@ -154,6 +157,27 @@ export const COLUMN_DOCS: ColumnDocs = {
     hooks:
       "What MCP hooks did around this step, as JSON: the context each added to the prompt, and " +
       "each that failed. A hook that worked and added nothing is not listed.",
+  },
+
+  runArtifacts: {
+    runId: "The run that produced it.",
+    runStepId: "The run step whose tool call first linked to it. Null once that step is deleted.",
+    taskId: "The run's task, copied so everything a task made is one lookup.",
+    serverId: "The MCP server that answered the call, which can read it back. Null once removed.",
+    serverSlug: "That server's slug, kept after the server is gone.",
+    tool: "The tool that linked to it, by the server's own name.",
+    uri: "What the server calls it: read it back with `resources/read` on that server.",
+    name: "The link's `name`.",
+    title: "The link's `title`, for display. The latest one this run was given.",
+    mimeType: "The link's `mimeType`, where the server gave one.",
+    description: "The link's `description`, where the server gave one.",
+    lastModified: "The link's `annotations.lastModified`, where the server gave one.",
+    webUrl:
+      'Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the ' +
+      "server gave none.",
+    count: "How many of this run's tool calls linked to this `uri`.",
+    createdAt: "When this run first linked to it.",
+    updatedAt: "When this run last linked to it.",
   },
 
   mcpServers: {

@@ -150,6 +150,20 @@ test("an agent does not delete the history", async () => {
   ).toEqual(["FORBIDDEN"]);
 });
 
+// What a run made is history like the run itself: open to read, by an agent as by the operator,
+// and written only by the runner. There is no generated write to guard — the table offers none —
+// so the check is that none exists, which is what would ship open if `features` lost the table.
+test("an agent may read what a run made, and nobody may write it", async () => {
+  await allowed(
+    `{ runArtifacts { uri webUrl } runArtifactsAggregate { count } runs { artifacts { uri } } }`,
+    "agent",
+  );
+  const writes = Object.keys(schema.getMutationType()?.getFields() ?? {}).filter((name) =>
+    /artifact/i.test(name),
+  );
+  expect(writes).toEqual([]);
+});
+
 // The one call on this schema that can lose a table, shut for every caller — the web app has
 // never sent one, and `deleteTask` cannot empty anything.
 test("a bulk write is nobody's, the operator included", async () => {

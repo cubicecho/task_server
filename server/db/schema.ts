@@ -11,6 +11,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -328,6 +329,58 @@ export const mcpServers = pgTable("mcp_servers", {
   hooks: jsonb().$type<ToolHook[]>(),
 });
 
+/**
+ * What a run's tool calls handed back as made: one row per `resource_link` uri per run, the
+ * protocol's own "I made this", so the run and the task can link straight to it.
+ *
+ * A table rather than a jsonb column on `runs` because the task-level list queries across runs,
+ * and a jsonb field cannot be filtered, ordered or indexed — the reason the token columns are
+ * columns. `taskId` is copied off the run so "everything this task made" is one indexed lookup
+ * rather than a join through every run it ever had.
+ *
+ * One row per uri per run, kept by the unique index the writer's `ON CONFLICT` lands on: a second
+ * step linking the same document bumps `count` rather than adding a row. Across runs each run
+ * keeps its own, and the task view groups them. `serverSlug` and `tool` are kept as text beside
+ * `serverId` so the row still says where it came from once the server row is gone.
+ *
+ * Written by the runner through Drizzle, never through GraphQL, so the generated writes stay shut
+ * by the permissions whitelist. Hook calls never reach `dispatch` and are not here: an artifact is
+ * what the task's model chose to make. See `runner/artifacts.ts`.
+ */
+export const runArtifacts = pgTable(
+  "run_artifacts",
+  {
+    id: id(),
+    runId: text()
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    runStepId: text().references(() => runSteps.id, { onDelete: "set null" }),
+    taskId: text()
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    serverId: text().references(() => mcpServers.id, { onDelete: "set null" }),
+    serverSlug: text().notNull().default(""),
+    tool: text().notNull().default(""),
+    // The `resource_link`'s own fields, spelled as MCP spells them so nothing is renamed on the
+    // way in — and close to A2A's `Artifact`, in case runs are ever exposed that way.
+    uri: text().notNull(),
+    name: text().notNull().default(""),
+    title: text().notNull().default(""),
+    mimeType: text().notNull().default(""),
+    description: text().notNull().default(""),
+    lastModified: timestamp({ mode: "date", withTimezone: true }),
+    webUrl: text().notNull().default(""),
+    count: integer().notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    // Also the run's index: a lookup by `runId` alone reads its leading column.
+    uniqueIndex("run_artifacts_run_uri_idx").on(table.runId, table.uri),
+    index("run_artifacts_task_updated_idx").on(table.taskId, table.updatedAt),
+  ],
+);
+
 /** The id of the one settings row. */
 export const SETTINGS_ID = "default";
 
@@ -418,6 +471,7 @@ export const schema = {
   steps,
   runs,
   runSteps,
+  runArtifacts,
   mcpServers,
   settings,
   endpointCapabilities,
@@ -445,9 +499,17 @@ export const relations = defineRelations(schema, (r) => ({
     task: r.one.tasks({ from: r.runs.taskId, to: r.tasks.id, optional: false }),
     trigger: r.one.triggers({ from: r.runs.triggerId, to: r.triggers.id }),
     steps: r.many.runSteps({ from: r.runs.id, to: r.runSteps.runId }),
+    artifacts: r.many.runArtifacts({ from: r.runs.id, to: r.runArtifacts.runId }),
   },
   runSteps: {
     run: r.one.runs({ from: r.runSteps.runId, to: r.runs.id, optional: false }),
+    artifacts: r.many.runArtifacts({ from: r.runSteps.id, to: r.runArtifacts.runStepId }),
+  },
+  // No relation to `mcpServers`: that table is the operator's, and a relation is a field an agent
+  // could walk to it through. `serverId` is a column, which says which server and nothing more.
+  runArtifacts: {
+    run: r.one.runs({ from: r.runArtifacts.runId, to: r.runs.id, optional: false }),
+    step: r.one.runSteps({ from: r.runArtifacts.runStepId, to: r.runSteps.id }),
   },
 }));
 
@@ -456,5 +518,6 @@ export type Task = typeof tasks.$inferSelect;
 export type Step = typeof steps.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type RunStep = typeof runSteps.$inferSelect;
+export type RunArtifactRow = typeof runArtifacts.$inferSelect;
 export type McpServerRow = typeof mcpServers.$inferSelect;
 export type Settings = typeof settings.$inferSelect;

@@ -215,8 +215,9 @@ export const RunEventType = new GraphQLObjectType({
     kind: {
       type: new GraphQLNonNull(GraphQLString),
       description:
-        "step | decision | turn | thinking | output | tool-call | tool-result | notice | usage | " +
-        "done.",
+        "step | decision | turn | thinking | output | tool-call | tool-result | artifact | " +
+        "notice | usage | done. An `artifact` is a tool call linking to something new: `text` " +
+        "is its title or uri, `name` the tool.",
     },
     text: { type: new GraphQLNonNull(GraphQLString) },
     name: {

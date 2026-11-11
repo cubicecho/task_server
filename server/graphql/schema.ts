@@ -69,6 +69,9 @@ type McpConnectionArgs = {
   headers?: Record<string, string> | null;
 };
 
+/** The tables the runner writes and a client only reads. */
+const HISTORY = new Set(["runs", "runSteps", "runArtifacts"]);
+
 /**
  * The CRUD half of the API is generated from the Drizzle schema — tasks, triggers, runs, MCP
  * servers and settings all get their queries, filters and mutations for free, and stay in step
@@ -86,12 +89,13 @@ const { entities } = buildSchema(db, {
   // in the web app.
   describeColumn,
   describeTable,
-  // The run history — the run and the steps it took — is written by the runner, never by a
-  // client: a hand-made row would claim something happened that did not.
+  // The run history — the run, the steps it took and what it made — is written by the runner,
+  // never by a client: a hand-made row would claim something happened that did not. An artifact
+  // is not deleted on its own either; it goes with its run.
   features: {
-    insert: (table) => table !== "runs" && table !== "runSteps" && table !== "settings",
-    update: (table) => table !== "runs" && table !== "runSteps",
-    delete: (table) => table !== "settings",
+    insert: (table) => !HISTORY.has(table) && table !== "settings",
+    update: (table) => !HISTORY.has(table),
+    delete: (table) => table !== "settings" && table !== "runArtifacts",
     // `nestedWrites` (triggers created inline under createTask) is off. Nothing in the driver
     // stops it any more; it is simply not earned yet — the UI writes the task and then its
     // triggers, and a flow is written by `setTaskSteps` rather than row at a time regardless.
