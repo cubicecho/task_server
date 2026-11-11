@@ -12,6 +12,7 @@ query McpServers {
     headers
     hiddenTools
     trustAnnotations
+    logLevel
     hooks
   }
   mcpStatus {

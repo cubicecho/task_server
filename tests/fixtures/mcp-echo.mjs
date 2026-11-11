@@ -78,6 +78,18 @@ const tools = [
         },
       ]
     : []),
+  // A tool that logs at four levels before it answers, behind `MCP_ECHO_LOGGING`, which also
+  // declares the `logging` capability: a client only sets a level on a server that declared it,
+  // and the SDK then drops what is quieter than that level on this side of the pipe.
+  ...(process.env.MCP_ECHO_LOGGING
+    ? [
+        {
+          name: "grumble",
+          description: "logs at debug, info, warning and error, then `warnings` more warnings",
+          inputSchema: { type: "object", properties: { warnings: { type: "number" } } },
+        },
+      ]
+    : []),
 ];
 
 /**
@@ -182,6 +194,7 @@ const server = new Server(
       ...(process.env.MCP_ECHO_PROMPTS ? { prompts: {} } : {}),
       ...(process.env.MCP_ECHO_COMPLETIONS ? { completions: {} } : {}),
       ...(process.env.MCP_ECHO_RESOURCES ? { resources: {} } : {}),
+      ...(process.env.MCP_ECHO_LOGGING ? { logging: {} } : {}),
     },
   },
 );
@@ -214,8 +227,23 @@ server.setRequestHandler(CallToolRequestSchema, (request, extra) => {
   if (request.params.name === "look" || request.params.name === "poke") {
     return timed(request);
   }
+  if (request.params.name === "grumble") {
+    return grumble(request);
+  }
   return reply(request);
 });
+
+/** `grumble`: one message at each of four levels, then as many extra warnings as asked. */
+const grumble = async (request) => {
+  for (const level of ["debug", "info", "warning", "error"]) {
+    await server.sendLoggingMessage({ level, logger: "grumble", data: `${level} from grumble` });
+  }
+  const extra = Number(request.params.arguments?.warnings ?? 0);
+  for (let index = 0; index < extra; index++) {
+    await server.sendLoggingMessage({ level: "warning", data: `warning ${index + 1}` });
+  }
+  return reply(request);
+};
 
 /** `look` and `poke`: a tenth of a second's work, bracketed in the timing log. */
 const timed = async (request) => {

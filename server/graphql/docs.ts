@@ -169,6 +169,9 @@ export const COLUMN_DOCS: ColumnDocs = {
       "The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: " +
       "each with when it was read, how many characters went in, whether the cap cut it, and " +
       "why a read failed. The text is not kept.",
+    serverLogs:
+      "What MCP servers logged at `warning` or worse during this step's tool calls, as JSON " +
+      "`{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.",
   },
 
   runArtifacts: {
@@ -211,6 +214,10 @@ export const COLUMN_DOCS: ColumnDocs = {
       "Believe this server's tools when they say they only read or are safe to repeat. Under " +
       "`auto` its reads then run together, and a repeat in one step is answered once. Off, " +
       "every call is treated as a write. Turn it on only for a server you have read.",
+    logLevel:
+      "The least serious message this server sends, shown under its tool call on the run's " +
+      "live stream: `warning` sends warnings and worse. Null leaves the server's own default. " +
+      "`warning` and worse are also kept on the step. Only a server that offers logging is told.",
     hooks:
       "Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. " +
       "`on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or " +

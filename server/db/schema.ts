@@ -14,6 +14,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { ResourceRead } from "../../shared/resource-placeholder.ts";
+import { LOG_LEVELS, type ServerLogNote } from "../../shared/server-logs.ts";
 
 /**
  * The whole domain, in one place. Postgres is the only database; `client.ts` chooses which
@@ -308,6 +309,14 @@ export const runSteps = pgTable(
      * text itself is not kept — it is the server's, and a step's history is not a mirror of it.
      */
     resources: jsonb().$type<ResourceRead[]>(),
+    /**
+     * What the step's MCP servers logged at `warning` or worse while its tool calls ran. The run
+     * stream shows everything a row's `logLevel` lets through, but its events are gone a minute
+     * after the run, and "the tool failed" is read days later — by someone who wants the server's
+     * own account of why. Beside `hooks` rather than in it: a hook note is what the host's own
+     * calls did around the step, and these are what a server said during the model's.
+     */
+    serverLogs: jsonb().$type<ServerLogNote[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),
@@ -344,6 +353,14 @@ export const mcpServers = pgTable("mcp_servers", {
    * so this is a judgement about one server an operator has read. Read at call time.
    */
   trustAnnotations: boolean().notNull().default(false),
+  /**
+   * How much the server logs, sent as `logging/setLevel` when it connects. Null is the server's
+   * own default — the pool's spelling, so the row reaches it unchanged — rather than the word
+   * `inherit` the profile columns use: there is no row above this one to inherit from, and a
+   * level named "inherit" would claim there was. `warning` by default, so a server is heard when
+   * it complains and not when it chatters. Only a server that declared `logging` is asked.
+   */
+  logLevel: text({ enum: LOG_LEVELS }).default("warning"),
   /**
    * Tool calls this server wants made at points in a run — recall before a step, remember after
    * one. See `server/runner/hooks.ts` for which points a run has. Checked by `validateHooks` when

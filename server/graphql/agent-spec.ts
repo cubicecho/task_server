@@ -49,10 +49,10 @@ function compact<T extends object>(value: T): T {
  * One MCP server row as a bundle carries it: how to start or reach it, under the slug the
  * profile's scope names it by.
  *
- * No `id`, no `enabled` and no `trustAnnotations`. An id is this database's and means nothing in
- * another, and a disabled server or a trusted one is a decision about this host — the importing
- * operator makes their own when they choose whether to create it, and a server arrives believed
- * by nobody. Only the arm the transport reads is written, so a row that was once stdio does not
+ * No `id`, no `enabled`, no `trustAnnotations` and no `logLevel`. An id is this database's and
+ * means nothing in another, and a disabled server, a trusted one or a chatty one is a decision
+ * about this host — the importing operator makes their own when they choose whether to create it,
+ * and a server arrives believed by nobody, logging at the column's default. Only the arm the transport reads is written, so a row that was once stdio does not
  * travel with a `url` it stopped using.
  */
 function bundled(row: McpServerRow): SpecServer {
@@ -261,6 +261,7 @@ const SERVER_COLUMNS = new Set([
   "headers",
   "hiddenTools",
   "trustAnnotations",
+  "logLevel",
   "hooks",
 ]);
 
@@ -325,6 +326,13 @@ function readBundled(
   // A host that wrote it believed the server, which was that host's judgement to make.
   if (held.trustAnnotations === true) {
     notes.push("its annotations were trusted where it was exported; created untrusted here");
+  }
+  // How much a server says is this host's to choose, as its trust is.
+  if (held.logLevel !== undefined && held.logLevel !== mcpServers.logLevel.default) {
+    notes.push(
+      `it logged at ${held.logLevel === null ? "its own default" : String(held.logLevel)} ` +
+        `where it was exported; created at ${mcpServers.logLevel.default} here`,
+    );
   }
 
   const names = (value: unknown) => (isRecord(value) ? Object.keys(value) : []);

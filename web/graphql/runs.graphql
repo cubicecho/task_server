@@ -59,6 +59,7 @@ query RunDetail($id: String!) {
       totalTokens
       hooks
       resources
+      serverLogs
     }
     # What the run made, in the order it first linked to each. A step's links are written in one
     # insert and share a `createdAt`, so the uri breaks the tie rather than leaving it to the plan.
@@ -106,6 +107,9 @@ subscription RunEvents($runId: String!) {
     name
     step
     ok
+    # Which call a `server-log` belongs to, so it is drawn under that call's line, and how bad.
+    id
+    level
   }
 }
 

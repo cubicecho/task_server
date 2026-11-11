@@ -135,6 +135,7 @@ export const echoRow = (over: Partial<McpServerRow> = {}): McpServerRow => ({
   headers: null,
   hiddenTools: null,
   trustAnnotations: false,
+  logLevel: "warning",
   hooks: null,
   ...over,
 });

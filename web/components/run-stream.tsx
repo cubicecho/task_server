@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { RunEventsDocument, type RunEventsSubscription } from "@/__generated__/graphql/graphql";
 import { subscribe } from "@/lib/gql";
 import { cn } from "@/lib/utils";
+import { isFailure, isSerious } from "../../shared/server-logs.ts";
 
 type RunEvent = RunEventsSubscription["runEvents"];
 
@@ -20,6 +21,10 @@ interface Block {
   step: string;
   ok?: boolean | null;
   text: string;
+  /** The tool call's id, on the tool kinds and `server-log`: what ties a log to its call. */
+  id?: string | null;
+  /** The server's level, on `server-log`. */
+  level?: string | null;
 }
 
 const mergeable = (kind: string) => kind === "thinking" || kind === "output";
@@ -34,20 +39,36 @@ const mergeable = (kind: string) => kind === "thinking" || kind === "output";
  * redraws the one that grew and none of the ones that did not.
  */
 function appendInto(blocks: Block[], event: RunEvent) {
-  const last = blocks[blocks.length - 1];
-  // Never across a step boundary: two steps writing the same kind of thing are two answers.
-  if (last && mergeable(event.kind) && last.kind === event.kind && last.step === event.step) {
-    blocks[blocks.length - 1] = { ...last, text: last.text + event.text };
-    return;
-  }
-  blocks.push({
+  const block: Block = {
     seq: event.seq,
     kind: event.kind,
     name: event.name,
     step: event.step,
     ok: event.ok,
     text: event.text,
-  });
+    id: event.id,
+    level: event.level,
+  };
+  // Under the call it was logged during, after whatever that call has logged already. Calls run
+  // in parallel log into one stream, and appended at the end a message would sit under whichever
+  // call happened to be drawn last. A log whose call is not on screen goes at the end.
+  if (event.kind === "server-log" && event.id) {
+    const at = blocks.findLastIndex(
+      (other) =>
+        other.id === event.id && (other.kind === "tool-call" || other.kind === "server-log"),
+    );
+    if (at >= 0) {
+      blocks.splice(at + 1, 0, block);
+      return;
+    }
+  }
+  const last = blocks[blocks.length - 1];
+  // Never across a step boundary: two steps writing the same kind of thing are two answers.
+  if (last && mergeable(event.kind) && last.kind === event.kind && last.step === event.step) {
+    blocks[blocks.length - 1] = { ...last, text: last.text + event.text };
+    return;
+  }
+  blocks.push(block);
 }
 
 /** One flow step's worth of blocks, under the name of the step that produced them. */
@@ -239,6 +260,22 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
           )}
         >
           ← {block.name}: {block.text}
+        </p>
+      );
+    case "server-log":
+      // The server's own account of the call above it, indented so it reads as belonging to it.
+      return (
+        <p
+          className={cn(
+            "pl-4 font-mono text-xs whitespace-pre-wrap break-all",
+            isFailure(block.level ?? "")
+              ? "text-negative"
+              : isSerious(block.level ?? "")
+                ? "text-warning"
+                : "text-foreground/60",
+          )}
+        >
+          {block.level} · {block.text}
         </p>
       );
     case "artifact":

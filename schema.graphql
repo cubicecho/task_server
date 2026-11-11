@@ -1308,6 +1308,7 @@ enum RunStepDistinctColumn {
   toolCalls
   hooks
   resources
+  serverLogs
   promptTokens
   completionTokens
   totalTokens
@@ -1566,6 +1567,11 @@ type RunStep {
   The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: each with when it was read, how many characters went in, whether the cap cut it, and why a read failed. The text is not kept.
   """
   resources: JSON
+
+  """
+  What MCP servers logged at `warning` or worse during this step's tool calls, as JSON `{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.
+  """
+  serverLogs: JSON
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1740,6 +1746,7 @@ type RunStepCountNonNullAggregate {
   toolCalls: Int!
   hooks: Int!
   resources: Int!
+  serverLogs: Int!
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -2193,6 +2200,11 @@ type McpServer {
   trustAnnotations: Boolean!
 
   """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
+
+  """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSON
@@ -2209,6 +2221,32 @@ enum McpServersTransportEnum {
 
   """Value: http"""
   http
+}
+
+enum McpServersLogLevelEnum {
+  """Value: debug"""
+  debug
+
+  """Value: info"""
+  info
+
+  """Value: notice"""
+  notice
+
+  """Value: warning"""
+  warning
+
+  """Value: error"""
+  error
+
+  """Value: critical"""
+  critical
+
+  """Value: alert"""
+  alert
+
+  """Value: emergency"""
+  emergency
 }
 
 type McpServerAggregate {
@@ -2238,6 +2276,11 @@ type McpServerMinAggregate {
 
   """The endpoint to dial, for `http`."""
   url: String
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
 }
 
 type McpServerMaxAggregate {
@@ -2259,6 +2302,11 @@ type McpServerMaxAggregate {
 
   """The endpoint to dial, for `http`."""
   url: String
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
 }
 
 type McpServerCountNonNullAggregate {
@@ -2274,6 +2322,7 @@ type McpServerCountNonNullAggregate {
   headers: Int!
   hiddenTools: Int!
   trustAnnotations: Int!
+  logLevel: Int!
   hooks: Int!
 }
 
@@ -2284,6 +2333,7 @@ type McpServerCountDistinctAggregate {
   transport: Int!
   command: Int!
   url: Int!
+  logLevel: Int!
 }
 
 type McpServerGroupBy {
@@ -2317,6 +2367,11 @@ type McpServerGroupKeys {
 
   """The endpoint to dial, for `http`."""
   url: String
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
 
   """A disabled server is not dialled, and lends no tools to a run."""
   enabled: Boolean
@@ -4578,6 +4633,11 @@ input RunStepFilters {
   The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: each with when it was read, how many characters went in, whether the cap cut it, and why a read failed. The text is not kept.
   """
   resources: JSONFilter
+
+  """
+  What MCP servers logged at `warning` or worse during this step's tool calls, as JSON `{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.
+  """
+  serverLogs: JSONFilter
   promptTokens: IntFilter
   completionTokens: IntFilter
   totalTokens: IntFilter
@@ -4642,6 +4702,7 @@ input RunStepOrderBy {
   toolCalls: InnerOrder
   hooks: InnerOrder
   resources: InnerOrder
+  serverLogs: InnerOrder
   promptTokens: InnerOrder
   completionTokens: InnerOrder
   totalTokens: InnerOrder
@@ -4711,6 +4772,7 @@ input RunStepCountNonNullHaving {
   toolCalls: AggregateNumberFilter
   hooks: AggregateNumberFilter
   resources: AggregateNumberFilter
+  serverLogs: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
@@ -4951,6 +5013,11 @@ input CreateMcpServerInput {
   trustAnnotations: Boolean
 
   """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
+
+  """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSON
@@ -5001,6 +5068,11 @@ input UpdateMcpServerInput {
   Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
   """
   trustAnnotations: Boolean
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
 
   """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
@@ -5064,6 +5136,11 @@ input McpServerFilters {
   trustAnnotations: BooleanFilter
 
   """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnumFilter
+
+  """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSONFilter
@@ -5107,6 +5184,35 @@ input McpServersTransportEnumFilter {
   NOT: McpServersTransportEnumFilter
 }
 
+input McpServersLogLevelEnumFilter {
+  """Equal to"""
+  eq: McpServersLogLevelEnum
+
+  """Not equal to"""
+  ne: McpServersLogLevelEnum
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [McpServersLogLevelEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [McpServersLogLevelEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [McpServersLogLevelEnumFilter!]
+
+  """Every branch matches"""
+  AND: [McpServersLogLevelEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: McpServersLogLevelEnumFilter
+}
+
 input McpServerOrderBy {
   id: InnerOrder
   slug: InnerOrder
@@ -5120,6 +5226,7 @@ input McpServerOrderBy {
   headers: InnerOrder
   hiddenTools: InnerOrder
   trustAnnotations: InnerOrder
+  logLevel: InnerOrder
   hooks: InnerOrder
 }
 
@@ -5144,6 +5251,7 @@ input McpServerCountNonNullHaving {
   headers: AggregateNumberFilter
   hiddenTools: AggregateNumberFilter
   trustAnnotations: AggregateNumberFilter
+  logLevel: AggregateNumberFilter
   hooks: AggregateNumberFilter
 }
 
@@ -5154,6 +5262,7 @@ input McpServerCountDistinctHaving {
   transport: AggregateNumberFilter
   command: AggregateNumberFilter
   url: AggregateNumberFilter
+  logLevel: AggregateNumberFilter
 }
 
 input UpdateSettingInput {
@@ -6058,6 +6167,7 @@ enum McpServerDistinctColumn {
   headers
   hiddenTools
   trustAnnotations
+  logLevel
   hooks
 }
 
@@ -6071,6 +6181,7 @@ enum McpServerGroupByColumn {
   command
   url
   trustAnnotations
+  logLevel
 }
 
 """Columns of Setting that a query can be made distinct on"""
@@ -6363,7 +6474,7 @@ type RunEvent {
   at: DateTime!
 
   """
-  step | decision | turn | thinking | output | tool-call | tool-result | artifact | notice | usage | done. An `artifact` is a tool call linking to something new: `text` is its title or uri, `name` the tool.
+  step | decision | turn | thinking | output | tool-call | tool-result | artifact | server-log | notice | usage | done. An `artifact` is a tool call linking to something new: `text` is its title or uri, `name` the tool. A `server-log` is what a tool's MCP server logged while the call ran: `text` is the message, `level` how serious.
   """
   kind: String!
   text: String!
@@ -6376,6 +6487,14 @@ type RunEvent {
   """
   step: String!
   ok: Boolean
+
+  """
+  The tool call's id on the tool kinds and `server-log`, which pairs a result or a log with its call when one tool is called twice in a step.
+  """
+  id: String
+
+  """On `server-log` only: the server's level, `debug` up to `emergency`."""
+  level: String
 }
 
 type Mutation {

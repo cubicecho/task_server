@@ -3,6 +3,7 @@ import { ClipboardPaste } from "lucide-react";
 import { useState } from "react";
 import {
   CreateMcpServerDocument,
+  McpServersLogLevelEnum,
   type McpServersQuery,
   McpServersTransportEnum,
   TestMcpServerDocument,
@@ -11,6 +12,7 @@ import {
 import {
   ComboboxField,
   InputField,
+  SelectField,
   SwitchField,
   TextareaField,
   useAppForm,
@@ -47,6 +49,8 @@ interface Draft {
   headers: string;
   hiddenTools: string[];
   trustAnnotations: boolean;
+  /** Null is the server's own default, which is the column's null. */
+  logLevel: McpServersLogLevelEnum | null;
   hooks: string;
 }
 
@@ -68,6 +72,8 @@ const toDraft = (server?: McpServer): Draft => ({
   headers: json(server?.headers, "{}"),
   hiddenTools: stringList(server?.hiddenTools),
   trustAnnotations: server?.trustAnnotations ?? false,
+  // A new server starts where the column does; an existing one's null is kept as null.
+  logLevel: server ? (server.logLevel ?? null) : McpServersLogLevelEnum.Warning,
   // Pretty-printed, unlike the one-line fields above: a hook is several keys deep and read more
   // often than it is written.
   hooks: server?.hooks ? JSON.stringify(server.hooks, null, 2) : "",
@@ -113,6 +119,7 @@ export function McpDialog({
         enabled: draft.enabled,
         hiddenTools: draft.hiddenTools.length ? draft.hiddenTools : null,
         trustAnnotations: draft.trustAnnotations,
+        logLevel: draft.logLevel,
         hooks: parseJson<unknown>(draft.hooks, "Hooks", null),
       };
       if (server) {
@@ -338,6 +345,20 @@ export function McpDialog({
             description={doc("trustAnnotations")}
             orientation="horizontal"
             className="rounded-md border p-3"
+          />
+
+          <SelectField
+            form={form}
+            name="logLevel"
+            label="Log level"
+            description={doc("logLevel")}
+            // In the generated enum's order, which is the column's: quietest first.
+            options={Object.values(McpServersLogLevelEnum).map((level) => ({
+              value: level,
+              label: level,
+            }))}
+            clearable
+            emptyLabel="The server's own default"
           />
 
           <TextareaField

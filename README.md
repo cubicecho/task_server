@@ -267,6 +267,27 @@ reads the same as having watched from the start.
 It is debugging output, not the record: nothing is persisted, nothing survives a restart, and a
 finished run is forgotten a minute later. The row remains the lasting account of what happened.
 
+### What a server said
+
+An MCP server can log while it works, and when a tool call fails its log is usually the only
+account of why. Each server row has a **log level** — `warning` by default, any of MCP's eight
+from `debug` to `emergency`, or none for the server's own default — which the pool sends as
+`logging/setLevel` when it connects, to a server that declared `logging`. What the server then
+logs during a call arrives on the stream as a `server-log` event, drawn under the call it
+belongs to.
+
+The stream is forgotten with the rest, so the part worth keeping is kept: whatever a server
+logged at `warning` or worse goes on the step as `run_steps.serverLogs`, beside its hook notes,
+up to twenty per step with one more entry counting what that dropped. The run's metrics count
+every one of them, kept or not, as `serverWarnings` and `serverErrors`, which the run detail
+shows on the **Metrics** panel.
+
+A message is put down to a call by elimination, not by id: MCP's log notification names no
+request, so the pool hears it as a call's only when that call is the one request in flight on
+its connection. Two calls to one server at once — parallel tool execution, or a hook beside the
+model's call — and neither is told; the messages go to the pool's general handler and reach no
+run. The pool also caps what one call hears at fifty, with a summary for the rest.
+
 A run's status is `running`, then one of `ok`, `error` or `stopped`. Two more are rows that have
 not run: `queued` is a firing waiting for a free slot, which becomes `running` in that same row
 when one comes back, and `skipped` never ran at all — a trigger that fired at a task that could

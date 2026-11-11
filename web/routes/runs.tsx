@@ -44,6 +44,7 @@ import { STATUS_VARIANT } from "@/lib/run-status";
 import { useRefreshRuns, useRunTask, useStopTask } from "@/lib/use-task-run";
 import { cn } from "@/lib/utils";
 import type { ResourceRead } from "../../shared/resource-placeholder.ts";
+import { isFailure, type ServerLogNote } from "../../shared/server-logs.ts";
 
 type Run = RunsQuery["runs"][number];
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
@@ -167,6 +168,45 @@ function ResourceReads({ reads }: { reads: unknown }) {
 }
 
 /**
+ * What the step's MCP servers complained of during its tool calls: the warnings and worse the
+ * live stream showed, kept because the stream is gone a minute after the run. Beside the hook
+ * notes, and collapsed for their reason — with an error red in the summary so it is not missed.
+ */
+function ServerLogs({ logs }: { logs: unknown }) {
+  const list = (logs ?? []) as ServerLogNote[];
+  if (list.length === 0) {
+    return null;
+  }
+  const errors = list.filter((entry) => isFailure(entry.level)).length;
+  const total = list.reduce((sum, entry) => sum + (entry.dropped ?? 1), 0);
+  return (
+    <Collapsible
+      title={`${total} server warning(s)${errors ? ", errors among them" : ""}`}
+      titleClassName={cn("text-xs", errors ? "text-negative" : "text-warning")}
+      contentSlot={
+        <List
+          label="Server logs"
+          divided={false}
+          contentSlot={list.map((entry, index) => (
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: entries are only ever appended, and a server may say one thing twice
+              key={index}
+              className={cn(
+                "font-mono text-xs whitespace-pre-wrap break-all",
+                isFailure(entry.level) ? "text-negative" : "text-warning",
+              )}
+            >
+              {entry.tool ? `${entry.tool} · ` : ""}
+              {entry.level} · {entry.text}
+            </span>
+          ))}
+        />
+      }
+    />
+  );
+}
+
+/**
  * What the run actually did, step by step.
  *
  * Indented by `depth`, so an arm of a decision reads as being inside it — and the arm each
@@ -196,6 +236,7 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
           <ToolChips calls={step.toolCalls} />
           <ResourceReads reads={step.resources} />
           <HookNotes notes={step.hooks} />
+          <ServerLogs logs={step.serverLogs} />
           {step.error ? <Alert variant="destructive" description={step.error} /> : null}
           {!step.error && step.output ? <CodeBlock content={step.output} wrap /> : null}
         </li>
@@ -225,7 +266,7 @@ function Metrics({ metrics }: { metrics: unknown }) {
       titleClassName={cn("text-xs", errors && "text-negative")}
       contentSlot={
         <div className="flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
             <StatTile label="Turns" value={m.turns} hint={`${m.requests} request(s)`} />
             <StatTile
               label="Tool calls"
@@ -247,6 +288,17 @@ function Metrics({ metrics }: { metrics: unknown }) {
               label="First token"
               value={m.firstTokenMs === undefined ? "—" : seconds(m.firstTokenMs)}
               hint={m.slowestTurnMs ? `slowest turn ${seconds(m.slowestTurnMs)}` : undefined}
+            />
+            {/* What the tools' servers logged at warning or worse, summed from every event, so
+                it counts what a step's cap did not keep. A run stored before the counts existed
+                has neither field, and reads as zero. */}
+            <StatTile
+              label="Server warnings"
+              value={(m.serverWarnings ?? 0) + (m.serverErrors ?? 0)}
+              valueClassName={
+                m.serverErrors ? "text-negative" : m.serverWarnings ? "text-warning" : undefined
+              }
+              hint={m.serverErrors ? `${m.serverErrors} error(s)` : undefined}
             />
           </div>
           {failed.length ? (
