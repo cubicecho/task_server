@@ -16,8 +16,8 @@ if (process.env.MCP_ECHO_SPAWN_LOG) {
 }
 
 /**
- * A stdio MCP server with three trivial tools, for the runner tests to connect to — four with
- * `MCP_ECHO_SLOW`.
+ * A stdio MCP server with three trivial tools, for the runner tests to connect to — more behind
+ * the `MCP_ECHO_*` flags below.
  */
 const tools = [
   { name: "ping", description: "replies pong", inputSchema: { type: "object", properties: {} } },
@@ -53,6 +53,25 @@ const tools = [
             properties: { uri: { type: "string" }, title: { type: "string" } },
             required: ["uri"],
           },
+        },
+      ]
+    : []),
+  // Two tools that take a moment, behind `MCP_ECHO_TIMED`: one that says it only reads and one
+  // that says it does not. Each notes when it started and finished in `MCP_ECHO_TIMING_LOG`, so
+  // a test can see which calls overlapped — which only the child can witness.
+  ...(process.env.MCP_ECHO_TIMED
+    ? [
+        {
+          name: "look",
+          description: "reads something, slowly",
+          inputSchema: { type: "object", properties: { tag: { type: "string" } } },
+          annotations: { readOnlyHint: true },
+        },
+        {
+          name: "poke",
+          description: "changes something, slowly",
+          inputSchema: { type: "object", properties: { tag: { type: "string" } } },
+          annotations: { readOnlyHint: false, destructiveHint: false },
         },
       ]
     : []),
@@ -108,6 +127,10 @@ const resource = (uri) =>
 const server = new Server(
   { name: "echo", version: "0.0.1" },
   {
+    // What the handshake tells a client about using this server, when a test gives it some.
+    ...(process.env.MCP_ECHO_INSTRUCTIONS
+      ? { instructions: process.env.MCP_ECHO_INSTRUCTIONS }
+      : {}),
     capabilities: {
       tools: {},
       ...(process.env.MCP_ECHO_PROMPTS ? { prompts: {} } : {}),
@@ -141,8 +164,26 @@ server.setRequestHandler(CallToolRequestSchema, (request, extra) => {
   if (request.params.name === "write") {
     return written(request);
   }
+  if (request.params.name === "look" || request.params.name === "poke") {
+    return timed(request);
+  }
   return reply(request);
 });
+
+/** `look` and `poke`: a tenth of a second's work, bracketed in the timing log. */
+const timed = async (request) => {
+  const note = (at) => {
+    if (process.env.MCP_ECHO_TIMING_LOG) {
+      const { tag } = request.params.arguments ?? {};
+      const line = JSON.stringify({ at, name: request.params.name, tag });
+      appendFileSync(process.env.MCP_ECHO_TIMING_LOG, `${line}\n`);
+    }
+  };
+  note("start");
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  note("end");
+  return reply(request);
+};
 
 /**
  * Sleeps a minute, or until the client sends `notifications/cancelled` for the request — which

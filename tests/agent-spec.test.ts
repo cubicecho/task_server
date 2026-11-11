@@ -294,8 +294,8 @@ const PREVIEW = `query ($document: JSON!, $createServers: [String!], $name: Stri
     refusals warnings dropped
     agent {
       name description baseUrl model systemPrompt maxTokens temperature maxToolIterations
-      toolDiscovery toolSelectModel toolExecution reasoningReplay requestTimeoutSeconds
-      maxRetries
+      toolDiscovery toolSelectModel toolExecution reasoningReplay serverInstructions
+      requestTimeoutSeconds maxRetries
     }
     servers { slug label created }
     bundled {
@@ -422,6 +422,7 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     toolSelectModel: "",
     toolExecution: "inherit",
     reasoningReplay: "inherit",
+    serverInstructions: "inherit",
     compactionModel: "",
     requestTimeoutSeconds: -1,
     maxRetries: -1,
@@ -439,6 +440,7 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     toolSelectModel: "small",
     toolExecution: "parallel",
     reasoningReplay: "none",
+    serverInstructions: "off",
     compactionModel: "summary",
     requestTimeoutSeconds: 0,
     maxRetries: 0,
@@ -477,6 +479,14 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     "com.cubicecho.task-server": { toolExecution: "sequential" },
   });
   expect(sequential.back.toolExecution).toBe("sequential");
+  const auto = await trip({ toolExecution: "auto" });
+  expect(auto.back.toolExecution).toBe("auto");
+  // `serverInstructions` travels there too, as the boolean it is rather than the column's word.
+  const instructed = await trip({ serverInstructions: "on" });
+  expect(instructed.spec.extensions).toEqual({
+    "com.cubicecho.task-server": { serverInstructions: true },
+  });
+  expect(instructed.back.serverInstructions).toBe("on");
   // And `reasoningReplay` three, one of which the column spells differently from the format.
   for (const [column, field] of [
     ["all", "all"],
@@ -777,6 +787,23 @@ test("a beforeCompact hook is imported like any other, and accepted on a write",
   expect(errors).toEqual([]);
 });
 
+// Trust is this host's judgement of a server, as `enabled` is, and a document cannot make it.
+test("a server bundled as trusted is created untrusted, and the preview says so", async () => {
+  const document = {
+    spec: SPEC,
+    name: "Trusting",
+    tools: { servers: ["t"] },
+    bundle: { mcpServers: [{ slug: "t", url: "http://127.0.0.1:9/mcp", trustAnnotations: true }] },
+  };
+
+  const shown = await preview(document, { createServers: ["t"] });
+  expect(shown.bundled[0].notes).toEqual([
+    "its annotations were trusted where it was exported; created untrusted here",
+  ]);
+  expect((await importSpec(document, { createServers: ["t"] })).errors).toEqual([]);
+  expect((await written()).servers[0].trustAnnotations).toBe(false);
+});
+
 test("a document that is not a spec is refused in the parser's words", async () => {
   for (const [document, reason] of [
     ["not an object", "spec: must be an object"],
@@ -826,7 +853,11 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     tasks: { title: { model: "tiny" }, toolSelect: { model: "small", maxTokens: 10 } },
     extensions: {
       "x-sandbox": { image: "alpine" },
-      "com.cubicecho.task-server": { toolExecution: "fast", colour: "red" },
+      "com.cubicecho.task-server": {
+        toolExecution: "fast",
+        serverInstructions: "yes",
+        colour: "red",
+      },
     },
     futureKey: true,
   };
@@ -839,6 +870,7 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     "futureKey",
     "extensions.x-sandbox",
     "extensions.com.cubicecho.task-server.toolExecution",
+    "extensions.com.cubicecho.task-server.serverInstructions",
     "extensions.com.cubicecho.task-server.colour",
     "endpoint.firstTokenSeconds",
     "model.reasoningEffort",
@@ -861,6 +893,7 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     toolSelectModel: "small",
     toolExecution: "inherit",
     reasoningReplay: "inherit",
+    serverInstructions: "inherit",
   });
   expect(shown.warnings).toContain(
     "prompt: 2 parts are joined into the one system prompt a profile holds",

@@ -106,6 +106,7 @@ export const settingsRow = (over: Partial<Settings> = {}): Settings => ({
   toolSelectModel: "",
   toolExecution: "sequential",
   reasoningReplay: "all",
+  serverInstructions: true,
   compactionModel: "",
   runRetentionDays: 30,
   requestTimeoutSeconds: 0,
@@ -133,6 +134,7 @@ export const echoRow = (over: Partial<McpServerRow> = {}): McpServerRow => ({
   url: "",
   headers: null,
   hiddenTools: null,
+  trustAnnotations: false,
   hooks: null,
   ...over,
 });

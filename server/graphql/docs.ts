@@ -66,8 +66,10 @@ export const COLUMN_DOCS: ColumnDocs = {
     maxToolIterations: "Ceiling on tool round-trips in a run. `-1` inherits the server default.",
     toolDiscovery: "`inherit` uses the server default; otherwise `eager` or `ondemand`.",
     toolSelectModel: "Empty inherits the server default. Unused unless discovery is on demand.",
-    toolExecution: "`inherit` uses the server default; otherwise `sequential` or `parallel`.",
+    toolExecution:
+      "`inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.",
     reasoningReplay: "`inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.",
+    serverInstructions: "`inherit` uses the server default; otherwise `on` or `off`.",
     compactionModel: "Empty inherits the server default, which is off unless one is set there.",
     requestTimeoutSeconds:
       "Seconds of silence before a request is given up on. `-1` inherits the server default; " +
@@ -197,6 +199,10 @@ export const COLUMN_DOCS: ColumnDocs = {
     hiddenTools:
       "Tools of this server a run's model is never offered, as a JSON array of the server's own " +
       "tool names. Its hooks can still call them — a memory server's `remember`, say.",
+    trustAnnotations:
+      "Believe this server's tools when they say they only read or are safe to repeat. Under " +
+      "`auto` its reads then run together, and a repeat in one step is answered once. Off, " +
+      "every call is treated as a write. Turn it on only for a server you have read.",
     hooks:
       "Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. " +
       "`on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or " +
@@ -223,13 +229,17 @@ export const COLUMN_DOCS: ColumnDocs = {
       "costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.",
     toolExecution:
       "`parallel` runs the calls a model asks for in one reply together, so a step waits for " +
-      "the slowest rather than the sum. Results return in the order asked either way. Leave it " +
-      "`sequential` if any tool writes: two writes run together finish in no set order.",
+      "the slowest rather than the sum; two writes run together finish in no set order. `auto` " +
+      "runs only the reads together — tools of a server whose annotations are trusted — and " +
+      "every other call alone, in order. Results return in the order asked either way.",
     reasoningReplay:
       "Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, " +
       "DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps " +
       "the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that " +
       "call tools; `none` saves context on an endpoint that does not use it.",
+    serverInstructions:
+      "Put what each MCP server says about using it in the system prompt, up to 1000 tokens a " +
+      "server. It is the same text on every step, so it stays in the endpoint's prompt cache.",
     compactionModel:
       "Model that summarises the oldest messages once a step fills 75% of the context window, " +
       "so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.",

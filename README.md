@@ -59,8 +59,8 @@ instead of the UI.
   run on it may reach. Everything left blank comes from settings, so a server with no profiles
   runs exactly as one that never had them. See **Agent profiles**.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
-  temperature limits, the cap on tool iterations per run, how MCP tools are discovered, and
-  whether the model's thinking is sent back to it (see below).
+  temperature limits, the cap on tool iterations per run, how MCP tools are discovered and
+  called, and whether the model's thinking is sent back to it (see below).
 
 ## Agent profiles
 
@@ -329,6 +329,21 @@ reasoning between tool calls, and a transcript sent back as the endpoint first s
 prompt cache valid. Never saves context on an endpoint that drops it anyway. The reasoning goes
 back under the field it arrived in, and an endpoint that refuses it is latched and not sent it
 again. In an exported agent spec it is `model.reasoningReplay`.
+
+**Tool calls in one reply** (`toolExecution`, on settings and on a profile) is **reads
+together** (`auto`, the default on a new install), **one at a time** or **all at once**. Reads
+together runs a server's read-only tools side by side and every other call alone, in the order
+the model asked — but only on a server whose row has **Believe this server's read-only and
+idempotent hints** (`trustAnnotations`) on, since MCP calls a tool's own annotations untrusted.
+Turn it on for a server you have read; on any other, reads together is one at a time. A trusted
+read asked twice in one reply is also answered once. An install from before this setting keeps
+the value it had.
+
+**Give the model the servers' instructions** (`serverInstructions`, on by default; a profile
+can say on, off or inherit) puts what each MCP server's handshake says about using it in the
+system prompt, up to 1000 tokens a server. And every step of a run is sent with the run id as
+its session: on a llama.cpp server that reports slots, the steps share one slot and its prompt
+cache, and the run's stream says which.
 
 MCP tool schemas are normalised before they reach the model (`@cubicecho/agent-core`):
 llama.cpp-backed servers compile every tool into one grammar, so a single shape their

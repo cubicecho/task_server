@@ -56,6 +56,7 @@ export interface SettingsForm {
   toolDiscovery: SettingsToolDiscoveryEnum;
   toolSelectModel: string;
   toolExecution: SettingsToolExecutionEnum;
+  serverInstructions: boolean;
   compactionModel: string;
   maxConcurrentRuns: number | null;
   runRetentionDays: number | null;
@@ -82,6 +83,7 @@ export const SECTION_OF: Record<keyof SettingsForm, Exclude<SettingsSection, "co
   toolDiscovery: "tools",
   toolSelectModel: "tools",
   toolExecution: "tools",
+  serverInstructions: "tools",
   compactionModel: "limits",
   maxConcurrentRuns: "server",
   runRetentionDays: "server",
@@ -102,6 +104,7 @@ export const toForm = (row: SettingsFieldsFragment): SettingsForm => ({
   toolDiscovery: row.toolDiscovery,
   toolSelectModel: row.toolSelectModel,
   toolExecution: row.toolExecution,
+  serverInstructions: row.serverInstructions,
   compactionModel: row.compactionModel,
   maxConcurrentRuns: row.maxConcurrentRuns,
   runRetentionDays: row.runRetentionDays,
@@ -125,6 +128,7 @@ export const toRow = (form: SettingsForm): UpdateSettingInput => ({
   toolDiscovery: form.toolDiscovery,
   toolSelectModel: form.toolSelectModel,
   toolExecution: form.toolExecution,
+  serverInstructions: form.serverInstructions,
   compactionModel: form.compactionModel,
   maxConcurrentRuns: form.maxConcurrentRuns ?? 0,
   runRetentionDays: form.runRetentionDays ?? 0,

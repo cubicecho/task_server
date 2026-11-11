@@ -32,14 +32,15 @@ const SYSTEM = "system";
 /**
  * Where a spec carries what this server has a column for and the format has no field for. A
  * spec's `extensions` are a host's own, keyed by reverse domain, and are kept by every reader —
- * so `toolExecution` survives an export and an import here, where an unknown key under `tools`
- * would be dropped by the parser on the way back in.
+ * so `toolExecution` and `serverInstructions` survive an export and an import here, where an
+ * unknown key under `tools` would be dropped by the parser on the way back in.
  */
 export const SPEC_EXTENSION = "com.cubicecho.task-server";
 
 /** What this server keeps under `SPEC_EXTENSION`. */
 export interface TaskServerExtension {
-  toolExecution?: "sequential" | "parallel";
+  toolExecution?: Settings["toolExecution"];
+  serverInstructions?: boolean;
 }
 
 /** The settings column's spelling of a replay policy, which is the profile column's less `inherit`. */
@@ -105,8 +106,12 @@ export const agentLayer = (agent: Agent): AgentSpec => {
   const prompt = str(agent.systemPrompt);
   const toolSelect = str(agent.toolSelectModel);
   const compaction = str(agent.compactionModel);
-  const own: TaskServerExtension =
-    agent.toolExecution === "inherit" ? {} : { toolExecution: agent.toolExecution };
+  const own: TaskServerExtension = {
+    ...(agent.toolExecution === "inherit" ? {} : { toolExecution: agent.toolExecution }),
+    ...(agent.serverInstructions === "inherit"
+      ? {}
+      : { serverInstructions: agent.serverInstructions === "on" }),
+  };
   return {
     spec: AGENT_SPEC,
     endpoint: {
@@ -174,9 +179,13 @@ export function resolveConfig(settings: Settings, agent?: Agent | null): Setting
     // optional there where the settings column always holds one.
     toolDiscovery: merged.toolDiscovery === "proxy" ? settings.toolDiscovery : merged.toolDiscovery,
     toolSelectModel: merged.toolSelectModel,
-    // Not the resolver's: a spec has no field for it, and `extensions` merge whole by key, so the
-    // laying-over is done here on the two columns rather than on the layers' extension objects.
+    // Neither is the resolver's: a spec has no field for them, and `extensions` merge whole by
+    // key, so the laying-over is done here on the columns rather than on the extension objects.
     toolExecution: agent.toolExecution === "inherit" ? settings.toolExecution : agent.toolExecution,
+    serverInstructions:
+      agent.serverInstructions === "inherit"
+        ? settings.serverInstructions
+        : agent.serverInstructions === "on",
     // The resolver leaves out a task whose model is blank, which is the column's own "off".
     compactionModel: merged.tasks.compaction?.model ?? "",
     requestTimeoutSeconds: merged.requestTimeoutSeconds ?? settings.requestTimeoutSeconds,

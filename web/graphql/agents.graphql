@@ -14,6 +14,7 @@ fragment AgentFields on Agent {
   toolSelectModel
   toolExecution
   reasoningReplay
+  serverInstructions
   compactionModel
   requestTimeoutSeconds
   maxRetries
@@ -77,6 +78,7 @@ query AgentSpecPreview($document: JSON!, $createServers: [String!], $name: Strin
       toolSelectModel
       toolExecution
       reasoningReplay
+      serverInstructions
       compactionModel
       requestTimeoutSeconds
       maxRetries

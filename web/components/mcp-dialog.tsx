@@ -46,6 +46,7 @@ interface Draft {
   url: string;
   headers: string;
   hiddenTools: string[];
+  trustAnnotations: boolean;
   hooks: string;
 }
 
@@ -66,6 +67,7 @@ const toDraft = (server?: McpServer): Draft => ({
   url: server?.url ?? "",
   headers: json(server?.headers, "{}"),
   hiddenTools: stringList(server?.hiddenTools),
+  trustAnnotations: server?.trustAnnotations ?? false,
   // Pretty-printed, unlike the one-line fields above: a hook is several keys deep and read more
   // often than it is written.
   hooks: server?.hooks ? JSON.stringify(server.hooks, null, 2) : "",
@@ -110,6 +112,7 @@ export function McpDialog({
         label: draft.label.trim(),
         enabled: draft.enabled,
         hiddenTools: draft.hiddenTools.length ? draft.hiddenTools : null,
+        trustAnnotations: draft.trustAnnotations,
         hooks: parseJson<unknown>(draft.hooks, "Hooks", null),
       };
       if (server) {
@@ -326,6 +329,15 @@ export function McpDialog({
             // A server that is not connected lists nothing, and a name can still be typed.
             freeText
             createLabel="Hide"
+          />
+
+          <SwitchField
+            form={form}
+            name="trustAnnotations"
+            label="Believe this server's read-only and idempotent hints"
+            description={doc("trustAnnotations")}
+            orientation="horizontal"
+            className="rounded-md border p-3"
           />
 
           <TextareaField

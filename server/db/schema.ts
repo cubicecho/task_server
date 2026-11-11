@@ -86,10 +86,14 @@ export const agents = pgTable("agents", {
     .notNull()
     .default("inherit"),
   toolSelectModel: text().notNull().default(""),
-  toolExecution: text({ enum: ["inherit", "sequential", "parallel"] })
+  toolExecution: text({ enum: ["inherit", "sequential", "parallel", "auto"] })
     .notNull()
     .default("inherit"),
   reasoningReplay: text({ enum: ["inherit", "all", "tool_loop", "none"] })
+    .notNull()
+    .default("inherit"),
+  /** A word rather than a nullable boolean, for the enum's reason above: `on`, `off` or `inherit`. */
+  serverInstructions: text({ enum: ["inherit", "on", "off"] })
     .notNull()
     .default("inherit"),
   compactionModel: text().notNull().default(""),
@@ -324,6 +328,15 @@ export const mcpServers = pgTable("mcp_servers", {
    */
   hiddenTools: jsonb().$type<string[]>(),
   /**
+   * Whether this server's tools are believed when they say they only read (`readOnlyHint`) or
+   * may be repeated (`idempotentHint`). The spec calls annotations untrusted and the pool
+   * believes none unless a row says so: under `toolExecution: auto` a trusted read runs beside
+   * the other reads, and an identical repeat of one in the same step is answered once. A server
+   * that marks a write read-only would get it run out of order, or its second call swallowed,
+   * so this is a judgement about one server an operator has read. Read at call time.
+   */
+  trustAnnotations: boolean().notNull().default(false),
+  /**
    * Tool calls this server wants made at points in a run — recall before a step, remember after
    * one. See `server/runner/hooks.ts` for which points a run has. Checked by `validateHooks` when
    * the row is written, so a placeholder the event does not offer is refused rather than skipped
@@ -408,16 +421,29 @@ export const settings = pgTable("settings", {
     .default("eager"),
   toolSelectModel: text().notNull().default(""),
   /**
-   * Whether the calls a model asks for in one reply run one after another or all at once. The
-   * results go back in the order the model asked either way. Sequential by default because this
-   * server cannot tell a tool that reads from one that writes: two writes to the same file, or a
-   * create and the update that assumes it, are only safe in the order they were asked. An
-   * operator whose tools are reads turns it on, and a round trip then costs the slowest call
-   * rather than the sum of them.
+   * Whether the calls a model asks for in one reply run one after another, all at once, or —
+   * `auto` — the reads together and the rest in order. The results go back in the order the
+   * model asked either way. Two writes to the same file, or a create and the update that assumes
+   * it, are only safe in the order they were asked, and this server cannot tell a read from a
+   * write on its own: `auto` asks the pool, which believes a tool's `readOnlyHint` only on a row
+   * that sets `trustAnnotations`. Every other call is a barrier, so `auto` over servers nobody
+   * vouched for is `sequential`, and a read asked for after a write still sees what it did.
+   *
+   * `auto` is the default for a new install. The column was `sequential` by default before it
+   * existed, and the migration only moves the default, so a row written then keeps its value:
+   * an operator who left it sequential is not turned parallel by an upgrade.
    */
-  toolExecution: text({ enum: ["sequential", "parallel"] })
+  toolExecution: text({ enum: ["sequential", "parallel", "auto"] })
     .notNull()
-    .default("sequential"),
+    .default("auto"),
+  /**
+   * Whether the system prompt carries what each connected MCP server says about how to use it —
+   * the `instructions` of its handshake, under agent-core's per-server budget. On by default, as
+   * min-agent has always had it: a server's author knows things about its tools a description
+   * has no room for. It costs prompt tokens on every step, though the block is the same text on
+   * each of them and so stays in the endpoint's cache; off is for a small window.
+   */
+  serverInstructions: boolean().notNull().default(true),
   /**
    * Which of the model's own replies carry its thinking back to it on the next request —
    * agent-core's `reasoningReplay`, whose default this is. A thinking model reads its earlier

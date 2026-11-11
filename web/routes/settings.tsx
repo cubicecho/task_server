@@ -13,7 +13,13 @@ import {
   SettingsToolExecutionEnum,
   UpdateSettingsDocument,
 } from "@/__generated__/graphql/graphql";
-import { InputField, NumberField, TextareaField, useAppForm } from "@/components/app-form";
+import {
+  InputField,
+  NumberField,
+  SwitchField,
+  TextareaField,
+  useAppForm,
+} from "@/components/app-form";
 import { CardLayout } from "@/components/card-layout";
 import { FieldRow } from "@/components/field-row";
 import { LoadError } from "@/components/load-state";
@@ -517,6 +523,13 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                           description={doc("toolExecution")}
                           options={[
                             {
+                              value: SettingsToolExecutionEnum.Auto,
+                              label: "Reads together",
+                              description:
+                                "Trusted read-only tools at once, everything else in order. " +
+                                "The default.",
+                            },
+                            {
                               value: SettingsToolExecutionEnum.Sequential,
                               label: "One at a time",
                               description: "Each call waits for the one before it.",
@@ -527,6 +540,14 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                               description: "For tools that only read.",
                             },
                           ]}
+                        />
+                        <SwitchField
+                          form={form}
+                          name="serverInstructions"
+                          label="Give the model the servers' instructions"
+                          description={doc("serverInstructions")}
+                          orientation="horizontal"
+                          className="rounded-md border p-3"
                         />
                       </div>
                     }

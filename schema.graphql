@@ -45,7 +45,7 @@ type Agent {
   toolSelectModel: String!
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum!
 
@@ -53,6 +53,9 @@ type Agent {
   `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
   """
   reasoningReplay: AgentsReasoningReplayEnum!
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum!
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -115,6 +118,9 @@ enum AgentsToolExecutionEnum {
 
   """Value: parallel"""
   parallel
+
+  """Value: auto"""
+  auto
 }
 
 enum AgentsReasoningReplayEnum {
@@ -129,6 +135,17 @@ enum AgentsReasoningReplayEnum {
 
   """Value: none"""
   none
+}
+
+enum AgentsServerInstructionsEnum {
+  """Value: inherit"""
+  inherit
+
+  """Value: on"""
+  on
+
+  """Value: off"""
+  off
 }
 
 """
@@ -224,7 +241,7 @@ type AgentMinAggregate {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
 
@@ -232,6 +249,9 @@ type AgentMinAggregate {
   `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
   """
   reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -295,7 +315,7 @@ type AgentMaxAggregate {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
 
@@ -303,6 +323,9 @@ type AgentMaxAggregate {
   `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
   """
   reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -336,6 +359,7 @@ type AgentCountNonNullAggregate {
   toolSelectModel: Int!
   toolExecution: Int!
   reasoningReplay: Int!
+  serverInstructions: Int!
   compactionModel: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -358,6 +382,7 @@ type AgentCountDistinctAggregate {
   toolSelectModel: Int!
   toolExecution: Int!
   reasoningReplay: Int!
+  serverInstructions: Int!
   compactionModel: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -423,7 +448,7 @@ type AgentGroupKeys {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
 
@@ -431,6 +456,9 @@ type AgentGroupKeys {
   `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
   """
   reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -2145,6 +2173,11 @@ type McpServer {
   hiddenTools: JSON
 
   """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: Boolean!
+
+  """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSON
@@ -2225,6 +2258,7 @@ type McpServerCountNonNullAggregate {
   url: Int!
   headers: Int!
   hiddenTools: Int!
+  trustAnnotations: Int!
   hooks: Int!
 }
 
@@ -2271,6 +2305,11 @@ type McpServerGroupKeys {
 
   """A disabled server is not dialled, and lends no tools to a run."""
   enabled: Boolean
+
+  """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: Boolean
 }
 
 """
@@ -2314,9 +2353,14 @@ type Setting {
   toolSelectModel: String!
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum!
+
+  """
+  Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
+  """
+  serverInstructions: Boolean!
 
   """
   Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
@@ -2368,6 +2412,9 @@ enum SettingsToolExecutionEnum {
 
   """Value: parallel"""
   parallel
+
+  """Value: auto"""
+  auto
 }
 
 enum SettingsReasoningReplayEnum {
@@ -2449,7 +2496,7 @@ type SettingMinAggregate {
   toolSelectModel: String
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum
 
@@ -2522,7 +2569,7 @@ type SettingMaxAggregate {
   toolSelectModel: String
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum
 
@@ -2568,6 +2615,7 @@ type SettingCountNonNullAggregate {
   toolDiscovery: Int!
   toolSelectModel: Int!
   toolExecution: Int!
+  serverInstructions: Int!
   reasoningReplay: Int!
   compactionModel: Int!
   runRetentionDays: Int!
@@ -2647,7 +2695,7 @@ type SettingGroupKeys {
   toolSelectModel: String
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum
 
@@ -2680,6 +2728,11 @@ type SettingGroupKeys {
   How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: Int
+
+  """
+  Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
+  """
+  serverInstructions: Boolean
 }
 
 input CreateAgentInput {
@@ -2726,7 +2779,7 @@ input CreateAgentInput {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
 
@@ -2734,6 +2787,9 @@ input CreateAgentInput {
   `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
   """
   reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -2802,7 +2858,7 @@ input UpdateAgentInput {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
 
@@ -2810,6 +2866,9 @@ input UpdateAgentInput {
   `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
   """
   reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -2887,7 +2946,7 @@ input AgentFilters {
   toolSelectModel: StringFilter
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnumFilter
 
@@ -2895,6 +2954,9 @@ input AgentFilters {
   `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
   """
   reasoningReplay: AgentsReasoningReplayEnumFilter
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnumFilter
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -3172,6 +3234,35 @@ input AgentsReasoningReplayEnumFilter {
   NOT: AgentsReasoningReplayEnumFilter
 }
 
+input AgentsServerInstructionsEnumFilter {
+  """Equal to"""
+  eq: AgentsServerInstructionsEnum
+
+  """Not equal to"""
+  ne: AgentsServerInstructionsEnum
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [AgentsServerInstructionsEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [AgentsServerInstructionsEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [AgentsServerInstructionsEnumFilter!]
+
+  """Every branch matches"""
+  AND: [AgentsServerInstructionsEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: AgentsServerInstructionsEnumFilter
+}
+
 input JSONFilter {
   """JSON equality on the whole value"""
   eq: JSON
@@ -3337,6 +3428,7 @@ input AgentOrderBy {
   toolSelectModel: InnerOrder
   toolExecution: InnerOrder
   reasoningReplay: InnerOrder
+  serverInstructions: InnerOrder
   compactionModel: InnerOrder
   requestTimeoutSeconds: InnerOrder
   maxRetries: InnerOrder
@@ -3450,6 +3542,7 @@ input AgentCountNonNullHaving {
   toolSelectModel: AggregateNumberFilter
   toolExecution: AggregateNumberFilter
   reasoningReplay: AggregateNumberFilter
+  serverInstructions: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
@@ -3472,6 +3565,7 @@ input AgentCountDistinctHaving {
   toolSelectModel: AggregateNumberFilter
   toolExecution: AggregateNumberFilter
   reasoningReplay: AggregateNumberFilter
+  serverInstructions: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
@@ -4824,6 +4918,11 @@ input CreateMcpServerInput {
   hiddenTools: JSON
 
   """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: Boolean
+
+  """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSON
@@ -4869,6 +4968,11 @@ input UpdateMcpServerInput {
   Tools of this server a run's model is never offered, as a JSON array of the server's own tool names. Its hooks can still call them — a memory server's `remember`, say.
   """
   hiddenTools: JSON
+
+  """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: Boolean
 
   """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
@@ -4927,6 +5031,11 @@ input McpServerFilters {
   hiddenTools: JSONFilter
 
   """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: BooleanFilter
+
+  """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSONFilter
@@ -4982,6 +5091,7 @@ input McpServerOrderBy {
   url: InnerOrder
   headers: InnerOrder
   hiddenTools: InnerOrder
+  trustAnnotations: InnerOrder
   hooks: InnerOrder
 }
 
@@ -5005,6 +5115,7 @@ input McpServerCountNonNullHaving {
   url: AggregateNumberFilter
   headers: AggregateNumberFilter
   hiddenTools: AggregateNumberFilter
+  trustAnnotations: AggregateNumberFilter
   hooks: AggregateNumberFilter
 }
 
@@ -5055,9 +5166,14 @@ input UpdateSettingInput {
   toolSelectModel: String
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum
+
+  """
+  Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
+  """
+  serverInstructions: Boolean
 
   """
   Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
@@ -5137,9 +5253,14 @@ input SettingFilters {
   toolSelectModel: StringFilter
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnumFilter
+
+  """
+  Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
+  """
+  serverInstructions: BooleanFilter
 
   """
   Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
@@ -5279,6 +5400,7 @@ input SettingOrderBy {
   toolDiscovery: InnerOrder
   toolSelectModel: InnerOrder
   toolExecution: InnerOrder
+  serverInstructions: InnerOrder
   reasoningReplay: InnerOrder
   compactionModel: InnerOrder
   runRetentionDays: InnerOrder
@@ -5350,6 +5472,7 @@ input SettingCountNonNullHaving {
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
   toolExecution: AggregateNumberFilter
+  serverInstructions: AggregateNumberFilter
   reasoningReplay: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   runRetentionDays: AggregateNumberFilter
@@ -5712,6 +5835,7 @@ enum AgentDistinctColumn {
   toolSelectModel
   toolExecution
   reasoningReplay
+  serverInstructions
   compactionModel
   requestTimeoutSeconds
   maxRetries
@@ -5735,6 +5859,7 @@ enum AgentGroupByColumn {
   toolSelectModel
   toolExecution
   reasoningReplay
+  serverInstructions
   compactionModel
   requestTimeoutSeconds
   maxRetries
@@ -5855,6 +5980,7 @@ enum McpServerDistinctColumn {
   url
   headers
   hiddenTools
+  trustAnnotations
   hooks
 }
 
@@ -5867,6 +5993,7 @@ enum McpServerGroupByColumn {
   transport
   command
   url
+  trustAnnotations
 }
 
 """Columns of Setting that a query can be made distinct on"""
@@ -5881,6 +6008,7 @@ enum SettingDistinctColumn {
   toolDiscovery
   toolSelectModel
   toolExecution
+  serverInstructions
   reasoningReplay
   compactionModel
   runRetentionDays
@@ -5901,6 +6029,7 @@ enum SettingGroupByColumn {
   toolDiscovery
   toolSelectModel
   toolExecution
+  serverInstructions
   reasoningReplay
   compactionModel
   runRetentionDays
@@ -5974,6 +6103,7 @@ type AgentSpecProfile {
   toolSelectModel: String!
   toolExecution: String!
   reasoningReplay: String!
+  serverInstructions: String!
   compactionModel: String!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
