@@ -9,7 +9,6 @@ import {
   notify,
   type RunEventInput,
   RunEventKind,
-  turnMessages,
 } from "@cubicecho/agent-core";
 import { type ToolHook, validateHooks } from "@cubicecho/agent-mcp-pool";
 import { eq, sql } from "drizzle-orm";
@@ -25,8 +24,9 @@ import { mcp } from "./mcp.ts";
  * task's own prompt being turn 0 with `sessionStart` ahead of it. `sessionEnd` fires once the
  * run has finished, `sessionDelete` for a run deleted by hand, by retention or with its task,
  * and `beforeCompact` when a step's transcript is folded — which only a step on a compaction
- * model ever is, and which the loop fires rather than this file (see `compaction`). A skipped or
- * queued run fires nothing, and `{{vars.task.id}}` is the key for memory that should outlast one
+ * model ever is. The loop fires `beforeCompact` and `afterTurn` rather than this file (see
+ * `loop`); `sessionStart` and `beforeTurn` are gathered here, ahead of the step's request, so
+ * the context goes on the question before the loop sees it. A skipped or queued run fires nothing, and `{{vars.task.id}}` is the key for memory that should outlast one
  * run.
  */
 
@@ -80,6 +80,14 @@ export interface HookStep {
   kind: Step["kind"];
   /** The prompt as the step was sent it, before any context. */
   prompt: string;
+  /**
+   * Where the step's question sits among the run's messages: how many the steps before it ended
+   * with. A run keeps no transcript — each step starts from nothing — so this lays the steps end
+   * to end as if it kept one, and the uuids a hook is told carry a message's place in the run
+   * rather than restarting at 0 for every step, which a memory server deduping on them would read
+   * as the same message.
+   */
+  at: number;
 }
 
 /** How a run that started came to an end, as `sessionEnd` is told it. */
@@ -142,21 +150,49 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
     },
 
     /**
-     * Tells the hooks a step has its output, without holding up the step after it. What failed
-     * is added to the step's row when it comes back.
+     * The step's hooks as the loop takes them, for the two events it fires on this host's behalf:
+     * `beforeCompact`, told what is about to be summarised away, and `afterTurn` once the step has
+     * its answer.
      *
-     * No signal: a run stopped after a step answered has not asked for that answer to be forgotten.
+     * `fire` leaves out `sessionStart` and `beforeTurn`, which `before` gathers ahead of the
+     * request so the context is on the question before the loop sees it. `question` is the prompt
+     * as written, so a memory server files what the step asked rather than what was recalled for
+     * it; `turnBase` makes the step's turn its index in the run, and `offset` puts its messages at
+     * `at`, so a folded message and a remembered one carry the same uuid.
+     *
+     * A `beforeCompact` that fails is told to `keep`, which puts it on the step's row with the
+     * rest. An `afterTurn` is only said on the stream here: it lands after the row is written
+     * whole, and `after` appends it.
      */
-    after(step: HookStep, reply: string, rowId: string, onEvent?: (event: RunEventInput) => void) {
-      const context: HookContext = {
-        ...contextFor(step),
-        prompt: step.prompt,
-        reply,
-        turn: { index: step.index, messages: exchange(step, reply) },
+    loop(
+      step: HookStep,
+      keep: (note: HookNote) => void,
+      onEvent?: (event: RunEventInput) => void,
+    ): AgentLoopHooks {
+      return {
+        run,
+        context: { ...contextFor(step), prompt: step.prompt, turn: { index: step.index } },
+        fire: [HookEvent.BeforeCompact, HookEvent.AfterTurn],
+        question: step.prompt,
+        turnBase: step.index,
+        offset: step.at,
+        onNote: (note) =>
+          note.event === HookEvent.AfterTurn
+            ? onEvent?.({ kind: RunEventKind.Notice, text: describe(note) })
+            : keep(note),
       };
-      const done = notify(run, HookEvent.AfterTurn, context, (note) =>
-        onEvent?.({ kind: RunEventKind.Notice, text: describe(note) }),
-      ).then(async (notes) => {
+    },
+
+    /**
+     * Keeps what a step's `afterTurn` hooks failed at on its row, once they come back, without
+     * holding up the step after it. Called after the row is closed, since closing it writes its
+     * notes whole and would overwrite these.
+     *
+     * The loop gives them no signal: a run stopped after a step answered has not asked for that
+     * answer to be forgotten.
+     */
+    after(told: Promise<HookNote[]>, rowId: string) {
+      const done = told.then(async (notes) => {
         if (!notes.length) {
           return;
         }
@@ -166,26 +202,6 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
           .where(eq(runSteps.id, rowId));
       });
       pending.push(done.catch((error: unknown) => log(`afterTurn: ${errorMessage(error)}`)));
-    },
-
-    /**
-     * The step's hooks as the loop takes them, for the one event it fires on this host's behalf:
-     * `beforeCompact`, told what is about to be summarised away.
-     *
-     * `fire` names that one alone, because `before` and `after` already fire `beforeTurn` and
-     * `afterTurn` around the whole step, and the loop would otherwise fire them a second time.
-     * `offset` numbers the step's messages from where `exchange` lays them, so a folded message
-     * reaches a memory server under the uuid its `afterTurn` will use. What fails is told to
-     * `onNote` and kept on the step's row with the rest.
-     */
-    compaction(step: HookStep, onNote: (note: HookNote) => void): AgentLoopHooks {
-      return {
-        run,
-        context: { ...contextFor(step), prompt: step.prompt, turn: { index: step.index } },
-        fire: [HookEvent.BeforeCompact],
-        offset: step.index * 2,
-        onNote,
-      };
     },
 
     /**
@@ -199,22 +215,6 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
       return ending.finally(() => ends.delete(ending));
     },
   };
-
-  /**
-   * A step's prompt and answer as the turn's messages.
-   *
-   * A run keeps no transcript — each step starts from nothing — so this lays the step's two
-   * messages where they would sit in one, at `index * 2`. Their uuids then carry the step's place
-   * in the run rather than restarting at 0 for every step, which a memory server deduping on them
-   * would read as the same message.
-   */
-  function exchange(step: HookStep, reply: string) {
-    const at = step.index * 2;
-    const transcript: { role: string; content: string }[] = [];
-    transcript[at] = { role: "user", content: step.prompt };
-    transcript[at + 1] = { role: "assistant", content: reply };
-    return turnMessages(runId, transcript, at);
-  }
 
   async function finishing(status: RunEnding, reply: string) {
     try {

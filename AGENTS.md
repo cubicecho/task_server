@@ -525,16 +525,39 @@ documented config works on all three. `server/runner/hooks.ts` is the mapping: `
 is the run id, each executed step is a turn (the task's own prompt is turn 0, and
 `sessionStart` fires ahead of it), `sessionEnd` fires once the run's outcome is written, and
 `sessionDelete` for a run deleted by hand, with its task, or by retention. `beforeCompact`
-fires when a step's transcript is folded, which happens only on a compaction model, and it is the
-one event the *loop* fires: `HookSession.compaction` hands `runAgentLoop` the run's hooks with
-`fire: [HookEvent.BeforeCompact]` and nothing else, since `before` and `after`
-already fire `beforeTurn` and `afterTurn` around the whole step and the loop would fire them a
-second time. Its `offset` is `step.index * 2`, where `exchange` lays the step's messages, so a
-folded message reaches a memory server under the uuid its `afterTurn` uses. A `beforeCompact`
-that fails is kept on `run_steps.hooks` with the rest. `{{vars.task.id}}` is the key for memory
-that should outlast one run.
+fires when a step's transcript is folded, which happens only on a compaction model.
 
-The host side is agent-core's: `gather` before a step, `notify` after, and `withContext` putting
+`afterTurn` and `beforeCompact` are the two events the *loop* fires: `HookSession.loop` hands
+`runAgentLoop` the run's hooks with `fire: [HookEvent.BeforeCompact, HookEvent.AfterTurn]`,
+leaving out `sessionStart` and `beforeTurn`, which `before` gathers ahead of the request so the
+context is on the question before the loop sees it. `question` is the step's prompt as written,
+so a memory server files what was asked rather than what was recalled for it; `turnBase` is the
+step's index, so `turn.index` is its place in the run; and `offset` is `HookStep.at`, the count of
+messages the steps before it ended with, which `flow.ts` keeps from each step's `messageCount`. A
+run keeps no transcript, so that lays the steps end to end as if it kept one, and a folded
+message reaches a memory server under the uuid its `afterTurn` uses. The loop's `turn.messages`
+is the step's whole exchange — the question, any text the model wrote beside its tool calls, and
+the answer — each at its real position, tool results skipped but keeping their places.
+
+Memory written before 7.20.0 is keyed differently. Until then `afterTurn` was a `notify` written
+here, which told a step's prompt at `index * 2` and its answer at `index * 2 + 1` and nothing in
+between; a step that called a tool now puts its answer further on, and the next step's question
+after that. The positions are a message's place in the run either way, but a memory server
+deduping on the uuid will not match a turn remembered before the change with the same turn
+remembered after it. Accepted rather than worked around: the old scheme dropped what a model
+said beside its calls, and with the loop's real positions a stride of two would put a tool-using
+step's answer where the next step's question is.
+
+The loop does not wait for `afterTurn`; it hands the promise back as `result.afterTurn`, and
+`HookSession.after` keeps what failed on the step's row once the row is closed — closing writes
+its notes whole, so an earlier append would be overwritten. An `afterTurn` note is therefore only
+said on the stream as it lands, and a `beforeCompact` that fails is kept on `run_steps.hooks`
+with the rest. A decision step whose answer could not be read back had still answered, so its
+turn is told and kept as well. `{{vars.task.id}}` is the key for memory that should outlast one
+run.
+
+The host side is agent-core's: `gather` before a step, the loop's `afterTurn` after it, and
+`withContext` putting
 what was gathered on the step's question with this server's preface, which `hooks.ts` sets once
 with `configureHooks` rather than passing at each call; the runner each of them is handed is
 the pool's `hookRunner`, bound to the run's MCP scope. What stays here is the

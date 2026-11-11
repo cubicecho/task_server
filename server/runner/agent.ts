@@ -2,6 +2,7 @@ import {
   type AgentLoopHooks,
   COMPACT_AT,
   contextLimitFor,
+  type HookNote,
   PRUNE_SHARE,
   type RunArtifact,
   type RunEventInput,
@@ -28,6 +29,17 @@ export interface AgentResult {
    * `flow.ts` writes them to `run_artifacts`, which is where they are one per uri for the run.
    */
   artifacts: RunArtifact[];
+  /**
+   * The step's `afterTurn` hooks, which the loop fires once it has the answer and does not wait
+   * for: what failed, for `HookSession.after` to keep on the step's row. Resolved and empty
+   * without `hooks`.
+   */
+  afterTurn: Promise<HookNote[]>;
+  /**
+   * How many messages the step's transcript ended with, question included. The next step's
+   * question is numbered after them in the uuids a hook is told — see `HookStep.at`.
+   */
+  messageCount: number;
 }
 
 export interface AgentOptions {
@@ -53,7 +65,7 @@ export interface AgentOptions {
    * the stream as a notice either way; this is how the step keeps it.
    */
   onElicitation?: (note: ElicitationNote) => void;
-  /** The MCP servers' `beforeCompact` hooks for this step, from `HookSession.compaction`. */
+  /** The MCP servers' hooks the loop fires for this step, from `HookSession.loop`. */
   hooks?: AgentLoopHooks;
   /**
    * The run this step belongs to, by id. Every step of a run passes the same one, so on a
@@ -113,7 +125,7 @@ export async function runAgent({
   // agent-core's own bound on the lookup, which guards nothing; a stop ends the wait with the run.
   const contextLength = await contextLimitFor({ ...config, model }, 0, { signal });
 
-  const { turn, toolCalls, usage, artifacts } = await runAgentLoop({
+  const { turn, toolCalls, usage, artifacts, afterTurn, messages } = await runAgentLoop({
     // A step may run on a model other than the settings row's. The first token gets the same
     // patience as every one after it, where the loop would otherwise wait five times as long.
     config: {
@@ -163,7 +175,7 @@ export async function runAgent({
     // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
     // report a window, since there is nothing to plan three quarters of.
     compact: Boolean(config.compactionModel),
-    // Only ever `beforeCompact`: see `compaction` in `hooks.ts`.
+    // `beforeCompact` and `afterTurn`, never the injecting events: see `loop` in `hooks.ts`.
     ...(hooks ? { hooks } : {}),
     // Needs no model, so it is on wherever the window is known. Old tool results are stubbed
     // past `COMPACT_AT` of the window, and only for at least `PRUNE_SHARE` of it: the stubs
@@ -217,5 +229,7 @@ export async function runAgent({
     completionTokens: usage.completion,
     totalTokens: usage.total,
     artifacts,
+    afterTurn,
+    messageCount: messages.length,
   };
 }
