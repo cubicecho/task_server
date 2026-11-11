@@ -4,6 +4,7 @@ import {
   type AgentFieldsFragment,
   type AgentsQuery,
   AgentsReasoningReplayEnum,
+  AgentsServerInstructionsEnum,
   AgentsToolDiscoveryEnum,
   AgentsToolExecutionEnum,
   CreateAgentDocument,
@@ -58,6 +59,7 @@ interface Draft {
   toolDiscovery: AgentsToolDiscoveryEnum;
   toolSelectModel: string;
   toolExecution: AgentsToolExecutionEnum;
+  serverInstructions: AgentsServerInstructionsEnum;
   compactionModel: string;
   requestTimeoutSeconds: number | null;
   maxRetries: number | null;
@@ -83,6 +85,7 @@ const toDraft = (agent?: AgentFieldsFragment): Draft => ({
   toolDiscovery: agent?.toolDiscovery ?? AgentsToolDiscoveryEnum.Inherit,
   toolSelectModel: agent?.toolSelectModel ?? "",
   toolExecution: agent?.toolExecution ?? AgentsToolExecutionEnum.Inherit,
+  serverInstructions: agent?.serverInstructions ?? AgentsServerInstructionsEnum.Inherit,
   compactionModel: agent?.compactionModel ?? "",
   requestTimeoutSeconds: shown(agent?.requestTimeoutSeconds ?? -1),
   maxRetries: shown(agent?.maxRetries ?? -1),
@@ -327,6 +330,11 @@ export function AgentDialog({
             options={[
               { value: AgentsToolExecutionEnum.Inherit, label: "From settings" },
               {
+                value: AgentsToolExecutionEnum.Auto,
+                label: "Reads together",
+                description: "Trusted read-only tools at once, everything else in order.",
+              },
+              {
                 value: AgentsToolExecutionEnum.Sequential,
                 label: "One at a time",
                 description: "Each call waits for the one before it.",
@@ -335,6 +343,26 @@ export function AgentDialog({
                 value: AgentsToolExecutionEnum.Parallel,
                 label: "All at once",
                 description: "For tools that only read.",
+              },
+            ]}
+          />
+
+          <RadioGroupField
+            form={form}
+            name="serverInstructions"
+            label="Servers' instructions"
+            description={doc("serverInstructions")}
+            options={[
+              { value: AgentsServerInstructionsEnum.Inherit, label: "From settings" },
+              {
+                value: AgentsServerInstructionsEnum.On,
+                label: "Given to the model",
+                description: "Each server's own guidance goes in the system prompt.",
+              },
+              {
+                value: AgentsServerInstructionsEnum.Off,
+                label: "Left out",
+                description: "Saves the prompt tokens on a small window.",
               },
             ]}
           />

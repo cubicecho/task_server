@@ -386,6 +386,9 @@ export async function runFlow({
         onEvent: emit,
         onMetrics,
         hooks: loopHooks,
+        // Every step of the run on one llama.cpp slot. The loop says which in a notice, which
+        // `emit` puts on the run's stream with the rest.
+        session: runId,
       });
       // Before the decision is read back, which can still fail the step: what the tools made
       // was made either way.

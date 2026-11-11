@@ -11,6 +11,7 @@ query McpServers {
     url
     headers
     hiddenTools
+    trustAnnotations
     hooks
   }
   mcpStatus {

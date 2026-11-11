@@ -374,8 +374,8 @@ table of rows; the one thing the resolver does that the old merge did not is tri
 system prompt when a profile is in play. Nothing downstream branches: `agent.ts`, `flow.ts` and `llm.ts` read one `Settings`
 exactly as they always did, which is why per-task endpoints cost the agent loop nothing. Blank
 is inherit, and the sentinel differs by column because zero is a real answer for most of them —
-`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`, `toolExecution` and
-`reasoningReplay`.
+`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`, `toolExecution`,
+`reasoningReplay` and `serverInstructions` — the last a boolean in settings, and `on`/`off` here.
 
 `reasoningReplay` is agent-core's own `model.reasoningReplay` — which of the model's replies
 carry its thinking back to it — and is laid over by the resolver like any spec field. The one
@@ -385,9 +385,9 @@ enum value cannot hold a hyphen and the driver names one it cannot spell `Option
 `agent.ts`, and nowhere else; the typecheck catches a fourth place that forgets, since the
 column's word is not one `ReasoningReplay` accepts. The settings default is `all`, agent-core's.
 
-`toolExecution` is the one column a spec has no field for, so it is laid over in
-`resolveConfig` by hand rather than by the resolver, and it travels in an export under this
-server's own extension, `extensions["com.cubicecho.task-server"]` (`SPEC_EXTENSION` in
+`toolExecution` and `serverInstructions` are the two columns a spec has no field for, so they are
+laid over in `resolveConfig` by hand rather than by the resolver, and they travel in an export
+under this server's own extension, `extensions["com.cubicecho.task-server"]` (`SPEC_EXTENSION` in
 `profile.ts`) — the format's place for what a host has a name for and it does not, and kept by
 every reader where an unknown key under `tools` would be dropped on the way back in. The import
 reads that one extension and drops every other, as before.
@@ -539,17 +539,39 @@ unexplained pause wants to be told either way. The step loop, the request body, 
 watchdog and the endpoint's latched refusals were all written here once and are not to be
 written here again — see [Future work](#future-work).
 
-Two of the loop's defaults are turned off, and both were decided rather than left.
-`toolOrder: false` sends tools in the order the pool lists them: sorted by name, a tool loaded on
-demand lands mid-array and moves every definition after it, where unsorted it is appended and
-the prefix an endpoint cached still matches — and the pool's order is configuration order, so
-there is no shuffle for a sort to undo. Reopen it with evidence that the order moves between
-requests. `dedupeToolCalls: false` leaves two identical calls in one step as two calls, since a
-counter or a "next page" is meant to answer differently the second time. `parallel` is the
-operator's, as `settings.toolExecution` (and a profile's): sequential by default, because this
-server cannot tell a tool that reads from one that writes, and two writes run together land in
-whichever order they finish — the results go back to the model in the order it asked either
-way. Recovery is on: a call the model wrote into its reply as text — a
+One of the loop's defaults is turned off and one narrowed, and both were decided rather than
+left. `toolOrder: false` sends tools in the order the pool lists them: sorted by name, a tool
+loaded on demand lands mid-array and moves every definition after it, where unsorted it is
+appended and the prefix an endpoint cached still matches — and the pool's order is configuration
+order, so there is no shuffle for a sort to undo. Reopen it with evidence that the order moves
+between requests. `dedupeToolCalls` answers an identical repeat in one step once only for a
+tool `mcp.readsOnly` vouches for, and leaves every other pair as two calls, since a counter or a
+"next page" is meant to answer differently the second time and a trusted read is neither.
+
+`parallel` is the operator's, as `settings.toolExecution` (and a profile's), and two writes run
+together land in whichever order they finish — the results go back to the model in the order it
+asked either way. This server cannot tell a tool that reads from one that writes, but the pool
+can where an operator lets it: `mcp_servers.trustAnnotations` makes the pool believe that
+server's `readOnlyHint`, and `auto` hands the loop
+`(call) => mcp.readsOnly(call.name, { servers })` as the predicate, so consecutive trusted reads
+run together and every other call is a barrier. Fail-closed is the pool's — an unknown, out-of-scope or untrusted tool is a write — so
+`auto` over servers nobody vouched for is `sequential`. It is the default for a new install; the
+migration that added it only moved the column's default, so a row written before it keeps the
+`sequential` it had, and an upgrade turns no one's writes parallel. Trust is not bundled in an
+agent spec: like `enabled` it is a judgement about this host, and a server arrives untrusted.
+`tests/tool-execution.test.ts` reads the overlap off the fixture's own timing log, since nothing
+on this side of the connection can see two calls in flight.
+
+`serverInstructions` is on by default, as min-agent has always had it: what a server's
+handshake says about using it goes in the system prompt, under agent-core's per-server budget.
+It costs prompt tokens on every step, but the block is the same text on each, so past the first
+request it is prefix the endpoint has cached; off is for a small window. And every step of a
+run passes the run id as `session`, so on a llama.cpp server that reports slots the steps share
+one, and the up to `maxConcurrentRuns` runs in flight stop evicting each other's prompt cache.
+It has no setting — an endpoint without `/props` slots is simply not pinned — and the loop's
+"pinned to slot" notice reaches the run stream with the rest.
+
+Recovery is on: a call the model wrote into its reply as text — a
 server whose parser misses the model's template streams it as content — is run as a call rather
 than stored as the step's answer, and the watcher is told in a notice.
 `firstTokenSeconds` is set to `requestTimeoutSeconds`, where the loop would otherwise give the

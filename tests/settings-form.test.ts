@@ -20,6 +20,7 @@ const ROW: SettingsFieldsFragment = {
   toolDiscovery: SettingsToolDiscoveryEnum.Eager,
   toolSelectModel: "",
   toolExecution: SettingsToolExecutionEnum.Sequential,
+  serverInstructions: true,
   compactionModel: "",
   requestTimeoutSeconds: 120,
   maxRetries: 2,

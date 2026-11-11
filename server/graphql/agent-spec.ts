@@ -49,10 +49,11 @@ function compact<T extends object>(value: T): T {
  * One MCP server row as a bundle carries it: how to start or reach it, under the slug the
  * profile's scope names it by.
  *
- * No `id` and no `enabled`. An id is this database's and means nothing in another, and a
- * disabled server is a decision about this host — the importing operator makes their own when
- * they choose whether to create it. Only the arm the transport reads is written, so a row that
- * was once stdio does not travel with a `url` it stopped using.
+ * No `id`, no `enabled` and no `trustAnnotations`. An id is this database's and means nothing in
+ * another, and a disabled server or a trusted one is a decision about this host — the importing
+ * operator makes their own when they choose whether to create it, and a server arrives believed
+ * by nobody. Only the arm the transport reads is written, so a row that was once stdio does not
+ * travel with a `url` it stopped using.
  */
 function bundled(row: McpServerRow): SpecServer {
   const connection =
@@ -163,6 +164,7 @@ export type ImportedAgent = Pick<
   | "toolSelectModel"
   | "toolExecution"
   | "reasoningReplay"
+  | "serverInstructions"
   | "compactionModel"
   | "requestTimeoutSeconds"
   | "maxRetries"
@@ -258,6 +260,7 @@ const SERVER_COLUMNS = new Set([
   "url",
   "headers",
   "hiddenTools",
+  "trustAnnotations",
   "hooks",
 ]);
 
@@ -318,6 +321,10 @@ function readBundled(
   }
   if (held.enabled === false) {
     notes.push("disabled where it was exported; created enabled here");
+  }
+  // A host that wrote it believed the server, which was that host's judgement to make.
+  if (held.trustAnnotations === true) {
+    notes.push("its annotations were trusted where it was exported; created untrusted here");
   }
 
   const names = (value: unknown) => (isRecord(value) ? Object.keys(value) : []);
@@ -429,19 +436,31 @@ export function planImport(
   // hand, since the parser promises only that `extensions` is an object.
   const own = spec.extensions?.[SPEC_EXTENSION];
   let execution: ImportedAgent["toolExecution"] = "inherit";
+  let instructions: ImportedAgent["serverInstructions"] = "inherit";
   if (own !== undefined && !isRecord(own)) {
     drop(`extensions.${SPEC_EXTENSION}`, "must be an object");
   }
   for (const [key, held] of Object.entries(isRecord(own) ? own : {})) {
-    if (key !== "toolExecution") {
-      drop(`extensions.${SPEC_EXTENSION}.${key}`, "a profile has no such setting");
-    } else if (held === "sequential" || held === "parallel") {
-      execution = held;
+    if (key === "toolExecution") {
+      if (held === "sequential" || held === "parallel" || held === "auto") {
+        execution = held;
+      } else {
+        drop(
+          `extensions.${SPEC_EXTENSION}.toolExecution`,
+          'must be "sequential", "parallel" or "auto", so it is left to inherit',
+        );
+      }
+    } else if (key === "serverInstructions") {
+      if (typeof held === "boolean") {
+        instructions = held ? "on" : "off";
+      } else {
+        drop(
+          `extensions.${SPEC_EXTENSION}.serverInstructions`,
+          "must be true or false, so it is left to inherit",
+        );
+      }
     } else {
-      drop(
-        `extensions.${SPEC_EXTENSION}.toolExecution`,
-        'must be "sequential" or "parallel", so it is left to inherit',
-      );
+      drop(`extensions.${SPEC_EXTENSION}.${key}`, "a profile has no such setting");
     }
   }
   for (const [index, hook] of (spec.hooks ?? []).entries()) {
@@ -528,6 +547,7 @@ export function planImport(
     toolDiscovery: discovery === "eager" || discovery === "ondemand" ? discovery : "inherit",
     toolSelectModel: spec.tasks?.toolSelect?.model?.trim() ?? "",
     toolExecution: execution,
+    serverInstructions: instructions,
     compactionModel: spec.tasks?.compaction?.model?.trim() ?? "",
     requestTimeoutSeconds: whole(
       "endpoint.requestTimeoutSeconds",

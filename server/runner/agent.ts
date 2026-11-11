@@ -7,6 +7,7 @@ import {
   RunEventKind,
   type RunMetrics,
   runAgentLoop,
+  type ToolCallRequest,
   withContext,
 } from "@cubicecho/agent-core";
 import type { Settings } from "../db/schema.ts";
@@ -54,6 +55,12 @@ export interface AgentOptions {
   onMetrics?: (metrics: RunMetrics, contextLength: number) => void;
   /** The MCP servers' `beforeCompact` hooks for this step, from `HookSession.compaction`. */
   hooks?: AgentLoopHooks;
+  /**
+   * The run this step belongs to, by id. Every step of a run passes the same one, so on a
+   * llama.cpp server they share a slot — and its prompt cache — rather than the up to
+   * `maxConcurrentRuns` runs in flight evicting each other's. Absent is a run of no session.
+   */
+  session?: string;
 }
 
 /**
@@ -83,6 +90,7 @@ export async function runAgent({
   onEvent,
   onMetrics,
   hooks,
+  session,
 }: AgentOptions): Promise<AgentResult> {
   if (!model) {
     throw new Error("No model selected — pick one in Settings.");
@@ -96,6 +104,9 @@ export async function runAgent({
   };
 
   const catalog = mcp.catalog(servers);
+  // Whether a call only reads, by the tool's own `readOnlyHint` on a row that sets
+  // `trustAnnotations`. Fails closed: anything the pool cannot vouch for is a write.
+  const reads = (call: ToolCallRequest) => mcp.readsOnly(call.name, { servers });
 
   // Chosen here rather than by the loop, for two things the loop's own preselection does not do:
   // it reads the prompt as written, before the hooks' context is put in front of it, and the
@@ -140,15 +151,22 @@ export async function runAgent({
     tools: mcp.tools({ servers }),
     catalog,
     preselected,
-    // Both are decisions, not defaults nobody looked at. Sorted by name, a tool loaded on demand
-    // lands mid-array and moves every definition after it, where unsorted it is appended and the
-    // prefix an endpoint cached still matches. And two identical calls in one step are two
-    // calls: a counter or a "next page" is meant to answer differently the second time.
+    // A decision, not a default nobody looked at. Sorted by name, a tool loaded on demand lands
+    // mid-array and moves every definition after it, where unsorted it is appended and the
+    // prefix an endpoint cached still matches.
     toolOrder: false,
-    dedupeToolCalls: false,
+    // Two identical calls in one step are two calls — a counter or a "next page" is meant to
+    // answer differently the second time — unless the tool is a read on a server whose
+    // annotations the operator trusts, which is neither.
+    dedupeToolCalls: reads,
     // The operator's call, since only they know whether their tools write: results still go back
     // in the order the model asked, but two writes run together land in the order they finish.
-    parallel: config.toolExecution === "parallel",
+    // `auto` asks the pool per call, and a call it cannot vouch for runs alone, in order.
+    parallel: config.toolExecution === "auto" ? reads : config.toolExecution === "parallel",
+    // Read off `catalog`, which is passed in every mode. The block is the same text on every
+    // request of the step, so past the first it is prompt the endpoint has cached.
+    serverInstructions: config.serverInstructions,
+    ...(session ? { session } : {}),
     maxContinuations: MAX_CONTINUATIONS,
     // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
     // report a window, since there is nothing to plan three quarters of.
