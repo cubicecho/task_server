@@ -234,6 +234,8 @@ export const permissions: PermissionsMap = {
     // the text. An agent writing a task through `/mcp` writes the prompt itself.
     mcpPrompts: canUser(Actions.read, "McpServer"),
     mcpPrompt: canUser(Actions.read, "McpServer"),
+    // What a server suggests for a prompt's blank is the same listing asked a narrower question.
+    mcpPromptCompletion: canUser(Actions.read, "McpServer"),
     // And what those servers will hand back for a uri: a run's artifact, previewed — but the
     // argument is any uri, so it reads whatever a configured server will serve.
     mcpResource: canUser(Actions.read, "McpServer"),

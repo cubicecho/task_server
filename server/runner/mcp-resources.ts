@@ -4,8 +4,8 @@ import { mcp } from "./mcp.ts";
 /**
  * A run's artifact read back from the server that made it, for a person to preview.
  *
- * Like the prompts beside it, this reaches past the pool's tool path to the protocol's other
- * half — `resources/read` on the server itself — and goes to a person, never to a run. The text is
+ * Like the prompts beside it, this is the protocol's other half — `resources/read`, through the
+ * pool's `readResource` — and goes to a person, never to a run. The text is
  * read fresh on every call rather than kept with the run: the artifact row says what was linked,
  * and the server is the only one that knows what it says now.
  */

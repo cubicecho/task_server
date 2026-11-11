@@ -3,6 +3,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  CompleteRequestSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListToolsRequestSchema,
@@ -115,6 +116,20 @@ const expand = {
 };
 
 /**
+ * What `completion/complete` suggests for `greet`'s arguments, behind `MCP_ECHO_COMPLETIONS` and
+ * for the prompts' reason. `who` is a prefix match over a few names; `mood` is narrowed by the
+ * `who` already filled in, which is the whole point of the request carrying a context.
+ */
+const NAMES = ["Ada", "Alan", "Grace"];
+const MOODS = { Ada: ["fond", "wry"] };
+const completions = (argument, context) =>
+  argument.name === "who"
+    ? NAMES.filter((name) => name.toLowerCase().startsWith(argument.value.toLowerCase()))
+    : argument.name === "mood"
+      ? (MOODS[context?.arguments?.who] ?? ["polite"])
+      : [];
+
+/**
  * What `resources/read` answers, behind `MCP_ECHO_RESOURCES` and for the prompts' reason: the
  * capability is what a client checks before it asks, so it moves with the handler. A uri under
  * `bin://` is answered as a blob, and any other as markdown that names the uri it was asked for.
@@ -134,6 +149,7 @@ const server = new Server(
     capabilities: {
       tools: {},
       ...(process.env.MCP_ECHO_PROMPTS ? { prompts: {} } : {}),
+      ...(process.env.MCP_ECHO_COMPLETIONS ? { completions: {} } : {}),
       ...(process.env.MCP_ECHO_RESOURCES ? { resources: {} } : {}),
     },
   },
@@ -241,13 +257,30 @@ const reply = (request) => ({
 });
 
 if (process.env.MCP_ECHO_PROMPTS) {
-  server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }));
+  // `MCP_ECHO_PROMPT_PAGE` pages the listing that many to a page, with the next offset as the
+  // cursor: a client that reads one page sees the first few templates as all of them.
+  const pageSize = Number(process.env.MCP_ECHO_PROMPT_PAGE) || prompts.length;
+  server.setRequestHandler(ListPromptsRequestSchema, (request) => {
+    const start = Number(request.params?.cursor ?? 0);
+    const end = start + pageSize;
+    return {
+      prompts: prompts.slice(start, end),
+      ...(end < prompts.length ? { nextCursor: String(end) } : {}),
+    };
+  });
   server.setRequestHandler(GetPromptRequestSchema, (request) => {
     const messages = expand[request.params.name];
     if (!messages) {
       throw new Error(`no prompt named ${request.params.name}`);
     }
     return { messages: messages(request.params.arguments ?? {}) };
+  });
+}
+
+if (process.env.MCP_ECHO_COMPLETIONS) {
+  server.setRequestHandler(CompleteRequestSchema, (request) => {
+    const values = completions(request.params.argument, request.params.context);
+    return { completion: { values, total: values.length, hasMore: false } };
   });
 }
 

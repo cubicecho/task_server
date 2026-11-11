@@ -89,6 +89,7 @@ test("how this server is wired is the operator's too", async () => {
     // this one dials, and what each of them is for.
     `{ mcpPrompts { name } }`,
     `{ mcpPrompt(server: "x", name: "greet") }`,
+    `{ mcpPromptCompletion(server: "x", name: "greet", argument: "who", value: "A") }`,
     // And what they serve back for a uri, which is any uri a configured server will read.
     `{ mcpResource(serverId: "x", uri: "file:///etc/passwd") { text } }`,
     `mutation { createMcpServer(values: { slug: "probe", command: "sh" }) { id } }`,

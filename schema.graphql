@@ -5776,12 +5776,12 @@ type Query {
   mcpStatus: [McpServerStatus!]!
 
   """
-  The prompts the connected MCP servers offer, for a picker — a prompt is the server author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` and the text becomes a task's or a step's prompt, editable before it is saved. Empty when no connected server offers any; a server that cannot be listed is left out rather than failing the query.
+  The prompts the connected MCP servers offer, for a picker — a prompt is the server author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` and the text becomes a task's or a step's prompt, editable before it is saved. Empty when no connected server offers any; a server that cannot be listed is left out rather than failing the query. Each server's list is read to its last page.
   """
   mcpPrompts: [McpPrompt!]!
 
   """
-  One prompt from `mcpPrompts`, expanded with the arguments given and flattened to the single string a prompt is. A template that answers with more than one message comes back with its roles labelled.
+  One prompt from `mcpPrompts`, expanded with the arguments given and flattened to the single string a prompt is. A template that answers with more than one message comes back with its roles labelled. Refused with `UNSUPPORTED` for a server that does not offer prompts, or is disabled or gone.
   """
   mcpPrompt(
     """The MCP server row's id, as `mcpPrompts` reports it."""
@@ -5791,6 +5791,28 @@ type Query {
     """The prompt's arguments by name. Absent is the same as none."""
     args: JSON
   ): String!
+
+  """
+  What the server behind a prompt from `mcpPrompts` suggests for one of its arguments, given what has been typed into it so far — at most a hundred, in the server's order. Empty, never an error, for a server that cannot complete.
+  """
+  mcpPromptCompletion(
+    """The MCP server row's id, as `mcpPrompts` reports it."""
+    server: String!
+
+    """The prompt's name."""
+    name: String!
+
+    """The argument being filled in."""
+    argument: String!
+
+    """What is in it so far. Empty asks for the server's opening suggestions."""
+    value: String!
+
+    """
+    The arguments already filled in, by name, which a server may narrow by — a folder before the document in it. Absent is the same as none.
+    """
+    context: JSON
+  ): [String!]!
 
   """
   One resource read back from an MCP server with `resources/read` — a run's artifact, previewed. Read fresh, so a document edited since the run reads as it is now. Text only: binary contents are named, not sent. Refused with `UNSUPPORTED` for a server that does not serve resources, or is disabled or gone.
