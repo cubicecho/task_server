@@ -1309,6 +1309,7 @@ enum RunStepDistinctColumn {
   hooks
   resources
   serverLogs
+  elicitations
   promptTokens
   completionTokens
   totalTokens
@@ -1572,6 +1573,11 @@ type RunStep {
   What MCP servers logged at `warning` or worse during this step's tool calls, as JSON `{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.
   """
   serverLogs: JSON
+
+  """
+  What MCP servers asked for mid-call during this step, as JSON `{ tool, server, message, fields }`. Each was declined, since a run has nobody to answer: `fields` names the values the task would have to supply.
+  """
+  elicitations: JSON
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1747,6 +1753,7 @@ type RunStepCountNonNullAggregate {
   hooks: Int!
   resources: Int!
   serverLogs: Int!
+  elicitations: Int!
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -4638,6 +4645,11 @@ input RunStepFilters {
   What MCP servers logged at `warning` or worse during this step's tool calls, as JSON `{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.
   """
   serverLogs: JSONFilter
+
+  """
+  What MCP servers asked for mid-call during this step, as JSON `{ tool, server, message, fields }`. Each was declined, since a run has nobody to answer: `fields` names the values the task would have to supply.
+  """
+  elicitations: JSONFilter
   promptTokens: IntFilter
   completionTokens: IntFilter
   totalTokens: IntFilter
@@ -4703,6 +4715,7 @@ input RunStepOrderBy {
   hooks: InnerOrder
   resources: InnerOrder
   serverLogs: InnerOrder
+  elicitations: InnerOrder
   promptTokens: InnerOrder
   completionTokens: InnerOrder
   totalTokens: InnerOrder
@@ -4773,6 +4786,7 @@ input RunStepCountNonNullHaving {
   hooks: AggregateNumberFilter
   resources: AggregateNumberFilter
   serverLogs: AggregateNumberFilter
+  elicitations: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter

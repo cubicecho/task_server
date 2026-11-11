@@ -10,7 +10,9 @@ import {
   type ToolCallRequest,
   withContext,
 } from "@cubicecho/agent-core";
+import { describeElicitation, type ElicitationNote } from "../../shared/elicitations.ts";
 import type { Settings } from "../db/schema.ts";
+import { declineUnattended } from "./elicitations.ts";
 import { mcp } from "./mcp.ts";
 import { replayPolicy } from "./profile.ts";
 import { pruneWhenFilling } from "./pruning.ts";
@@ -53,6 +55,11 @@ export interface AgentOptions {
    * resolved to and which window each step's model had — this is how those two get out.
    */
   onMetrics?: (metrics: RunMetrics, contextLength: number) => void;
+  /**
+   * Handed each question a tool call's server asked mid-call, once it has been declined. Said on
+   * the stream as a notice either way; this is how the step keeps it.
+   */
+  onElicitation?: (note: ElicitationNote) => void;
   /** The MCP servers' `beforeCompact` hooks for this step, from `HookSession.compaction`. */
   hooks?: AgentLoopHooks;
   /**
@@ -89,6 +96,7 @@ export async function runAgent({
   signal,
   onEvent,
   onMetrics,
+  onElicitation,
   hooks,
   session,
 }: AgentOptions): Promise<AgentResult> {
@@ -198,12 +206,20 @@ export async function runAgent({
     // `server-log` event under the call's id — for the watcher, never the transcript. The pool
     // can only tell a message is this call's when it is the one request in flight on that
     // connection, so beside a parallel call or a hook on the same server it is not heard here.
+    //
+    // `onElicit` answers a server that stops mid-call to ask for something, and it is attributed
+    // the same way: a question the pool cannot tie to this call goes to no handler and is declined
+    // by the pool, unnoted. Either way the answer is `decline` — see `elicitations.ts`.
     dispatch: (call, callSignal, report) =>
       mcp.call(call.name, call.args, {
         servers,
         signal: callSignal,
         links: true,
         onLog: report.log,
+        onElicit: declineUnattended(call.name, (note) => {
+          notice(describeElicitation(note));
+          onElicitation?.(note);
+        }),
       }),
     signal,
     onEvent: (event) => {

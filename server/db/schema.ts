@@ -13,6 +13,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { ElicitationNote } from "../../shared/elicitations.ts";
 import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 import { LOG_LEVELS, type ServerLogNote } from "../../shared/server-logs.ts";
 
@@ -317,6 +318,14 @@ export const runSteps = pgTable(
      * calls did around the step, and these are what a server said during the model's.
      */
     serverLogs: jsonb().$type<ServerLogNote[]>(),
+    /**
+     * What the step's MCP servers stopped mid-call to ask for, each declined because a run has
+     * nobody to answer. Kept so the Runs page can say a task needs a default it does not carry —
+     * the field names are which. Its own column rather than hook notes, which are the host's own
+     * calls, or server logs, which a server chose to say: this is a question it could not go on
+     * without, and the operator's to answer by changing the task.
+     */
+    elicitations: jsonb().$type<ElicitationNote[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),

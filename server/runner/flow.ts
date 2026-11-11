@@ -9,6 +9,7 @@ import {
   UNTRUSTED_PREFACE,
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
+import { type ElicitationNote, MAX_STEP_ELICITATIONS } from "../../shared/elicitations.ts";
 import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flow.ts";
 import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 import { db } from "../db/client.ts";
@@ -378,12 +379,18 @@ export async function runFlow({
     // What a server complained of during a call is often the whole of why the step failed, so it
     // is kept on the row on the failing path too.
     const logs = serverLogCollector();
-    const noted = (): Partial<Pick<RunStep, "hooks" | "resources" | "serverLogs">> => {
+    // A question nobody answered is the likeliest reason a tool failed, so it is kept on failure
+    // too.
+    const asked: ElicitationNote[] = [];
+    const noted = (): Partial<
+      Pick<RunStep, "hooks" | "resources" | "serverLogs" | "elicitations">
+    > => {
       const serverLogs = logs.entries();
       return {
         ...(notes.length ? { hooks: notes } : {}),
         ...(reads.length ? { resources: reads } : {}),
         ...(serverLogs.length ? { serverLogs } : {}),
+        ...(asked.length ? { elicitations: asked } : {}),
       };
     };
 
@@ -433,6 +440,11 @@ export async function runFlow({
           emit(event);
         },
         onMetrics,
+        onElicitation: (note) => {
+          if (asked.length < MAX_STEP_ELICITATIONS) {
+            asked.push(note);
+          }
+        },
         hooks: loopHooks,
         // Every step of the run on one llama.cpp slot. The loop says which in a notice, which
         // `emit` puts on the run's stream with the rest.
