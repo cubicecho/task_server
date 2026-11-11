@@ -189,8 +189,9 @@ box is usually what sent somebody looking for a template.
 `server/runner/mcp-prompts.ts` is the whole of the server side. It asks only the servers whose
 handshake declared the `prompts` capability — the SDK refuses to send `prompts/list` to one that
 did not, so a `try` around every server would turn "offers no prompts" into an error per server
-per listing — and it goes through `mcp.client(id)` rather than the pool's tool path, which is the
-one place in this server that reaches past tools into the rest of the protocol. A template
+per listing — and it goes through `mcp.client(id)` rather than the pool's tool path — one of the two places in
+this server that reach past tools into the rest of the protocol, the other being the preview of a
+run's outputs. A template
 answers with a list of messages; a picker takes one string. One message unwraps verbatim, several
 are joined with their roles in front (`assistant: …`), and content that carries no text at all —
 an image, a resource link — is named in square brackets rather than dropped, because a gap where
@@ -365,7 +366,8 @@ server/
   runner/      the agent loop and the flow that drives it, over @cubicecho/agent-core
                and @cubicecho/agent-mcp-pool; llm.ts is the settings row, mcp.ts the pool
                wired to the mcp_servers table, profile.ts an agent profile laid over
-               settings, mcp-prompts.ts the templates those servers offer a person
+               settings, mcp-prompts.ts the templates those servers offer a person,
+               mcp-resources.ts a run's outputs read back for a preview
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write;
                cleanup.ts prunes old runs hourly
   webhooks.ts  POST /webhooks/:id, which fires matching event triggers
@@ -715,6 +717,7 @@ them, and reads what happened. Four things it may not touch:
   and `testMcpServer` spawns whatever stdio command it is handed, so it is arbitrary execution on
   this host for anyone who reaches it. `mcpStatus` and `mcpPrompts` are the same list answered
   from the live pool, carrying no credentials but saying just as plainly what this server dials.
+  `mcpResource` reads back whatever uri a configured server will serve, so it is shut with them.
 - **The agent profiles.** The settings row again in miniature, one per profile: an endpoint, a
   key, and which MCP servers a task on it may reach. An agent that could write one could point a
   task at a model of its choosing and hand it every tool this server has. A task still carries

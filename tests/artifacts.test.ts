@@ -3,8 +3,13 @@ import path from "node:path";
 import { history, resetEvents } from "@cubicecho/agent-core";
 import type { ToolHook } from "@cubicecho/agent-mcp-pool";
 import { eq } from "drizzle-orm";
-import { type GraphQLSchema, graphql } from "graphql";
+import { type GraphQLSchema, graphql, print } from "graphql";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
+import {
+  McpResourceDocument,
+  RunDetailDocument,
+  RunsDocument,
+} from "../web/__generated__/graphql/graphql.ts";
 import { type Completion, completion, replyWith, toolCall } from "./fixtures/sse.ts";
 import { dataDir, ECHO_FIXTURE, type FakeModel, fakeModel, useModel } from "./helpers.ts";
 
@@ -73,7 +78,7 @@ async function echoServer(rowHooks: ToolHook[] = []) {
       label: "Echo",
       command: process.execPath,
       args: [ECHO_FIXTURE],
-      env: { MCP_ECHO_LINKS: "1", MCP_ECHO_CALL_LOG: callLog },
+      env: { MCP_ECHO_LINKS: "1", MCP_ECHO_RESOURCES: "1", MCP_ECHO_CALL_LOG: callLog },
       hooks: rowHooks,
     })
     .returning();
@@ -197,4 +202,51 @@ test("deleting the run removes its artifacts", async () => {
   });
   expect(errors).toBeUndefined();
   expect(await artifactsOf(run.id)).toEqual([]);
+});
+
+/**
+ * The runs page's own documents, printed rather than retyped, so the test cannot drift from what
+ * the browser sends: the card's count, the opened run's Outputs, and Preview reading one back.
+ */
+test("the runs page counts a run's outputs, lists them in order, and previews one", async () => {
+  const server = await echoServer();
+  const { id: taskId } = await task("notes", "write the notes");
+  replies = [
+    write("doc://notes/a.md", "Notes A"),
+    write("doc://notes/b.md", undefined, "call-2"),
+    completion("written"),
+  ];
+  const run = await runner.runTask(taskId);
+  expect(run.status).toBe("ok");
+
+  const list = await graphql({
+    schema,
+    source: print(RunsDocument),
+    variableValues: { limit: 10 },
+  });
+  expect(list.errors).toBeUndefined();
+  expect(list.data?.runs).toMatchObject([{ id: run.id, artifactsAggregate: { count: 2 } }]);
+
+  const detail = await graphql({
+    schema,
+    source: print(RunDetailDocument),
+    variableValues: { id: run.id },
+  });
+  expect(detail.errors).toBeUndefined();
+  const [opened] = (detail.data?.runs ?? []) as { artifacts: Record<string, unknown>[] }[];
+  expect(opened.artifacts).toMatchObject([
+    { uri: "doc://notes/a.md", title: "Notes A", serverId: server.id, serverSlug: "echo" },
+    { uri: "doc://notes/b.md", title: "", name: "b.md", count: 1 },
+  ]);
+
+  const preview = await graphql({
+    schema,
+    source: print(McpResourceDocument),
+    variableValues: { serverId: server.id, uri: "doc://notes/a.md" },
+  });
+  expect(preview.errors).toBeUndefined();
+  expect(preview.data?.mcpResource).toMatchObject({
+    mimeType: "text/markdown",
+    text: "# doc://notes/a.md\n\nRead back from the echo server.",
+  });
 });

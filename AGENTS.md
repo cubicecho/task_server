@@ -164,8 +164,8 @@ compatibility pass, on-demand tool loading, the step loop that drives all of the
 reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
 `profile.ts` lays an agent profile over settings, `agent.ts` maps one step onto `runAgentLoop`
 and `flow.ts` drives the steps.
-`mcp-prompts.ts` is the one thing here that reaches past tools into the rest of the protocol —
-see below.
+`mcp-prompts.ts` and `mcp-resources.ts` are the two things here that reach past tools into the
+rest of the protocol, and both answer a person rather than a run — see below.
 `mcp.ts` also says who this process is — `clientName` and `clientVersion` are the `clientInfo` of
 every handshake, and the whole of what a dialled server can log or gate on. The version is
 `package.json`'s, the same string `/mcp` answers a client with; left unset the pool reports its
@@ -449,7 +449,7 @@ since it answers which slugs are servers here.
 
 **An MCP prompt is expanded into a prompt box, not resolved at run time.**
 `server/runner/mcp-prompts.ts` reads `prompts/list` and `prompts/get` off `mcp.client(id)` —
-past the pool's tool path, which is the only place this server does that — and the web app's
+past the pool's tool path, which only it and the resource preview below do — and the web app's
 `McpPromptButton` sits beside the task prompt and every step's. What the task stores is the
 expanded text: readable on the page, editable afterwards, and unable to change under a working
 task because a server's author rephrased their template. Prompts are the user-controlled half of
@@ -464,6 +464,17 @@ in front, and non-text content is named in brackets rather than dropped.
 `mcpPrompts` and `mcpPrompt` are the operator's, with `mcpStatus` and for its reason — the
 listing is which servers this one dials and what each is for — and are deliberately not in
 `TOOLS`. An agent writing a task through `/mcp` writes the prompt itself.
+
+**A run's artifact is previewed from its server, fresh.** `mcpResource(serverId, uri)` is the
+Outputs section's Preview on the runs page: `server/runner/mcp-resources.ts` calls the pool's
+`readResource`, which checks the handshake declared `resources` and refuses with `unsupported`
+otherwise, and the resolver turns that — and a server since removed or disabled — into an
+`UNSUPPORTED` refusal a dialog can show. It is text only, capped at `PREVIEW_MAX_CHARS`: binary
+parts are named with their type and size and never sent. Nothing is cached, so a doc edited since
+the run reads as it is now, and the dialog shows the row's `lastModified` beside it so a person
+can tell. It is the operator's, gated with `mcpPrompts` and not in `TOOLS`, because its argument
+is any uri and it reads whatever a configured server will serve. Which of Open, Preview and Copy a
+row gets is `web/lib/run-artifacts.ts`, and a `webUrl` is a link only when it parses as `http(s)`.
 
 **An MCP server's hooks fire at a run's points, and a run is the session.** A row's `hooks` are
 tool calls the pool makes on the host's behalf — a memory server's `recall` before a step and its
@@ -622,7 +633,7 @@ route's header, trail, action row and body), `DialogLayout` (title, body, `foote
 control and `footerActionsSlot` for cancel/confirm, and the unsaved-changes guard), `Section`,
 `CardLayout`, `SplitLayout`, `LoadState` with `LoadError`, `Collapsible`, `CollapsibleRow`,
 `List`, `StatTile`, `ConfirmButton`, `FormField`, `FieldRow`, `Combobox`, `PasswordInput`,
-`ModelSelect`'s field wrapper, `CodeBlock` and `CopyButton` — and, since the registry began shipping its own, every primitive under
+`ModelSelect`'s field wrapper, `CodeBlock`, `CopyButton` and `Markdown` — and, since the registry began shipping its own, every primitive under
 `web/components/ui/`. **No cubeui component takes `children`** — the body is `contentSlot`, and
 every other place an element goes is a prop ending in `Slot` (`actionSlot`, `emptySlot`,
 `iconSlot`, `backSlot`, `controlSlot`…), which is what stops a shell from being subclassed

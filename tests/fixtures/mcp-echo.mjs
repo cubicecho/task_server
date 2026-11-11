@@ -6,6 +6,7 @@ import {
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListToolsRequestSchema,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
 // One line per process started. The pool is supposed to keep one child per configured server,
@@ -94,9 +95,25 @@ const expand = {
   ],
 };
 
+/**
+ * What `resources/read` answers, behind `MCP_ECHO_RESOURCES` and for the prompts' reason: the
+ * capability is what a client checks before it asks, so it moves with the handler. A uri under
+ * `bin://` is answered as a blob, and any other as markdown that names the uri it was asked for.
+ */
+const resource = (uri) =>
+  uri.startsWith("bin://")
+    ? { uri, mimeType: "image/png", blob: "aGk=" }
+    : { uri, mimeType: "text/markdown", text: `# ${uri}\n\nRead back from the echo server.` };
+
 const server = new Server(
   { name: "echo", version: "0.0.1" },
-  { capabilities: { tools: {}, ...(process.env.MCP_ECHO_PROMPTS ? { prompts: {} } : {}) } },
+  {
+    capabilities: {
+      tools: {},
+      ...(process.env.MCP_ECHO_PROMPTS ? { prompts: {} } : {}),
+      ...(process.env.MCP_ECHO_RESOURCES ? { resources: {} } : {}),
+    },
+  },
 );
 
 // The `clientInfo` of the handshake, when a test asks for it. It is the whole of what a dialled
@@ -191,6 +208,12 @@ if (process.env.MCP_ECHO_PROMPTS) {
     }
     return { messages: messages(request.params.arguments ?? {}) };
   });
+}
+
+if (process.env.MCP_ECHO_RESOURCES) {
+  server.setRequestHandler(ReadResourceRequestSchema, (request) => ({
+    contents: [resource(request.params.uri)],
+  }));
 }
 
 await server.connect(new StdioServerTransport());
