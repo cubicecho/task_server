@@ -654,14 +654,16 @@ here; an endpoint that will not say in time gets no guard, which is what every r
 step answered in prose is read back with `askJson` against a schema whose only field is an enum
 of the step's arms, so the second opinion cannot name a case that does not exist.
 
-**A step that fills its window clears its old tool results first.** `pruning.ts` is the loop's
-`beforeStep`: past `COMPACT_AT` of a window the endpoint reported, agent-core's
-`pruneToolResults` stubs every result but the latest five, and the fold — when a compaction
-model is set — then plans from what is left. A step is one question and a tool loop, and
+**A step that fills its window clears its old tool results first.** That is the loop's `prune`
+option, given `COMPACT_AT` and `PRUNE_SHARE` as its gate: past that share of a window the endpoint
+reported, every result but the latest five is stubbed, behind a boundary that moves only when
+the window fills again so a request between moves is the last one with its tail added. The fold
+— when a compaction model is set — then plans from what is left, and the boundary moves again
+after a fold, since the cache is already lost. A step is one question and a tool loop, and
 agent-core folds inside one since 4.5: the question is kept, the oldest assistant/tool pairs after
 it become a summary at the head, and the tail resumes at an assistant message.
-`tests/compaction.test.ts` runs that end to end, and it is the only test that would notice a fold
-that silently never happens — which is what this wiring did for its first release. Both rewrite the prefix and cost the prompt cache,
+`tests/compaction.test.ts` runs both end to end, and it is the only test that would notice a fold
+or a prune that silently never happens — which is what the fold's wiring did for its first release. Both rewrite the prefix and cost the prompt cache,
 which is why neither runs a little on every step, and a prune that would win back less than
 `PRUNE_SHARE` of the window is not done at all. It has no column: it makes no request, so there
 is nothing for an operator to choose to pay for, and with no window known it is inert like the

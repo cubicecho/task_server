@@ -1,6 +1,8 @@
 import {
   type AgentLoopHooks,
+  COMPACT_AT,
   contextLimitFor,
+  PRUNE_SHARE,
   type RunArtifact,
   type RunEventInput,
   RunEventKind,
@@ -14,7 +16,6 @@ import type { Settings } from "../db/schema.ts";
 import { declineUnattended } from "./elicitations.ts";
 import { mcp } from "./mcp.ts";
 import { replayPolicy } from "./profile.ts";
-import { pruneWhenFilling } from "./pruning.ts";
 
 /** What a step produced and what it cost — and, summed over its steps, what a whole flow did. */
 export interface AgentResult {
@@ -172,19 +173,13 @@ export async function runAgent({
     compact: Boolean(config.compactionModel),
     // Only ever `beforeCompact`: see `compaction` in `hooks.ts`.
     ...(hooks ? { hooks } : {}),
-    // Needs no model, so it is on wherever the window is known. It runs ahead of the fold, which
-    // then plans from what is left: a prune that brings the run back under the line spares it the
-    // summary's round trip.
-    beforeStep: (messages, _step, window) => {
-      const pruned = pruneWhenFilling(messages, window);
-      if (pruned) {
-        notice(
-          `cleared ${pruned.cleared} old tool result${pruned.cleared === 1 ? "" : "s"} ` +
-            `(~${pruned.tokens} tokens) as the window filled`,
-        );
-      }
-      return pruned?.messages;
-    },
+    // Needs no model, so it is on wherever the window is known. Old tool results are stubbed
+    // past `COMPACT_AT` of the window, and only for at least `PRUNE_SHARE` of it: the stubs
+    // rewrite the prefix, and a prune that wins back a few hundred tokens costs the endpoint its
+    // cache of everything after them. It runs ahead of the fold, which then plans from what is
+    // left, so a prune that brings the run back under the line spares it the summary's round
+    // trip. Each one is said as a notice.
+    prune: { at: COMPACT_AT, minShare: PRUNE_SHARE },
     // The loop hands each call the run's signal. Passed on, a stop sends the server the
     // protocol's `notifications/cancelled` and the call rejects at once; dropped, the tool ran to
     // its end or the call timeout, and a write the person stopped still landed.
