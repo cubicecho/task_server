@@ -14,7 +14,7 @@ import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flo
 import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
-import { type AgentOptions, type AgentResult, runAgent } from "./agent.ts";
+import { type AgentResult, runAgent } from "./agent.ts";
 import { recordArtifacts } from "./artifacts.ts";
 import { describe, type HookSession, type HookStep } from "./hooks.ts";
 import { readPromptResources } from "./prompt-resources.ts";
@@ -286,8 +286,6 @@ export interface FlowOptions {
   hooks?: HookSession;
   signal?: AbortSignal;
   onEvent?: (event: RunEventInput) => void;
-  /** Each step's loop metrics, as `runAgent` hands them over. See `AgentOptions.onMetrics`. */
-  onMetrics?: AgentOptions["onMetrics"];
 }
 
 /**
@@ -308,7 +306,6 @@ export async function runFlow({
   hooks,
   signal,
   onEvent,
-  onMetrics,
 }: FlowOptions): Promise<FlowResult> {
   const context: ContextEntry[] = [];
   const result: FlowResult = {
@@ -439,7 +436,6 @@ export async function runFlow({
           logs.observe(event);
           emit(event);
         },
-        onMetrics,
         onElicitation: (note) => {
           if (asked.length < MAX_STEP_ELICITATIONS) {
             asked.push(note);
