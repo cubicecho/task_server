@@ -526,8 +526,8 @@ is the run id, each executed step is a turn (the task's own prompt is turn 0, an
 `sessionStart` fires ahead of it), `sessionEnd` fires once the run's outcome is written, and
 `sessionDelete` for a run deleted by hand, with its task, or by retention. `beforeCompact`
 fires when a step's transcript is folded, which happens only on a compaction model, and it is the
-one event the *loop* fires: `HookSession.compaction` hands `runAgentLoop` a runner that passes
-`beforeCompact` through and answers every other event with nothing, since `before` and `after`
+one event the *loop* fires: `HookSession.compaction` hands `runAgentLoop` the run's hooks with
+`fire: [HookEvent.BeforeCompact]` and nothing else, since `before` and `after`
 already fire `beforeTurn` and `afterTurn` around the whole step and the loop would fire them a
 second time. Its `offset` is `step.index * 2`, where `exchange` lays the step's messages, so a
 folded message reaches a memory server under the uuid its `afterTurn` uses. A `beforeCompact`
@@ -536,7 +536,8 @@ that should outlast one run.
 
 The host side is agent-core's: `gather` before a step, `notify` after, and `withContext` putting
 what was gathered on the step's question with this server's preface, which `hooks.ts` sets once
-with `configureHooks` rather than passing at each call. What stays here is the
+with `configureHooks` rather than passing at each call; the runner each of them is handed is
+the pool's `hookRunner`, bound to the run's MCP scope. What stays here is the
 mapping and the persistence — each hook that injected or failed leaves a note on
 `run_steps.hooks`, and a failed `sessionEnd` on `runs.hooks`, since run events are gone a minute
 later. `afterTurn` and `sessionEnd` are not awaited by the run; `sessionEnd` waits for the steps'

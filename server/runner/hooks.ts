@@ -6,7 +6,6 @@ import {
   type HookContext,
   HookEvent,
   type HookNote,
-  type HookRunner,
   notify,
   type RunEventInput,
   RunEventKind,
@@ -119,8 +118,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
     },
   });
 
-  const run: HookRunner = (event, context, { signal }) =>
-    mcp.runHooks(event, context, { servers, signal, onNotice: log });
+  const run = mcp.hookRunner({ servers, onNotice: log });
 
   return {
     /**
@@ -174,18 +172,17 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
      * The step's hooks as the loop takes them, for the one event it fires on this host's behalf:
      * `beforeCompact`, told what is about to be summarised away.
      *
-     * Everything else is filtered out of the runner, because `before` and `after` already fire
-     * `beforeTurn` and `afterTurn` around the whole step, and the loop would otherwise fire them a
-     * second time. `offset` numbers the step's messages from where `exchange` lays them, so a
-     * folded message reaches a memory server under the uuid its `afterTurn` will use. What fails
-     * is told to `onNote` and kept on the step's row with the rest.
+     * `fire` names that one alone, because `before` and `after` already fire `beforeTurn` and
+     * `afterTurn` around the whole step, and the loop would otherwise fire them a second time.
+     * `offset` numbers the step's messages from where `exchange` lays them, so a folded message
+     * reaches a memory server under the uuid its `afterTurn` will use. What fails is told to
+     * `onNote` and kept on the step's row with the rest.
      */
     compaction(step: HookStep, onNote: (note: HookNote) => void): AgentLoopHooks {
       return {
-        run: (event, context, options) =>
-          event === HookEvent.BeforeCompact ? run(event, context, options) : Promise.resolve([]),
+        run,
         context: { ...contextFor(step), prompt: step.prompt, turn: { index: step.index } },
-        events: [],
+        fire: [HookEvent.BeforeCompact],
         offset: step.index * 2,
         onNote,
       };
@@ -255,7 +252,7 @@ export type HookSession = ReturnType<typeof hookSession>;
  * server being down.
  */
 export function runsDeleted(ids: readonly string[]) {
-  const run: HookRunner = (event, context) => mcp.runHooks(event, context, { onNotice: log });
+  const run = mcp.hookRunner({ onNotice: log });
   for (const id of ids) {
     void notify(run, HookEvent.SessionDelete, { session: { id }, host: HOST });
   }
