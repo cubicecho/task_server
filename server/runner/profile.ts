@@ -1,4 +1,10 @@
-import { AGENT_SPEC, type AgentSpec, NO_KEY, resolveAgentSpec } from "@cubicecho/agent-core";
+import {
+  type AgentSpec,
+  defineSpecColumns,
+  ReasoningReplay,
+  resolveAgentSpec,
+  resolveApiKey,
+} from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Agent, agents, type Settings, type Task } from "../db/schema.ts";
@@ -33,130 +39,143 @@ const SYSTEM = "system";
 /**
  * Where a spec carries what this server has a column for and the format has no field for. A
  * spec's `extensions` are a host's own, keyed by reverse domain, and are kept by every reader —
- * so `toolExecution` survives an export and an import here, where an unknown key under `tools`
- * would be dropped by the parser on the way back in.
+ * so `toolExecution` and `serverInstructions` survive an export and an import here, where an
+ * unknown key under `tools` would be dropped by the parser on the way back in.
  */
 export const SPEC_EXTENSION = "com.cubicecho.task-server";
 
-/** What this server keeps under `SPEC_EXTENSION`. */
-export interface TaskServerExtension {
-  toolExecution?: "sequential" | "parallel";
-}
+/** The settings column's spelling of a replay policy, which is the profile column's less `inherit`. */
+export type ReplayColumn = Settings["reasoningReplay"];
 
-/** `""` is "ask settings" for a string column, which a layer says by leaving the field out. */
+/**
+ * A replay column as agent-core spells it. Only `tool_loop` differs: a GraphQL enum value cannot
+ * hold a hyphen, so the column cannot store agent-core's word for it.
+ */
+export const replayPolicy = (column: ReplayColumn): ReasoningReplay =>
+  column === "tool_loop" ? ReasoningReplay.ToolLoop : column;
+
+/** The other way, for what comes back from the resolver and in from a spec. */
+export const replayColumn = (policy: ReasoningReplay): ReplayColumn =>
+  policy === ReasoningReplay.ToolLoop ? "tool_loop" : policy;
+
+/** `""` is "ask settings" for a string column, and so is one that is only whitespace. */
 const str = (value: string) => value.trim() || undefined;
 
 /**
- * `-1` is "ask settings" for a number column, and anything else is meant — zero included.
+ * `-1` is "ask settings" for a number column, and so is any other negative — zero is meant.
  * Zero retries, zero seconds of patience and zero tokens are all real answers, so the sentinel
  * has to be a value none of these columns can legitimately hold.
  */
 const num = (value: number) => (value < 0 ? undefined : value);
 
 /**
- * The settings row as the bottom layer: every column is an answer, blank ones included. An
- * empty tool-selection model is "use the run's own", and has to reach the resolver as that
- * rather than as nothing said.
+ * The settings row as the bottom layer: no column has a marker, so every one is an answer,
+ * blank ones included. An empty tool-selection model is "use the run's own", and has to reach
+ * the resolver as that rather than as nothing said.
+ *
+ * `toolExecution` and `serverInstructions` are not in it: a spec has no field for them, and
+ * `extensions` merge whole by key, so `resolveConfig` lays those two over by hand.
  */
-const settingsLayer = (settings: Settings): AgentSpec => ({
-  spec: AGENT_SPEC,
-  endpoint: {
-    baseUrl: settings.baseUrl,
-    requestTimeoutSeconds: settings.requestTimeoutSeconds,
-  },
-  model: {
-    model: settings.model,
-    maxTokens: settings.maxTokens,
-    temperature: settings.temperature,
-  },
-  prompt: [{ id: SYSTEM, text: settings.systemPrompt }],
-  tools: { discovery: settings.toolDiscovery, maxIterations: settings.maxToolIterations },
-  retry: { maxRetries: settings.maxRetries },
-  tasks: {
-    toolSelect: { model: settings.toolSelectModel },
-    compaction: { model: settings.compactionModel },
-  },
+const SETTINGS_COLUMNS = defineSpecColumns<Settings>({
+  baseUrl: { path: "endpoint.baseUrl" },
+  requestTimeoutSeconds: { path: "endpoint.requestTimeoutSeconds" },
+  model: { path: "model.model" },
+  maxTokens: { path: "model.maxTokens" },
+  temperature: { path: "model.temperature" },
+  reasoningReplay: { path: "model.reasoningReplay", toSpec: replayPolicy },
+  systemPrompt: { path: `prompt.${SYSTEM}` },
+  toolDiscovery: { path: "tools.discovery" },
+  maxToolIterations: { path: "tools.maxIterations" },
+  maxRetries: { path: "retry.maxRetries" },
+  toolSelectModel: { path: "tasks.toolSelect.model" },
+  compactionModel: { path: "tasks.compaction.model" },
 });
 
 /**
  * A profile as the layer above it. A column at its inherit value is a field the layer does not
- * have, which is the only spelling of "inherit" the resolver knows; an empty `prompt` part would
- * replace the server's prompt with nothing, where a missing one leaves it alone.
+ * have, which is the only spelling of "inherit" the resolver knows; a blank prompt would replace
+ * the server's prompt with nothing, where a missing part leaves it alone. The marker is one value
+ * per column, and `str` and `num` widen it to the range each column treats as inherit.
  *
  * `mcpServerIds` is not in it: a spec has no field for this server's row ids, and
- * `resolveServers` answers it from the row. Exported because `agentSpec` hands out this same
- * layer with its slugs put back, and a second projection would be a second opinion on "inherit".
+ * `resolveServers` answers it from the row.
  */
-export const agentLayer = (agent: Agent): AgentSpec => {
-  const prompt = str(agent.systemPrompt);
-  const toolSelect = str(agent.toolSelectModel);
-  const compaction = str(agent.compactionModel);
-  const own: TaskServerExtension =
-    agent.toolExecution === "inherit" ? {} : { toolExecution: agent.toolExecution };
-  return {
-    spec: AGENT_SPEC,
-    endpoint: {
-      baseUrl: str(agent.baseUrl),
-      requestTimeoutSeconds: num(agent.requestTimeoutSeconds),
-    },
-    model: {
-      model: str(agent.model),
-      maxTokens: num(agent.maxTokens),
-      temperature: num(agent.temperature),
-    },
-    ...(prompt ? { prompt: [{ id: SYSTEM, text: prompt }] } : {}),
-    tools: {
-      discovery: agent.toolDiscovery === "inherit" ? undefined : agent.toolDiscovery,
-      maxIterations: num(agent.maxToolIterations),
-    },
-    retry: { maxRetries: num(agent.maxRetries) },
-    ...(toolSelect || compaction
-      ? {
-          tasks: {
-            ...(toolSelect ? { toolSelect: { model: toolSelect } } : {}),
-            ...(compaction ? { compaction: { model: compaction } } : {}),
-          },
-        }
-      : {}),
-    ...(Object.keys(own).length ? { extensions: { [SPEC_EXTENSION]: own } } : {}),
-  };
-};
+const AGENT_COLUMNS = defineSpecColumns<Agent>({
+  baseUrl: { path: "endpoint.baseUrl", inherit: "", toSpec: str },
+  requestTimeoutSeconds: { path: "endpoint.requestTimeoutSeconds", inherit: -1, toSpec: num },
+  model: { path: "model.model", inherit: "", toSpec: str },
+  maxTokens: { path: "model.maxTokens", inherit: -1, toSpec: num },
+  temperature: { path: "model.temperature", inherit: -1, toSpec: num },
+  reasoningReplay: {
+    path: "model.reasoningReplay",
+    inherit: "inherit",
+    // Never handed the marker, but its type is the column's, which holds it.
+    toSpec: (value) => (value === "inherit" ? undefined : replayPolicy(value)),
+  },
+  systemPrompt: { path: `prompt.${SYSTEM}`, inherit: "", toSpec: str },
+  toolDiscovery: { path: "tools.discovery", inherit: "inherit" },
+  maxToolIterations: { path: "tools.maxIterations", inherit: -1, toSpec: num },
+  maxRetries: { path: "retry.maxRetries", inherit: -1, toSpec: num },
+  toolSelectModel: { path: "tasks.toolSelect.model", inherit: "", toSpec: str },
+  compactionModel: { path: "tasks.compaction.model", inherit: "", toSpec: str },
+  toolExecution: { path: ["extensions", SPEC_EXTENSION, "toolExecution"], inherit: "inherit" },
+  serverInstructions: {
+    path: ["extensions", SPEC_EXTENSION, "serverInstructions"],
+    inherit: "inherit",
+    toSpec: (value) => value === "on",
+  },
+});
+
+/**
+ * A profile as a spec layer: what it says, and nothing it inherits. Exported because `agentSpec`
+ * hands out this same layer with its slugs put back, and a second projection would be a second
+ * opinion on "inherit".
+ */
+export const agentLayer = (agent: Agent): AgentSpec => AGENT_COLUMNS.toLayer(agent);
 
 /**
  * The settings row as this agent would have it.
  *
  * The merge is agent-core's `resolveAgentSpec` over two spec layers, and only the columns come
- * back. The key stays here, since a spec carries no credential: an agent naming its own
- * `baseUrl` uses its own key or none, never the operator's or `$OPENAI_API_KEY`, because a
- * credential issued for one endpoint has no business being posted to another. agent-core's
- * `resolveApiKey` is not used: it treats a trailing slash as the same endpoint, which errs
- * toward sending the key.
+ * back. The key is laid over beside it, since a spec carries no credential, and by agent-core's
+ * `resolveApiKey`: an agent naming another `baseUrl` uses its own key or none, never the
+ * operator's or `$OPENAI_API_KEY`, because a credential issued for one endpoint has no business
+ * being posted to another. What counts as another is `normalizeBaseUrl`'s answer — a trailing
+ * slash, the host's case or a default port is the same server, and the key goes to it either way.
  */
 export function resolveConfig(settings: Settings, agent?: Agent | null): Settings {
   if (!agent) {
     return settings;
   }
 
-  const baseUrl = agent.baseUrl.trim();
-  const elsewhere = baseUrl !== "" && baseUrl !== settings.baseUrl;
-  const merged = resolveAgentSpec([settingsLayer(settings), agentLayer(agent)]);
+  const merged = resolveAgentSpec([SETTINGS_COLUMNS.toLayer(settings), agentLayer(agent)]);
 
   return {
     ...settings,
     baseUrl: merged.baseUrl,
-    apiKey: agent.apiKey || (elsewhere ? NO_KEY : settings.apiKey),
+    // No environment: `loadSettings` has already folded `$OPENAI_API_KEY` into the row, and a
+    // second reading of it here would be a second place that decides what the key is.
+    apiKey: resolveApiKey(agent, settings, {}),
     model: merged.model,
     systemPrompt: merged.systemPrompt,
     maxTokens: merged.maxTokens,
     temperature: merged.temperature,
+    // Optional in a spec, where the settings column always holds one.
+    reasoningReplay: merged.reasoningReplay
+      ? replayColumn(merged.reasoningReplay)
+      : settings.reasoningReplay,
     maxToolIterations: merged.maxToolIterations,
     // Wider in a spec than in either row: neither layer can say `proxy`, and the timeout is
     // optional there where the settings column always holds one.
     toolDiscovery: merged.toolDiscovery === "proxy" ? settings.toolDiscovery : merged.toolDiscovery,
     toolSelectModel: merged.toolSelectModel,
-    // Not the resolver's: a spec has no field for it, and `extensions` merge whole by key, so the
-    // laying-over is done here on the two columns rather than on the layers' extension objects.
+    // Neither is the resolver's: a spec has no field for them, and `extensions` merge whole by
+    // key, so the laying-over is done here on the columns rather than on the extension objects.
     toolExecution: agent.toolExecution === "inherit" ? settings.toolExecution : agent.toolExecution,
+    serverInstructions:
+      agent.serverInstructions === "inherit"
+        ? settings.serverInstructions
+        : agent.serverInstructions === "on",
     // The resolver leaves out a task whose model is blank, which is the column's own "off".
     compactionModel: merged.tasks.compaction?.model ?? "",
     requestTimeoutSeconds: merged.requestTimeoutSeconds ?? settings.requestTimeoutSeconds,

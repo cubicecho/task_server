@@ -9,7 +9,8 @@ export type RefusalCode =
   | "BAD_STEPS"
   | "FORBIDDEN"
   | "NOT_FOUND"
-  | "RUN_IN_FLIGHT";
+  | "RUN_IN_FLIGHT"
+  | "UNSUPPORTED";
 
 /**
  * Something the caller got wrong and can fix, with a code to branch on.

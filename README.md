@@ -41,12 +41,14 @@ instead of the UI.
   a `POST` arrives at `/webhooks/<its event id>` — see **Webhooks**.
 - **run** — one execution: status, timings, output or error, which tools were called, tokens.
   A run in flight can be called off from either the Runs or the Tasks page (`stopTask`), which
-  aborts the request and finishes the run as `stopped` — neither a success nor a failure.
+  aborts the model request and any tool call it is waiting on — the MCP server is sent the
+  protocol's cancellation — and finishes the run as `stopped`, neither a success nor a failure.
   Neither the run nor its task can be deleted while it is going: both deletes are refused
   server-side until it has stopped. Expanding a running run on the **Runs** page shows it
   happening — see below.
 - **run step** — what one step of the flow actually did on one run: its status, output, tools
-  and tokens, and for a decision the arm it took. This is the record of the path a run took,
+  and tokens, and for a decision the arm it took. A step stopped or failed mid-answer keeps what
+  the model had said by then as its output. This is the record of the path a run took,
   and it survives the step being edited or deleted afterwards.
 - **mcp server** — a stdio or http MCP server whose tools every run can reach, exposed to the
   model as `slug__tool-name`. The **MCP servers** page takes a `.mcp.json`-shaped paste and
@@ -58,7 +60,8 @@ instead of the UI.
   run on it may reach. Everything left blank comes from settings, so a server with no profiles
   runs exactly as one that never had them. See **Agent profiles**.
 - **settings** — a single row: base URL, key, default model and system prompt, token and
-  temperature limits, the cap on tool iterations per run, and how MCP tools are discovered.
+  temperature limits, the cap on tool iterations per run, how MCP tools are discovered and
+  called, and whether the model's thinking is sent back to it (see below).
 
 ## Agent profiles
 
@@ -82,7 +85,8 @@ own never inherits the server's API key or `$OPENAI_API_KEY`: a credential issue
 endpoint has no business being posted to another, and "I pointed a task at a friend's server and
 it sent my OpenAI key" is not a mistake worth being able to make. Such a profile uses its own key
 or none, which is what a local server wants anyway. A profile on the *same* endpoint inherits the
-key like everything else. The key is write-only in both places — `setAgentApiKey` writes it, and
+key like everything else — and the same endpoint is the same server, so `http://host/v1/` is
+`http://host/v1` with a slash on it, not somewhere else. The key is write-only in both places — `setAgentApiKey` writes it, and
 it is excluded from the `Agent` type, so it cannot be read back out of the API.
 
 `mcpServerIds` is which MCP servers a run on the profile may reach, and an empty or absent list is
@@ -169,6 +173,9 @@ where the earlier outputs go and does not suppress the preamble. A prompt may as
 a run no webhook started, or one whose body could not be read, it renders as
 `(this run has no event payload)`. See **Webhooks**.
 
+`{{resource:<server slug>:<uri>}}` is the fourth, and is read fresh as each step starts — see
+**MCP resources**. Like `{{event}}`, it leaves the preamble standing.
+
 Flows are capped at 64 executed steps and 8 levels of nesting per run, which is what stops a
 mis-parented tree from running away. Edit one on a task's page, either as cards or as YAML —
 the two are the same tree, and the text tab keeps step ids, so a round trip through it leaves
@@ -202,20 +209,64 @@ A template resolved at run time would be a prompt whose text nobody can read bac
 Insert appends after a blank line rather than replacing, since the half-written prompt in the
 box is usually what sent somebody looking for a template.
 
-`server/runner/mcp-prompts.ts` is the whole of the server side. It asks only the servers whose
-handshake declared the `prompts` capability — the SDK refuses to send `prompts/list` to one that
-did not, so a `try` around every server would turn "offers no prompts" into an error per server
-per listing — and it goes through `mcp.client(id)` rather than the pool's tool path, which is the
-one place in this server that reaches past tools into the rest of the protocol. A template
-answers with a list of messages; a picker takes one string. One message unwraps verbatim, several
-are joined with their roles in front (`assistant: …`), and content that carries no text at all —
-an image, a resource link — is named in square brackets rather than dropped, because a gap where
-it was would read as a template that simply said less.
+`server/runner/mcp-prompts.ts` is the whole of the server side, and it is thin: the pool's
+`prompts()`, `expandPrompt()` and `complete()` do the protocol work. Only the servers whose
+handshake declared the `prompts` capability are asked, and each list is read to its last page. A
+template answers with a list of messages; a picker takes one string. One message unwraps
+verbatim, several are joined with their roles in front (`assistant: …`), and content that carries
+no text at all — an image, a resource link — is named in square brackets rather than dropped,
+because a gap where it was would read as a template that simply said less. That rule is the
+pool's `promptText`, shared with every other host that puts a prompt in a box.
 
-The two fields are `mcpPrompts` and `mcpPrompt(server:, name:, args:)`, and both are the
-operator's, alongside `mcpStatus`: the listing is which servers this one dials and what each of
-them is for. They are not on the `/mcp` surface. An agent writing a task through that endpoint
+Each argument is a box you type into, with what the server suggests for it underneath — a server
+that supports completion is asked once typing pauses, and is told the arguments above it, so it
+can narrow a document by the folder already picked. A server that does not just offers nothing.
+
+The three fields are `mcpPrompts`, `mcpPrompt(server:, name:, args:)` and
+`mcpPromptCompletion(server:, name:, argument:, value:, context:)`, and all are the operator's,
+alongside `mcpStatus`: the listing is which servers this one dials and what each of them is for. They are not on the `/mcp` surface. An agent writing a task through that endpoint
 writes the prompt itself, which is the same text it would have got.
+
+## MCP resources
+
+A prompt is somebody's phrasing, and is copied in so that it cannot change under a working task.
+A **resource** is the opposite case: it is data — a ragdown document of house rules, this week's
+notes — and the point of naming it is to get what it says on the day. So a prompt names it with
+a placeholder, `{{resource:<server slug>:<uri>}}`, and every run reads it again:
+
+```text
+Summarise what changed this week, in the house style:
+
+{{resource:ragdown:ragdown://notes/weekly.md}}
+```
+
+The slug is in it as well as the uri because a uri's scheme is the server's own and says nothing
+about which configured row serves it. Beside the **MCP prompt** button, an **MCP resource**
+button lists what the connected servers serve, resources and resource templates both, fills a
+template's variables with what the server suggests for each, and inserts the placeholder.
+
+At run time, as each step starts and before its hooks, `server/runner/prompt-resources.ts` reads
+every placeholder in that step's prompt — each distinct one once — and puts the text where it was
+named, fenced in `<untrusted source="<slug>:<uri>">` with agent-core's `untrusted`, and the
+fence's standing rule added to that step's system prompt. Only the prompt as written is scanned:
+a placeholder that arrives in an earlier step's output, a webhook body or another resource stays
+text, since nobody who wrote the task wrote it.
+
+- **Scope.** A read is held to the run profile's MCP servers, as its tools are. A slug outside
+  them fails the step in the same words as a slug nothing here has, so a task an agent wrote
+  cannot learn which servers exist beyond its own.
+- **A failed read fails the step**, with the reason, before the model is asked anything: a prompt
+  missing its input is a different prompt.
+- **Size.** Each placeholder is cut to 40,000 characters (`RESOURCE_MAX_CHARS`), head and tail
+  kept around a marker, and the watcher is told in a notice when one was.
+- **What is kept.** `run_steps.resources` records each read — the slug and uri, when, how many
+  characters, whether it was cut, and why one failed — for the reason `runs.payload` is kept: the
+  prompt the model saw depended on it. The text is not kept.
+
+The picker's fields are `mcpResources` and `mcpResourceCompletion(server:, uri:, variable:,
+value:, context:)`, the operator's like `mcpPrompts` and not on `/mcp`. An agent writing a task
+there writes the placeholder itself; the field description of a task's and a step's `prompt`
+says how.
 
 ## Watching a run
 
@@ -234,6 +285,46 @@ reads the same as having watched from the start.
 
 It is debugging output, not the record: nothing is persisted, nothing survives a restart, and a
 finished run is forgotten a minute later. The row remains the lasting account of what happened.
+
+### What a server said
+
+An MCP server can log while it works, and when a tool call fails its log is usually the only
+account of why. Each server row has a **log level** — `warning` by default, any of MCP's eight
+from `debug` to `emergency`, or none for the server's own default — which the pool sends as
+`logging/setLevel` when it connects, to a server that declared `logging`. What the server then
+logs during a call arrives on the stream as a `server-log` event, drawn under the call it
+belongs to.
+
+The stream is forgotten with the rest, so the part worth keeping is kept: whatever a server
+logged at `warning` or worse goes on the step as `run_steps.serverLogs`, beside its hook notes,
+up to twenty per step with one more entry counting what that dropped. The run's metrics count
+every one of them, kept or not, as `serverWarnings` and `serverErrors`, which the run detail
+shows on the **Metrics** panel.
+
+A message is put down to a call by elimination, not by id: MCP's log notification names no
+request, so the pool hears it as a call's only when that call is the one request in flight on
+its connection. Two calls to one server at once — parallel tool execution, or a hook beside the
+model's call — and neither is told; the messages go to the pool's general handler and reach no
+run. The pool also caps what one call hears at fifty, with a summary for the rest.
+
+### What a server asked
+
+An MCP server can stop in the middle of a tool and ask the client for something — "which
+folder?", "overwrite it?" — which MCP calls elicitation. A run has nobody to ask: it was started
+by a schedule, a webhook, or a person who has since looked away. So task-server declares the
+capability and answers every question **decline**, which tells the server there is no one to
+ask, where a client that never offered would leave it to fail or guess.
+
+Each question is said on the stream as a notice — `server echo asked: Which folder? (fields:
+folder, overwrite) — declined: task-server runs unattended` — and kept on the step as
+`run_steps.elicitations`, up to twenty, with the tool, the server's slug, its message and the
+names of the fields its form asked for. The run detail shows them in a warning under the step:
+the fields are the defaults the task needs and does not have, and the fix is to put them in the
+prompt.
+
+A question is tied to a call the way a log message is, by elimination, so one asked beside
+another call to the same server, or during a hook or a resource read, reaches no handler. The
+pool declines it all the same; it is only not noted.
 
 A run's status is `running`, then one of `ok`, `error` or `stopped`. Two more are rows that have
 not run: `queued` is a firing waiting for a free slot, which becomes `running` in that same row
@@ -303,6 +394,25 @@ document the browser sends, printed rather than retyped — against a real datab
 escaped `%`, an enum `eq` and an `OR` across a relation mean what the controls say they mean is
 a question about SQL, and nothing in the browser can answer it.
 
+`/runs?run=<id>` narrows the list to that one run and opens it, which is what a link to a run
+from elsewhere in the app is. The filter bar shows it as a **One run** chip, and taking the chip
+off — or Clear — goes back to every run.
+
+### What a task has made
+
+A run's **Outputs** are the `resource_link`s its tool calls answered with. The task page adds
+**Produced**: the same rows across every run the task has had, one per `uri`, newest first, with
+a link to the run that last touched each — so a weekly task that rewrites one document shows it
+once, not fifty-two times. It is the generated `runArtifacts` list with `distinct: [uri]`, which
+keeps the newest row of each uri before the page is cut, so twenty rows are twenty documents.
+`tests/task-artifacts.test.ts` asks it of a real database. Two things it does not do:
+
+- **A link can go stale.** A row is what the server said when the run linked it. A document
+  moved or deleted on its server keeps its old link here; a move shows up as a new row under the
+  new uri, and the old row stays.
+- **It reaches back only as far as runs are kept.** An artifact goes with its run, so retention
+  (below) prunes this list along with the history.
+
 With several servers connected, tool definitions cost more per request than the task's own
 prompt — they are mostly JSON Schema, and every one is sent on every turn. Settings offers two
 discovery modes (`@cubicecho/agent-core`):
@@ -315,6 +425,30 @@ discovery modes (`@cubicecho/agent-core`):
   the first step opens with that shortlist alone — no catalogue, no `load_tools`, no extra
   round trip. A wrong guess only costs an unused definition for one run, and the model can
   still load whatever it actually wanted.
+
+**Send thinking back to the model** (`reasoningReplay`, on settings and on a profile) says which
+of a thinking model's replies carry their reasoning on the next request: **all turns**, the
+default and agent-core's; **only during tool calls**, gpt-oss harmony's rule for a server that
+renders whatever it is sent; or **never**. gpt-oss, DeepSeek, Qwen3.x and GLM read their earlier
+reasoning between tool calls, and a transcript sent back as the endpoint first saw it keeps its
+prompt cache valid. Never saves context on an endpoint that drops it anyway. The reasoning goes
+back under the field it arrived in, and an endpoint that refuses it is latched and not sent it
+again. In an exported agent spec it is `model.reasoningReplay`.
+
+**Tool calls in one reply** (`toolExecution`, on settings and on a profile) is **reads
+together** (`auto`, the default on a new install), **one at a time** or **all at once**. Reads
+together runs a server's read-only tools side by side and every other call alone, in the order
+the model asked — but only on a server whose row has **Believe this server's read-only and
+idempotent hints** (`trustAnnotations`) on, since MCP calls a tool's own annotations untrusted.
+Turn it on for a server you have read; on any other, reads together is one at a time. A trusted
+read asked twice in one reply is also answered once. An install from before this setting keeps
+the value it had.
+
+**Give the model the servers' instructions** (`serverInstructions`, on by default; a profile
+can say on, off or inherit) puts what each MCP server's handshake says about using it in the
+system prompt, up to 1000 tokens a server. And every step of a run is sent with the run id as
+its session: on a llama.cpp server that reports slots, the steps share one slot and its prompt
+cache, and the run's stream says which.
 
 MCP tool schemas are normalised before they reach the model (`@cubicecho/agent-core`):
 llama.cpp-backed servers compile every tool into one grammar, so a single shape their
@@ -381,7 +515,8 @@ server/
   runner/      the agent loop and the flow that drives it, over @cubicecho/agent-core
                and @cubicecho/agent-mcp-pool; llm.ts is the settings row, mcp.ts the pool
                wired to the mcp_servers table, profile.ts an agent profile laid over
-               settings, mcp-prompts.ts the templates those servers offer a person
+               settings, mcp-prompts.ts the templates those servers offer a person,
+               mcp-resources.ts a run's outputs read back for a preview
   scheduler/   node-cron, rebuilt from the triggers table on every relevant write;
                cleanup.ts prunes old runs hourly
   webhooks.ts  POST /webhooks/:id, which fires matching event triggers
@@ -441,7 +576,7 @@ usual use is memory — recall before each step, remember after it:
 | --- | --- |
 | `sessionStart` | Before the first step, alongside its `beforeExchange` |
 | `beforeExchange` | Before each step that executes; `inject: true` puts the result ahead of its prompt |
-| `afterExchange` | Once a step has its output (`{{reply}}`, `{{turn.messages}}`) |
+| `afterExchange` | Once a step has its output (`{{reply}}`, `{{turn.messages}}`: the prompt, any text beside its tool calls, and the answer) |
 | `beforeCompact` | When a step fills 75% of its window and the oldest of it is summarised (needs a compaction model) |
 | `sessionEnd` | Once the run has finished (`{{status}}`: `ok`, `stopped` or `error`) |
 | `sessionDelete` | When the run is deleted, by hand, with its task, or by retention |
@@ -449,7 +584,14 @@ usual use is memory — recall before each step, remember after it:
 `{{session.id}}` is the run id, so it changes every run; key memory that should outlast one on
 `{{vars.task.id}}` (also `{{vars.task.name}}`, `{{vars.step.name}}`, `{{vars.trigger}}`).
 `beforeCompact` fires when a step is compacted, which only happens with a compaction model set in
-Settings. Injected context shares a 2000-token budget per
+Settings.
+
+Each message in `{{turn.messages}}` carries a uuid, `<run id>:<position>:<digest>`, where the
+position is the message's place in the run as if its steps were one transcript laid end to end.
+**Memory written before 7.20.0 is keyed differently:** a step's prompt and answer were then at
+`2 × step` and `2 × step + 1`, with nothing said beside a tool call. A memory server that
+dedupes on the uuid will not match a turn it stored before the upgrade with the same turn after
+it. Injected context shares a 2000-token budget per
 step. A hook that fails never fails the step — it leaves a note, shown under the step on the Runs
 page. `hiddenTools` hides a server's tools from the model while its hooks can still call them.
 
@@ -731,6 +873,8 @@ them, and reads what happened. Four things it may not touch:
   and `testMcpServer` spawns whatever stdio command it is handed, so it is arbitrary execution on
   this host for anyone who reaches it. `mcpStatus` and `mcpPrompts` are the same list answered
   from the live pool, carrying no credentials but saying just as plainly what this server dials.
+  `mcpResource` reads back whatever uri a configured server will serve, so it is shut with them,
+  and so are `mcpResources` and `mcpResourceCompletion`, the resource picker's listing.
 - **The agent profiles.** The settings row again in miniature, one per profile: an endpoint, a
   key, and which MCP servers a task on it may reach. An agent that could write one could point a
   task at a model of its choosing and hand it every tool this server has. A task still carries

@@ -11,7 +11,11 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { ElicitationNote } from "../../shared/elicitations.ts";
+import type { ResourceRead } from "../../shared/resource-placeholder.ts";
+import { LOG_LEVELS, type ServerLogNote } from "../../shared/server-logs.ts";
 
 /**
  * The whole domain, in one place. Postgres is the only database; `client.ts` chooses which
@@ -85,7 +89,14 @@ export const agents = pgTable("agents", {
     .notNull()
     .default("inherit"),
   toolSelectModel: text().notNull().default(""),
-  toolExecution: text({ enum: ["inherit", "sequential", "parallel"] })
+  toolExecution: text({ enum: ["inherit", "sequential", "parallel", "auto"] })
+    .notNull()
+    .default("inherit"),
+  reasoningReplay: text({ enum: ["inherit", "all", "tool_loop", "none"] })
+    .notNull()
+    .default("inherit"),
+  /** A word rather than a nullable boolean, for the enum's reason above: `on`, `off` or `inherit`. */
+  serverInstructions: text({ enum: ["inherit", "on", "off"] })
     .notNull()
     .default("inherit"),
   compactionModel: text().notNull().default(""),
@@ -292,6 +303,29 @@ export const runSteps = pgTable(
      * only record of what the model was given beyond the step's own prompt.
      */
     hooks: jsonb().$type<HookNote[]>(),
+    /**
+     * The MCP resources this step's prompt named with `{{resource:…}}`, and when each was read.
+     * Kept for `runs.payload`'s reason: what the model was asked depended on them, and a
+     * resource is read fresh on every run, so what it says now is not what it said then. The
+     * text itself is not kept — it is the server's, and a step's history is not a mirror of it.
+     */
+    resources: jsonb().$type<ResourceRead[]>(),
+    /**
+     * What the step's MCP servers logged at `warning` or worse while its tool calls ran. The run
+     * stream shows everything a row's `logLevel` lets through, but its events are gone a minute
+     * after the run, and "the tool failed" is read days later — by someone who wants the server's
+     * own account of why. Beside `hooks` rather than in it: a hook note is what the host's own
+     * calls did around the step, and these are what a server said during the model's.
+     */
+    serverLogs: jsonb().$type<ServerLogNote[]>(),
+    /**
+     * What the step's MCP servers stopped mid-call to ask for, each declined because a run has
+     * nobody to answer. Kept so the Runs page can say a task needs a default it does not carry —
+     * the field names are which. Its own column rather than hook notes, which are the host's own
+     * calls, or server logs, which a server chose to say: this is a question it could not go on
+     * without, and the operator's to answer by changing the task.
+     */
+    elicitations: jsonb().$type<ElicitationNote[]>(),
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),
@@ -327,6 +361,23 @@ export const mcpServers = pgTable("mcp_servers", {
    */
   hiddenTools: jsonb().$type<string[]>(),
   /**
+   * Whether this server's tools are believed when they say they only read (`readOnlyHint`) or
+   * may be repeated (`idempotentHint`). The spec calls annotations untrusted and the pool
+   * believes none unless a row says so: under `toolExecution: auto` a trusted read runs beside
+   * the other reads, and an identical repeat of one in the same step is answered once. A server
+   * that marks a write read-only would get it run out of order, or its second call swallowed,
+   * so this is a judgement about one server an operator has read. Read at call time.
+   */
+  trustAnnotations: boolean().notNull().default(false),
+  /**
+   * How much the server logs, sent as `logging/setLevel` when it connects. Null is the server's
+   * own default — the pool's spelling, so the row reaches it unchanged — rather than the word
+   * `inherit` the profile columns use: there is no row above this one to inherit from, and a
+   * level named "inherit" would claim there was. `warning` by default, so a server is heard when
+   * it complains and not when it chatters. Only a server that declared `logging` is asked.
+   */
+  logLevel: text({ enum: LOG_LEVELS }).default("warning"),
+  /**
    * Tool calls this server wants made at points in a run — recall before a step, remember after
    * one. See `server/runner/hooks.ts` for which points a run has. Checked by `validateHooks` when
    * the row is written, so a placeholder the event does not offer is refused rather than skipped
@@ -334,6 +385,58 @@ export const mcpServers = pgTable("mcp_servers", {
    */
   hooks: jsonb().$type<ToolHook[]>(),
 });
+
+/**
+ * What a run's tool calls handed back as made: one row per `resource_link` uri per run, the
+ * protocol's own "I made this", so the run and the task can link straight to it.
+ *
+ * A table rather than a jsonb column on `runs` because the task-level list queries across runs,
+ * and a jsonb field cannot be filtered, ordered or indexed — the reason the token columns are
+ * columns. `taskId` is copied off the run so "everything this task made" is one indexed lookup
+ * rather than a join through every run it ever had.
+ *
+ * One row per uri per run, kept by the unique index the writer's `ON CONFLICT` lands on: a second
+ * step linking the same document bumps `count` rather than adding a row. Across runs each run
+ * keeps its own, and the task view groups them. `serverSlug` and `tool` are kept as text beside
+ * `serverId` so the row still says where it came from once the server row is gone.
+ *
+ * Written by the runner through Drizzle, never through GraphQL, so the generated writes stay shut
+ * by the permissions whitelist. Hook calls never reach `dispatch` and are not here: an artifact is
+ * what the task's model chose to make. See `runner/artifacts.ts`.
+ */
+export const runArtifacts = pgTable(
+  "run_artifacts",
+  {
+    id: id(),
+    runId: text()
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    runStepId: text().references(() => runSteps.id, { onDelete: "set null" }),
+    taskId: text()
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    serverId: text().references(() => mcpServers.id, { onDelete: "set null" }),
+    serverSlug: text().notNull().default(""),
+    tool: text().notNull().default(""),
+    // The `resource_link`'s own fields, spelled as MCP spells them so nothing is renamed on the
+    // way in — and close to A2A's `Artifact`, in case runs are ever exposed that way.
+    uri: text().notNull(),
+    name: text().notNull().default(""),
+    title: text().notNull().default(""),
+    mimeType: text().notNull().default(""),
+    description: text().notNull().default(""),
+    lastModified: timestamp({ mode: "date", withTimezone: true }),
+    webUrl: text().notNull().default(""),
+    count: integer().notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    // Also the run's index: a lookup by `runId` alone reads its leading column.
+    uniqueIndex("run_artifacts_run_uri_idx").on(table.runId, table.uri),
+    index("run_artifacts_task_updated_idx").on(table.taskId, table.updatedAt),
+  ],
+);
 
 /** The id of the one settings row. */
 export const SETTINGS_ID = "default";
@@ -359,16 +462,43 @@ export const settings = pgTable("settings", {
     .default("eager"),
   toolSelectModel: text().notNull().default(""),
   /**
-   * Whether the calls a model asks for in one reply run one after another or all at once. The
-   * results go back in the order the model asked either way. Sequential by default because this
-   * server cannot tell a tool that reads from one that writes: two writes to the same file, or a
-   * create and the update that assumes it, are only safe in the order they were asked. An
-   * operator whose tools are reads turns it on, and a round trip then costs the slowest call
-   * rather than the sum of them.
+   * Whether the calls a model asks for in one reply run one after another, all at once, or —
+   * `auto` — the reads together and the rest in order. The results go back in the order the
+   * model asked either way. Two writes to the same file, or a create and the update that assumes
+   * it, are only safe in the order they were asked, and this server cannot tell a read from a
+   * write on its own: `auto` asks the pool, which believes a tool's `readOnlyHint` only on a row
+   * that sets `trustAnnotations`. Every other call is a barrier, so `auto` over servers nobody
+   * vouched for is `sequential`, and a read asked for after a write still sees what it did.
+   *
+   * `auto` is the default for a new install. The column was `sequential` by default before it
+   * existed, and the migration only moves the default, so a row written then keeps its value:
+   * an operator who left it sequential is not turned parallel by an upgrade.
    */
-  toolExecution: text({ enum: ["sequential", "parallel"] })
+  toolExecution: text({ enum: ["sequential", "parallel", "auto"] })
     .notNull()
-    .default("sequential"),
+    .default("auto"),
+  /**
+   * Whether the system prompt carries what each connected MCP server says about how to use it —
+   * the `instructions` of its handshake, under agent-core's per-server budget. On by default, as
+   * min-agent has always had it: a server's author knows things about its tools a description
+   * has no room for. It costs prompt tokens on every step, though the block is the same text on
+   * each of them and so stays in the endpoint's cache; off is for a small window.
+   */
+  serverInstructions: boolean().notNull().default(true),
+  /**
+   * Which of the model's own replies carry its thinking back to it on the next request —
+   * agent-core's `reasoningReplay`, whose default this is. A thinking model reads its earlier
+   * reasoning between tool calls, and a transcript sent back as the endpoint first saw it keeps
+   * the endpoint's prompt cache valid; stripping it client-side breaks both. `tool-loop` is
+   * gpt-oss harmony's rule, for a server that renders whatever it is sent, and `none` saves the
+   * context on an endpoint that drops it anyway.
+   *
+   * `tool_loop` is agent-core's `tool-loop` respelled, because a GraphQL enum value cannot hold a
+   * hyphen and the driver names one it cannot spell `Option<n>`. `runner/profile.ts` translates.
+   */
+  reasoningReplay: text({ enum: ["all", "tool_loop", "none"] })
+    .notNull()
+    .default("all"),
   /**
    * The model that summarises the oldest stretch of a step's transcript once it fills three
    * quarters of the window, so a long tool loop keeps going instead of failing with
@@ -425,6 +555,7 @@ export const schema = {
   steps,
   runs,
   runSteps,
+  runArtifacts,
   mcpServers,
   settings,
   endpointCapabilities,
@@ -452,9 +583,17 @@ export const relations = defineRelations(schema, (r) => ({
     task: r.one.tasks({ from: r.runs.taskId, to: r.tasks.id, optional: false }),
     trigger: r.one.triggers({ from: r.runs.triggerId, to: r.triggers.id }),
     steps: r.many.runSteps({ from: r.runs.id, to: r.runSteps.runId }),
+    artifacts: r.many.runArtifacts({ from: r.runs.id, to: r.runArtifacts.runId }),
   },
   runSteps: {
     run: r.one.runs({ from: r.runSteps.runId, to: r.runs.id, optional: false }),
+    artifacts: r.many.runArtifacts({ from: r.runSteps.id, to: r.runArtifacts.runStepId }),
+  },
+  // No relation to `mcpServers`: that table is the operator's, and a relation is a field an agent
+  // could walk to it through. `serverId` is a column, which says which server and nothing more.
+  runArtifacts: {
+    run: r.one.runs({ from: r.runArtifacts.runId, to: r.runs.id, optional: false }),
+    step: r.one.runSteps({ from: r.runArtifacts.runStepId, to: r.runSteps.id }),
   },
 }));
 
@@ -463,5 +602,6 @@ export type Task = typeof tasks.$inferSelect;
 export type Step = typeof steps.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type RunStep = typeof runSteps.$inferSelect;
+export type RunArtifactRow = typeof runArtifacts.$inferSelect;
 export type McpServerRow = typeof mcpServers.$inferSelect;
 export type Settings = typeof settings.$inferSelect;

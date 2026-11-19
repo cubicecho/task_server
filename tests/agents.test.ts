@@ -56,6 +56,8 @@ const agent = (over: Partial<Agent> = {}): Agent => ({
   toolDiscovery: "inherit",
   toolSelectModel: "",
   toolExecution: "inherit",
+  reasoningReplay: "inherit",
+  serverInstructions: "inherit",
   compactionModel: "",
   requestTimeoutSeconds: -1,
   maxRetries: -1,
@@ -93,6 +95,8 @@ const GOLDEN: {
       toolDiscovery: "ondemand",
       toolSelectModel: "tiny",
       toolExecution: "parallel",
+      reasoningReplay: "none",
+      serverInstructions: "off",
       compactionModel: "summary",
       requestTimeoutSeconds: 30,
       maxRetries: 5,
@@ -106,6 +110,8 @@ const GOLDEN: {
       toolDiscovery: "ondemand",
       toolSelectModel: "tiny",
       toolExecution: "parallel",
+      reasoningReplay: "none",
+      serverInstructions: false,
       compactionModel: "summary",
       requestTimeoutSeconds: 30,
       maxRetries: 5,
@@ -200,6 +206,42 @@ const GOLDEN: {
     expected: { toolExecution: "sequential" },
   },
   {
+    name: "auto over sequential",
+    settings: { toolExecution: "sequential" },
+    agent: { toolExecution: "auto" },
+    expected: { toolExecution: "auto" },
+  },
+  {
+    name: "inherit over instructions off",
+    settings: { serverInstructions: false },
+    agent: { serverInstructions: "inherit" },
+    expected: {},
+  },
+  {
+    name: "instructions on over off",
+    settings: { serverInstructions: false },
+    agent: { serverInstructions: "on" },
+    expected: { serverInstructions: true },
+  },
+  {
+    name: "inherit over a narrowed replay",
+    settings: { reasoningReplay: "tool_loop" },
+    agent: { reasoningReplay: "inherit" },
+    expected: {},
+  },
+  {
+    // The one value whose column spelling is not agent-core's, so it is translated both ways.
+    name: "tool_loop over all",
+    agent: { reasoningReplay: "tool_loop" },
+    expected: { reasoningReplay: "tool_loop" },
+  },
+  {
+    name: "all over none",
+    settings: { reasoningReplay: "none" },
+    agent: { reasoningReplay: "all" },
+    expected: { reasoningReplay: "all" },
+  },
+  {
     name: "inherit over ondemand",
     settings: { toolDiscovery: "ondemand" },
     agent: { toolDiscovery: "inherit" },
@@ -243,17 +285,29 @@ const GOLDEN: {
     expected: { apiKey: "other-key" },
   },
   {
+    // agent-core's spelling of "none", which sends what an empty key did: no auth header.
     name: "the same endpoint when the server has no key",
     settings: { apiKey: "" },
     agent: { model: "gpt-5" },
-    expected: { model: "gpt-5" },
+    expected: { model: "gpt-5", apiKey: NO_KEY },
   },
   {
-    // Spelled differently is a different endpoint: the comparison is of the strings, and the
-    // cost of being wrong in the other direction is a key posted somewhere it was not issued for.
+    // A trailing slash is the same server, so the key it was issued for still goes to it.
     name: "the same endpoint with a trailing slash",
     agent: { baseUrl: "http://server:11434/v1/" },
-    expected: { baseUrl: "http://server:11434/v1/", apiKey: NO_KEY },
+    expected: { baseUrl: "http://server:11434/v1/" },
+  },
+  {
+    name: "the same endpoint with the host in capitals and its default port",
+    settings: { baseUrl: "https://api.example.com/v1" },
+    agent: { baseUrl: "HTTPS://API.Example.com:443/v1" },
+    expected: { baseUrl: "HTTPS://API.Example.com:443/v1" },
+  },
+  {
+    // A path's case is the server's to read, so it is another endpoint.
+    name: "a path in another case is another endpoint",
+    agent: { baseUrl: "http://server:11434/V1" },
+    expected: { baseUrl: "http://server:11434/V1", apiKey: NO_KEY },
   },
   {
     name: "a server scope changes nothing in the row",

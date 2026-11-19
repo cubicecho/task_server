@@ -1,4 +1,5 @@
 import { errorMessage, fold, history, type RunEvent, watch } from "@cubicecho/agent-core";
+import { McpPoolError } from "@cubicecho/agent-mcp-pool";
 import { buildSchema, extractFilters, GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import { applyPermissions } from "@vantreeseba/graphql-casl";
 import { eq, inArray } from "drizzle-orm";
@@ -29,6 +30,7 @@ import { hookProblems, runsDeleted } from "../runner/hooks.ts";
 import { listAgentModels, listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
 import * as mcpPrompts from "../runner/mcp-prompts.ts";
+import * as mcpResources from "../runner/mcp-resources.ts";
 import { resolveConfig } from "../runner/profile.ts";
 import { drainSoon, runningRunIds, runningTaskIds, runTask, stopTask } from "../runner/run.ts";
 import { flush, isValidCron, state as scheduleState, syncSoon } from "../scheduler/cron.ts";
@@ -50,6 +52,8 @@ import {
   McpConnectionInput,
   McpProbeType,
   McpPromptType,
+  McpResourceEntryType,
+  McpResourceType,
   McpServerStatusType,
   RunEventType,
   ScheduleEntryType,
@@ -58,6 +62,55 @@ import {
 
 /** How much of a run's log `runEvents` hands back when the caller names no limit. */
 const DEFAULT_EVENT_LIMIT = 200;
+
+/** The pool's refusals that are about the server row rather than what was asked of it. */
+const GONE: Partial<Record<McpPoolError["code"], string>> = {
+  "unknown-server": "is not configured here any more",
+  disabled: "is disabled",
+};
+
+/** What the pool's refusals to read a resource mean to the person who pressed Preview. */
+const UNREADABLE = {
+  ...GONE,
+  unsupported: "does not serve resources, so nothing it made can be previewed",
+};
+
+/** And to expand a prompt, for the person who picked one. */
+const UNEXPANDABLE = { ...GONE, unsupported: "does not offer prompts" };
+
+/**
+ * A refusal the pool can name, as a sentence a dialog can show; anything else as it was thrown.
+ * A plain `Error` reaches the client as "Internal server error", which says nothing about a
+ * server that simply never offered resources. What the server itself answers — a uri it no
+ * longer has, a prompt argument missing — passes through in its own words.
+ */
+function poolRefusal(
+  error: unknown,
+  serverId: string,
+  reasons: Partial<Record<McpPoolError["code"], string>>,
+): unknown {
+  const reason = error instanceof McpPoolError ? reasons[error.code] : undefined;
+  if (!reason) {
+    return error;
+  }
+  const slug = mcp.state().find((server) => server.id === serverId)?.slug;
+  return refusal("UNSUPPORTED", `The MCP server ${slug ?? serverId} ${reason}.`);
+}
+
+/**
+ * A prompt's arguments as a `JSON` argument brings them, cut to what the protocol takes: every
+ * argument is a string, and anything else in the object is not one the template declared.
+ */
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+}
 
 /** `McpConnectionInput` as it arrives: both arms' fields, all of them optional but the transport. */
 type McpConnectionArgs = {
@@ -68,6 +121,9 @@ type McpConnectionArgs = {
   url?: string | null;
   headers?: Record<string, string> | null;
 };
+
+/** The tables the runner writes and a client only reads. */
+const HISTORY = new Set(["runs", "runSteps", "runArtifacts"]);
 
 /**
  * The CRUD half of the API is generated from the Drizzle schema — tasks, triggers, runs, MCP
@@ -86,12 +142,13 @@ const { entities } = buildSchema(db, {
   // in the web app.
   describeColumn,
   describeTable,
-  // The run history — the run and the steps it took — is written by the runner, never by a
-  // client: a hand-made row would claim something happened that did not.
+  // The run history — the run, the steps it took and what it made — is written by the runner,
+  // never by a client: a hand-made row would claim something happened that did not. An artifact
+  // is not deleted on its own either; it goes with its run.
   features: {
-    insert: (table) => table !== "runs" && table !== "runSteps" && table !== "settings",
-    update: (table) => table !== "runs" && table !== "runSteps",
-    delete: (table) => table !== "settings",
+    insert: (table) => !HISTORY.has(table) && table !== "settings",
+    update: (table) => !HISTORY.has(table),
+    delete: (table) => table !== "settings" && table !== "runArtifacts",
     // `nestedWrites` (triggers created inline under createTask) is off. Nothing in the driver
     // stops it any more; it is simply not earned yet — the UI writes the task and then its
     // triggers, and a flow is written by `setTaskSteps` rather than row at a time regardless.
@@ -492,7 +549,7 @@ const baseSchema = new GraphQLSchema({
           "author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` " +
           "and the text becomes a task's or a step's prompt, editable before it is saved. " +
           "Empty when no connected server offers any; a server that cannot be listed is left " +
-          "out rather than failing the query.",
+          "out rather than failing the query. Each server's list is read to its last page.",
         resolve: () => mcpPrompts.list(),
       },
       mcpPrompt: {
@@ -500,7 +557,8 @@ const baseSchema = new GraphQLSchema({
         description:
           "One prompt from `mcpPrompts`, expanded with the arguments given and flattened to " +
           "the single string a prompt is. A template that answers with more than one message " +
-          "comes back with its roles labelled.",
+          "comes back with its roles labelled. Refused with `UNSUPPORTED` for a server that " +
+          "does not offer prompts, or is disabled or gone.",
         args: {
           server: {
             type: new GraphQLNonNull(GraphQLString),
@@ -512,8 +570,143 @@ const baseSchema = new GraphQLSchema({
             description: "The prompt's arguments by name. Absent is the same as none.",
           },
         },
-        resolve: (_source, args: { server: string; name: string; args?: unknown }) =>
-          mcpPrompts.get(args.server, args.name, (args.args ?? {}) as Record<string, string>),
+        resolve: async (_source, args: { server: string; name: string; args?: unknown }) => {
+          try {
+            return await mcpPrompts.get(args.server, args.name, stringRecord(args.args));
+          } catch (error) {
+            throw poolRefusal(error, args.server, UNEXPANDABLE);
+          }
+        },
+      },
+      mcpPromptCompletion: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))),
+        description:
+          "What the server behind a prompt from `mcpPrompts` suggests for one of its " +
+          "arguments, given what has been typed into it so far — at most a hundred, in the " +
+          "server's order. Empty, never an error, for a server that cannot complete.",
+        args: {
+          server: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The MCP server row's id, as `mcpPrompts` reports it.",
+          },
+          name: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The prompt's name.",
+          },
+          argument: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The argument being filled in.",
+          },
+          value: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "What is in it so far. Empty asks for the server's opening suggestions.",
+          },
+          context: {
+            type: GraphQLJSON,
+            description:
+              "The arguments already filled in, by name, which a server may narrow by — a " +
+              "folder before the document in it. Absent is the same as none.",
+          },
+        },
+        resolve: async (
+          _source,
+          args: {
+            server: string;
+            name: string;
+            argument: string;
+            value: string;
+            context?: unknown;
+          },
+        ) => {
+          try {
+            return await mcpPrompts.complete(
+              args.server,
+              args.name,
+              { name: args.argument, value: args.value },
+              stringRecord(args.context),
+            );
+          } catch (error) {
+            throw poolRefusal(error, args.server, UNEXPANDABLE);
+          }
+        },
+      },
+      mcpResources: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpResourceEntryType))),
+        description:
+          "The resources and resource templates the connected MCP servers offer, for the picker " +
+          "that names one in a prompt as `{{resource:<serverSlug>:<uri>}}` — read fresh on " +
+          "every run, unlike an expanded `mcpPrompt`. Empty when no connected server serves " +
+          "any; a server that cannot be listed is left out rather than failing the query.",
+        resolve: () => mcpResources.list(),
+      },
+      mcpResourceCompletion: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))),
+        description:
+          "What the server behind a template from `mcpResources` suggests for one of its " +
+          "variables, given what has been typed into it so far — at most a hundred, in the " +
+          "server's order. Empty, never an error, for a server that cannot complete.",
+        args: {
+          server: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The MCP server row's id, as `mcpResources` reports it.",
+          },
+          uri: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The template's own `uri`, with its variables unfilled.",
+          },
+          variable: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The variable being filled in.",
+          },
+          value: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "What is in it so far. Empty asks for the server's opening suggestions.",
+          },
+          context: {
+            type: GraphQLJSON,
+            description:
+              "The variables already filled in, by name, which a server may narrow by. Absent " +
+              "is the same as none.",
+          },
+        },
+        resolve: async (
+          _source,
+          args: { server: string; uri: string; variable: string; value: string; context?: unknown },
+        ) => {
+          try {
+            return await mcpResources.complete(
+              args.server,
+              args.uri,
+              { name: args.variable, value: args.value },
+              stringRecord(args.context),
+            );
+          } catch (error) {
+            throw poolRefusal(error, args.server, UNREADABLE);
+          }
+        },
+      },
+      mcpResource: {
+        type: new GraphQLNonNull(McpResourceType),
+        description:
+          "One resource read back from an MCP server with `resources/read` — a run's artifact, " +
+          "previewed. Read fresh, so a document edited since the run reads as it is now. Text " +
+          "only: binary contents are named, not sent. Refused with `UNSUPPORTED` for a server " +
+          "that does not serve resources, or is disabled or gone.",
+        args: {
+          serverId: {
+            type: new GraphQLNonNull(GraphQLString),
+            description: "The MCP server row's id — an artifact's `serverId`.",
+          },
+          uri: { type: new GraphQLNonNull(GraphQLString) },
+        },
+        resolve: async (_source, args: { serverId: string; uri: string }) => {
+          try {
+            const read = await mcpResources.read(args.serverId, args.uri);
+            return { ...read, mimeType: read.mimeType ?? "" };
+          } catch (error) {
+            throw poolRefusal(error, args.serverId, UNREADABLE);
+          }
+        },
       },
       schedule: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(ScheduleEntryType))),

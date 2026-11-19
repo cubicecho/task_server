@@ -12,7 +12,7 @@ import { db } from "../db/client.ts";
 import { type Agent, agents, type McpServerRow, mcpServers } from "../db/schema.ts";
 import { hookProblems } from "../runner/hooks.ts";
 import { mcp } from "../runner/mcp.ts";
-import { agentLayer, SPEC_EXTENSION } from "../runner/profile.ts";
+import { agentLayer, replayColumn, SPEC_EXTENSION } from "../runner/profile.ts";
 import { NEW_MCP_SERVER, shapeProblems } from "./mcp-server.ts";
 
 /**
@@ -49,10 +49,11 @@ function compact<T extends object>(value: T): T {
  * One MCP server row as a bundle carries it: how to start or reach it, under the slug the
  * profile's scope names it by.
  *
- * No `id` and no `enabled`. An id is this database's and means nothing in another, and a
- * disabled server is a decision about this host — the importing operator makes their own when
- * they choose whether to create it. Only the arm the transport reads is written, so a row that
- * was once stdio does not travel with a `url` it stopped using.
+ * No `id`, no `enabled`, no `trustAnnotations` and no `logLevel`. An id is this database's and
+ * means nothing in another, and a disabled server, a trusted one or a chatty one is a decision
+ * about this host — the importing operator makes their own when they choose whether to create it,
+ * and a server arrives believed by nobody, logging at the column's default. Only the arm the transport reads is written, so a row that was once stdio does not
+ * travel with a `url` it stopped using.
  */
 function bundled(row: McpServerRow): SpecServer {
   const connection =
@@ -162,6 +163,8 @@ export type ImportedAgent = Pick<
   | "toolDiscovery"
   | "toolSelectModel"
   | "toolExecution"
+  | "reasoningReplay"
+  | "serverInstructions"
   | "compactionModel"
   | "requestTimeoutSeconds"
   | "maxRetries"
@@ -257,6 +260,8 @@ const SERVER_COLUMNS = new Set([
   "url",
   "headers",
   "hiddenTools",
+  "trustAnnotations",
+  "logLevel",
   "hooks",
 ]);
 
@@ -317,6 +322,17 @@ function readBundled(
   }
   if (held.enabled === false) {
     notes.push("disabled where it was exported; created enabled here");
+  }
+  // A host that wrote it believed the server, which was that host's judgement to make.
+  if (held.trustAnnotations === true) {
+    notes.push("its annotations were trusted where it was exported; created untrusted here");
+  }
+  // How much a server says is this host's to choose, as its trust is.
+  if (held.logLevel !== undefined && held.logLevel !== mcpServers.logLevel.default) {
+    notes.push(
+      `it logged at ${held.logLevel === null ? "its own default" : String(held.logLevel)} ` +
+        `where it was exported; created at ${mcpServers.logLevel.default} here`,
+    );
   }
 
   const names = (value: unknown) => (isRecord(value) ? Object.keys(value) : []);
@@ -428,19 +444,31 @@ export function planImport(
   // hand, since the parser promises only that `extensions` is an object.
   const own = spec.extensions?.[SPEC_EXTENSION];
   let execution: ImportedAgent["toolExecution"] = "inherit";
+  let instructions: ImportedAgent["serverInstructions"] = "inherit";
   if (own !== undefined && !isRecord(own)) {
     drop(`extensions.${SPEC_EXTENSION}`, "must be an object");
   }
   for (const [key, held] of Object.entries(isRecord(own) ? own : {})) {
-    if (key !== "toolExecution") {
-      drop(`extensions.${SPEC_EXTENSION}.${key}`, "a profile has no such setting");
-    } else if (held === "sequential" || held === "parallel") {
-      execution = held;
+    if (key === "toolExecution") {
+      if (held === "sequential" || held === "parallel" || held === "auto") {
+        execution = held;
+      } else {
+        drop(
+          `extensions.${SPEC_EXTENSION}.toolExecution`,
+          'must be "sequential", "parallel" or "auto", so it is left to inherit',
+        );
+      }
+    } else if (key === "serverInstructions") {
+      if (typeof held === "boolean") {
+        instructions = held ? "on" : "off";
+      } else {
+        drop(
+          `extensions.${SPEC_EXTENSION}.serverInstructions`,
+          "must be true or false, so it is left to inherit",
+        );
+      }
     } else {
-      drop(
-        `extensions.${SPEC_EXTENSION}.toolExecution`,
-        'must be "sequential" or "parallel", so it is left to inherit',
-      );
+      drop(`extensions.${SPEC_EXTENSION}.${key}`, "a profile has no such setting");
     }
   }
   for (const [index, hook] of (spec.hooks ?? []).entries()) {
@@ -519,10 +547,15 @@ export function planImport(
     systemPrompt: texts.join("\n\n"),
     maxTokens: whole("model.maxTokens", spec.model?.maxTokens),
     temperature: spec.model?.temperature ?? -1,
+    // The parser has already dropped a value that is not one of the three, with the reason.
+    reasoningReplay: spec.model?.reasoningReplay
+      ? replayColumn(spec.model.reasoningReplay)
+      : "inherit",
     maxToolIterations: whole("tools.maxIterations", spec.tools?.maxIterations),
     toolDiscovery: discovery === "eager" || discovery === "ondemand" ? discovery : "inherit",
     toolSelectModel: spec.tasks?.toolSelect?.model?.trim() ?? "",
     toolExecution: execution,
+    serverInstructions: instructions,
     compactionModel: spec.tasks?.compaction?.model?.trim() ?? "",
     requestTimeoutSeconds: whole(
       "endpoint.requestTimeoutSeconds",

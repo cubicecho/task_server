@@ -89,6 +89,11 @@ test("how this server is wired is the operator's too", async () => {
     // this one dials, and what each of them is for.
     `{ mcpPrompts { name } }`,
     `{ mcpPrompt(server: "x", name: "greet") }`,
+    `{ mcpPromptCompletion(server: "x", name: "greet", argument: "who", value: "A") }`,
+    // And what they serve back for a uri, which is any uri a configured server will read.
+    `{ mcpResource(serverId: "x", uri: "file:///etc/passwd") { text } }`,
+    `{ mcpResources { uri } }`,
+    `{ mcpResourceCompletion(server: "x", uri: "doc://{path}", variable: "path", value: "") }`,
     `mutation { createMcpServer(values: { slug: "probe", command: "sh" }) { id } }`,
     `mutation { testMcpServer(config: { transport: "stdio", command: "sh" }) { ok } }`,
     `mutation { reconnectMcp { slug } }`,
@@ -148,6 +153,20 @@ test("an agent does not delete the history", async () => {
   expect(
     await refused(`mutation { deleteRunStep(where: { id: { eq: "x" } }) { id } }`, "agent"),
   ).toEqual(["FORBIDDEN"]);
+});
+
+// What a run made is history like the run itself: open to read, by an agent as by the operator,
+// and written only by the runner. There is no generated write to guard — the table offers none —
+// so the check is that none exists, which is what would ship open if `features` lost the table.
+test("an agent may read what a run made, and nobody may write it", async () => {
+  await allowed(
+    `{ runArtifacts { uri webUrl } runArtifactsAggregate { count } runs { artifacts { uri } } }`,
+    "agent",
+  );
+  const writes = Object.keys(schema.getMutationType()?.getFields() ?? {}).filter((name) =>
+    /artifact/i.test(name),
+  );
+  expect(writes).toEqual([]);
 });
 
 // The one call on this schema that can lose a table, shut for every caller — the web app has

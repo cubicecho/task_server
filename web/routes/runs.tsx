@@ -1,5 +1,6 @@
 import type { HookNote, RunMetrics } from "@cubicecho/agent-core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   DeleteRunDocument,
@@ -20,6 +21,7 @@ import { List } from "@/components/list";
 import { LoadState } from "@/components/load-state";
 import { PageLayout } from "@/components/page-layout";
 import { RunDialog } from "@/components/run-dialog";
+import { RunOutputs } from "@/components/run-outputs";
 import { RunStream } from "@/components/run-stream";
 import { StatTile } from "@/components/stat-tile";
 import { Alert } from "@/components/ui/alert";
@@ -43,6 +45,9 @@ import {
 import { STATUS_VARIANT } from "@/lib/run-status";
 import { useRefreshRuns, useRunTask, useStopTask } from "@/lib/use-task-run";
 import { cn } from "@/lib/utils";
+import { describeElicitation, type ElicitationNote } from "../../shared/elicitations.ts";
+import type { ResourceRead } from "../../shared/resource-placeholder.ts";
+import { isFailure, type ServerLogNote } from "../../shared/server-logs.ts";
 
 type Run = RunsQuery["runs"][number];
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
@@ -127,6 +132,115 @@ function HookNotes({ notes }: { notes: unknown }) {
 }
 
 /**
+ * The MCP resources a step's prompt named, as they were read for it: when, how much, and whether
+ * the cap cut it. Collapsed for `HookNotes`' reason; the text is not kept, so there is none here.
+ * A failed read is also the step's error, so it is said there in full.
+ */
+function ResourceReads({ reads }: { reads: unknown }) {
+  const list = (reads ?? []) as ResourceRead[];
+  if (list.length === 0) {
+    return null;
+  }
+  const failed = list.filter((read) => read.error).length;
+  return (
+    <Collapsible
+      title={`${list.length} resource(s) read${failed ? `, ${failed} failed` : ""}`}
+      titleClassName={cn("text-xs", failed && "text-negative")}
+      contentSlot={
+        <List
+          label="Resources read"
+          divided={false}
+          contentSlot={list.map((read) => (
+            <span
+              key={`${read.server}:${read.uri}`}
+              className={cn(
+                "font-mono text-xs",
+                read.error ? "text-negative" : "text-foreground/60",
+              )}
+            >
+              {read.server}:{read.uri} · {new Date(read.readAt).toLocaleString()}
+              {read.error
+                ? " · failed"
+                : ` · ${read.chars} chars${read.truncated ? " · cut to fit" : ""}`}
+            </span>
+          ))}
+        />
+      }
+    />
+  );
+}
+
+/**
+ * What the step's MCP servers complained of during its tool calls: the warnings and worse the
+ * live stream showed, kept because the stream is gone a minute after the run. Beside the hook
+ * notes, and collapsed for their reason — with an error red in the summary so it is not missed.
+ */
+function ServerLogs({ logs }: { logs: unknown }) {
+  const list = (logs ?? []) as ServerLogNote[];
+  if (list.length === 0) {
+    return null;
+  }
+  const errors = list.filter((entry) => isFailure(entry.level)).length;
+  const total = list.reduce((sum, entry) => sum + (entry.dropped ?? 1), 0);
+  return (
+    <Collapsible
+      title={`${total} server warning(s)${errors ? ", errors among them" : ""}`}
+      titleClassName={cn("text-xs", errors ? "text-negative" : "text-warning")}
+      contentSlot={
+        <List
+          label="Server logs"
+          divided={false}
+          contentSlot={list.map((entry, index) => (
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: entries are only ever appended, and a server may say one thing twice
+              key={index}
+              className={cn(
+                "font-mono text-xs whitespace-pre-wrap break-all",
+                isFailure(entry.level) ? "text-negative" : "text-warning",
+              )}
+            >
+              {entry.tool ? `${entry.tool} · ` : ""}
+              {entry.level} · {entry.text}
+            </span>
+          ))}
+        />
+      }
+    />
+  );
+}
+
+/**
+ * What the step's MCP servers stopped to ask for, each declined because nobody was there to
+ * answer. Open rather than collapsed, unlike the notes beside it: this is the one of them that
+ * asks the operator to do something — give the task the values the fields name.
+ */
+function Elicitations({ asked }: { asked: unknown }) {
+  const list = (asked ?? []) as ElicitationNote[];
+  if (list.length === 0) {
+    return null;
+  }
+  return (
+    <Alert
+      variant="warning"
+      title={`A server asked for input ${list.length === 1 ? "once" : `${list.length} times`}`}
+      description={
+        <ul className="flex flex-col gap-1">
+          {list.map((note, index) => (
+            <li
+              // biome-ignore lint/suspicious/noArrayIndexKey: notes are only ever appended, and a server may ask one thing twice
+              key={index}
+              className="text-xs"
+            >
+              <span className="font-mono">{note.tool}</span> · {describeElicitation(note)}
+            </li>
+          ))}
+        </ul>
+      }
+    />
+  );
+}
+
+/**
  * What the run actually did, step by step.
  *
  * Indented by `depth`, so an arm of a decision reads as being inside it — and the arm each
@@ -167,7 +281,10 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
             ) : null}
           </div>
           <ToolChips calls={step.toolCalls} />
+          <ResourceReads reads={step.resources} />
           <HookNotes notes={step.hooks} />
+          <ServerLogs logs={step.serverLogs} />
+          <Elicitations asked={step.elicitations} />
           {step.error ? <Alert variant="destructive" description={step.error} /> : null}
           {!step.error && step.output ? <CodeBlock content={step.output} wrap /> : null}
         </li>
@@ -197,7 +314,7 @@ function Metrics({ metrics }: { metrics: unknown }) {
       titleClassName={cn("text-xs", errors && "text-negative")}
       contentSlot={
         <div className="flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
             <StatTile label="Turns" value={m.turns} hint={`${m.requests} request(s)`} />
             <StatTile
               label="Tool calls"
@@ -219,6 +336,17 @@ function Metrics({ metrics }: { metrics: unknown }) {
               label="First token"
               value={m.firstTokenMs === undefined ? "—" : seconds(m.firstTokenMs)}
               hint={m.slowestTurnMs ? `slowest turn ${seconds(m.slowestTurnMs)}` : undefined}
+            />
+            {/* What the tools' servers logged at warning or worse, summed from every event, so
+                it counts what a step's cap did not keep. A run stored before the counts existed
+                has neither field, and reads as zero. */}
+            <StatTile
+              label="Server warnings"
+              value={(m.serverWarnings ?? 0) + (m.serverErrors ?? 0)}
+              valueClassName={
+                m.serverErrors ? "text-negative" : m.serverWarnings ? "text-warning" : undefined
+              }
+              hint={m.serverErrors ? `${m.serverErrors} error(s)` : undefined}
             />
           </div>
           {failed.length ? (
@@ -322,6 +450,7 @@ function RunDetail({
       )}
       <HookNotes notes={found.hooks} />
       {withResult ? <Metrics metrics={found.metrics} /> : null}
+      {withResult ? <RunOutputs detail={found} /> : null}
       {withResult ? result : null}
     </>
   );
@@ -359,6 +488,18 @@ function FilterBar({
         placeholder="Search output, errors and task names…"
         className="min-w-56 flex-1"
       />
+
+      {/* Shown only when a link asked for one run: no control above sets it, so this is where it
+          says so, and how it is taken off. */}
+      {filters.runId ? (
+        <Badge
+          variant="outline"
+          onRemove={() => onChange({ runId: null })}
+          removeLabel="Show every run"
+        >
+          One run
+        </Badge>
+      ) : null}
 
       {/* A rule under the first row of each of these: "any" is how the filter is turned off, not
           one of the things it filters to, and without it the two read as peers. */}
@@ -415,8 +556,11 @@ function FilterBar({
 
 export function RunsRoute() {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const navigate = useNavigate();
+  // A link to one run — from a task's Produced list — arrives as `?run=`, opened and alone.
+  const { run: linked } = useSearch({ from: "/runs" });
+  const [open, setOpen] = useState<string | null>(linked ?? null);
+  const [filters, setFilters] = useState<Filters>({ ...NO_FILTERS, runId: linked ?? null });
   // The run whose body is being replayed, and the body as it stood when the dialog opened.
   const [replay, setReplay] = useState<{ run: Run; payload: unknown } | null>(null);
   const [limit, setLimit] = useState(PAGE);
@@ -455,9 +599,23 @@ export function RunsRoute() {
   // cheaper than counting the table to find out.
   const more = rows.length >= limit;
 
+  // A second link followed while the page is already showing one.
+  useEffect(() => {
+    if (linked) {
+      setFilters({ ...NO_FILTERS, runId: linked });
+      setOpen(linked);
+      setLimit(PAGE);
+    }
+  }, [linked]);
+
   const update = (patch: Partial<Filters>) => {
     setFilters((current) => ({ ...current, ...patch }));
     setLimit(PAGE);
+    // Once the one run is let go of, the address stops naming it, so a reload does not bring
+    // the filter back.
+    if (linked && patch.runId === null) {
+      navigate({ to: "/runs", search: {}, replace: true });
+    }
   };
 
   const refresh = useRefreshRuns();
@@ -540,6 +698,9 @@ export function RunsRoute() {
                               {run.totalTokens ? ` · ${run.totalTokens} tokens` : ""}
                               {/* Only worth saying when the row stands for more than the one firing. */}
                               {run.attempts > 1 ? ` · ${run.attempts}×` : ""}
+                              {run.artifactsAggregate.count
+                                ? ` · ${run.artifactsAggregate.count} output${run.artifactsAggregate.count > 1 ? "s" : ""}`
+                                : ""}
                             </span>
                             <Provenance trigger={run.trigger} />
                           </>

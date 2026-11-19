@@ -1,8 +1,11 @@
+import { useStore } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
 import {
   type AgentFieldsFragment,
   type AgentsQuery,
+  AgentsReasoningReplayEnum,
+  AgentsServerInstructionsEnum,
   AgentsToolDiscoveryEnum,
   AgentsToolExecutionEnum,
   CreateAgentDocument,
@@ -51,12 +54,14 @@ interface Draft {
   apiKey: string;
   model: string;
   systemPrompt: string;
+  reasoningReplay: AgentsReasoningReplayEnum;
   maxTokens: number | null;
   temperature: number | null;
   maxToolIterations: number | null;
   toolDiscovery: AgentsToolDiscoveryEnum;
   toolSelectModel: string;
   toolExecution: AgentsToolExecutionEnum;
+  serverInstructions: AgentsServerInstructionsEnum;
   compactionModel: string;
   requestTimeoutSeconds: number | null;
   maxRetries: number | null;
@@ -75,12 +80,14 @@ const toDraft = (agent?: AgentFieldsFragment): Draft => ({
   apiKey: "",
   model: agent?.model ?? "",
   systemPrompt: agent?.systemPrompt ?? "",
+  reasoningReplay: agent?.reasoningReplay ?? AgentsReasoningReplayEnum.Inherit,
   maxTokens: shown(agent?.maxTokens ?? -1),
   temperature: shown(agent?.temperature ?? -1),
   maxToolIterations: shown(agent?.maxToolIterations ?? -1),
   toolDiscovery: agent?.toolDiscovery ?? AgentsToolDiscoveryEnum.Inherit,
   toolSelectModel: agent?.toolSelectModel ?? "",
   toolExecution: agent?.toolExecution ?? AgentsToolExecutionEnum.Inherit,
+  serverInstructions: agent?.serverInstructions ?? AgentsServerInstructionsEnum.Inherit,
   compactionModel: agent?.compactionModel ?? "",
   requestTimeoutSeconds: shown(agent?.requestTimeoutSeconds ?? -1),
   maxRetries: shown(agent?.maxRetries ?? -1),
@@ -151,8 +158,10 @@ export function AgentDialog({
     onSubmit: ({ value }) => save.mutateAsync(value),
   });
   // Asked of the saved profile's endpoint, as the model list is: a new one is not known until it
-  // has been saved once.
+  // has been saved once. An agent loads, picks and compacts its tools on the router, so the
+  // settings for a loop the step does not run are left out of the form for one.
   const agentModels = useAgentModels(agent?.id, Boolean(agent));
+  const isAgent = useStore(form.store, (state) => agentModels.has(state.values.model));
 
   return (
     <DialogLayout
@@ -209,22 +218,18 @@ export function AgentDialog({
             placeholder={agent ? "unchanged — leave blank to keep the stored key" : "sk-…"}
           />
 
-          <form.Subscribe selector={(state) => agentModels.has(state.values.model)}>
-            {(isAgent) => (
-              <ModelSelectField
-                form={form}
-                name="model"
-                label="Model"
-                description={
-                  isAgent
-                    ? "An ai-router agent: it runs its own loop, with its own tools and compaction, so the settings for those are left out below."
-                    : "Opening the list asks this profile's endpoint for its models, so save a new base URL first."
-                }
-                defaultLabel="Default from Settings"
-                agentId={agent?.id}
-              />
-            )}
-          </form.Subscribe>
+          <ModelSelectField
+            form={form}
+            name="model"
+            label="Model"
+            description={
+              isAgent
+                ? "An ai-router agent: it runs its own loop, with its own tools and compaction, so the settings for those are left out below."
+                : "Opening the list asks this profile's endpoint for its models, so save a new base URL first."
+            }
+            defaultLabel="Default from Settings"
+            agentId={agent?.id}
+          />
 
           <TextareaField
             form={form}
@@ -233,6 +238,31 @@ export function AgentDialog({
             description={doc("systemPrompt")}
             rows={3}
             placeholder="(from settings)"
+          />
+
+          <RadioGroupField
+            form={form}
+            name="reasoningReplay"
+            label="Send thinking back to the model"
+            description={doc("reasoningReplay")}
+            options={[
+              { value: AgentsReasoningReplayEnum.Inherit, label: "From settings" },
+              {
+                value: AgentsReasoningReplayEnum.All,
+                label: "All turns",
+                description: "Every reply keeps its reasoning.",
+              },
+              {
+                value: AgentsReasoningReplayEnum.ToolLoop,
+                label: "Only during tool calls",
+                description: "The final answer goes back without it.",
+              },
+              {
+                value: AgentsReasoningReplayEnum.None,
+                label: "Never",
+                description: "No reply carries its reasoning back.",
+              },
+            ]}
           />
 
           <FieldRow
@@ -274,45 +304,38 @@ export function AgentDialog({
             }
           />
 
-          {/* An agent loads its tools, picks them and compacts on the router: these would be
-              settings for a loop the step does not run. Tool execution stays, for the calls of
-              this server's tools an agent hands back. */}
-          <form.Subscribe selector={(state) => agentModels.has(state.values.model)}>
-            {(isAgent) =>
-              isAgent ? null : (
-                <>
-                  <RadioGroupField
-                    form={form}
-                    name="toolDiscovery"
-                    label="Tool discovery"
-                    description={doc("toolDiscovery")}
-                    options={[
-                      { value: AgentsToolDiscoveryEnum.Inherit, label: "From settings" },
-                      {
-                        value: AgentsToolDiscoveryEnum.Eager,
-                        label: "Eager",
-                        description: "Send every definition every time.",
-                      },
-                      {
-                        value: AgentsToolDiscoveryEnum.Ondemand,
-                        label: "On demand",
-                        description: "Load definitions as the run asks for them.",
-                      },
-                    ]}
-                  />
+          {isAgent ? null : (
+            <>
+              <RadioGroupField
+                form={form}
+                name="toolDiscovery"
+                label="Tool discovery"
+                description={doc("toolDiscovery")}
+                options={[
+                  { value: AgentsToolDiscoveryEnum.Inherit, label: "From settings" },
+                  {
+                    value: AgentsToolDiscoveryEnum.Eager,
+                    label: "Eager",
+                    description: "Send every definition every time.",
+                  },
+                  {
+                    value: AgentsToolDiscoveryEnum.Ondemand,
+                    label: "On demand",
+                    description: "Load definitions as the run asks for them.",
+                  },
+                ]}
+              />
 
-                  <ModelSelectField
-                    form={form}
-                    name="toolSelectModel"
-                    label="Tool-picking model"
-                    description={doc("toolSelectModel")}
-                    defaultLabel="From settings"
-                    agentId={agent?.id}
-                  />
-                </>
-              )
-            }
-          </form.Subscribe>
+              <ModelSelectField
+                form={form}
+                name="toolSelectModel"
+                label="Tool-picking model"
+                description={doc("toolSelectModel")}
+                defaultLabel="From settings"
+                agentId={agent?.id}
+              />
+            </>
+          )}
 
           <RadioGroupField
             form={form}
@@ -321,6 +344,11 @@ export function AgentDialog({
             description={doc("toolExecution")}
             options={[
               { value: AgentsToolExecutionEnum.Inherit, label: "From settings" },
+              {
+                value: AgentsToolExecutionEnum.Auto,
+                label: "Reads together",
+                description: "Trusted read-only tools at once, everything else in order.",
+              },
               {
                 value: AgentsToolExecutionEnum.Sequential,
                 label: "One at a time",
@@ -334,29 +362,40 @@ export function AgentDialog({
             ]}
           />
 
-          <form.Subscribe selector={(state) => agentModels.has(state.values.model)}>
-            {(isAgent) =>
-              isAgent ? null : (
-                <ModelSelectField
-                  form={form}
-                  name="compactionModel"
-                  label="Compaction model"
-                  description={doc("compactionModel")}
-                  defaultLabel="From settings"
-                  agentId={agent?.id}
-                />
-              )
-            }
-          </form.Subscribe>
+          <RadioGroupField
+            form={form}
+            name="serverInstructions"
+            label="Servers' instructions"
+            description={doc("serverInstructions")}
+            options={[
+              { value: AgentsServerInstructionsEnum.Inherit, label: "From settings" },
+              {
+                value: AgentsServerInstructionsEnum.On,
+                label: "Given to the model",
+                description: "Each server's own guidance goes in the system prompt.",
+              },
+              {
+                value: AgentsServerInstructionsEnum.Off,
+                label: "Left out",
+                description: "Saves the prompt tokens on a small window.",
+              },
+            ]}
+          />
+
+          {isAgent ? null : (
+            <ModelSelectField
+              form={form}
+              name="compactionModel"
+              label="Compaction model"
+              description={doc("compactionModel")}
+              defaultLabel="From settings"
+              agentId={agent?.id}
+            />
+          )}
 
           {servers.length === 0 ? null : (
-            <form.Subscribe
-              selector={(state) => ({
-                picked: state.values.mcpServerIds.length,
-                isAgent: agentModels.has(state.values.model),
-              })}
-            >
-              {({ picked, isAgent }) => (
+            <form.Subscribe selector={(state) => state.values.mcpServerIds.length}>
+              {(picked) => (
                 <ComboboxField
                   multiple
                   form={form}

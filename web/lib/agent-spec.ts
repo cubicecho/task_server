@@ -8,16 +8,32 @@ export interface ProfileColumns {
   baseUrl: string;
   model: string;
   systemPrompt: string;
+  reasoningReplay: string;
   maxTokens: number;
   temperature: number;
   maxToolIterations: number;
   toolDiscovery: string;
   toolSelectModel: string;
   toolExecution: string;
+  serverInstructions: string;
   compactionModel: string;
   requestTimeoutSeconds: number;
   maxRetries: number;
 }
+
+/** How the profile list says a tool-execution mode. */
+const EXECUTION_PHRASE: Record<string, string> = {
+  sequential: "tools one at a time",
+  parallel: "tools in parallel",
+  auto: "reads in parallel",
+};
+
+/** How the profile list says a replay policy, which is not a word a person would pick. */
+const REPLAY_PHRASE: Record<string, string> = {
+  all: "thinking sent back",
+  tool_loop: "thinking sent back in tool calls",
+  none: "thinking not sent back",
+};
 
 /**
  * What a profile changes, one phrase per column that is not at its inherit sentinel.
@@ -37,6 +53,9 @@ export function overrides(agent: ProfileColumns): string[] {
   if (agent.systemPrompt) {
     said.push("system prompt");
   }
+  if (agent.reasoningReplay !== "inherit") {
+    said.push(REPLAY_PHRASE[agent.reasoningReplay] ?? `thinking: ${agent.reasoningReplay}`);
+  }
   if (agent.maxTokens >= 0) {
     said.push(`${agent.maxTokens} tokens`);
   }
@@ -53,7 +72,10 @@ export function overrides(agent: ProfileColumns): string[] {
     said.push(`picks tools with ${agent.toolSelectModel}`);
   }
   if (agent.toolExecution !== "inherit") {
-    said.push(agent.toolExecution === "parallel" ? "tools in parallel" : "tools one at a time");
+    said.push(EXECUTION_PHRASE[agent.toolExecution] ?? `tools: ${agent.toolExecution}`);
+  }
+  if (agent.serverInstructions !== "inherit") {
+    said.push(agent.serverInstructions === "on" ? "server instructions" : "no server instructions");
   }
   if (agent.compactionModel) {
     said.push(`compacts with ${agent.compactionModel}`);

@@ -104,6 +104,64 @@ export const McpPromptType = new GraphQLObjectType({
   },
 });
 
+export const McpResourceEntryType = new GraphQLObjectType({
+  name: "McpResourceEntry",
+  description:
+    "A resource, or a resource template, a connected MCP server offers — something a prompt " +
+    "can name as `{{resource:<serverSlug>:<uri>}}` to have it read on every run.",
+  fields: {
+    server: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The MCP server row's id, which `mcpResourceCompletion` is addressed with.",
+    },
+    serverSlug: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The server's slug, which is what a placeholder names.",
+    },
+    serverLabel: { type: new GraphQLNonNull(GraphQLString) },
+    template: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description:
+        "Whether `uri` is an RFC 6570 template whose variables are filled in before it is " +
+        "named — a document by its path, say.",
+    },
+    uri: { type: new GraphQLNonNull(GraphQLString) },
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    title: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "What the server calls it for a person. Empty where it gave none; show `name`.",
+    },
+    description: { type: new GraphQLNonNull(GraphQLString) },
+    mimeType: { type: new GraphQLNonNull(GraphQLString) },
+  },
+});
+
+export const McpResourceType = new GraphQLObjectType({
+  name: "McpResource",
+  description:
+    "One resource read back from the MCP server that serves it, as text and as it is now — not " +
+    "as it was when a run linked to it.",
+  fields: {
+    uri: { type: new GraphQLNonNull(GraphQLString) },
+    mimeType: {
+      type: new GraphQLNonNull(GraphQLString),
+      description:
+        "The contents' type where every part the server answered with agreed on one. Empty " +
+        "where it gave none, or where the parts disagreed.",
+    },
+    text: {
+      type: new GraphQLNonNull(GraphQLString),
+      description:
+        "Text parts verbatim, joined by newlines. A binary part is named with its type and " +
+        "size in brackets, never sent.",
+    },
+    truncated: {
+      type: new GraphQLNonNull(GraphQLBoolean),
+      description: "Whether `text` was cut to the preview's limit.",
+    },
+  },
+});
+
 export const McpConnectionInput = new GraphQLInputObjectType({
   name: "McpConnectionInput",
   description: "How to reach an MCP server — the connection half of a row, without its identity.",
@@ -223,7 +281,9 @@ export const RunEventType = new GraphQLObjectType({
       type: new GraphQLNonNull(GraphQLString),
       description:
         "step | step-end | decision | turn | thinking | output | tool-call | tool-result | " +
-        "notice | usage | done.",
+        "artifact | server-log | notice | usage | done. An `artifact` is a tool call linking to something " +
+        "new: `text` is its title or uri, `name` the tool. A `server-log` is what a tool's MCP " +
+        "server logged while the call ran: `text` is the message, `level` how serious.",
       // agent-core calls a step an exchange. This server's flow has steps, and so does its API.
       resolve: (event: RunEvent) => STEP_KINDS[event.kind] ?? event.kind,
     },
@@ -240,6 +300,16 @@ export const RunEventType = new GraphQLObjectType({
       resolve: (event: RunEvent) => event.exchange ?? "",
     },
     ok: { type: GraphQLBoolean },
+    id: {
+      type: GraphQLString,
+      description:
+        "The tool call's id on the tool kinds and `server-log`, which pairs a result or a log " +
+        "with its call when one tool is called twice in a step.",
+    },
+    level: {
+      type: GraphQLString,
+      description: "On `server-log` only: the server's level, `debug` up to `emergency`.",
+    },
   },
 });
 
@@ -265,6 +335,8 @@ const AgentSpecProfileType = new GraphQLObjectType({
     toolDiscovery: { type: new GraphQLNonNull(GraphQLString) },
     toolSelectModel: { type: new GraphQLNonNull(GraphQLString) },
     toolExecution: { type: new GraphQLNonNull(GraphQLString) },
+    reasoningReplay: { type: new GraphQLNonNull(GraphQLString) },
+    serverInstructions: { type: new GraphQLNonNull(GraphQLString) },
     compactionModel: { type: new GraphQLNonNull(GraphQLString) },
     requestTimeoutSeconds: { type: new GraphQLNonNull(GraphQLInt) },
     maxRetries: { type: new GraphQLNonNull(GraphQLInt) },

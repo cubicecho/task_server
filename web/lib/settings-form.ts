@@ -1,5 +1,6 @@
 import type {
   SettingsFieldsFragment,
+  SettingsReasoningReplayEnum,
   SettingsToolDiscoveryEnum,
   SettingsToolExecutionEnum,
   UpdateSettingInput,
@@ -46,6 +47,7 @@ export interface SettingsForm {
   apiKey: string;
   model: string;
   systemPrompt: string;
+  reasoningReplay: SettingsReasoningReplayEnum;
   maxTokens: number | null;
   temperature: number | null;
   maxToolIterations: number | null;
@@ -54,6 +56,7 @@ export interface SettingsForm {
   toolDiscovery: SettingsToolDiscoveryEnum;
   toolSelectModel: string;
   toolExecution: SettingsToolExecutionEnum;
+  serverInstructions: boolean;
   compactionModel: string;
   maxConcurrentRuns: number | null;
   runRetentionDays: number | null;
@@ -71,6 +74,7 @@ export const SECTION_OF: Record<keyof SettingsForm, Exclude<SettingsSection, "co
   apiKey: "model",
   model: "model",
   systemPrompt: "model",
+  reasoningReplay: "model",
   maxTokens: "limits",
   temperature: "limits",
   maxToolIterations: "limits",
@@ -79,6 +83,7 @@ export const SECTION_OF: Record<keyof SettingsForm, Exclude<SettingsSection, "co
   toolDiscovery: "tools",
   toolSelectModel: "tools",
   toolExecution: "tools",
+  serverInstructions: "tools",
   compactionModel: "limits",
   maxConcurrentRuns: "server",
   runRetentionDays: "server",
@@ -90,6 +95,7 @@ export const toForm = (row: SettingsFieldsFragment): SettingsForm => ({
   apiKey: "",
   model: row.model,
   systemPrompt: row.systemPrompt,
+  reasoningReplay: row.reasoningReplay,
   maxTokens: row.maxTokens,
   temperature: row.temperature,
   maxToolIterations: row.maxToolIterations,
@@ -98,6 +104,7 @@ export const toForm = (row: SettingsFieldsFragment): SettingsForm => ({
   toolDiscovery: row.toolDiscovery,
   toolSelectModel: row.toolSelectModel,
   toolExecution: row.toolExecution,
+  serverInstructions: row.serverInstructions,
   compactionModel: row.compactionModel,
   maxConcurrentRuns: row.maxConcurrentRuns,
   runRetentionDays: row.runRetentionDays,
@@ -112,6 +119,7 @@ export const toRow = (form: SettingsForm): UpdateSettingInput => ({
   baseUrl: form.baseUrl,
   model: form.model,
   systemPrompt: form.systemPrompt,
+  reasoningReplay: form.reasoningReplay,
   maxTokens: form.maxTokens ?? 0,
   temperature: form.temperature ?? 0,
   maxToolIterations: form.maxToolIterations ?? 0,
@@ -120,6 +128,7 @@ export const toRow = (form: SettingsForm): UpdateSettingInput => ({
   toolDiscovery: form.toolDiscovery,
   toolSelectModel: form.toolSelectModel,
   toolExecution: form.toolExecution,
+  serverInstructions: form.serverInstructions,
   compactionModel: form.compactionModel,
   maxConcurrentRuns: form.maxConcurrentRuns ?? 0,
   runRetentionDays: form.runRetentionDays ?? 0,

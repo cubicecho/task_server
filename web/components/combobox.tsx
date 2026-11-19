@@ -113,6 +113,11 @@ type ComboboxSharedProps = Omit<
   /** The search box's placeholder. Read only when `searchable`. */
   searchPlaceholder?: string | undefined;
   /**
+   * Told what is in the search box as it changes, and `""` when the menu closes and clears it.
+   * What a menu whose options the server suggests for the text typed so far needs to ask with.
+   */
+  onSearchChange?: ((search: string) => void) | undefined;
+  /**
    * The search box's accessible name. cmdk points its input at a hidden `<label>` it renders from
    * `Command`'s `label`, and the native half makes it the input's `aria-label`: a placeholder is
    * not a name.
@@ -390,6 +395,7 @@ type SearchMenuProps = Pick<
   | "contentClassName"
   | "disabled"
   | "searchPlaceholder"
+  | "onSearchChange"
   | "searchLabel"
   | "popoverLabel"
   | "emptyMessage"
@@ -435,6 +441,7 @@ function SearchMenu({
   disabled,
   searchable,
   searchPlaceholder = "Search…",
+  onSearchChange,
   searchLabel = "Search",
   popoverLabel = "Options",
   emptyMessage = "No matches.",
@@ -447,7 +454,11 @@ function SearchMenu({
   "aria-invalid": ariaInvalid,
 }: SearchMenuProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearchState] = useState("");
+  const setSearch = (next: string) => {
+    setSearchState(next);
+    onSearchChange?.(next);
+  };
   const titleId = useId();
   const rowId = useId();
   const isOpen = open ?? uncontrolledOpen;
@@ -632,6 +643,7 @@ function SingleCombobox({
   disabled,
   searchable = false,
   searchPlaceholder,
+  onSearchChange,
   searchLabel,
   popoverLabel,
   emptyMessage,
@@ -673,6 +685,7 @@ function SingleCombobox({
           contentClassName={contentClassName}
           disabled={disabled}
           searchPlaceholder={searchPlaceholder}
+          onSearchChange={onSearchChange}
           searchLabel={searchLabel}
           popoverLabel={popoverLabel}
           emptyMessage={emptyMessage}
@@ -765,6 +778,7 @@ function MultipleCombobox({
   disabled,
   searchable = true,
   searchPlaceholder,
+  onSearchChange,
   searchLabel,
   popoverLabel,
   emptyMessage,
@@ -812,6 +826,7 @@ function MultipleCombobox({
         contentClassName={contentClassName}
         disabled={disabled}
         searchPlaceholder={searchPlaceholder}
+        onSearchChange={onSearchChange}
         searchLabel={searchLabel}
         popoverLabel={popoverLabel}
         emptyMessage={emptyMessage}

@@ -1,20 +1,27 @@
 import {
   askJson,
   errorMessage,
+  failedRun,
   type HookNote,
   parseJson,
   type RunEventInput,
   RunEventKind,
   tryAsk,
+  UNTRUSTED_PREFACE,
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
+import { type ElicitationNote, MAX_STEP_ELICITATIONS } from "../../shared/elicitations.ts";
 import { DEFAULT_BRANCH, MAX_DEPTH, MAX_STEPS, sameCase } from "../../shared/flow.ts";
+import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 import { db } from "../db/client.ts";
 import { type RunStep, runSteps, type Settings, type Step, type Task } from "../db/schema.ts";
-import { type AgentOptions, type AgentResult, runAgent } from "./agent.ts";
+import { type AgentResult, runAgent } from "./agent.ts";
+import { recordArtifacts } from "./artifacts.ts";
 import { describe, type HookSession, type HookStep } from "./hooks.ts";
 import { loadSettings } from "./llm.ts";
+import { readPromptResources } from "./prompt-resources.ts";
 import { isRemoteAgent } from "./remote-agent.ts";
+import { serverLogCollector } from "./server-logs.ts";
 
 /**
  * A task as a flow: its prompt, then a tree of steps under it.
@@ -106,8 +113,11 @@ export function buildTree(rows: Step[]): FlowNode[] {
 /** The read-back answers with one case name inside one JSON object, and nothing else. */
 const READ_BACK_MAX_TOKENS = 32;
 
-/** What a prompt can ask for by hand: `{{previous}}`, `{{steps.<name>}}` and `{{event}}`. */
-const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?)\s*\}\}/gi;
+/**
+ * What a prompt can ask for by hand: `{{previous}}`, `{{steps.<name>}}`, `{{event}}` and
+ * `{{resource:<slug>:<uri>}}` — the last spelled as `shared/resource-placeholder.ts` reads it.
+ */
+const PLACEHOLDER = /\{\{\s*(previous|event|steps\.[^}]+?|resource:[^:}\s]+:.+?)\s*\}\}/gi;
 
 /**
  * The webhook body as a prompt reads it.
@@ -142,12 +152,19 @@ function visibleTo(mode: Step["context"], context: ContextEntry[]): ContextEntry
  * `context` mode allows. A prompt that places them itself with `{{previous}}` or
  * `{{steps.<name>}}` gets the substitution and no preamble, since a second copy would only be
  * something for the model to reconcile. `{{event}}` is the webhook body, not step context, so
- * placing it does not suppress the preamble.
+ * placing it does not suppress the preamble, and nor does a `{{resource:…}}`, for the same
+ * reason.
+ *
+ * `resources` is what `readPromptResources` read for this prompt, fenced, by `resourceKey`. The
+ * reads happen before this is called because they are I/O and can fail the step; one that is not
+ * in the map is said to be missing rather than left as a placeholder the model would read as an
+ * instruction to go and fetch it.
  */
 export function renderPrompt(
   step: Pick<Step, "prompt" | "context">,
   context: ContextEntry[],
   payload?: unknown,
+  resources?: ReadonlyMap<string, string>,
 ): string {
   // One pass says both whether the prompt places its own context and what that reads as —
   // `test` on a global regex would leave `lastIndex` behind for the next call to trip over.
@@ -156,6 +173,10 @@ export function renderPrompt(
     const key = token.toLowerCase();
     if (key === "event") {
       return renderPayload(payload);
+    }
+    if (key.startsWith("resource:")) {
+      const ref = token.slice("resource:".length);
+      return resources?.get(ref) ?? `(the resource ${ref} was not read)`;
     }
     placed = true;
     if (key === "previous") {
@@ -248,6 +269,15 @@ interface Plan {
   depth: number;
 }
 
+/**
+ * What a whole flow did, summed over its steps. Its artifacts are not here: a uri two steps
+ * linked to is one artifact of the run, and the one place that is so is `run_artifacts`.
+ */
+export type FlowResult = Omit<
+  AgentResult,
+  "artifacts" | "afterExchange" | "messageCount" | "remote" | "remoteRunId"
+>;
+
 export interface FlowOptions {
   runId: string;
   task: Task;
@@ -262,8 +292,6 @@ export interface FlowOptions {
   hooks?: HookSession;
   signal?: AbortSignal;
   onEvent?: (event: RunEventInput) => void;
-  /** Each step's loop metrics, as `runAgent` hands them over. See `AgentOptions.onMetrics`. */
-  onMetrics?: AgentOptions["onMetrics"];
 }
 
 /**
@@ -298,10 +326,9 @@ export async function runFlow({
   hooks,
   signal,
   onEvent,
-  onMetrics,
-}: FlowOptions): Promise<AgentResult> {
+}: FlowOptions): Promise<FlowResult> {
   const context: ContextEntry[] = [];
-  const result: AgentResult = {
+  const result: FlowResult = {
     output: "",
     toolCalls: [],
     promptTokens: 0,
@@ -312,6 +339,8 @@ export async function runFlow({
   let position = 0;
   /** How many steps have actually run, which is what the cap is about. */
   let executed = 0;
+  /** Where the next step's question sits among the run's messages. See `HookStep.at`. */
+  let at = 0;
 
   /**
    * Stamps everything a step says with the step it said it in, for whoever is watching. The loop
@@ -366,27 +395,67 @@ export async function runFlow({
 
     const emit = scope(plan);
     const row = await record(plan, "running");
-    const turn: HookStep = {
-      index: executed++,
-      name: plan.name,
-      kind: plan.kind,
-      prompt: renderPrompt(plan, context, payload),
+    const index = executed++;
+
+    // Kept on the row whether the step works or not: a recall that failed is as much a part of
+    // why a step went the way it did as one that worked, and a resource that could not be read
+    // is why it did not run at all.
+    const notes: HookNote[] = [];
+    const reads: ResourceRead[] = [];
+    // What a server complained of during a call is often the whole of why the step failed, so it
+    // is kept on the row on the failing path too.
+    const logs = serverLogCollector();
+    // A question nobody answered is the likeliest reason a tool failed, so it is kept on failure
+    // too.
+    const asked: ElicitationNote[] = [];
+    // The step's `afterExchange`, once the loop has fired it.
+    let told: Promise<HookNote[]> | undefined;
+    const noted = (): Partial<
+      Pick<RunStep, "hooks" | "resources" | "serverLogs" | "elicitations">
+    > => {
+      const serverLogs = logs.entries();
+      return {
+        ...(notes.length ? { hooks: notes } : {}),
+        ...(reads.length ? { resources: reads } : {}),
+        ...(serverLogs.length ? { serverLogs } : {}),
+        ...(asked.length ? { elicitations: asked } : {}),
+      };
     };
 
-    const systemPrompt = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
-    // Kept on the row whether the step works or not: a recall that failed is as much a part of
-    // why a step went the way it did as one that worked.
-    const notes: HookNote[] = [];
-    const noted = (): Partial<Pick<RunStep, "hooks">> => (notes.length ? { hooks: notes } : {});
-
     try {
+      // Inside the `try`, so a read that fails is this step's error on its row, and before the
+      // hooks, which are told the prompt as it was sent — with what was read in it.
+      const fetched = await readPromptResources(plan.prompt, { servers, signal, onEvent: emit });
+      reads.push(...fetched.reads);
+      if (fetched.failure) {
+        throw new Error(fetched.failure);
+      }
+      const turn: HookStep = {
+        index,
+        name: plan.name,
+        kind: plan.kind,
+        prompt: renderPrompt(plan, context, payload, fetched.texts),
+        at,
+      };
+
+      const configured = plan.systemPrompt || task.systemPrompt || config.systemPrompt || "";
+      // The standing rule about what an `<untrusted>` block is goes in the system prompt, as
+      // agent-core asks, and only for a step that has one: the rest keep the prompt they had.
+      const systemPrompt = reads.length
+        ? `${configured}\n\n${UNTRUSTED_PREFACE}`.trim()
+        : configured;
+
       const gathered = await hooks?.before(turn, signal, emit);
       notes.push(...(gathered?.notes ?? []));
       // A `beforeCompact` that failed mid-step is kept beside what `before` noted.
-      const loopHooks = hooks?.compaction(turn, (note) => {
-        notes.push(note);
-        emit({ kind: RunEventKind.Notice, text: describe(note) });
-      });
+      const loopHooks = hooks?.loop(
+        turn,
+        (note) => {
+          notes.push(note);
+          emit({ kind: RunEventKind.Notice, text: describe(note) });
+        },
+        emit,
+      );
 
       const agentResult = await runAgent({
         config,
@@ -400,9 +469,30 @@ export async function runFlow({
         context: gathered?.context,
         servers,
         signal,
-        onEvent: emit,
-        onMetrics,
+        onEvent: (event) => {
+          logs.observe(event);
+          emit(event);
+        },
+        onElicitation: (note) => {
+          if (asked.length < MAX_STEP_ELICITATIONS) {
+            asked.push(note);
+          }
+        },
         hooks: loopHooks,
+        // Every step of the run on one llama.cpp slot. The loop says which in a notice, which
+        // `emit` puts on the run's stream with the rest.
+        session: runId,
+      });
+      told = agentResult.afterExchange;
+      at += agentResult.messageCount;
+      // Before the decision is read back, which can still fail the step: what the tools made
+      // was made either way.
+      await recordArtifacts({
+        runId,
+        taskId: task.id,
+        runStepId: row.id,
+        artifacts: agentResult.artifacts,
+        servers,
       });
 
       result.toolCalls.push(...agentResult.toolCalls);
@@ -412,7 +502,15 @@ export async function runFlow({
       result.output = agentResult.output;
       context.push({ name: plan.name, output: agentResult.output });
 
-      const { output, remote, remoteRunId, ...tokens } = agentResult;
+      const {
+        output,
+        artifacts: _artifacts,
+        afterExchange: _afterExchange,
+        messageCount: _messageCount,
+        remote,
+        remoteRunId,
+        ...tokens
+      } = agentResult;
       let branch: string | undefined;
       if (plan.kind === "decision") {
         branch = await resolveCase(plan, output, emit, remote === true);
@@ -426,16 +524,41 @@ export async function runFlow({
         ...(remoteRunId ? { remoteRunId } : {}),
         ...noted(),
       });
-      hooks?.after(turn, output, row.id, emit);
       return branch;
     } catch (error) {
       const stopped = signal?.aborted === true;
+      // What the model had said when the request in flight was cut off — the answer a person
+      // watching had been shown, up to the moment they pressed stop. It is no turn the endpoint
+      // would take back, but it is what the step got to, and a row with nothing in it reads as a
+      // step that said nothing.
+      const failure = failedRun(error);
+      const partial = failure?.partial?.content;
       await close(row.id, {
         status: stopped ? "stopped" : "error",
         error: stopped ? "" : errorMessage(error),
+        ...(partial ? { output: partial } : {}),
         ...noted(),
       });
+      // A step that failed after its tools wrote still wrote: the document a call made before the
+      // budget ran out, or before the stop, exists either way. Only a failure out of the loop
+      // carries them — one after it, in the decision's read-back, was recorded above already.
+      // Logged rather than thrown, so the run is failed for what failed the step.
+      await recordArtifacts({
+        runId,
+        taskId: task.id,
+        runStepId: row.id,
+        artifacts: failure?.artifacts ?? [],
+        servers,
+      }).catch((cause: unknown) =>
+        console.error(`[run] ${plan.name}: artifacts not kept: ${errorMessage(cause)}`),
+      );
       throw error;
+    } finally {
+      // After the row is closed either way, since closing writes its notes whole. A step whose
+      // decision could not be read back had still answered, and the loop told its turn.
+      if (told) {
+        hooks?.after(told, row.id);
+      }
     }
   }
 
@@ -463,8 +586,6 @@ export async function runFlow({
     }
 
     const reader = remote ? await plainEndpoint(signal) : { config, model: modelFor(plan) };
-    // Asked with the arms as a schema, so an endpoint that can hold a reply to one does: the answer
-    // to "which did it mean" cannot itself come back as prose.
     const extracted = reader
       ? await readBack(plan, output, reader.config, reader.config.toolSelectModel || reader.model)
       : undefined;
@@ -494,7 +615,11 @@ export async function runFlow({
     );
   }
 
-  /** The one cheap extraction call that says which arm a prose answer meant. */
+  /**
+   * The one cheap extraction call that says which arm a prose answer meant. Asked with the arms
+   * as a schema, so an endpoint that can hold a reply to one does: the answer to "which did it
+   * mean" cannot itself come back as prose.
+   */
   function readBack(plan: Plan, output: string, endpoint: Settings, model: string) {
     return tryAsk("decision", () =>
       askJson<{ case?: unknown }>(

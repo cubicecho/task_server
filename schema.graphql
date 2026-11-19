@@ -45,9 +45,17 @@ type Agent {
   toolSelectModel: String!
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum!
+
+  """
+  `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
+  """
+  reasoningReplay: AgentsReasoningReplayEnum!
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum!
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -110,6 +118,34 @@ enum AgentsToolExecutionEnum {
 
   """Value: parallel"""
   parallel
+
+  """Value: auto"""
+  auto
+}
+
+enum AgentsReasoningReplayEnum {
+  """Value: inherit"""
+  inherit
+
+  """Value: all"""
+  all
+
+  """Value: tool_loop"""
+  tool_loop
+
+  """Value: none"""
+  none
+}
+
+enum AgentsServerInstructionsEnum {
+  """Value: inherit"""
+  inherit
+
+  """Value: on"""
+  on
+
+  """Value: off"""
+  off
 }
 
 """
@@ -205,9 +241,17 @@ type AgentMinAggregate {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
+
+  """
+  `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
+  """
+  reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -271,9 +315,17 @@ type AgentMaxAggregate {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
+
+  """
+  `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
+  """
+  reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -306,6 +358,8 @@ type AgentCountNonNullAggregate {
   toolDiscovery: Int!
   toolSelectModel: Int!
   toolExecution: Int!
+  reasoningReplay: Int!
+  serverInstructions: Int!
   compactionModel: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -327,6 +381,8 @@ type AgentCountDistinctAggregate {
   toolDiscovery: Int!
   toolSelectModel: Int!
   toolExecution: Int!
+  reasoningReplay: Int!
+  serverInstructions: Int!
   compactionModel: Int!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -392,9 +448,17 @@ type AgentGroupKeys {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
+
+  """
+  `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
+  """
+  reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -423,7 +487,9 @@ type Task {
   """What this task is called, in the task list and the run history."""
   name: String!
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String!
 
   """
@@ -555,7 +621,9 @@ type TaskMinAggregate {
   """What this task is called, in the task list and the run history."""
   name: String
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String
 
   """
@@ -578,7 +646,9 @@ type TaskMaxAggregate {
   """What this task is called, in the task list and the run history."""
   name: String
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String
 
   """
@@ -636,7 +706,9 @@ type TaskGroupKeys {
   """What this task is called, in the task list and the run history."""
   name: String
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String
 
   """
@@ -868,7 +940,7 @@ type Step {
   name: String!
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String!
 
@@ -962,7 +1034,7 @@ type StepMinAggregate {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -1005,7 +1077,7 @@ type StepMaxAggregate {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -1094,7 +1166,7 @@ type StepGroupKeys {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -1183,6 +1255,19 @@ type Run {
     distinct: [RunStepDistinctColumn!]
   ): [RunStep!]!
   stepsAggregate(where: RunStepFilters): RunStepAggregate!
+  artifacts(
+    where: RunArtifactFilters
+    orderBy: RunArtifactOrderBy
+    offset: Int
+    limit: Int
+
+    """
+    Keyset pagination: only return related rows strictly after this cursor (a row's `cursor` field from a previous page of this relation, under the same orderBy).
+    """
+    after: String
+    distinct: [RunArtifactDistinctColumn!]
+  ): [RunArtifact!]!
+  artifactsAggregate(where: RunArtifactFilters): RunArtifactAggregate!
 }
 
 enum RunsStatusEnum {
@@ -1222,10 +1307,34 @@ enum RunStepDistinctColumn {
   error
   toolCalls
   hooks
+  resources
+  serverLogs
+  elicitations
   promptTokens
   completionTokens
   totalTokens
   remoteRunId
+}
+
+"""Columns of RunArtifact that a query can be made distinct on"""
+enum RunArtifactDistinctColumn {
+  id
+  runId
+  runStepId
+  taskId
+  serverId
+  serverSlug
+  tool
+  uri
+  name
+  title
+  mimeType
+  description
+  lastModified
+  webUrl
+  count
+  createdAt
+  updatedAt
 }
 
 type RunAggregate {
@@ -1455,6 +1564,21 @@ type RunStep {
   What MCP hooks did around this step, as JSON: the context each added to the prompt, and each that failed. A hook that worked and added nothing is not listed.
   """
   hooks: JSON
+
+  """
+  The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: each with when it was read, how many characters went in, whether the cap cut it, and why a read failed. The text is not kept.
+  """
+  resources: JSON
+
+  """
+  What MCP servers logged at `warning` or worse during this step's tool calls, as JSON `{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.
+  """
+  serverLogs: JSON
+
+  """
+  What MCP servers asked for mid-call during this step, as JSON `{ tool, server, message, fields }`. Each was declined, since a run has nobody to answer: `fields` names the values the task would have to supply.
+  """
+  elicitations: JSON
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1469,6 +1593,19 @@ type RunStep {
   """
   cursor: String
   run(where: RunFilters): Run!
+  artifacts(
+    where: RunArtifactFilters
+    orderBy: RunArtifactOrderBy
+    offset: Int
+    limit: Int
+
+    """
+    Keyset pagination: only return related rows strictly after this cursor (a row's `cursor` field from a previous page of this relation, under the same orderBy).
+    """
+    after: String
+    distinct: [RunArtifactDistinctColumn!]
+  ): [RunArtifact!]!
+  artifactsAggregate(where: RunArtifactFilters): RunArtifactAggregate!
 }
 
 enum RunStepsStatusEnum {
@@ -1630,6 +1767,9 @@ type RunStepCountNonNullAggregate {
   error: Int!
   toolCalls: Int!
   hooks: Int!
+  resources: Int!
+  serverLogs: Int!
+  elicitations: Int!
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
@@ -1720,6 +1860,328 @@ type RunStepGroupKeys {
   remoteRunId: String
 }
 
+"""
+Something a run's tool calls linked to as made — an MCP `resource_link` — one row per `uri` per run. Written by the runner; read-only here. A link is what its server said then: one since moved or deleted keeps its row, and rows go with their run when retention prunes it.
+"""
+type RunArtifact {
+  id: String!
+
+  """The run that produced it."""
+  runId: String!
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: String
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: String!
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: String
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: String!
+
+  """The tool that linked to it, by the server's own name."""
+  tool: String!
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: String!
+
+  """The link's `name`."""
+  name: String!
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: String!
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: String!
+
+  """The link's `description`, where the server gave one."""
+  description: String!
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTime
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: String!
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: Int!
+
+  """When this run first linked to it."""
+  createdAt: DateTime!
+
+  """When this run last linked to it."""
+  updatedAt: DateTime!
+
+  """
+  Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
+  """
+  cursor: String
+  run(where: RunFilters): Run!
+  step(where: RunStepFilters): RunStep
+}
+
+type RunArtifactAggregate {
+  count: Int!
+  avg: RunArtifactAvgAggregate
+  sum: RunArtifactSumAggregate
+  min: RunArtifactMinAggregate
+  max: RunArtifactMaxAggregate
+  countNonNull: RunArtifactCountNonNullAggregate
+  countDistinct: RunArtifactCountDistinctAggregate
+}
+
+type RunArtifactAvgAggregate {
+  count: Float
+}
+
+type RunArtifactSumAggregate {
+  count: Float
+}
+
+type RunArtifactMinAggregate {
+  id: String
+
+  """The run that produced it."""
+  runId: String
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: String
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: String
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: String
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: String
+
+  """The tool that linked to it, by the server's own name."""
+  tool: String
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: String
+
+  """The link's `name`."""
+  name: String
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: String
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: String
+
+  """The link's `description`, where the server gave one."""
+  description: String
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTime
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: String
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: Int
+
+  """When this run first linked to it."""
+  createdAt: DateTime
+
+  """When this run last linked to it."""
+  updatedAt: DateTime
+}
+
+type RunArtifactMaxAggregate {
+  id: String
+
+  """The run that produced it."""
+  runId: String
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: String
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: String
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: String
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: String
+
+  """The tool that linked to it, by the server's own name."""
+  tool: String
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: String
+
+  """The link's `name`."""
+  name: String
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: String
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: String
+
+  """The link's `description`, where the server gave one."""
+  description: String
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTime
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: String
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: Int
+
+  """When this run first linked to it."""
+  createdAt: DateTime
+
+  """When this run last linked to it."""
+  updatedAt: DateTime
+}
+
+type RunArtifactCountNonNullAggregate {
+  id: Int!
+  runId: Int!
+  runStepId: Int!
+  taskId: Int!
+  serverId: Int!
+  serverSlug: Int!
+  tool: Int!
+  uri: Int!
+  name: Int!
+  title: Int!
+  mimeType: Int!
+  description: Int!
+  lastModified: Int!
+  webUrl: Int!
+  count: Int!
+  createdAt: Int!
+  updatedAt: Int!
+}
+
+type RunArtifactCountDistinctAggregate {
+  id: Int!
+  runId: Int!
+  runStepId: Int!
+  taskId: Int!
+  serverId: Int!
+  serverSlug: Int!
+  tool: Int!
+  uri: Int!
+  name: Int!
+  title: Int!
+  mimeType: Int!
+  description: Int!
+  lastModified: Int!
+  webUrl: Int!
+  count: Int!
+  createdAt: Int!
+  updatedAt: Int!
+}
+
+type RunArtifactGroupBy {
+  group: RunArtifactGroupKeys!
+  count: Int!
+  avg: RunArtifactAvgAggregate
+  sum: RunArtifactSumAggregate
+  min: RunArtifactMinAggregate
+  max: RunArtifactMaxAggregate
+  countNonNull: RunArtifactCountNonNullAggregate
+  countDistinct: RunArtifactCountDistinctAggregate
+}
+
+"""
+The grouped column values of one RunArtifact group. A column the query did not group by is null.
+"""
+type RunArtifactGroupKeys {
+  id: String
+
+  """The run that produced it."""
+  runId: String
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: String
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: String
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: String
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: String
+
+  """The tool that linked to it, by the server's own name."""
+  tool: String
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: String
+
+  """The link's `name`."""
+  name: String
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: String
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: String
+
+  """The link's `description`, where the server gave one."""
+  description: String
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTime
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: String
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: Int
+
+  """When this run first linked to it."""
+  createdAt: DateTime
+
+  """When this run last linked to it."""
+  updatedAt: DateTime
+}
+
 """An MCP server this one dials, and the tools it lends to every run."""
 type McpServer {
   id: String!
@@ -1763,6 +2225,16 @@ type McpServer {
   hiddenTools: JSON
 
   """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: Boolean!
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
+
+  """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSON
@@ -1779,6 +2251,32 @@ enum McpServersTransportEnum {
 
   """Value: http"""
   http
+}
+
+enum McpServersLogLevelEnum {
+  """Value: debug"""
+  debug
+
+  """Value: info"""
+  info
+
+  """Value: notice"""
+  notice
+
+  """Value: warning"""
+  warning
+
+  """Value: error"""
+  error
+
+  """Value: critical"""
+  critical
+
+  """Value: alert"""
+  alert
+
+  """Value: emergency"""
+  emergency
 }
 
 type McpServerAggregate {
@@ -1808,6 +2306,11 @@ type McpServerMinAggregate {
 
   """The endpoint to dial, for `http`."""
   url: String
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
 }
 
 type McpServerMaxAggregate {
@@ -1829,6 +2332,11 @@ type McpServerMaxAggregate {
 
   """The endpoint to dial, for `http`."""
   url: String
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
 }
 
 type McpServerCountNonNullAggregate {
@@ -1843,6 +2351,8 @@ type McpServerCountNonNullAggregate {
   url: Int!
   headers: Int!
   hiddenTools: Int!
+  trustAnnotations: Int!
+  logLevel: Int!
   hooks: Int!
 }
 
@@ -1853,6 +2363,7 @@ type McpServerCountDistinctAggregate {
   transport: Int!
   command: Int!
   url: Int!
+  logLevel: Int!
 }
 
 type McpServerGroupBy {
@@ -1887,8 +2398,18 @@ type McpServerGroupKeys {
   """The endpoint to dial, for `http`."""
   url: String
 
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
+
   """A disabled server is not dialled, and lends no tools to a run."""
   enabled: Boolean
+
+  """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: Boolean
 }
 
 """
@@ -1932,9 +2453,19 @@ type Setting {
   toolSelectModel: String!
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum!
+
+  """
+  Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
+  """
+  serverInstructions: Boolean!
+
+  """
+  Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
+  """
+  reasoningReplay: SettingsReasoningReplayEnum!
 
   """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
@@ -1981,6 +2512,20 @@ enum SettingsToolExecutionEnum {
 
   """Value: parallel"""
   parallel
+
+  """Value: auto"""
+  auto
+}
+
+enum SettingsReasoningReplayEnum {
+  """Value: all"""
+  all
+
+  """Value: tool_loop"""
+  tool_loop
+
+  """Value: none"""
+  none
 }
 
 type SettingAggregate {
@@ -2051,9 +2596,14 @@ type SettingMinAggregate {
   toolSelectModel: String
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum
+
+  """
+  Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
+  """
+  reasoningReplay: SettingsReasoningReplayEnum
 
   """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
@@ -2119,9 +2669,14 @@ type SettingMaxAggregate {
   toolSelectModel: String
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum
+
+  """
+  Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
+  """
+  reasoningReplay: SettingsReasoningReplayEnum
 
   """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
@@ -2160,6 +2715,8 @@ type SettingCountNonNullAggregate {
   toolDiscovery: Int!
   toolSelectModel: Int!
   toolExecution: Int!
+  serverInstructions: Int!
+  reasoningReplay: Int!
   compactionModel: Int!
   runRetentionDays: Int!
   requestTimeoutSeconds: Int!
@@ -2178,6 +2735,7 @@ type SettingCountDistinctAggregate {
   toolDiscovery: Int!
   toolSelectModel: Int!
   toolExecution: Int!
+  reasoningReplay: Int!
   compactionModel: Int!
   runRetentionDays: Int!
   requestTimeoutSeconds: Int!
@@ -2237,9 +2795,14 @@ type SettingGroupKeys {
   toolSelectModel: String
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum
+
+  """
+  Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
+  """
+  reasoningReplay: SettingsReasoningReplayEnum
 
   """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
@@ -2265,6 +2828,11 @@ type SettingGroupKeys {
   How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: Int
+
+  """
+  Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
+  """
+  serverInstructions: Boolean
 }
 
 input CreateAgentInput {
@@ -2311,9 +2879,17 @@ input CreateAgentInput {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
+
+  """
+  `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
+  """
+  reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -2382,9 +2958,17 @@ input UpdateAgentInput {
   toolSelectModel: String
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnum
+
+  """
+  `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
+  """
+  reasoningReplay: AgentsReasoningReplayEnum
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnum
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -2462,9 +3046,17 @@ input AgentFilters {
   toolSelectModel: StringFilter
 
   """
-  `inherit` uses the server default; otherwise `sequential` or `parallel`.
+  `inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.
   """
   toolExecution: AgentsToolExecutionEnumFilter
+
+  """
+  `inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.
+  """
+  reasoningReplay: AgentsReasoningReplayEnumFilter
+
+  """`inherit` uses the server default; otherwise `on` or `off`."""
+  serverInstructions: AgentsServerInstructionsEnumFilter
 
   """
   Empty inherits the server default, which is off unless one is set there.
@@ -2713,6 +3305,64 @@ input AgentsToolExecutionEnumFilter {
   NOT: AgentsToolExecutionEnumFilter
 }
 
+input AgentsReasoningReplayEnumFilter {
+  """Equal to"""
+  eq: AgentsReasoningReplayEnum
+
+  """Not equal to"""
+  ne: AgentsReasoningReplayEnum
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [AgentsReasoningReplayEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [AgentsReasoningReplayEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [AgentsReasoningReplayEnumFilter!]
+
+  """Every branch matches"""
+  AND: [AgentsReasoningReplayEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: AgentsReasoningReplayEnumFilter
+}
+
+input AgentsServerInstructionsEnumFilter {
+  """Equal to"""
+  eq: AgentsServerInstructionsEnum
+
+  """Not equal to"""
+  ne: AgentsServerInstructionsEnum
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [AgentsServerInstructionsEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [AgentsServerInstructionsEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [AgentsServerInstructionsEnumFilter!]
+
+  """Every branch matches"""
+  AND: [AgentsServerInstructionsEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: AgentsServerInstructionsEnumFilter
+}
+
 input JSONFilter {
   """JSON equality on the whole value"""
   eq: JSON
@@ -2877,6 +3527,8 @@ input AgentOrderBy {
   toolDiscovery: InnerOrder
   toolSelectModel: InnerOrder
   toolExecution: InnerOrder
+  reasoningReplay: InnerOrder
+  serverInstructions: InnerOrder
   compactionModel: InnerOrder
   requestTimeoutSeconds: InnerOrder
   maxRetries: InnerOrder
@@ -2989,6 +3641,8 @@ input AgentCountNonNullHaving {
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
   toolExecution: AggregateNumberFilter
+  reasoningReplay: AggregateNumberFilter
+  serverInstructions: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
@@ -3010,6 +3664,8 @@ input AgentCountDistinctHaving {
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
   toolExecution: AggregateNumberFilter
+  reasoningReplay: AggregateNumberFilter
+  serverInstructions: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
@@ -3023,7 +3679,9 @@ input CreateTaskInput {
   """What this task is called, in the task list and the run history."""
   name: String!
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String!
 
   """
@@ -3051,7 +3709,9 @@ input UpdateTaskInput {
   """What this task is called, in the task list and the run history."""
   name: String
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: String
 
   """
@@ -3088,7 +3748,9 @@ input TaskFilters {
   """What this task is called, in the task list and the run history."""
   name: StringFilter
 
-  """What the agent is asked to do, each time this task fires."""
+  """
+  What the agent is asked to do, each time this task fires. `{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.
+  """
   prompt: StringFilter
 
   """
@@ -3442,7 +4104,7 @@ input CreateStepInput {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -3493,7 +4155,7 @@ input UpdateStepInput {
   name: String
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: String
 
@@ -3553,7 +4215,7 @@ input StepFilters {
   name: StringFilter
 
   """
-  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.
+  What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, `{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.
   """
   prompt: StringFilter
 
@@ -3783,6 +4445,7 @@ input RunFilters {
   """Matches rows whose trigger matches these filters"""
   trigger: TriggerFilters
   steps: RunStepListRelationFilter
+  artifacts: RunArtifactListRelationFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [RunFilters!]
@@ -3832,6 +4495,17 @@ input RunStepListRelationFilter {
 
   """Every related row matches"""
   every: RunStepFilters
+}
+
+input RunArtifactListRelationFilter {
+  """At least one related row matches"""
+  some: RunArtifactFilters
+
+  """No related row matches"""
+  none: RunArtifactFilters
+
+  """Every related row matches"""
+  every: RunArtifactFilters
 }
 
 input RunOrderBy {
@@ -3984,6 +4658,21 @@ input RunStepFilters {
   What MCP hooks did around this step, as JSON: the context each added to the prompt, and each that failed. A hook that worked and added nothing is not listed.
   """
   hooks: JSONFilter
+
+  """
+  The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: each with when it was read, how many characters went in, whether the cap cut it, and why a read failed. The text is not kept.
+  """
+  resources: JSONFilter
+
+  """
+  What MCP servers logged at `warning` or worse during this step's tool calls, as JSON `{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.
+  """
+  serverLogs: JSONFilter
+
+  """
+  What MCP servers asked for mid-call during this step, as JSON `{ tool, server, message, fields }`. Each was declined, since a run has nobody to answer: `fields` names the values the task would have to supply.
+  """
+  elicitations: JSONFilter
   promptTokens: IntFilter
   completionTokens: IntFilter
   totalTokens: IntFilter
@@ -3995,6 +4684,7 @@ input RunStepFilters {
 
   """Matches rows whose run matches these filters"""
   run: RunFilters
+  artifacts: RunArtifactListRelationFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [RunStepFilters!]
@@ -4051,6 +4741,9 @@ input RunStepOrderBy {
   error: InnerOrder
   toolCalls: InnerOrder
   hooks: InnerOrder
+  resources: InnerOrder
+  serverLogs: InnerOrder
+  elicitations: InnerOrder
   promptTokens: InnerOrder
   completionTokens: InnerOrder
   totalTokens: InnerOrder
@@ -4120,6 +4813,9 @@ input RunStepCountNonNullHaving {
   error: AggregateNumberFilter
   toolCalls: AggregateNumberFilter
   hooks: AggregateNumberFilter
+  resources: AggregateNumberFilter
+  serverLogs: AggregateNumberFilter
+  elicitations: AggregateNumberFilter
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
@@ -4144,6 +4840,175 @@ input RunStepCountDistinctHaving {
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
   remoteRunId: AggregateNumberFilter
+}
+
+input RunArtifactFilters {
+  id: StringFilter
+
+  """The run that produced it."""
+  runId: StringFilter
+
+  """
+  The run step whose tool call first linked to it. Null once that step is deleted.
+  """
+  runStepId: StringFilter
+
+  """The run's task, copied so everything a task made is one lookup."""
+  taskId: StringFilter
+
+  """
+  The MCP server that answered the call, which can read it back. Null once removed.
+  """
+  serverId: StringFilter
+
+  """That server's slug, kept after the server is gone."""
+  serverSlug: StringFilter
+
+  """The tool that linked to it, by the server's own name."""
+  tool: StringFilter
+
+  """
+  What the server calls it: read it back with `resources/read` on that server.
+  """
+  uri: StringFilter
+
+  """The link's `name`."""
+  name: StringFilter
+
+  """The link's `title`, for display. The latest one this run was given."""
+  title: StringFilter
+
+  """The link's `mimeType`, where the server gave one."""
+  mimeType: StringFilter
+
+  """The link's `description`, where the server gave one."""
+  description: StringFilter
+
+  """The link's `annotations.lastModified`, where the server gave one."""
+  lastModified: DateTimeFilter
+
+  """
+  Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the server gave none.
+  """
+  webUrl: StringFilter
+
+  """How many of this run's tool calls linked to this `uri`."""
+  count: IntFilter
+
+  """When this run first linked to it."""
+  createdAt: DateTimeFilter
+
+  """When this run last linked to it."""
+  updatedAt: DateTimeFilter
+
+  """Matches rows whose run matches these filters"""
+  run: RunFilters
+
+  """Matches rows whose step matches these filters"""
+  step: RunStepFilters
+
+  """At least one branch matches; ANDed with any sibling fields"""
+  OR: [RunArtifactFilters!]
+
+  """Every branch matches"""
+  AND: [RunArtifactFilters!]
+
+  """Negates the nested filters"""
+  NOT: RunArtifactFilters
+}
+
+input RunArtifactOrderBy {
+  id: InnerOrder
+  runId: InnerOrder
+  runStepId: InnerOrder
+  taskId: InnerOrder
+  serverId: InnerOrder
+  serverSlug: InnerOrder
+  tool: InnerOrder
+  uri: InnerOrder
+  name: InnerOrder
+  title: InnerOrder
+  mimeType: InnerOrder
+  description: InnerOrder
+  lastModified: InnerOrder
+  webUrl: InnerOrder
+  count: InnerOrder
+  createdAt: InnerOrder
+  updatedAt: InnerOrder
+
+  """Order by columns of the related run row"""
+  run: RunOrderBy
+
+  """Order by columns of the related step row"""
+  step: RunStepOrderBy
+}
+
+"""Filters RunArtifact groups by their aggregated values"""
+input RunArtifactHaving {
+  """Filters groups by how many rows they contain"""
+  count: AggregateNumberFilter
+  avg: RunArtifactAvgHaving
+  sum: RunArtifactSumHaving
+  min: RunArtifactMinHaving
+  max: RunArtifactMaxHaving
+  countNonNull: RunArtifactCountNonNullHaving
+  countDistinct: RunArtifactCountDistinctHaving
+}
+
+input RunArtifactAvgHaving {
+  count: AggregateNumberFilter
+}
+
+input RunArtifactSumHaving {
+  count: AggregateNumberFilter
+}
+
+input RunArtifactMinHaving {
+  count: AggregateNumberFilter
+}
+
+input RunArtifactMaxHaving {
+  count: AggregateNumberFilter
+}
+
+input RunArtifactCountNonNullHaving {
+  id: AggregateNumberFilter
+  runId: AggregateNumberFilter
+  runStepId: AggregateNumberFilter
+  taskId: AggregateNumberFilter
+  serverId: AggregateNumberFilter
+  serverSlug: AggregateNumberFilter
+  tool: AggregateNumberFilter
+  uri: AggregateNumberFilter
+  name: AggregateNumberFilter
+  title: AggregateNumberFilter
+  mimeType: AggregateNumberFilter
+  description: AggregateNumberFilter
+  lastModified: AggregateNumberFilter
+  webUrl: AggregateNumberFilter
+  count: AggregateNumberFilter
+  createdAt: AggregateNumberFilter
+  updatedAt: AggregateNumberFilter
+}
+
+input RunArtifactCountDistinctHaving {
+  id: AggregateNumberFilter
+  runId: AggregateNumberFilter
+  runStepId: AggregateNumberFilter
+  taskId: AggregateNumberFilter
+  serverId: AggregateNumberFilter
+  serverSlug: AggregateNumberFilter
+  tool: AggregateNumberFilter
+  uri: AggregateNumberFilter
+  name: AggregateNumberFilter
+  title: AggregateNumberFilter
+  mimeType: AggregateNumberFilter
+  description: AggregateNumberFilter
+  lastModified: AggregateNumberFilter
+  webUrl: AggregateNumberFilter
+  count: AggregateNumberFilter
+  createdAt: AggregateNumberFilter
+  updatedAt: AggregateNumberFilter
 }
 
 input CreateMcpServerInput {
@@ -4186,6 +5051,16 @@ input CreateMcpServerInput {
   Tools of this server a run's model is never offered, as a JSON array of the server's own tool names. Its hooks can still call them — a memory server's `remember`, say.
   """
   hiddenTools: JSON
+
+  """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: Boolean
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
 
   """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
@@ -4233,6 +5108,16 @@ input UpdateMcpServerInput {
   Tools of this server a run's model is never offered, as a JSON array of the server's own tool names. Its hooks can still call them — a memory server's `remember`, say.
   """
   hiddenTools: JSON
+
+  """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: Boolean
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnum
 
   """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
@@ -4291,6 +5176,16 @@ input McpServerFilters {
   hiddenTools: JSONFilter
 
   """
+  Believe this server's tools when they say they only read or are safe to repeat. Under `auto` its reads then run together, and a repeat in one step is answered once. Off, every call is treated as a write. Turn it on only for a server you have read.
+  """
+  trustAnnotations: BooleanFilter
+
+  """
+  The least serious message this server sends, shown under its tool call on the run's live stream: `warning` sends warnings and worse. Null leaves the server's own default. `warning` and worse are also kept on the step. Only a server that offers logging is told.
+  """
+  logLevel: McpServersLogLevelEnumFilter
+
+  """
   Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSONFilter
@@ -4334,6 +5229,35 @@ input McpServersTransportEnumFilter {
   NOT: McpServersTransportEnumFilter
 }
 
+input McpServersLogLevelEnumFilter {
+  """Equal to"""
+  eq: McpServersLogLevelEnum
+
+  """Not equal to"""
+  ne: McpServersLogLevelEnum
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [McpServersLogLevelEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [McpServersLogLevelEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [McpServersLogLevelEnumFilter!]
+
+  """Every branch matches"""
+  AND: [McpServersLogLevelEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: McpServersLogLevelEnumFilter
+}
+
 input McpServerOrderBy {
   id: InnerOrder
   slug: InnerOrder
@@ -4346,6 +5270,8 @@ input McpServerOrderBy {
   url: InnerOrder
   headers: InnerOrder
   hiddenTools: InnerOrder
+  trustAnnotations: InnerOrder
+  logLevel: InnerOrder
   hooks: InnerOrder
 }
 
@@ -4369,6 +5295,8 @@ input McpServerCountNonNullHaving {
   url: AggregateNumberFilter
   headers: AggregateNumberFilter
   hiddenTools: AggregateNumberFilter
+  trustAnnotations: AggregateNumberFilter
+  logLevel: AggregateNumberFilter
   hooks: AggregateNumberFilter
 }
 
@@ -4379,6 +5307,7 @@ input McpServerCountDistinctHaving {
   transport: AggregateNumberFilter
   command: AggregateNumberFilter
   url: AggregateNumberFilter
+  logLevel: AggregateNumberFilter
 }
 
 input UpdateSettingInput {
@@ -4419,9 +5348,19 @@ input UpdateSettingInput {
   toolSelectModel: String
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnum
+
+  """
+  Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
+  """
+  serverInstructions: Boolean
+
+  """
+  Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
+  """
+  reasoningReplay: SettingsReasoningReplayEnum
 
   """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
@@ -4496,9 +5435,19 @@ input SettingFilters {
   toolSelectModel: StringFilter
 
   """
-  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum. Results return in the order asked either way. Leave it `sequential` if any tool writes: two writes run together finish in no set order.
+  `parallel` runs the calls a model asks for in one reply together, so a step waits for the slowest rather than the sum; two writes run together finish in no set order. `auto` runs only the reads together — tools of a server whose annotations are trusted — and every other call alone, in order. Results return in the order asked either way.
   """
   toolExecution: SettingsToolExecutionEnumFilter
+
+  """
+  Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
+  """
+  serverInstructions: BooleanFilter
+
+  """
+  Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that call tools; `none` saves context on an endpoint that does not use it.
+  """
+  reasoningReplay: SettingsReasoningReplayEnumFilter
 
   """
   Model that summarises the oldest messages once a step fills 75% of the context window, so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.
@@ -4593,6 +5542,35 @@ input SettingsToolExecutionEnumFilter {
   NOT: SettingsToolExecutionEnumFilter
 }
 
+input SettingsReasoningReplayEnumFilter {
+  """Equal to"""
+  eq: SettingsReasoningReplayEnum
+
+  """Not equal to"""
+  ne: SettingsReasoningReplayEnum
+
+  """Matches any one of these values (SQL `IN`)"""
+  inArray: [SettingsReasoningReplayEnum!]
+
+  """Matches none of these values (SQL `NOT IN`)"""
+  notInArray: [SettingsReasoningReplayEnum!]
+
+  """When true, matches rows where the column is NULL"""
+  isNull: Boolean
+
+  """When true, matches rows where the column is not NULL"""
+  isNotNull: Boolean
+
+  """At least one branch matches; ANDed with any sibling operators"""
+  OR: [SettingsReasoningReplayEnumFilter!]
+
+  """Every branch matches"""
+  AND: [SettingsReasoningReplayEnumFilter!]
+
+  """Negates the nested operators"""
+  NOT: SettingsReasoningReplayEnumFilter
+}
+
 input SettingOrderBy {
   id: InnerOrder
   baseUrl: InnerOrder
@@ -4604,6 +5582,8 @@ input SettingOrderBy {
   toolDiscovery: InnerOrder
   toolSelectModel: InnerOrder
   toolExecution: InnerOrder
+  serverInstructions: InnerOrder
+  reasoningReplay: InnerOrder
   compactionModel: InnerOrder
   runRetentionDays: InnerOrder
   requestTimeoutSeconds: InnerOrder
@@ -4674,6 +5654,8 @@ input SettingCountNonNullHaving {
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
   toolExecution: AggregateNumberFilter
+  serverInstructions: AggregateNumberFilter
+  reasoningReplay: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
@@ -4692,6 +5674,7 @@ input SettingCountDistinctHaving {
   toolDiscovery: AggregateNumberFilter
   toolSelectModel: AggregateNumberFilter
   toolExecution: AggregateNumberFilter
+  reasoningReplay: AggregateNumberFilter
   compactionModel: AggregateNumberFilter
   runRetentionDays: AggregateNumberFilter
   requestTimeoutSeconds: AggregateNumberFilter
@@ -4856,6 +5839,32 @@ type Query {
     """Filters the groups after they are aggregated."""
     having: RunStepHaving
   ): [RunStepGroupBy!]!
+  runArtifacts(
+    offset: Int
+    limit: Int
+    orderBy: RunArtifactOrderBy
+    where: RunArtifactFilters
+
+    """
+    Keyset pagination: only return rows strictly after this cursor (a row's `cursor` field from a previous page, under the same orderBy).
+    """
+    after: String
+    distinct: [RunArtifactDistinctColumn!]
+  ): [RunArtifact!]!
+  runArtifact(offset: Int, orderBy: RunArtifactOrderBy, where: RunArtifactFilters): RunArtifact
+  runArtifactsAggregate(where: RunArtifactFilters): RunArtifactAggregate!
+  runArtifactsGroupBy(
+    """
+    Columns to group by. One result row per distinct combination of their values.
+    """
+    groupBy: [RunArtifactGroupByColumn!]!
+
+    """Filters the rows before they are grouped."""
+    where: RunArtifactFilters
+
+    """Filters the groups after they are aggregated."""
+    having: RunArtifactHaving
+  ): [RunArtifactGroupBy!]!
   mcpServers(
     offset: Int
     limit: Int
@@ -4957,12 +5966,12 @@ type Query {
   mcpStatus: [McpServerStatus!]!
 
   """
-  The prompts the connected MCP servers offer, for a picker — a prompt is the server author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` and the text becomes a task's or a step's prompt, editable before it is saved. Empty when no connected server offers any; a server that cannot be listed is left out rather than failing the query.
+  The prompts the connected MCP servers offer, for a picker — a prompt is the server author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` and the text becomes a task's or a step's prompt, editable before it is saved. Empty when no connected server offers any; a server that cannot be listed is left out rather than failing the query. Each server's list is read to its last page.
   """
   mcpPrompts: [McpPrompt!]!
 
   """
-  One prompt from `mcpPrompts`, expanded with the arguments given and flattened to the single string a prompt is. A template that answers with more than one message comes back with its roles labelled.
+  One prompt from `mcpPrompts`, expanded with the arguments given and flattened to the single string a prompt is. A template that answers with more than one message comes back with its roles labelled. Refused with `UNSUPPORTED` for a server that does not offer prompts, or is disabled or gone.
   """
   mcpPrompt(
     """The MCP server row's id, as `mcpPrompts` reports it."""
@@ -4972,6 +5981,64 @@ type Query {
     """The prompt's arguments by name. Absent is the same as none."""
     args: JSON
   ): String!
+
+  """
+  What the server behind a prompt from `mcpPrompts` suggests for one of its arguments, given what has been typed into it so far — at most a hundred, in the server's order. Empty, never an error, for a server that cannot complete.
+  """
+  mcpPromptCompletion(
+    """The MCP server row's id, as `mcpPrompts` reports it."""
+    server: String!
+
+    """The prompt's name."""
+    name: String!
+
+    """The argument being filled in."""
+    argument: String!
+
+    """What is in it so far. Empty asks for the server's opening suggestions."""
+    value: String!
+
+    """
+    The arguments already filled in, by name, which a server may narrow by — a folder before the document in it. Absent is the same as none.
+    """
+    context: JSON
+  ): [String!]!
+
+  """
+  The resources and resource templates the connected MCP servers offer, for the picker that names one in a prompt as `{{resource:<serverSlug>:<uri>}}` — read fresh on every run, unlike an expanded `mcpPrompt`. Empty when no connected server serves any; a server that cannot be listed is left out rather than failing the query.
+  """
+  mcpResources: [McpResourceEntry!]!
+
+  """
+  What the server behind a template from `mcpResources` suggests for one of its variables, given what has been typed into it so far — at most a hundred, in the server's order. Empty, never an error, for a server that cannot complete.
+  """
+  mcpResourceCompletion(
+    """The MCP server row's id, as `mcpResources` reports it."""
+    server: String!
+
+    """The template's own `uri`, with its variables unfilled."""
+    uri: String!
+
+    """The variable being filled in."""
+    variable: String!
+
+    """What is in it so far. Empty asks for the server's opening suggestions."""
+    value: String!
+
+    """
+    The variables already filled in, by name, which a server may narrow by. Absent is the same as none.
+    """
+    context: JSON
+  ): [String!]!
+
+  """
+  One resource read back from an MCP server with `resources/read` — a run's artifact, previewed. Read fresh, so a document edited since the run reads as it is now. Text only: binary contents are named, not sent. Refused with `UNSUPPORTED` for a server that does not serve resources, or is disabled or gone.
+  """
+  mcpResource(
+    """The MCP server row's id — an artifact's `serverId`."""
+    serverId: String!
+    uri: String!
+  ): McpResource!
 
   """
   When each armed cron trigger fires next, read from the running scheduler rather than the table — so it answers what will happen, not what was asked for. A `cron` trigger missing here is not armed, which usually means it or its task is disabled. `event` triggers never appear; they fire on a webhook, not a clock.
@@ -5006,6 +6073,8 @@ enum AgentDistinctColumn {
   toolDiscovery
   toolSelectModel
   toolExecution
+  reasoningReplay
+  serverInstructions
   compactionModel
   requestTimeoutSeconds
   maxRetries
@@ -5028,6 +6097,8 @@ enum AgentGroupByColumn {
   toolDiscovery
   toolSelectModel
   toolExecution
+  reasoningReplay
+  serverInstructions
   compactionModel
   requestTimeoutSeconds
   maxRetries
@@ -5115,6 +6186,27 @@ enum RunStepGroupByColumn {
   remoteRunId
 }
 
+"""Columns of RunArtifact that a query can group by"""
+enum RunArtifactGroupByColumn {
+  id
+  runId
+  runStepId
+  taskId
+  serverId
+  serverSlug
+  tool
+  uri
+  name
+  title
+  mimeType
+  description
+  lastModified
+  webUrl
+  count
+  createdAt
+  updatedAt
+}
+
 """Columns of McpServer that a query can be made distinct on"""
 enum McpServerDistinctColumn {
   id
@@ -5128,6 +6220,8 @@ enum McpServerDistinctColumn {
   url
   headers
   hiddenTools
+  trustAnnotations
+  logLevel
   hooks
 }
 
@@ -5140,6 +6234,8 @@ enum McpServerGroupByColumn {
   transport
   command
   url
+  trustAnnotations
+  logLevel
 }
 
 """Columns of Setting that a query can be made distinct on"""
@@ -5154,6 +6250,8 @@ enum SettingDistinctColumn {
   toolDiscovery
   toolSelectModel
   toolExecution
+  serverInstructions
+  reasoningReplay
   compactionModel
   runRetentionDays
   requestTimeoutSeconds
@@ -5173,6 +6271,8 @@ enum SettingGroupByColumn {
   toolDiscovery
   toolSelectModel
   toolExecution
+  serverInstructions
+  reasoningReplay
   compactionModel
   runRetentionDays
   requestTimeoutSeconds
@@ -5244,6 +6344,8 @@ type AgentSpecProfile {
   toolDiscovery: String!
   toolSelectModel: String!
   toolExecution: String!
+  reasoningReplay: String!
+  serverInstructions: String!
   compactionModel: String!
   requestTimeoutSeconds: Int!
   maxRetries: Int!
@@ -5359,6 +6461,54 @@ type McpPromptArgument {
   required: Boolean!
 }
 
+"""
+A resource, or a resource template, a connected MCP server offers — something a prompt can name as `{{resource:<serverSlug>:<uri>}}` to have it read on every run.
+"""
+type McpResourceEntry {
+  """
+  The MCP server row's id, which `mcpResourceCompletion` is addressed with.
+  """
+  server: String!
+
+  """The server's slug, which is what a placeholder names."""
+  serverSlug: String!
+  serverLabel: String!
+
+  """
+  Whether `uri` is an RFC 6570 template whose variables are filled in before it is named — a document by its path, say.
+  """
+  template: Boolean!
+  uri: String!
+  name: String!
+
+  """
+  What the server calls it for a person. Empty where it gave none; show `name`.
+  """
+  title: String!
+  description: String!
+  mimeType: String!
+}
+
+"""
+One resource read back from the MCP server that serves it, as text and as it is now — not as it was when a run linked to it.
+"""
+type McpResource {
+  uri: String!
+
+  """
+  The contents' type where every part the server answered with agreed on one. Empty where it gave none, or where the parts disagreed.
+  """
+  mimeType: String!
+
+  """
+  Text parts verbatim, joined by newlines. A binary part is named with its type and size in brackets, never sent.
+  """
+  text: String!
+
+  """Whether `text` was cut to the preview's limit."""
+  truncated: Boolean!
+}
+
 """A cron trigger that is currently armed, and when it next fires."""
 type ScheduleEntry {
   triggerId: String!
@@ -5378,7 +6528,7 @@ type RunEvent {
   at: DateTime!
 
   """
-  step | step-end | decision | turn | thinking | output | tool-call | tool-result | notice | usage | done.
+  step | step-end | decision | turn | thinking | output | tool-call | tool-result | artifact | server-log | notice | usage | done. An `artifact` is a tool call linking to something new: `text` is its title or uri, `name` the tool. A `server-log` is what a tool's MCP server logged while the call ran: `text` is the message, `level` how serious.
   """
   kind: String!
   text: String!
@@ -5391,6 +6541,14 @@ type RunEvent {
   """
   step: String!
   ok: Boolean
+
+  """
+  The tool call's id on the tool kinds and `server-log`, which pairs a result or a log with its call when one tool is called twice in a step.
+  """
+  id: String
+
+  """On `server-log` only: the server's level, `debug` up to `emergency`."""
+  level: String
 }
 
 type Mutation {

@@ -11,6 +11,8 @@ query McpServers {
     url
     headers
     hiddenTools
+    trustAnnotations
+    logLevel
     hooks
   }
   mcpStatus {
@@ -78,4 +80,50 @@ query McpPrompts {
 
 query McpPrompt($server: String!, $name: String!, $args: JSON) {
   mcpPrompt(server: $server, name: $name, args: $args)
+}
+
+query McpPromptCompletion(
+  $server: String!
+  $name: String!
+  $argument: String!
+  $value: String!
+  $context: JSON
+) {
+  mcpPromptCompletion(
+    server: $server
+    name: $name
+    argument: $argument
+    value: $value
+    context: $context
+  )
+}
+
+query McpResources {
+  mcpResources {
+    server
+    serverSlug
+    serverLabel
+    template
+    uri
+    name
+    title
+    description
+    mimeType
+  }
+}
+
+query McpResourceCompletion(
+  $server: String!
+  $uri: String!
+  $variable: String!
+  $value: String!
+  $context: JSON
+) {
+  mcpResourceCompletion(
+    server: $server
+    uri: $uri
+    variable: $variable
+    value: $value
+    context: $context
+  )
 }

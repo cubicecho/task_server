@@ -1,18 +1,18 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
+  McpPromptCompletionDocument,
   McpPromptDocument,
   McpPromptsDocument,
   type McpPromptsQuery,
 } from "@/__generated__/graphql/graphql";
+import { CompletionField } from "@/components/completion-field";
 import { DialogLayout } from "@/components/dialog-layout";
-import { FormField } from "@/components/form-field";
 import { List } from "@/components/list";
 import { ListItem } from "@/components/list-item";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "@/components/ui/icons";
-import { Input } from "@/components/ui/input";
 import { request } from "@/lib/gql";
 
 /**
@@ -154,20 +154,14 @@ function PromptDialog({
       contentSlot={
         <div className="flex flex-col gap-3">
           {chosen ? (
-            chosen.arguments.map((arg) => (
-              <FormField
+            chosen.arguments.map((arg, index) => (
+              <ArgumentField
                 key={arg.name}
-                label={arg.name}
-                required={arg.required}
-                description={arg.description || undefined}
-                controlSlot={
-                  <Input
-                    value={values[arg.name] ?? ""}
-                    onChange={(event) =>
-                      setValues((held) => ({ ...held, [arg.name]: event.target.value }))
-                    }
-                  />
-                }
+                prompt={chosen}
+                argument={arg}
+                value={values[arg.name] ?? ""}
+                onChange={(next) => setValues((held) => ({ ...held, [arg.name]: next }))}
+                context={filledBefore(chosen, index, values)}
               />
             ))
           ) : (
@@ -214,6 +208,57 @@ function PromptDialog({
           ) : null}
         </>
       )}
+    />
+  );
+}
+
+/**
+ * The arguments above this one that have something in them, which is what a server narrows a
+ * later one by — the folder before the document in it. Only the earlier ones: a later blank
+ * filled first is a guess about an order the template's author did not choose.
+ */
+function filledBefore(prompt: McpPrompt, index: number, values: Record<string, string>) {
+  return Object.fromEntries(
+    prompt.arguments
+      .slice(0, index)
+      .map((arg) => [arg.name, values[arg.name]?.trim() ?? ""] as const)
+      .filter(([, value]) => value !== ""),
+  );
+}
+
+/** One blank of a template, with what the server suggests for it. See `CompletionField`. */
+function ArgumentField({
+  prompt,
+  argument,
+  value,
+  onChange,
+  context,
+}: {
+  prompt: McpPrompt;
+  argument: McpPrompt["arguments"][number];
+  value: string;
+  onChange: (value: string) => void;
+  context: Record<string, string>;
+}) {
+  return (
+    <CompletionField
+      label={argument.name}
+      required={argument.required}
+      description={argument.description || undefined}
+      value={value}
+      onChange={onChange}
+      queryKey={["mcp", "prompts", "complete", prompt.server, prompt.name, argument.name, context]}
+      suggest={async (typed) =>
+        (
+          await request(McpPromptCompletionDocument, {
+            server: prompt.server,
+            name: prompt.name,
+            argument: argument.name,
+            value: typed,
+            context,
+          })
+        ).mcpPromptCompletion
+      }
     />
   );
 }

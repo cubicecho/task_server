@@ -44,6 +44,10 @@ const TABLE_DOCS: Partial<Record<keyof Tables, string>> = {
     "step picks which of its arms runs next.",
   runs: "One execution of a task, with what it produced and what it cost.",
   runSteps: "One step of one run: the path a run actually took through the task's tree.",
+  runArtifacts:
+    "Something a run's tool calls linked to as made — an MCP `resource_link` — one row per " +
+    "`uri` per run. Written by the runner; read-only here. A link is what its server said then: " +
+    "one since moved or deleted keeps its row, and rows go with their run when retention prunes it.",
   mcpServers: "An MCP server this one dials, and the tools it lends to every run.",
   settings: "The one row of server-wide defaults. Every task falls back to what is here.",
 };
@@ -62,7 +66,10 @@ export const COLUMN_DOCS: ColumnDocs = {
     maxToolIterations: "Ceiling on tool round-trips in a run. `-1` inherits the server default.",
     toolDiscovery: "`inherit` uses the server default; otherwise `eager` or `ondemand`.",
     toolSelectModel: "Empty inherits the server default. Unused unless discovery is on demand.",
-    toolExecution: "`inherit` uses the server default; otherwise `sequential` or `parallel`.",
+    toolExecution:
+      "`inherit` uses the server default; otherwise `sequential`, `parallel` or `auto`.",
+    reasoningReplay: "`inherit` uses the server default; otherwise `all`, `tool_loop` or `none`.",
+    serverInstructions: "`inherit` uses the server default; otherwise `on` or `off`.",
     compactionModel: "Empty inherits the server default, which is off unless one is set there.",
     requestTimeoutSeconds:
       "Seconds of silence before a request is given up on. `-1` inherits the server default; " +
@@ -79,7 +86,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     agentId:
       "The agent profile this task runs on. Null runs it on the server's own settings, which " +
       "is the default and what every task did before profiles existed.",
-    prompt: "What the agent is asked to do, each time this task fires.",
+    prompt:
+      "What the agent is asked to do, each time this task fires. " +
+      "`{{resource:<server slug>:<uri>}}` is that MCP resource, read fresh on every run.",
     model: "Empty falls back to the default model in settings.",
     systemPrompt: "Empty falls back to the default system prompt in settings.",
     enabled: "A disabled task is never started by a trigger, and can still be run by hand.",
@@ -103,7 +112,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     position: "Where in its sequence this step runs, from 0.",
     kind: "`agent` does the work. `decision` does the work *and* picks the arm to run next.",
     name: "What this step is called, in the run history and in `{{steps.<name>}}`.",
-    prompt: "What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output.",
+    prompt:
+      "What this step asks for. `{{steps.<name>}}` interpolates an earlier step's output, " +
+      "`{{resource:<server slug>:<uri>}}` an MCP resource as it reads when the step starts.",
     cases: "Decision only: the arms it may choose between. `default` is always available.",
     model: "Empty falls back to the task's model, then to settings.",
     systemPrompt: "Empty falls back to the task's system prompt, then to settings.",
@@ -154,9 +165,41 @@ export const COLUMN_DOCS: ColumnDocs = {
     hooks:
       "What MCP hooks did around this step, as JSON: the context each added to the prompt, and " +
       "each that failed. A hook that worked and added nothing is not listed.",
+    resources:
+      "The MCP resources the step's prompt named with `{{resource:<slug>:<uri>}}`, as JSON: " +
+      "each with when it was read, how many characters went in, whether the cap cut it, and " +
+      "why a read failed. The text is not kept.",
+    serverLogs:
+      "What MCP servers logged at `warning` or worse during this step's tool calls, as JSON " +
+      "`{ tool, level, text }`. Capped per step; the last entry counts what the cap dropped.",
+    elicitations:
+      "What MCP servers asked for mid-call during this step, as JSON `{ tool, server, message, " +
+      "fields }`. Each was declined, since a run has nobody to answer: `fields` names the " +
+      "values the task would have to supply.",
     remoteRunId:
       "The ai-router run that answered, where the step ran on one of its agents: the id its " +
       "`/runs/<id>` reads. Empty for a step on a plain model.",
+  },
+
+  runArtifacts: {
+    runId: "The run that produced it.",
+    runStepId: "The run step whose tool call first linked to it. Null once that step is deleted.",
+    taskId: "The run's task, copied so everything a task made is one lookup.",
+    serverId: "The MCP server that answered the call, which can read it back. Null once removed.",
+    serverSlug: "That server's slug, kept after the server is gone.",
+    tool: "The tool that linked to it, by the server's own name.",
+    uri: "What the server calls it: read it back with `resources/read` on that server.",
+    name: "The link's `name`.",
+    title: "The link's `title`, for display. The latest one this run was given.",
+    mimeType: "The link's `mimeType`, where the server gave one.",
+    description: "The link's `description`, where the server gave one.",
+    lastModified: "The link's `annotations.lastModified`, where the server gave one.",
+    webUrl:
+      'Where a person views it, from `_meta["com.cubicecho/webUrl"]`. Empty where the ' +
+      "server gave none.",
+    count: "How many of this run's tool calls linked to this `uri`.",
+    createdAt: "When this run first linked to it.",
+    updatedAt: "When this run last linked to it.",
   },
 
   mcpServers: {
@@ -174,6 +217,14 @@ export const COLUMN_DOCS: ColumnDocs = {
     hiddenTools:
       "Tools of this server a run's model is never offered, as a JSON array of the server's own " +
       "tool names. Its hooks can still call them — a memory server's `remember`, say.",
+    trustAnnotations:
+      "Believe this server's tools when they say they only read or are safe to repeat. Under " +
+      "`auto` its reads then run together, and a repeat in one step is answered once. Off, " +
+      "every call is treated as a write. Turn it on only for a server you have read.",
+    logLevel:
+      "The least serious message this server sends, shown under its tool call on the run's " +
+      "live stream: `warning` sends warnings and worse. Null leaves the server's own default. " +
+      "`warning` and worse are also kept on the step. Only a server that offers logging is told.",
     hooks:
       "Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. " +
       "`on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or " +
@@ -200,8 +251,17 @@ export const COLUMN_DOCS: ColumnDocs = {
       "costs no round trip. Empty uses the task's model. Unused unless discovery is on demand.",
     toolExecution:
       "`parallel` runs the calls a model asks for in one reply together, so a step waits for " +
-      "the slowest rather than the sum. Results return in the order asked either way. Leave it " +
-      "`sequential` if any tool writes: two writes run together finish in no set order.",
+      "the slowest rather than the sum; two writes run together finish in no set order. `auto` " +
+      "runs only the reads together — tools of a server whose annotations are trusted — and " +
+      "every other call alone, in order. Results return in the order asked either way.",
+    reasoningReplay:
+      "Which of the model's replies carry its thinking back to it. Thinking models (gpt-oss, " +
+      "DeepSeek, Qwen3, GLM) need their reasoning between tool calls, and sending it back keeps " +
+      "the endpoint's prompt cache valid. `all` is every reply; `tool_loop` only replies that " +
+      "call tools; `none` saves context on an endpoint that does not use it.",
+    serverInstructions:
+      "Put what each MCP server says about using it in the system prompt, up to 1000 tokens a " +
+      "server. It is the same text on every step, so it stays in the endpoint's prompt cache.",
     compactionModel:
       "Model that summarises the oldest messages once a step fills 75% of the context window, " +
       "so a long tool loop can keep going. Empty is off, and a run that outgrows its window fails.",

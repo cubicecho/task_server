@@ -176,9 +176,10 @@ test("a run tells its watcher each turn, call and result, in order and in these 
     .filter((event) => event.kind !== "usage" && event.kind !== "output")
     .map(({ kind, name, ok, text }) => [kind, name, ok, text].filter((part) => part !== undefined));
   expect(told).toEqual([
-    ["notice", "tools picked before the run: echo__add"],
-    // A step run on its own names no exchange; a flow names each one after its step.
+    // A step run on its own names no exchange; a flow names each one after its step. The loop
+    // opens it, then preselects inside it.
     ["exchange", ""],
+    ["notice", "tools picked before the run: echo__add"],
     ["turn", "turn 1"],
     ["tool-call", "echo__add", '{"a":1,"b":2}'],
     ["tool-result", "echo__add", true, 'add({"a":1,"b":2})'],

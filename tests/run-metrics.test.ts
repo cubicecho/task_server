@@ -126,3 +126,35 @@ test("a failed run keeps what it did before it failed", async () => {
   expect(run.status).toBe("error");
   expect(run.metrics).toMatchObject({ toolCalls: 1, outcome: "failed" });
 });
+
+test("what load_tools resolved to is counted across every step of a flow", async () => {
+  const discovery = (toolDiscovery: "eager" | "ondemand") =>
+    client.db
+      .update(tables.settings)
+      .set({ toolDiscovery })
+      .where(eq(tables.settings.id, "default"));
+  await discovery("ondemand");
+  try {
+    const { id } = await task("loader", "load a tool");
+    await client.db
+      .insert(tables.steps)
+      .values({ taskId: id, name: "again", prompt: "load it all again", position: 0 });
+    const load = (names: string[], callId: string) =>
+      toolCall("load_tools", JSON.stringify({ names }), callId);
+    replies = [
+      completion("[]"),
+      load(["echo__ping"], "call-1"),
+      completion("loaded"),
+      completion("[]"),
+      load(["echo__ping", "echo__nope"], "call-2"),
+      completion("loaded again"),
+    ];
+
+    const run = await runner.runTask(id);
+    expect(run.status, run.error ?? "").toBe("ok");
+    // A run keeps no tools between steps, so the second step's ping is a load and not a repeat.
+    expect(run.metrics).toMatchObject({ toolsLoaded: 2, redundantLoads: 0, unknownToolNames: 1 });
+  } finally {
+    await discovery("eager");
+  }
+});

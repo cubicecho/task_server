@@ -18,6 +18,11 @@ query Runs($where: RunFilters, $limit: Int!) {
     error
     totalTokens
     attempts
+    # The card says how many things a run made, so one that wrote a doc can be spotted without
+    # opening each. A count, not the rows: those are `RunDetail`'s.
+    artifactsAggregate {
+      count
+    }
     task {
       name
     }
@@ -53,8 +58,40 @@ query RunDetail($id: String!) {
       toolCalls
       totalTokens
       hooks
+      resources
+      serverLogs
+      elicitations
       remoteRunId
     }
+    # What the run made, in the order it first linked to each. A step's links are written in one
+    # insert and share a `createdAt`, so the uri breaks the tie rather than leaving it to the plan.
+    # The driver sorts the highest `priority` first, so the tie-break is the lower number.
+    artifacts(
+      orderBy: { createdAt: { direction: asc, priority: 2 }, uri: { direction: asc, priority: 1 } }
+    ) {
+      id
+      runStepId
+      serverId
+      serverSlug
+      uri
+      name
+      title
+      mimeType
+      lastModified
+      webUrl
+      count
+    }
+  }
+}
+
+# One artifact read back from its server for a preview — fresh each time, so a document edited
+# since the run reads as it is now.
+query McpResource($serverId: String!, $uri: String!) {
+  mcpResource(serverId: $serverId, uri: $uri) {
+    uri
+    mimeType
+    text
+    truncated
   }
 }
 
@@ -72,6 +109,9 @@ subscription RunEvents($runId: String!) {
     name
     step
     ok
+    # Which call a `server-log` belongs to, so it is drawn under that call's line, and how bad.
+    id
+    level
   }
 }
 

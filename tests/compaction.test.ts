@@ -24,6 +24,9 @@ const BULK = "x".repeat(1600);
 
 const SUMMARY = "Notes: echoed the bulk text four times.";
 
+/** How many tool calls the model asks for before it answers, and the text each one echoes. */
+let script = { calls: 6, text: BULK };
+
 let model: FakeModel;
 const mainRequests: ChatBody[] = [];
 const summaryRequests: ChatBody[] = [];
@@ -64,8 +67,8 @@ beforeAll(async () => {
       mainRequests.push(body);
       const n = mainRequests.length;
       const reply =
-        n <= 6
-          ? toolCall("echo__echo", JSON.stringify({ text: BULK }), `call-${n}`)
+        n <= script.calls
+          ? toolCall("echo__echo", JSON.stringify({ text: script.text }), `call-${n}`)
           : completion("done");
       replyWith(response, sized(body, reply), body);
     },
@@ -144,4 +147,34 @@ test("a single question's tool loop is folded once it fills the window, and befo
     .from(tables.runSteps)
     .where(eq(tables.runSteps.runId, run.id));
   expect(step.hooks).toBeNull();
+});
+
+test("with no compaction model, a filling window has its old tool results cleared instead", async () => {
+  await client.db
+    .update(tables.settings)
+    .set({ compactionModel: "" })
+    .where(eq(tables.settings.id, "default"));
+  // Seven round trips of ~250 tokens each way. The seventh puts the transcript past three
+  // quarters of the window, and clearing the two results the latest five leave over wins back
+  // more than a tenth of it; one result would not have been worth the cache.
+  script = { calls: 7, text: "y".repeat(1000) };
+  mainRequests.length = 0;
+  summaryRequests.length = 0;
+  const [task] = await client.db
+    .insert(tables.tasks)
+    .values({ name: "prune", prompt: "echo the text until told to stop" })
+    .returning();
+
+  const run = await runner.runTask(task.id);
+  await hooks.hooksSettled();
+  expect(run.status, run.error ?? "").toBe("ok");
+  expect(summaryRequests).toHaveLength(0);
+
+  const stubbed = (body?: ChatBody) =>
+    (body?.messages ?? []).filter(
+      (m) => m.role === "tool" && String(m.content).startsWith("[result cleared"),
+    ).length;
+  expect(stubbed(mainRequests.at(-2))).toBe(0);
+  expect(stubbed(mainRequests.at(-1))).toBe(2);
+  expect(mainRequests.at(-1)?.messages.filter((m) => m.role === "tool")).toHaveLength(7);
 });

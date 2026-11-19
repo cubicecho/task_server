@@ -158,6 +158,7 @@ test("a column left to inherit is a field the document does not have", async () 
     toolDiscovery: "ondemand",
     toolSelectModel: "small",
     toolExecution: "parallel",
+    reasoningReplay: "tool_loop",
     requestTimeoutSeconds: 0,
     maxRetries: 0,
   });
@@ -167,7 +168,8 @@ test("a column left to inherit is a field the document does not have", async () 
     name: "Full",
     description: "Everything said",
     endpoint: { baseUrl: "http://local:11434/v1", requestTimeoutSeconds: 0 },
-    model: { model: "big", maxTokens: 0, temperature: 0 },
+    // The column's `tool_loop` leaves in agent-core's spelling, which is the format's.
+    model: { model: "big", maxTokens: 0, temperature: 0, reasoningReplay: "tool-loop" },
     prompt: [{ id: "system", text: "Be brief." }],
     tools: { discovery: "ondemand", maxIterations: 12 },
     retry: { maxRetries: 0 },
@@ -292,7 +294,8 @@ const PREVIEW = `query ($document: JSON!, $createServers: [String!], $name: Stri
     refusals warnings dropped
     agent {
       name description baseUrl model systemPrompt maxTokens temperature maxToolIterations
-      toolDiscovery toolSelectModel toolExecution requestTimeoutSeconds maxRetries
+      toolDiscovery toolSelectModel toolExecution reasoningReplay serverInstructions
+      requestTimeoutSeconds maxRetries
     }
     servers { slug label created }
     bundled {
@@ -418,6 +421,8 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     toolDiscovery: "inherit",
     toolSelectModel: "",
     toolExecution: "inherit",
+    reasoningReplay: "inherit",
+    serverInstructions: "inherit",
     compactionModel: "",
     requestTimeoutSeconds: -1,
     maxRetries: -1,
@@ -434,6 +439,8 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     toolDiscovery: "eager",
     toolSelectModel: "small",
     toolExecution: "parallel",
+    reasoningReplay: "none",
+    serverInstructions: "off",
     compactionModel: "summary",
     requestTimeoutSeconds: 0,
     maxRetries: 0,
@@ -472,6 +479,23 @@ test("every inherit sentinel survives the trip, and so does every zero", async (
     "com.cubicecho.task-server": { toolExecution: "sequential" },
   });
   expect(sequential.back.toolExecution).toBe("sequential");
+  const auto = await trip({ toolExecution: "auto" });
+  expect(auto.back.toolExecution).toBe("auto");
+  // `serverInstructions` travels there too, as the boolean it is rather than the column's word.
+  const instructed = await trip({ serverInstructions: "on" });
+  expect(instructed.spec.extensions).toEqual({
+    "com.cubicecho.task-server": { serverInstructions: true },
+  });
+  expect(instructed.back.serverInstructions).toBe("on");
+  // And `reasoningReplay` three, one of which the column spells differently from the format.
+  for (const [column, field] of [
+    ["all", "all"],
+    ["tool_loop", "tool-loop"],
+  ] as const) {
+    const replay = await trip({ reasoningReplay: column });
+    expect(replay.spec.model).toEqual({ reasoningReplay: field });
+    expect(replay.back.reasoningReplay).toBe(column);
+  }
 });
 
 // The one value a column holds that the format does not: the parser wants at least one tool
@@ -763,6 +787,40 @@ test("a beforeCompact hook is imported like any other, and accepted on a write",
   expect(errors).toEqual([]);
 });
 
+// Trust is this host's judgement of a server, as `enabled` is, and a document cannot make it.
+test("a server bundled as trusted is created untrusted, and the preview says so", async () => {
+  const document = {
+    spec: SPEC,
+    name: "Trusting",
+    tools: { servers: ["t"] },
+    bundle: { mcpServers: [{ slug: "t", url: "http://127.0.0.1:9/mcp", trustAnnotations: true }] },
+  };
+
+  const shown = await preview(document, { createServers: ["t"] });
+  expect(shown.bundled[0].notes).toEqual([
+    "its annotations were trusted where it was exported; created untrusted here",
+  ]);
+  expect((await importSpec(document, { createServers: ["t"] })).errors).toEqual([]);
+  expect((await written()).servers[0].trustAnnotations).toBe(false);
+});
+
+// How much a server says on this host's run stream is this host's to choose, as its trust is.
+test("a server bundled with a log level is created at the column's default, and says so", async () => {
+  const document = {
+    spec: SPEC,
+    name: "Chatty",
+    tools: { servers: ["c"] },
+    bundle: { mcpServers: [{ slug: "c", url: "http://127.0.0.1:9/mcp", logLevel: "debug" }] },
+  };
+
+  const shown = await preview(document, { createServers: ["c"] });
+  expect(shown.bundled[0].notes).toEqual([
+    "it logged at debug where it was exported; created at warning here",
+  ]);
+  expect((await importSpec(document, { createServers: ["c"] })).errors).toEqual([]);
+  expect((await written()).servers[0].logLevel).toBe("warning");
+});
+
 test("a document that is not a spec is refused in the parser's words", async () => {
   for (const [document, reason] of [
     ["not an object", "spec: must be an object"],
@@ -795,7 +853,13 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     id: "researcher",
     name: "Wide",
     endpoint: { baseUrl: "http://local/v1", firstTokenSeconds: 30 },
-    model: { model: "big", maxTokens: 1.5, reasoningEffort: "high", contextLength: 8192 },
+    model: {
+      model: "big",
+      maxTokens: 1.5,
+      reasoningEffort: "high",
+      contextLength: 8192,
+      reasoningReplay: "sometimes",
+    },
     prompt: [
       { id: "persona", text: "You are careful." },
       { id: "rules", text: "Cite." },
@@ -806,7 +870,11 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     tasks: { title: { model: "tiny" }, toolSelect: { model: "small", maxTokens: 10 } },
     extensions: {
       "x-sandbox": { image: "alpine" },
-      "com.cubicecho.task-server": { toolExecution: "fast", colour: "red" },
+      "com.cubicecho.task-server": {
+        toolExecution: "fast",
+        serverInstructions: "yes",
+        colour: "red",
+      },
     },
     futureKey: true,
   };
@@ -819,6 +887,7 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     "futureKey",
     "extensions.x-sandbox",
     "extensions.com.cubicecho.task-server.toolExecution",
+    "extensions.com.cubicecho.task-server.serverInstructions",
     "extensions.com.cubicecho.task-server.colour",
     "endpoint.firstTokenSeconds",
     "model.reasoningEffort",
@@ -840,10 +909,14 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     toolDiscovery: "inherit",
     toolSelectModel: "small",
     toolExecution: "inherit",
+    reasoningReplay: "inherit",
+    serverInstructions: "inherit",
   });
   expect(shown.warnings).toContain(
     "prompt: 2 parts are joined into the one system prompt a profile holds",
   );
+  // A policy the format has no word for is the parser's to refuse, and it leaves the column.
+  expect(shown.warnings.some((line) => line.startsWith("model.reasoningReplay"))).toBe(true);
 });
 
 test("an imported profile has no key, and the preview says what that means", async () => {

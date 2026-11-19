@@ -15,11 +15,18 @@ import { mcpServers } from "../db/schema.ts";
  * whenever `sync()` reconciles without being handed rows, which is boot and every `onWrite`
  * hook on the table. The name and version are the handshake's `clientInfo`, set here because
  * the pool would otherwise report its own version under this server's name.
+ *
+ * `elicitation` declares that a server may ask for input mid-call, with no pool-wide handler: a
+ * run's tool calls answer their own, in `agent.ts`, and decline every one (`elicitations.ts`).
+ * Declaring it is what lets a server hear "nobody is here to ask" instead of a client that never
+ * offered. Anything the pool cannot tie to a run's call — a hook's, a resource read's — reaches
+ * no handler and the pool declines it.
  */
 export const mcp = new McpPool({
   load: () => db.select().from(mcpServers),
   clientName: "task-server",
   clientVersion: pkg.version,
+  elicitation: true,
 });
 
 /**

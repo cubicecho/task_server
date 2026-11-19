@@ -164,8 +164,9 @@ compatibility pass, on-demand tool loading, the step loop that drives all of the
 reads the settings row, `mcp.ts` hands the pool a `load()` that selects from `mcp_servers`,
 `profile.ts` lays an agent profile over settings, `agent.ts` maps one step onto `runAgentLoop`
 and `flow.ts` drives the steps.
-`mcp-prompts.ts` is the one thing here that reaches past tools into the rest of the protocol —
-see below.
+`mcp-prompts.ts` and `mcp-resources.ts` answer a person rather than a run from the rest of the
+protocol, and neither reaches past the pool to do it: listing, expansion, completion and reads
+are the pool's — see below.
 `mcp.ts` also says who this process is — `clientName` and `clientVersion` are the `clientInfo` of
 every handshake, and the whole of what a dialled server can log or gate on. The version is
 `package.json`'s, the same string `/mcp` answers a client with; left unset the pool reports its
@@ -374,11 +375,20 @@ table of rows; the one thing the resolver does that the old merge did not is tri
 system prompt when a profile is in play. Nothing downstream branches: `agent.ts`, `flow.ts` and `llm.ts` read one `Settings`
 exactly as they always did, which is why per-task endpoints cost the agent loop nothing. Blank
 is inherit, and the sentinel differs by column because zero is a real answer for most of them —
-`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery` and `toolExecution`.
+`""` for text, `-1` for a number, the word `inherit` for `toolDiscovery`, `toolExecution`,
+`reasoningReplay` and `serverInstructions` — the last a boolean in settings, and `on`/`off` here.
 
-`toolExecution` is the one column a spec has no field for, so it is laid over in
-`resolveConfig` by hand rather than by the resolver, and it travels in an export under this
-server's own extension, `extensions["com.cubicecho.task-server"]` (`SPEC_EXTENSION` in
+`reasoningReplay` is agent-core's own `model.reasoningReplay` — which of the model's replies
+carry its thinking back to it — and is laid over by the resolver like any spec field. The one
+wrinkle is a spelling: agent-core's `tool-loop` is `tool_loop` in both columns, because a GraphQL
+enum value cannot hold a hyphen and the driver names one it cannot spell `Option<n>`.
+`replayPolicy` and `replayColumn` in `profile.ts` translate, at the layers, at the import and in
+`agent.ts`, and nowhere else; the typecheck catches a fourth place that forgets, since the
+column's word is not one `ReasoningReplay` accepts. The settings default is `all`, agent-core's.
+
+`toolExecution` and `serverInstructions` are the two columns a spec has no field for, so they are
+laid over in `resolveConfig` by hand rather than by the resolver, and they travel in an export
+under this server's own extension, `extensions["com.cubicecho.task-server"]` (`SPEC_EXTENSION` in
 `profile.ts`) — the format's place for what a host has a name for and it does not, and kept by
 every reader where an unknown key under `tools` would be dropped on the way back in. The import
 reads that one extension and drops every other, as before.
@@ -387,7 +397,9 @@ The key is the one column that is not a plain override. A profile naming a `base
 never inherits `settings.apiKey` or `$OPENAI_API_KEY` — it uses its own key or `NO_KEY`,
 agent-core's constant for "there is no key here, do not fall through to the environment".
 A credential issued for one endpoint has no business being posted to another. A profile on the
-*same* endpoint inherits it like anything else. agent-core caches a client per endpoint for the
+*same* endpoint inherits it like anything else. The rule is agent-core's `resolveApiKey`, and
+"same" is `normalizeBaseUrl`'s: a trailing slash, the host's case and a default port are the one
+server a key was issued for, and a path in another case is not. agent-core caches a client per endpoint for the
 same reason: two profiles on two servers would otherwise evict each other's connection pool on
 every request.
 
@@ -477,22 +489,63 @@ bundle beside it is both guarded tables in one answer. The preview is gated as t
 since it answers which slugs are servers here.
 
 **An MCP prompt is expanded into a prompt box, not resolved at run time.**
-`server/runner/mcp-prompts.ts` reads `prompts/list` and `prompts/get` off `mcp.client(id)` —
-past the pool's tool path, which is the only place this server does that — and the web app's
-`McpPromptButton` sits beside the task prompt and every step's. What the task stores is the
+`server/runner/mcp-prompts.ts` is the pool's `prompts()`, `expandPrompt()` and `complete()` with
+each server's label put on the rows, and the web app's `McpPromptButton` sits beside the task
+prompt and every step's. What the task stores is the
 expanded text: readable on the page, editable afterwards, and unable to change under a working
 task because a server's author rephrased their template. Prompts are the user-controlled half of
 the protocol, so they reach a person as a menu item and never a run as a tool.
 
-Only servers whose handshake declared the `prompts` capability are asked. The SDK refuses to send
-`prompts/list` to one that did not, so a `try` per server would make "offers no prompts" an error
-per server per listing, indistinguishable from a broken one. A template answers with messages and
-a prompt box takes one string: one message unwraps verbatim, several are joined with their roles
-in front, and non-text content is named in brackets rather than dropped.
+The rules are the pool's and are not restated here. `prompts()` asks only the servers whose
+handshake declared `prompts` and reads each list to its last page; a server that fails to answer
+is a server with none in the picker. `expandPrompt()` flattens the messages by `promptText` —
+one verbatim, several with their roles in front, non-text named in brackets — and refuses a
+server that offers no prompts with `unsupported`, which the resolver turns into an `UNSUPPORTED`
+refusal the dialog shows, as it does for the resource preview. `mcpPromptCompletion` is the
+pool's `complete()`: each argument in the picker is a free-text `Combobox` whose rows are what
+the server suggests for the text typed so far, asked once typing pauses and only while the menu
+is open, with the arguments above it as `context` so a server can narrow a later one by an
+earlier one. A server that cannot complete answers none rather than an error. The search text
+reaches the picker through `onSearchChange`, a local addition to the vendored `combobox.tsx`
+until cubeui ships one — check a refresh did not drop it.
 
-`mcpPrompts` and `mcpPrompt` are the operator's, with `mcpStatus` and for its reason — the
-listing is which servers this one dials and what each is for — and are deliberately not in
-`TOOLS`. An agent writing a task through `/mcp` writes the prompt itself.
+`mcpPrompts`, `mcpPrompt` and `mcpPromptCompletion` are the operator's, with `mcpStatus` and for
+its reason — the listing is which servers this one dials and what each is for — and are
+deliberately not in `TOOLS`. An agent writing a task through `/mcp` writes the prompt itself.
+
+**An MCP resource is read into a prompt on every run, never stored as one.** The inverse of a
+prompt: `{{resource:<slug>:<uri>}}` names data whose point is what it says now. The grammar is
+`shared/resource-placeholder.ts`, read by the runner and written by the web app's
+`McpResourceButton` (beside `McpPromptButton`, listing `mcpResources` and filling a template's
+variables through `mcpResourceCompletion`, the pool's `complete()` with a `ref/resource`; the
+template is expanded by the SDK's own `UriTemplate`, in `web/lib/resource-template.ts`). Both
+fields are the operator's and not in `TOOLS`. The free-text blank with suggestions under it is
+`web/components/completion-field.tsx`, shared by both pickers.
+
+`server/runner/prompt-resources.ts` reads them as a step starts, inside `execute`'s `try` and
+before the hooks, so a failure is the step's `error` and `beforeExchange` is told the prompt as sent.
+Four decisions, each with a test in `tests/prompt-resources.test.ts`: a read goes through
+`readResource` with the profile's `servers`, and a slug outside them is refused in the words of
+a slug that is not there, as `call()` refuses a tool; a failed read fails the step before the
+model is asked; each read is capped at `RESOURCE_MAX_CHARS` (40,000, fixed rather than a column)
+with a notice when it cut; and `run_steps.resources` records each read and when, failed ones too,
+but not the text. The text is fenced with agent-core's `untrusted` and the step's system prompt
+gets `UNTRUSTED_PREFACE` — only a step that read something, so the others keep the prompt they
+had. `renderPrompt` stays synchronous and takes the reads as a map; a resource does not set
+`placed`, as `{{event}}` does not. Only the prompt as written is scanned: a placeholder in an
+earlier step's output or a webhook body is passed on as text, since a read it could ask for is
+a read a model or a sender could aim.
+
+**A run's artifact is previewed from its server, fresh.** `mcpResource(serverId, uri)` is the
+Outputs section's Preview on the runs page: `server/runner/mcp-resources.ts` calls the pool's
+`readResource`, which checks the handshake declared `resources` and refuses with `unsupported`
+otherwise, and the resolver turns that — and a server since removed or disabled — into an
+`UNSUPPORTED` refusal a dialog can show. It is text only, capped at `PREVIEW_MAX_CHARS`: binary
+parts are named with their type and size and never sent. Nothing is cached, so a doc edited since
+the run reads as it is now, and the dialog shows the row's `lastModified` beside it so a person
+can tell. It is the operator's, gated with `mcpPrompts` and not in `TOOLS`, because its argument
+is any uri and it reads whatever a configured server will serve. Which of Open, Preview and Copy a
+row gets is `web/lib/run-artifacts.ts`, and a `webUrl` is a link only when it parses as `http(s)`.
 
 **An MCP server's hooks fire at a run's points, and a run is the session.** A row's `hooks` are
 tool calls the pool makes on the host's behalf — a memory server's `recall` before a step and its
@@ -501,23 +554,46 @@ documented config works on all three. `server/runner/hooks.ts` is the mapping: `
 is the run id, each executed step is a turn (the task's own prompt is turn 0, and
 `sessionStart` fires ahead of it), `sessionEnd` fires once the run's outcome is written, and
 `sessionDelete` for a run deleted by hand, with its task, or by retention. `beforeCompact`
-fires when a step's transcript is folded, which happens only on a compaction model, and it is the
-one event the *loop* fires: `HookSession.compaction` hands `runAgentLoop` `fire:
-[beforeCompact]` and a runner that answers every other event with nothing, since `before` and
-`after` already fire `beforeExchange` and `afterExchange` around the whole step and the loop would
-fire them a second time. Stored rows that named the old `beforeTurn` and `afterTurn` were renamed
-by a migration when agent-mcp-pool 4 dropped them. Its `offset` is `step.index * 2`, where `exchange` lays the step's messages, so a
-folded message reaches a memory server under the uuid its `afterExchange` uses. A `beforeCompact`
-that fails is kept on `run_steps.hooks` with the rest. `{{vars.task.id}}` is the key for memory
-that should outlast one run.
+fires when a step's transcript is folded, which happens only on a compaction model.
 
-The host side is agent-core's: `gather` before a step, `notify` after, and `withContext` putting
+`afterExchange` and `beforeCompact` are the two events the *loop* fires: `HookSession.loop` hands
+`runAgentLoop` the run's hooks with `fire: [HookEvent.BeforeCompact, HookEvent.AfterTurn]`,
+leaving out `sessionStart` and `beforeExchange`, which `before` gathers ahead of the request so the
+context is on the question before the loop sees it. `question` is the step's prompt as written,
+so a memory server files what was asked rather than what was recalled for it; `turnBase` is the
+step's index, so `turn.index` is its place in the run; and `offset` is `HookStep.at`, the count of
+messages the steps before it ended with, which `flow.ts` keeps from each step's `messageCount`. A
+run keeps no transcript, so that lays the steps end to end as if it kept one, and a folded
+message reaches a memory server under the uuid its `afterExchange` uses. The loop's `turn.messages`
+is the step's whole exchange — the question, any text the model wrote beside its tool calls, and
+the answer — each at its real position, tool results skipped but keeping their places.
+
+Memory written before 7.20.0 is keyed differently. Until then `afterExchange` was a `notify` written
+here, which told a step's prompt at `index * 2` and its answer at `index * 2 + 1` and nothing in
+between; a step that called a tool now puts its answer further on, and the next step's question
+after that. The positions are a message's place in the run either way, but a memory server
+deduping on the uuid will not match a turn remembered before the change with the same turn
+remembered after it. Accepted rather than worked around: the old scheme dropped what a model
+said beside its calls, and with the loop's real positions a stride of two would put a tool-using
+step's answer where the next step's question is.
+
+The loop does not wait for `afterExchange`; it hands the promise back as `result.afterExchange`, and
+`HookSession.after` keeps what failed on the step's row once the row is closed — closing writes
+its notes whole, so an earlier append would be overwritten. An `afterExchange` note is therefore only
+said on the stream as it lands, and a `beforeCompact` that fails is kept on `run_steps.hooks`
+with the rest. A decision step whose answer could not be read back had still answered, so its
+turn is told and kept as well. `{{vars.task.id}}` is the key for memory that should outlast one
+run.
+
+The host side is agent-core's: `gather` before a step, the loop's `afterExchange` after it, and
+`withContext` putting
 what was gathered on the step's question with this server's preface, which `hooks.ts` sets once
-with `configureHooks` rather than passing at each call. What stays here is the
+with `configureHooks` rather than passing at each call; the runner each of them is handed is
+the pool's `hookRunner`, bound to the run's MCP scope. What stays here is the
 mapping and the persistence — each hook that injected or failed leaves a note on
 `run_steps.hooks`, and a failed `sessionEnd` on `runs.hooks`, since run events are gone a minute
-later. `afterExchange` and `sessionEnd` are not awaited by the run; `sessionEnd` waits for the
-steps' `afterExchange`s so a memory server hears them in order, and `hooksSettled()` is the test seam.
+later. `afterExchange` and `sessionEnd` are not awaited by the run; `sessionEnd` waits for the steps'
+`afterExchange`s so a memory server hears them in order, and `hooksSettled()` is the test seam.
 
 `hiddenTools` keeps a tool out of every run's listing and still callable by the row's hooks, and
 both columns are checked on write in `vetMcpServer` with the pool's `validateHooks`: a
@@ -542,30 +618,54 @@ that rearms on every chunk, not a deadline on the request.
 
 `agent.ts` sends no request of its own. It hands `runAgentLoop` the settings row with the step's
 model laid over it, the pool's tools and catalogue, a `dispatch` that is `mcp.call` under the
-profile's scope, and an `onEvent` that forwards to the run-event bus and copies notices to the
+profile's scope and the signal the loop hands it — dropped, a stop left the tool call running to
+its end — and an `onEvent` that forwards to the run-event bus and copies notices to the
 log. A retry and a capability downgrade both arrive as notices, because a watcher reading an
 unexplained pause wants to be told either way. The step loop, the request body, the silence
 watchdog and the endpoint's latched refusals were all written here once and are not to be
 written here again — see [Future work](#future-work).
 
-Two of the loop's defaults are turned off, and both were decided rather than left.
-`toolOrder: false` sends tools in the order the pool lists them: sorted by name, a tool loaded on
-demand lands mid-array and moves every definition after it, where unsorted it is appended and
-the prefix an endpoint cached still matches — and the pool's order is configuration order, so
-there is no shuffle for a sort to undo. Reopen it with evidence that the order moves between
-requests. `dedupeToolCalls: false` leaves two identical calls in one step as two calls, since a
-counter or a "next page" is meant to answer differently the second time. `parallel` is the
-operator's, as `settings.toolExecution` (and a profile's): sequential by default, because this
-server cannot tell a tool that reads from one that writes, and two writes run together land in
-whichever order they finish — the results go back to the model in the order it asked either
-way. Recovery is on: a call the model wrote into its reply as text — a
+One of the loop's defaults is turned off and one narrowed, and both were decided rather than
+left. `toolOrder: false` sends tools in the order the pool lists them: sorted by name, a tool
+loaded on demand lands mid-array and moves every definition after it, where unsorted it is
+appended and the prefix an endpoint cached still matches — and the pool's order is configuration
+order, so there is no shuffle for a sort to undo. Reopen it with evidence that the order moves
+between requests. `dedupeToolCalls` answers an identical repeat in one step once only for a
+tool `mcp.readsOnly` vouches for, and leaves every other pair as two calls, since a counter or a
+"next page" is meant to answer differently the second time and a trusted read is neither.
+
+`parallel` is the operator's, as `settings.toolExecution` (and a profile's), and two writes run
+together land in whichever order they finish — the results go back to the model in the order it
+asked either way. This server cannot tell a tool that reads from one that writes, but the pool
+can where an operator lets it: `mcp_servers.trustAnnotations` makes the pool believe that
+server's `readOnlyHint`, and `auto` hands the loop
+`(call) => mcp.readsOnly(call.name, { servers })` as the predicate, so consecutive trusted reads
+run together and every other call is a barrier. Fail-closed is the pool's — an unknown, out-of-scope or untrusted tool is a write — so
+`auto` over servers nobody vouched for is `sequential`. It is the default for a new install; the
+migration that added it only moved the column's default, so a row written before it keeps the
+`sequential` it had, and an upgrade turns no one's writes parallel. Trust is not bundled in an
+agent spec: like `enabled` it is a judgement about this host, and a server arrives untrusted.
+`tests/tool-execution.test.ts` reads the overlap off the fixture's own timing log, since nothing
+on this side of the connection can see two calls in flight.
+
+`serverInstructions` is on by default, as min-agent has always had it: what a server's
+handshake says about using it goes in the system prompt, under agent-core's per-server budget.
+It costs prompt tokens on every step, but the block is the same text on each, so past the first
+request it is prefix the endpoint has cached; off is for a small window. And every step of a
+run passes the run id as `session`, so on a llama.cpp server that reports slots the steps share
+one, and the up to `maxConcurrentRuns` runs in flight stop evicting each other's prompt cache.
+It has no setting — an endpoint without `/props` slots is simply not pinned — and the loop's
+"pinned to slot" notice reaches the run stream with the rest.
+
+Recovery is on: a call the model wrote into its reply as text — a
 server whose parser misses the model's template streams it as content — is run as a call rather
 than stored as the step's answer, and the watcher is told in a notice.
 `firstTokenSeconds` is set to `requestTimeoutSeconds`, where the loop would otherwise give the
-first token five times the silence it gives the rest. Tool preselection is done here rather than
-by the loop, so it reads the prompt before the hooks' context is put in front of it and the
-watcher is told what was picked
-([agent-core#150](https://github.com/cubicecho/agent-core/issues/150)).
+first token five times the silence it gives the rest. Tool preselection is the loop's
+(`preselect: true`), on the tool-selection model or the step's own where that is blank, and it
+is handed the prompt as written in `preselectQuery`: the hooks' context is already on
+`messages`, and a preselector shown both picks tools for whatever memory recalled. The loop says
+what it picked in a notice, which is what the watcher is told.
 
 The catalogue in the system prompt does not mark what is loaded. It used to, and the loop
 deliberately does not: the system prompt is then the same text on every step, so a load does not
@@ -606,21 +706,38 @@ here; an endpoint that will not say in time gets no guard, which is what every r
 step answered in prose is read back with `askJson` against a schema whose only field is an enum
 of the step's arms, so the second opinion cannot name a case that does not exist.
 
-**A step that fills its window clears its old tool results first.** `pruning.ts` is the loop's
-`beforeTurn`: past `COMPACTION_DEFAULTS.compactAtShare` of a window the endpoint reported, agent-core's
-`pruneToolResults` stubs every result but the latest five, and the fold — when a compaction
-model is set — then plans from what is left. A step is one question and a tool loop, and
+**A step that fills its window clears its old tool results first.** That is the loop's `prune`
+option, given `COMPACTION_DEFAULTS.compactAtShare` and `PRUNE_DEFAULTS.minShare` as its gate: past that share of a window the endpoint
+reported, every result but the latest five is stubbed, behind a boundary that moves only when
+the window fills again so a request between moves is the last one with its tail added. The fold
+— when a compaction model is set — then plans from what is left, and the boundary moves again
+after a fold, since the cache is already lost. A step is one question and a tool loop, and
 agent-core folds inside one since 4.5: the question is kept, the oldest assistant/tool pairs after
 it become a summary at the head, and the tail resumes at an assistant message.
-`tests/compaction.test.ts` runs that end to end, and it is the only test that would notice a fold
-that silently never happens — which is what this wiring did for its first release. Both rewrite the prefix and cost the prompt cache,
+`tests/compaction.test.ts` runs both end to end, and it is the only test that would notice a fold
+or a prune that silently never happens — which is what the fold's wiring did for its first release. Both rewrite the prefix and cost the prompt cache,
 which is why neither runs a little on every step, and a prune that would win back less than
-`PRUNE_SHARE` of the window is not done at all. It has no column: it makes no request, so there
+`PRUNE_DEFAULTS.minShare` of the window is not done at all. It has no column: it makes no request, so there
 is nothing for an operator to choose to pay for, and with no window known it is inert like the
 fold.
 
 **Run events are debugging output and are not persisted.** They live in an in-memory bus for a
 minute after the run ends. Anything worth keeping goes in the run row.
+A server's `server-log` events are the case in point: `dispatch` hands the pool `onLog:
+report.log` at the row's `logLevel` (null is the server's own default — the pool's spelling, so
+the row reaches it unmapped, and there is no row above it for an `inherit` to mean), and
+`server-logs.ts` keeps what is `warning` or worse on `run_steps.serverLogs`, capped per step. A
+sibling of `hooks` rather than more notes in it, since a hook note is what the host's own calls
+did and these are what a server said during the model's. The pool ties a message to a call only
+when it is the one request in flight on that connection, so a parallel call or a hook on the same
+server goes unheard.
+An elicitation rides the same path and the same limit: the pool declares the capability
+(`elicitation: true`, no pool-wide handler), `dispatch` hands each call an `onElicit` from
+`elicitations.ts` that answers `decline` — a run is unattended, and `decline` is what lets a
+server act on that — and the question is a notice on the stream and a note on
+`run_steps.elicitations`, its own column because it is neither the host's call nor a server's
+log but something the operator has to fix in the task. Waiting for a person on a watched run, or
+a `waiting` status, were looked at in #107 and not taken.
 What is kept of them is `runs.metrics`, agent-core's `runMetrics` over the run's events, which
 `server/runner/metrics.ts` collects as the run emits them rather than reading back off the bus —
 the bus caps a run's backlog and drops its oldest, which is exactly the tool calls a summary
@@ -632,6 +749,28 @@ agent-core calls a flow step an *exchange*: `runAgentLoop` is handed the step's 
 `RunEvent` on the GraphQL side keeps this server's word: its `kind` says `step` and `step-end`,
 and its `step` field is the event's `exchange`, so the `run_events` tool and the web stream read
 as they always did.
+
+**What a run made is the `resource_link`s its tools answered with, and nothing else.**
+`dispatch` calls the pool with `links: true`, so the model reads the same text as before and the
+loop collects the links beside it as the step's `artifacts`; `flow.ts` hands them to
+`server/runner/artifacts.ts`, which writes `run_artifacts`. One row per `uri` per run: the loop
+dedupes within a step, and a later step linking the same uri lands on the unique
+`(runId, uri)` index and bumps `count`, with the latest `title` winning. A step that fails or is stopped after its tools wrote keeps
+what they wrote too, read off the loop's failure (`failedRun(error).artifacts`): a write made
+before the budget ran out was made. `webUrl` is the producing
+server's `_meta["com.cubicecho/webUrl"]`, since MCP has no field for where a person views a
+thing. Hook calls never reach `dispatch` and are not captured, and links marked for the model
+alone are dropped by the pool. The table is history: `features` gives it no generated writes, it
+goes with its run by cascade, reads are open to an agent, and it is not in `TOOLS`. No regexes
+over result text, and no `record_artifact` tool — see #98 for why.
+
+The task page's **Produced** is the same table across runs, and the generated list says it:
+`TaskArtifacts` in `web/graphql/tasks.graphql` asks `runArtifacts` with `distinct: [uri]`, which
+keeps the first row of each uri under `orderBy` *before* `limit`, so the latest per uri, newest
+first, needs no hand-written field and no client-side dedupe. `tests/task-artifacts.test.ts` holds
+that rule against a real database. The driver sorts the highest `priority` first, so a tie-break
+takes the lower number. A row links to its run as `/runs?run=<id>`, which narrows the runs list
+to that run and opens it. Stale links and retention are accepted, and written in `docs.ts`.
 
 **Frontend:** shadcn primitives in `web/components/ui/` with no app logic; routes in
 `web/routes/`; `@/` maps to `web/`. Every query goes through `request()` in `web/lib/gql.ts`
@@ -646,7 +785,7 @@ route's header, trail, action row and body), `DialogLayout` (title, body, `foote
 control and `footerActionsSlot` for cancel/confirm, and the unsaved-changes guard), `Section`,
 `CardLayout`, `SplitLayout`, `LoadState` with `LoadError`, `Collapsible`, `CollapsibleRow`,
 `List`, `StatTile`, `ConfirmButton`, `FormField`, `FieldRow`, `Combobox`, `PasswordInput`,
-`ModelSelect`'s field wrapper, `CodeBlock` and `CopyButton` — and, since the registry began shipping its own, every primitive under
+`ModelSelect`'s field wrapper, `CodeBlock`, `CopyButton` and `Markdown` — and, since the registry began shipping its own, every primitive under
 `web/components/ui/`. **No cubeui component takes `children`** — the body is `contentSlot`, and
 every other place an element goes is a prop ending in `Slot` (`actionSlot`, `emptySlot`,
 `iconSlot`, `backSlot`, `controlSlot`…), which is what stops a shell from being subclassed

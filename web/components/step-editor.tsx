@@ -5,6 +5,7 @@ import { FieldRow } from "@/components/field-row";
 import { FormField } from "@/components/form-field";
 import { ModelSelect } from "@/components/model-select";
 import { McpPromptButton, withPrompt } from "@/components/prompt-picker";
+import { McpResourceButton } from "@/components/resource-picker";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -240,13 +241,17 @@ function StepCard({
             }
           />
 
-          {/* A flex child of the column above rather than a row of its own: the picker draws
-            nothing where no MCP server offers prompts, and an empty wrapper would still take
-            the column's gap on every step of every flow. */}
-          <McpPromptButton
-            className="self-end"
-            onInsert={(text) => patch({ prompt: withPrompt(step.prompt, text) })}
-          />
+          {/* `empty:hidden` because each picker draws nothing where no MCP server offers what
+            it picks, and an empty row would still take the column's gap on every step of every
+            flow. */}
+          <div className="flex gap-2 self-end empty:hidden">
+            <McpResourceButton
+              onInsert={(placeholder) => patch({ prompt: withPrompt(step.prompt, placeholder) })}
+            />
+            <McpPromptButton
+              onInsert={(text) => patch({ prompt: withPrompt(step.prompt, text) })}
+            />
+          </div>
 
           {decision ? (
             <Section
