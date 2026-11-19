@@ -104,11 +104,11 @@ afterAll(async () => {
   await model.close();
 });
 
-test("a beforeTurn hook's result is put in front of each step's prompt, and noted", async () => {
+test("a beforeExchange hook's result is put in front of each step's prompt, and noted", async () => {
   await echoServer([
     {
       id: "recall",
-      on: "beforeTurn",
+      on: "beforeExchange",
       tool: "echo",
       args: { text: "memories of {{vars.task.name}} step {{turn.index}}" },
       inject: true,
@@ -140,7 +140,7 @@ test("a beforeTurn hook's result is put in front of each step's prompt, and note
     .orderBy(asc(tables.runSteps.position));
   expect(rows[0].hooks).toMatchObject([
     {
-      event: "beforeTurn",
+      event: "beforeExchange",
       source: "Echo",
       hookId: "recall",
       text: expect.stringContaining("step 0"),
@@ -150,13 +150,13 @@ test("a beforeTurn hook's result is put in front of each step's prompt, and note
   expect(rows[0].output).toBe("one subject");
 });
 
-test("afterTurn, sessionStart and sessionEnd reach the server with what the run did", async () => {
+test("afterExchange, sessionStart and sessionEnd reach the server with what the run did", async () => {
   await echoServer(
     [
       { id: "start", on: "sessionStart", tool: "add", args: { a: 1, b: 2 } },
       {
         id: "remember",
-        on: "afterTurn",
+        on: "afterExchange",
         tool: "echo",
         args: { text: "{{vars.task.id}}|{{session.id}}|{{turn.messages}}" },
       },
@@ -188,8 +188,8 @@ test("afterTurn, sessionStart and sessionEnd reach the server with what the run 
 
 test("a hook that cannot run is noted on the step and never fails the run", async () => {
   await echoServer([
-    { id: "keyed", on: "beforeTurn", tool: "echo", args: { text: "{{vars.nothing}}" } },
-    { id: "gone", on: "afterTurn", tool: "no-such-tool", args: {} },
+    { id: "keyed", on: "beforeExchange", tool: "echo", args: { text: "{{vars.nothing}}" } },
+    { id: "gone", on: "afterExchange", tool: "no-such-tool", args: {} },
   ]);
   const { id: taskId } = await task("digest", "list the subjects");
   replies = ["one subject"];
@@ -204,8 +204,8 @@ test("a hook that cannot run is noted on the step and never fails the run", asyn
     .from(tables.runSteps)
     .where(eq(tables.runSteps.runId, run.id));
   expect(row.hooks).toMatchObject([
-    { event: "beforeTurn", hookId: "keyed", error: expect.stringContaining("vars.nothing") },
-    { event: "afterTurn", hookId: "gone", error: expect.any(String) },
+    { event: "beforeExchange", hookId: "keyed", error: expect.stringContaining("vars.nothing") },
+    { event: "afterExchange", hookId: "gone", error: expect.any(String) },
   ]);
 });
 
@@ -281,7 +281,7 @@ test("hooks that could never run are refused when the row is saved", async () =>
     });
 
   const noReply = await create([
-    { id: "early", on: "beforeTurn", tool: "echo", args: { text: "{{reply}}" } },
+    { id: "early", on: "beforeExchange", tool: "echo", args: { text: "{{reply}}" } },
   ]);
   expect(noReply.errors?.[0]?.message).toContain("reply");
 
@@ -289,7 +289,7 @@ test("hooks that could never run are refused when the row is saved", async () =>
   expect(hidden.errors?.[0]?.message).toContain("hiddenTools");
 
   const fine = await create(
-    [{ id: "ok", on: "afterTurn", tool: "echo", args: { text: "{{reply}}" } }],
+    [{ id: "ok", on: "afterExchange", tool: "echo", args: { text: "{{reply}}" } }],
     ["add"],
   );
   expect(fine.errors).toBeUndefined();

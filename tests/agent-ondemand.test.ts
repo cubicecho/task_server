@@ -177,6 +177,8 @@ test("a run tells its watcher each turn, call and result, in order and in these 
     .map(({ kind, name, ok, text }) => [kind, name, ok, text].filter((part) => part !== undefined));
   expect(told).toEqual([
     ["notice", "tools picked before the run: echo__add"],
+    // A step run on its own names no exchange; a flow names each one after its step.
+    ["exchange", ""],
     ["turn", "turn 1"],
     ["tool-call", "echo__add", '{"a":1,"b":2}'],
     ["tool-result", "echo__add", true, 'add({"a":1,"b":2})'],
@@ -194,6 +196,7 @@ test("a run tells its watcher each turn, call and result, in order and in these 
     ["tool-call", "echo__ping", "{}"],
     ["tool-result", "echo__ping", true, "ping({})"],
     ["turn", "turn 4"],
+    ["exchange-end", true],
   ]);
   const answer = events.flatMap((event) => (event.kind === "output" ? [event.text] : []));
   expect(answer.join("")).toBe("3, and pong");

@@ -1,4 +1,4 @@
-import { exportCapabilities, resetAll } from "@cubicecho/agent-core";
+import { CAPABILITY_SNAPSHOT_VERSION, exportCapabilities, resetAll } from "@cubicecho/agent-core";
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from "vitest";
 import { completion, replyWith } from "./fixtures/sse.ts";
 import { dataDir, type FakeModel, fakeModel, useModel } from "./helpers.ts";
@@ -95,7 +95,7 @@ test("a snapshot this version cannot read is ignored and then overwritten", asyn
 
   await runOnce();
   expect(asked).toEqual([true, false]);
-  expect((await stored())?.snapshot).toMatchObject({ version: 1 });
+  expect((await stored())?.snapshot).toMatchObject({ version: CAPABILITY_SNAPSHOT_VERSION });
 });
 
 test("a latch older than the maximum age is forgotten on restore", async () => {

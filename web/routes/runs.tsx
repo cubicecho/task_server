@@ -26,8 +26,10 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Play, RefreshCw, RotateCcwClock, Square, Trash2, X } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
 import {
   ANY,
@@ -131,6 +133,7 @@ function HookNotes({ notes }: { notes: unknown }) {
  * decision took is spelled out, which is the thing you open a branching run to find out.
  */
 function RunSteps({ steps }: { steps: readonly RunStep[] }) {
+  const toast = useToast();
   return (
     <ol className="flex flex-col gap-3">
       {steps.map((step) => (
@@ -149,6 +152,18 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
             ) : null}
             {step.totalTokens ? (
               <span className="text-foreground/60 text-xs">{step.totalTokens} tokens</span>
+            ) : null}
+            {/* What the agent did inside the step is the router's record, and this is its key. */}
+            {step.remoteRunId ? (
+              <span className="flex items-center gap-1 font-mono text-foreground/60 text-xs">
+                ai-router run {step.remoteRunId}
+                <CopyButton
+                  value={step.remoteRunId}
+                  label="Copy the ai-router run id"
+                  size="icon-xs"
+                  onError={() => toast("Could not copy. Select the id and copy it by hand.")}
+                />
+              </span>
             ) : null}
           </div>
           <ToolChips calls={step.toolCalls} />

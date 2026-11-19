@@ -295,6 +295,13 @@ export const runSteps = pgTable(
     promptTokens: integer().notNull().default(0),
     completionTokens: integer().notNull().default(0),
     totalTokens: integer().notNull().default(0),
+    /**
+     * The ai-router run that answered, where the step ran on one of its agents. The agent's own
+     * tool calls, its thinking and its compaction happen there, and this server's run events are
+     * gone a minute after the run, so the router's `GET /runs/<id>` is where that detail lasts.
+     * Empty for a step on a plain model.
+     */
+    remoteRunId: text().notNull().default(""),
   },
   (table) => [index("run_steps_run_idx").on(table.runId)],
 );

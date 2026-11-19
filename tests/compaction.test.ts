@@ -100,7 +100,7 @@ beforeAll(async () => {
     env: { MCP_ECHO_CALL_LOG: callLog },
     hooks: [
       { id: "fold", on: "beforeCompact", tool: "ping" },
-      { id: "after", on: "afterTurn", tool: "add", args: { a: 1, b: 2 } },
+      { id: "after", on: "afterExchange", tool: "add", args: { a: 1, b: 2 } },
     ],
   });
   await mcp.sync();
@@ -135,7 +135,7 @@ test("a single question's tool loop is folded once it fills the window, and befo
   );
   expect(last?.messages.filter((m) => m.role === "tool").length).toBeLessThan(6);
 
-  // The hook ran once, through the loop, and nothing it did failed. `afterTurn` is still fired by
+  // The hook ran once, through the loop, and nothing it did failed. `afterExchange` is still fired by
   // `hooks.ts` alone: handing the loop the hooks must not have it fire a second time.
   expect(calls().filter((call) => call.name === "ping")).toHaveLength(1);
   expect(calls().filter((call) => call.name === "add")).toHaveLength(1);

@@ -39,3 +39,9 @@ mutation UpdateSettings($set: UpdateSettingInput!) {
 mutation SetApiKey($apiKey: String!) {
   setApiKey(apiKey: $apiKey)
 }
+
+# The models on that same endpoint that are ai-router agents, so the picker can mark them and a
+# profile's form can leave out the settings such an agent keeps for itself.
+query AgentModels($agentId: String) {
+  agentModels(agentId: $agentId)
+}

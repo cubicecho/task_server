@@ -97,7 +97,7 @@ export interface HookSessionOptions {
 /**
  * One run's hooks, from its first step to its end.
  *
- * Kept as an object rather than free calls because `end` has to wait for the `afterTurn` calls
+ * Kept as an object rather than free calls because `end` has to wait for the `afterExchange` calls
  * the steps did not: a memory server told the session is over before it was told the last turn
  * would file them out of order.
  */
@@ -131,7 +131,9 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
      */
     before(step: HookStep, signal?: AbortSignal, onEvent?: (event: RunEventInput) => void) {
       const events: HookEvent[] =
-        step.index === 0 ? [HookEvent.SessionStart, HookEvent.BeforeTurn] : [HookEvent.BeforeTurn];
+        step.index === 0
+          ? [HookEvent.SessionStart, HookEvent.BeforeExchange]
+          : [HookEvent.BeforeExchange];
       const context: HookContext = {
         ...contextFor(step),
         prompt: step.prompt,
@@ -156,7 +158,7 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
         reply,
         turn: { index: step.index, messages: exchange(step, reply) },
       };
-      const done = notify(run, HookEvent.AfterTurn, context, (note) =>
+      const done = notify(run, HookEvent.AfterExchange, context, (note) =>
         onEvent?.({ kind: RunEventKind.Notice, text: describe(note) }),
       ).then(async (notes) => {
         if (!notes.length) {
@@ -167,32 +169,33 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
           .set({ hooks: appended(runSteps.hooks, notes) })
           .where(eq(runSteps.id, rowId));
       });
-      pending.push(done.catch((error: unknown) => log(`afterTurn: ${errorMessage(error)}`)));
+      pending.push(done.catch((error: unknown) => log(`afterExchange: ${errorMessage(error)}`)));
     },
 
     /**
      * The step's hooks as the loop takes them, for the one event it fires on this host's behalf:
      * `beforeCompact`, told what is about to be summarised away.
      *
-     * Everything else is filtered out of the runner, because `before` and `after` already fire
-     * `beforeTurn` and `afterTurn` around the whole step, and the loop would otherwise fire them a
-     * second time. `offset` numbers the step's messages from where `exchange` lays them, so a
-     * folded message reaches a memory server under the uuid its `afterTurn` will use. What fails
-     * is told to `onNote` and kept on the step's row with the rest.
+     * `fire` names it alone, because `before` and `after` already fire `beforeExchange` and
+     * `afterExchange` around the whole step, and the loop would otherwise fire them a second time;
+     * the runner refuses the rest as well, so a loop that fired more would still reach no server.
+     * `offset` numbers the step's messages from where `exchange` lays them, so a folded message
+     * reaches a memory server under the uuid its `afterExchange` will use. What fails is told to
+     * `onNote` and kept on the step's row with the rest.
      */
     compaction(step: HookStep, onNote: (note: HookNote) => void): AgentLoopHooks {
       return {
         run: (event, context, options) =>
           event === HookEvent.BeforeCompact ? run(event, context, options) : Promise.resolve([]),
         context: { ...contextFor(step), prompt: step.prompt, turn: { index: step.index } },
-        events: [],
+        fire: [HookEvent.BeforeCompact],
         offset: step.index * 2,
         onNote,
       };
     },
 
     /**
-     * The run is over. Waits for the steps' `afterTurn` calls, then fires `sessionEnd` and keeps
+     * The run is over. Waits for the steps' `afterExchange` calls, then fires `sessionEnd` and keeps
      * what failed on the run row. Never rejects: it is called once the run's outcome is already
      * written, and nobody is waiting on it.
      */

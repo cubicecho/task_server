@@ -87,7 +87,7 @@ test("a finished run has its metrics on the row", async () => {
 
   const [row] = await client.db.select().from(tables.runs).where(eq(tables.runs.id, run.id));
   expect(row.metrics).toMatchObject({
-    steps: 1,
+    exchanges: 1,
     turns: 3,
     requests: 3,
     toolCalls: 2,

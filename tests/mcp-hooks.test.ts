@@ -9,7 +9,7 @@ test("the placeholder is a hook the form accepts", () => {
 test("reports the pool's first problem", () => {
   expect(hooksProblem("[")).toMatch(/valid JSON/);
   expect(hooksProblem("{}")).toMatch(/must be a list/);
-  expect(hooksProblem(JSON.stringify([{ id: "a", on: "beforeTurn" }]))).toMatch(/needs a tool/);
+  expect(hooksProblem(JSON.stringify([{ id: "a", on: "beforeExchange" }]))).toMatch(/needs a tool/);
   expect(
     hooksProblem(JSON.stringify([{ id: "a", on: "sessionEnd", tool: "t", inject: true }])),
   ).toMatch(/can inject/);

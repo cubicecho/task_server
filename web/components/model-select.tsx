@@ -5,6 +5,7 @@ import { Combobox } from "@/components/combobox";
 import { Button } from "@/components/ui/button";
 import { List } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
+import { useAgentModels } from "@/lib/agent-models";
 import { request } from "@/lib/gql";
 import type { SelectEntry } from "@/lib/select-options";
 
@@ -61,6 +62,7 @@ export function ModelSelect({
     retry: false,
     staleTime: 60_000,
   });
+  const agents = useAgentModels(agentId, opened);
 
   if (typing) {
     return (
@@ -88,7 +90,13 @@ export function ModelSelect({
 
   const options: SelectEntry[] = [
     ...(defaultLabel ? [{ value: DEFAULT, label: defaultLabel }] : []),
-    ...names.map((name) => ({ value: name, label: name, className: "font-mono" })),
+    ...names.map((name) => ({
+      value: name,
+      label: name,
+      className: "font-mono",
+      // An agent runs a loop of its own on the router, which is a different thing to pick.
+      meta: agents.has(name) ? "ai-router agent" : undefined,
+    })),
     ...(models.isFetching && names.length === 0 ? [{ note: "Loading…" }] : []),
     ...(models.error ? [{ note: models.error.message, className: "text-negative text-xs" }] : []),
     { separator: true },

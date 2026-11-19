@@ -70,8 +70,8 @@ export const COLUMN_DOCS: ColumnDocs = {
     maxRetries: "Retries of a request that failed before answering. `-1` inherits; `0` is none.",
     mcpServerIds:
       "Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty " +
-      "or absent is every enabled server. Tools outside the list cannot be called, not just " +
-      "not offered.",
+      "or absent is every enabled server, except on an ai-router agent, where it is none. " +
+      "Tools outside the list cannot be called, not just not offered.",
   },
 
   tasks: {
@@ -154,6 +154,9 @@ export const COLUMN_DOCS: ColumnDocs = {
     hooks:
       "What MCP hooks did around this step, as JSON: the context each added to the prompt, and " +
       "each that failed. A hook that worked and added nothing is not listed.",
+    remoteRunId:
+      "The ai-router run that answered, where the step ran on one of its agents: the id its " +
+      "`/runs/<id>` reads. Empty for a step on a plain model.",
   },
 
   mcpServers: {
@@ -173,7 +176,7 @@ export const COLUMN_DOCS: ColumnDocs = {
       "tool names. Its hooks can still call them — a memory server's `remember`, say.",
     hooks:
       "Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. " +
-      "`on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or " +
+      "`on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or " +
       "`sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), " +
       "`{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.",
   },

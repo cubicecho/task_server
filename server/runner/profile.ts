@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Agent, agents, type Settings, type Task } from "../db/schema.ts";
 import { loadSettings } from "./llm.ts";
+import { isRemoteAgent, NO_SERVERS } from "./remote-agent.ts";
 
 /**
  * What a run is configured with: the settings row, with a task's agent laid over it.
@@ -18,6 +19,12 @@ export interface RunConfig {
    * pool's own answer, and what every run got before profiles existed.
    */
   servers?: ReadonlySet<string>;
+  /**
+   * Whether the run's model is an ai-router agent (see `remote-agent.ts`). Such a run reaches no
+   * MCP server it was not pointed at: the agent has its own, and an unnarrowed scope here would
+   * hand it every server this one dials as tools of the app's.
+   */
+  remote: boolean;
 }
 
 /** The one id both rows write their system prompt under, so a profile's replaces the server's. */
@@ -164,17 +171,22 @@ export const resolveServers = (agent?: Agent | null): ReadonlySet<string> | unde
 /**
  * Everything the runner needs to run this task, read at the moment the run starts.
  *
+ * A run whose model is an ai-router agent is scoped to the servers its profile names, and to none
+ * where it names none: the one place an empty list does not mean every server.
+ *
  * Read now rather than held: settings and profiles are both editable while the server is up,
  * and a run should use what they say when it begins. A task naming an agent that has since been
  * deleted is a null `agentId` by then — the foreign key sees to that — so this cannot fail to
  * find one.
  */
-export async function configForTask(task: Task): Promise<RunConfig> {
+export async function configForTask(task: Task, signal?: AbortSignal): Promise<RunConfig> {
   const settings = await loadSettings();
-  if (!task.agentId) {
-    return { config: settings };
-  }
-
-  const [agent] = await db.select().from(agents).where(eq(agents.id, task.agentId)).limit(1);
-  return { config: resolveConfig(settings, agent), servers: resolveServers(agent) };
+  const [agent] = task.agentId
+    ? await db.select().from(agents).where(eq(agents.id, task.agentId)).limit(1)
+    : [];
+  const config = resolveConfig(settings, agent);
+  const servers = resolveServers(agent);
+  // The listing is asked on the run's signal: a stop is a stop before the first request too.
+  const remote = await isRemoteAgent(config, task.model || config.model, signal);
+  return { config, servers: remote ? (servers ?? NO_SERVERS) : servers, remote };
 }

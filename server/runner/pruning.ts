@@ -1,8 +1,8 @@
 import {
-  COMPACT_AT,
+  COMPACTION_DEFAULTS,
   messageTokens,
   pruneToolResults,
-  type StepWindow,
+  type TurnWindow,
 } from "@cubicecho/agent-core";
 import type OpenAI from "openai";
 
@@ -29,7 +29,7 @@ export interface Pruned {
  * them is worth it — `undefined` otherwise, which is the loop's "keep what you have".
  *
  * agent-core's `pruneToolResults` rewrites the prefix, and a prefix that changes is a prompt cache
- * that misses, so this runs where `planCompaction` would and no sooner: past `COMPACT_AT` of a
+ * that misses, so this runs where `planCompaction` would and no sooner: past `COMPACTION_DEFAULTS.compactAtShare` of a
  * window the endpoint reported. A run keeps no transcript beyond its step, so the stubs stay in
  * the loop's own array and the next request extends this one; it is not re-pruned until the
  * window fills again. A prune that would clear less than `PRUNE_SHARE` of the window is not done
@@ -42,14 +42,14 @@ export interface Pruned {
  */
 export function pruneWhenFilling(
   messages: readonly Message[],
-  { used, limit }: Pick<StepWindow, "used" | "limit">,
+  { used, limit }: Pick<TurnWindow, "used" | "limit">,
 ): Pruned | undefined {
   if (!(limit > 0)) {
     return undefined;
   }
   const given = messages as Message[];
   const estimate = given.reduce((total, message) => total + messageTokens(message), 0);
-  if (Math.max(used ?? 0, estimate) < limit * COMPACT_AT) {
+  if (Math.max(used ?? 0, estimate) < limit * COMPACTION_DEFAULTS.compactAtShare) {
     return undefined;
   }
   const pruned = pruneToolResults(given);
