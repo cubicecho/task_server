@@ -26,8 +26,8 @@ import { mcp } from "./mcp.ts";
  * and `beforeCompact` when a step's transcript is folded — which only a step on a compaction
  * model ever is. The loop fires `beforeCompact` and `afterExchange` rather than this file (see
  * `loop`); `sessionStart` and `beforeExchange` are gathered here, ahead of the step's request, so
- * the context goes on the question before the loop sees it. A skipped or queued run fires nothing, and `{{vars.task.id}}` is the key for memory that should outlast one
- * run.
+ * the context goes on the question before the loop sees it. A skipped or queued run fires
+ * nothing, and `{{vars.task.id}}` is the key for memory that should outlast one run.
  */
 
 /** Every hook's `{{host}}`, so a server shared with min-agent can tell the two apart. */
