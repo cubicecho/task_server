@@ -465,7 +465,7 @@ async function execute({
   try {
     // The settings row, with the task's agent profile laid over it — endpoint, model and every
     // ceiling. A task with no profile gets the row itself, which is what every run used to get.
-    const { config, servers } = await configForTask(task);
+    const { config, servers } = await configForTask(task, controller.signal);
     hooks = hookSession({ runId: run.id, task, triggerId: run.triggerId, servers });
     const result = await runFlow({
       runId: run.id,

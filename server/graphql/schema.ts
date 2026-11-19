@@ -27,7 +27,7 @@ import {
   triggers,
 } from "../db/schema.ts";
 import { hookProblems, runsDeleted } from "../runner/hooks.ts";
-import { listModels, loadSettings } from "../runner/llm.ts";
+import { listAgentModels, listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
 import * as mcpPrompts from "../runner/mcp-prompts.ts";
 import * as mcpResources from "../runner/mcp-resources.ts";
@@ -471,6 +471,30 @@ const baseSchema = new GraphQLSchema({
             .where(eq(agents.id, args.agentId))
             .limit(1);
           return listModels(resolveConfig(await loadSettings(), agent));
+        },
+      },
+      agentModels: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))),
+        description:
+          "Which of `models` the endpoint marks as ai-router agents — models that run a loop of " +
+          "their own, with their own tools and compaction. A step on one reaches only the MCP " +
+          "servers its profile names. Empty for an endpoint that is not an ai-router.",
+        args: {
+          agentId: {
+            type: GraphQLString,
+            description: "Ask this agent profile's endpoint. Omit for the server's own.",
+          },
+        },
+        resolve: async (_source, args: { agentId?: string | null }) => {
+          if (!args.agentId) {
+            return listAgentModels();
+          }
+          const [agent] = await db
+            .select()
+            .from(agents)
+            .where(eq(agents.id, args.agentId))
+            .limit(1);
+          return listAgentModels(resolveConfig(await loadSettings(), agent));
         },
       },
       agentSpec: {

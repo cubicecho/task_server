@@ -1,9 +1,9 @@
 import {
   type AgentLoopHooks,
-  COMPACT_AT,
+  COMPACTION_DEFAULTS,
   contextLimitFor,
   type HookNote,
-  PRUNE_SHARE,
+  PRUNE_DEFAULTS,
   type RunArtifact,
   type RunEventInput,
   RunEventKind,
@@ -16,6 +16,7 @@ import type { Settings } from "../db/schema.ts";
 import { declineUnattended } from "./elicitations.ts";
 import { mcp } from "./mcp.ts";
 import { replayPolicy } from "./profile.ts";
+import { isRemoteAgent, NO_SERVERS } from "./remote-agent.ts";
 
 /** What a step produced and what it cost — and, summed over its steps, what a whole flow did. */
 export interface AgentResult {
@@ -30,16 +31,23 @@ export interface AgentResult {
    */
   artifacts: RunArtifact[];
   /**
-   * The step's `afterTurn` hooks, which the loop fires once it has the answer and does not wait
+   * The step's `afterExchange` hooks, which the loop fires once it has the answer and does not wait
    * for: what failed, for `HookSession.after` to keep on the step's row. Resolved and empty
    * without `hooks`.
    */
-  afterTurn: Promise<HookNote[]>;
+  afterExchange: Promise<HookNote[]>;
   /**
    * How many messages the step's transcript ended with, question included. The next step's
    * question is numbered after them in the uuids a hook is told — see `HookStep.at`.
    */
   messageCount: number;
+  /**
+   * The run on the ai-router that answered, where the step ran on one of its agents: the id its
+   * `GET /runs/<id>` reads, and the only lasting record of what the agent did inside the step.
+   */
+  remoteRunId?: string;
+  /** Whether the step ran on an ai-router agent. See `remote-agent.ts`. */
+  remote?: boolean;
 }
 
 export interface AgentOptions {
@@ -47,6 +55,11 @@ export interface AgentOptions {
   model: string;
   systemPrompt: string;
   prompt: string;
+  /**
+   * The flow step this is, by name. The loop opens and closes the step with `exchange` and
+   * `exchange-end` under it, which are the boundaries a watcher groups a run by.
+   */
+  exchange?: string;
   /**
    * What the MCP servers' hooks added for this step — `<context>` blocks from `hooks.ts`. Put in
    * front of the prompt in the request only: tool preselection reads the prompt as written.
@@ -96,6 +109,7 @@ export async function runAgent({
   model,
   systemPrompt,
   prompt,
+  exchange,
   context = "",
   servers,
   signal,
@@ -115,121 +129,168 @@ export async function runAgent({
     onEvent?.({ kind: RunEventKind.Notice, text });
   };
 
-  const catalog = mcp.catalog(servers);
+  // An agent behind the endpoint runs its own loop, and the step is a thin client of it: its
+  // window, compaction, pruning and tool loading are the agent's, and it reaches only the servers
+  // it was pointed at. See `remote-agent.ts`.
+  const remote = await isRemoteAgent(config, model, signal);
+  const scope = remote ? (servers ?? NO_SERVERS) : servers;
+
+  const catalog = mcp.catalog(scope);
   // Whether a call only reads, by the tool's own `readOnlyHint` on a row that sets
   // `trustAnnotations`. Fails closed: anything the pool cannot vouch for is a write.
-  const reads = (call: ToolCallRequest) => mcp.readsOnly(call.name, { servers });
+  const reads = (call: ToolCallRequest) => mcp.readsOnly(call.name, { servers: scope });
 
   // What the model will read, so a request that cannot fit is refused here with its size rather
   // than by the endpoint a round trip later. Zero where the endpoint does not say, or not within
   // agent-core's own bound on the lookup, which guards nothing; a stop ends the wait with the run.
-  const contextLength = await contextLimitFor({ ...config, model }, 0, { signal });
+  // An agent's window is its own business, and the guard is set aside on one anyway.
+  const contextLength = remote ? 0 : await contextLimitFor({ ...config, model }, 0, { signal });
 
-  const { turn, toolCalls, usage, artifacts, afterTurn, messages } = await runAgentLoop({
-    // A step may run on a model other than the settings row's. The first token gets the same
-    // patience as every one after it, where the loop would otherwise wait five times as long.
-    config: {
-      ...config,
-      model,
-      contextLength,
-      firstTokenSeconds: config.requestTimeoutSeconds,
-      reasoningReplay: replayPolicy(config.reasoningReplay),
-      // On the run's own endpoint, and only when a model is named: the loop has no fallback to
-      // the main model, so an empty column leaves `compact` with nothing to summarise with.
-      ...(config.compactionModel
-        ? { tasks: { compaction: { model: config.compactionModel, endpoint: config } } }
-        : {}),
-    },
-    system: systemPrompt,
-    // The context goes on the step's one question and stays there for the step's whole loop: a
-    // run keeps no transcript, so there is no stored message it could leak into. What is said
-    // above it is set once in `hooks.ts`, which is the only place a context comes from.
-    messages: withContext([{ role: "user", content: prompt }], 0, context),
-    tools: mcp.tools({ servers }),
-    catalog,
-    // On demand, the loop asks the tool-selection model — the step's own where none is set — which
-    // tools the prompt needs, and says what it picked in a notice. It is asked the prompt as
-    // written: the hooks' context is already on `messages`, and tools picked for what memory
-    // recalled are tools for a question nobody asked. Guessing wrong is cheap — an unused
-    // definition costs a few hundred tokens for one run, and the model can still load what it
-    // actually wanted.
-    preselect: true,
-    preselectQuery: prompt,
-    // A decision, not a default nobody looked at. Sorted by name, a tool loaded on demand lands
-    // mid-array and moves every definition after it, where unsorted it is appended and the
-    // prefix an endpoint cached still matches.
-    toolOrder: false,
-    // Two identical calls in one step are two calls — a counter or a "next page" is meant to
-    // answer differently the second time — unless the tool is a read on a server whose
-    // annotations the operator trusts, which is neither.
-    dedupeToolCalls: reads,
-    // The operator's call, since only they know whether their tools write: results still go back
-    // in the order the model asked, but two writes run together land in the order they finish.
-    // `auto` asks the pool per call, and a call it cannot vouch for runs alone, in order.
-    parallel: config.toolExecution === "auto" ? reads : config.toolExecution === "parallel",
-    // Read off `catalog`, which is passed in every mode. The block is the same text on every
-    // request of the step, so past the first it is prompt the endpoint has cached.
-    serverInstructions: config.serverInstructions,
-    ...(session ? { session } : {}),
-    maxContinuations: MAX_CONTINUATIONS,
-    // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
-    // report a window, since there is nothing to plan three quarters of.
-    compact: Boolean(config.compactionModel),
-    // `beforeCompact` and `afterTurn`, never the injecting events: see `loop` in `hooks.ts`.
-    ...(hooks ? { hooks } : {}),
-    // Needs no model, so it is on wherever the window is known. Old tool results are stubbed
-    // past `COMPACT_AT` of the window, and only for at least `PRUNE_SHARE` of it: the stubs
-    // rewrite the prefix, and a prune that wins back a few hundred tokens costs the endpoint its
-    // cache of everything after them. It runs ahead of the fold, which then plans from what is
-    // left, so a prune that brings the run back under the line spares it the summary's round
-    // trip. Each one is said as a notice.
-    prune: { at: COMPACT_AT, minShare: PRUNE_SHARE },
-    // The loop hands each call the run's signal. Passed on, a stop sends the server the
-    // protocol's `notifications/cancelled` and the call rejects at once; dropped, the tool ran to
-    // its end or the call timeout, and a write the person stopped still landed.
-    //
-    // `links` answers with the text the model reads and, beside it, the result's `resource_link`s,
-    // which the loop collects as the step's artifacts. The text is what a plain call returns, so
-    // the model is told exactly what it was told before.
-    //
-    // `onLog` hands what the server logs during the call to the loop, which makes each message a
-    // `server-log` event under the call's id — for the watcher, never the transcript. The pool
-    // can only tell a message is this call's when it is the one request in flight on that
-    // connection, so beside a parallel call or a hook on the same server it is not heard here.
-    //
-    // `onElicit` answers a server that stops mid-call to ask for something, and it is attributed
-    // the same way: a question the pool cannot tie to this call goes to no handler and is declined
-    // by the pool, unnoted. Either way the answer is `decline` — see `elicitations.ts`.
-    dispatch: (call, callSignal, report) =>
-      mcp.call(call.name, call.args, {
-        servers,
-        signal: callSignal,
-        links: true,
-        onLog: report.log,
-        onElicit: declineUnattended(call.name, (note) => {
-          notice(describeElicitation(note));
-          onElicitation?.(note);
+  /** The agent's own calls, as its progress tells them, by id, in the order they were made. */
+  const agentCalls = new Map<string, { name: string; ok?: boolean }>();
+
+  const { turn, toolCalls, usage, artifacts, afterExchange, messages, remoteRunId } =
+    await runAgentLoop({
+      config: remote
+        ? {
+            // The sampling is sent: the profile and the settings row are where an operator says
+            // what a step should run at, and an agent's override policy is the router's to set.
+            ...config,
+            model,
+            remoteAgent: true,
+            toolDiscovery: "eager",
+            firstTokenSeconds: config.requestTimeoutSeconds,
+            reasoningReplay: replayPolicy(config.reasoningReplay),
+          }
+        : {
+            // A step may run on a model other than the settings row's. The first token gets the
+            // same patience as every one after it, where the loop would otherwise wait five times
+            // as long.
+            ...config,
+            model,
+            contextLength,
+            firstTokenSeconds: config.requestTimeoutSeconds,
+            reasoningReplay: replayPolicy(config.reasoningReplay),
+            // On the run's own endpoint, and only when a model is named: the loop has no fallback
+            // to the main model, so an empty column leaves `compact` with nothing to summarise with.
+            ...(config.compactionModel
+              ? { tasks: { compaction: { model: config.compactionModel, endpoint: config } } }
+              : {}),
+          },
+      system: systemPrompt,
+      // The context goes on the step's one question and stays there for the step's whole loop: a
+      // run keeps no transcript, so there is no stored message it could leak into. What is said
+      // above it is set once in `hooks.ts`, which is the only place a context comes from.
+      messages: withContext([{ role: "user", content: prompt }], 0, context),
+      tools: mcp.tools({ servers: scope }),
+      catalog,
+      // On demand, the loop asks the tool-selection model — the step's own where none is set — which
+      // tools the prompt needs, and says what it picked in a notice. It is asked the prompt as
+      // written: the hooks' context is already on `messages`, and tools picked for what memory
+      // recalled are tools for a question nobody asked. Guessing wrong is cheap — an unused
+      // definition costs a few hundred tokens for one run, and the model can still load what it
+      // actually wanted.
+      // Never on an agent: its endpoint lists agents, and the tool-select model is not one of them.
+      preselect: !remote,
+      preselectQuery: prompt,
+      // A decision, not a default nobody looked at. Sorted by name, a tool loaded on demand lands
+      // mid-array and moves every definition after it, where unsorted it is appended and the
+      // prefix an endpoint cached still matches.
+      toolOrder: false,
+      // Two identical calls in one step are two calls — a counter or a "next page" is meant to
+      // answer differently the second time — unless the tool is a read on a server whose
+      // annotations the operator trusts, which is neither.
+      dedupeToolCalls: reads,
+      // The operator's call, since only they know whether their tools write: results still go back
+      // in the order the model asked, but two writes run together land in the order they finish.
+      // `auto` asks the pool per call, and a call it cannot vouch for runs alone, in order.
+      parallel: config.toolExecution === "auto" ? reads : config.toolExecution === "parallel",
+      // Read off `catalog`, which is passed in every mode. The block is the same text on every
+      // request of the step, so past the first it is prompt the endpoint has cached.
+      serverInstructions: config.serverInstructions,
+      ...(session ? { session } : {}),
+      // Neither is the step's to do on an agent, and the loop would only say it set them aside.
+      ...(remote ? {} : { maxContinuations: MAX_CONTINUATIONS }),
+      // Off unless a compaction model is set, as in min-agent. Also inert where the endpoint did not
+      // report a window, since there is nothing to plan three quarters of.
+      compact: !remote && Boolean(config.compactionModel),
+      // `beforeCompact` and `afterExchange`, never the injecting events: see `loop` in `hooks.ts`.
+      ...(hooks ? { hooks } : {}),
+      // Needs no model, so it is on wherever the window is known. Old tool results are stubbed
+      // past `COMPACTION_DEFAULTS.compactAtShare` of the window, and only for at least
+      // `PRUNE_DEFAULTS.minShare` of it: the stubs
+      // rewrite the prefix, and a prune that wins back a few hundred tokens costs the endpoint its
+      // cache of everything after them. It runs ahead of the fold, which then plans from what is
+      // left, so a prune that brings the run back under the line spares it the summary's round
+      // trip. Each one is said as a notice.
+      prune: remote
+        ? false
+        : { at: COMPACTION_DEFAULTS.compactAtShare, minShare: PRUNE_DEFAULTS.minShare },
+      // The loop hands each call the run's signal. Passed on, a stop sends the server the
+      // protocol's `notifications/cancelled` and the call rejects at once; dropped, the tool ran to
+      // its end or the call timeout, and a write the person stopped still landed.
+      //
+      // `links` answers with the text the model reads and, beside it, the result's `resource_link`s,
+      // which the loop collects as the step's artifacts. The text is what a plain call returns, so
+      // the model is told exactly what it was told before.
+      //
+      // `onLog` hands what the server logs during the call to the loop, which makes each message a
+      // `server-log` event under the call's id — for the watcher, never the transcript. The pool
+      // can only tell a message is this call's when it is the one request in flight on that
+      // connection, so beside a parallel call or a hook on the same server it is not heard here.
+      //
+      // `onElicit` answers a server that stops mid-call to ask for something, and it is attributed
+      // the same way: a question the pool cannot tie to this call goes to no handler and is declined
+      // by the pool, unnoted. Either way the answer is `decline` — see `elicitations.ts`.
+      dispatch: (call, callSignal, report) =>
+        mcp.call(call.name, call.args, {
+          servers: scope,
+          signal: callSignal,
+          links: true,
+          onLog: report.log,
+          onElicit: declineUnattended(call.name, (note) => {
+            notice(describeElicitation(note));
+            onElicitation?.(note);
+          }),
         }),
-      }),
-    signal,
-    onEvent: (event) => {
-      if (event.kind === RunEventKind.Notice) {
-        console.warn(`[agent] ${event.text}`);
-      }
-      onEvent?.(event);
-    },
-  });
+      ...(exchange ? { exchange } : {}),
+      signal,
+      onEvent: (event) => {
+        if (event.kind === RunEventKind.Notice) {
+          console.warn(`[agent] ${event.text}`);
+        }
+        // An agent's progress carries its own `seq`, and tells every call it made — its own and the
+        // ones it handed back — which the step's row would otherwise only have the second half of.
+        if ("seq" in event && event.id) {
+          if (event.kind === RunEventKind.ToolCall && !agentCalls.has(event.id)) {
+            agentCalls.set(event.id, { name: event.name ?? "" });
+          }
+          const call = agentCalls.get(event.id);
+          if (event.kind === RunEventKind.ToolResult && call) {
+            call.ok = event.ok !== false;
+          }
+        }
+        onEvent?.(event);
+      },
+    });
+
+  // On an agent, its progress is the whole story where there is any; a call it handed back that
+  // the progress never told is added after, so nothing the step ran goes unrecorded.
+  const told = [...agentCalls].map(([id, { name, ok }]) => ({ id, name, ok: ok ?? false }));
+  const known = new Set(told.map((call) => call.id));
+  const calls = [...told, ...toolCalls.filter((call) => !call.id || !known.has(call.id))];
 
   return {
     output: turn.content,
     // `load_tools` is recorded alongside the real calls: the run history is what the task
     // actually did, and "spent three steps loading tools" is part of that.
-    toolCalls: toolCalls.map(({ name, ok }) => ({ name, ok })),
-    promptTokens: usage.prompt,
-    completionTokens: usage.completion,
-    totalTokens: usage.total,
+    toolCalls: calls.map(({ name, ok }) => ({ name, ok })),
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    totalTokens: usage.totalTokens,
     artifacts,
-    afterTurn,
+    afterExchange,
     messageCount: messages.length,
+    ...(remote ? { remote, ...(remoteRunId ? { remoteRunId } : {}) } : {}),
   };
 }

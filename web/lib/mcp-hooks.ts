@@ -11,7 +11,7 @@ export const HOOK_PLACEHOLDER = JSON.stringify(
   [
     {
       id: "recall",
-      on: "beforeTurn",
+      on: "beforeExchange",
       tool: "recall",
       args: { query: "{{prompt}}", scope: "{{vars.task.id}}" },
       inject: true,

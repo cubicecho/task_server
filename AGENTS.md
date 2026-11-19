@@ -416,6 +416,35 @@ Profiles are the operator's on both sides: they carry an endpoint, a key and the
 which is the settings row's own argument. `agentId` on a task stays readable, so an agent on
 `/mcp` can see that a task runs on a profile without being able to read or choose one.
 
+**A step on an ai-router agent is a thin client of it.** ai-router serves agents at `/v1`, the
+agent's name as the model, and marks each on `GET /models` with `"ai_router": { "kind": "agent"
+}`. `server/runner/remote-agent.ts` reads that mark once per endpoint, key and model — a copy of
+min-agent's until agent-core reads it
+([agent-core#238](https://github.com/cubicecho/agent-core/issues/238)), when the file goes — and
+`runAgent` then runs the loop under `remoteAgent: true`. The agent keeps its own tools,
+compaction, pruning, tool loading and context window, so no preselection, compaction model or
+window lookup is asked of an endpoint that serves agents and no plain model. The sampling and the
+system prompt are sent as for any step: the system prompt becomes the agent's `host` prompt part.
+
+Such a run reaches only the MCP servers its profile names, and **none where it names none** —
+the one place an empty `mcpServerIds` is not every server, since every server this one dials
+would otherwise reach the agent as tools of the app's. `configForTask` narrows the hook session
+the same way, and `runAgent` checks again per step, for a step whose model is an agent on a
+profile that is not. A server that is named reaches the agent as app tools, handed back to run
+here through `mcp.call`.
+
+What the agent did lives on the router. Its progress events are forwarded to the run's bus (each
+carries its own `seq`), its own tool calls are added to the step's `toolCalls` from them, and
+`run_steps.remoteRunId` keeps the router's run id, which the run page shows. A decision answered
+in prose is read back on the settings row's own endpoint instead, and goes straight to `default`
+when that is an agent too. The listing is asked on the run's signal, so a stop is a stop before
+the first request as well. Known gaps: a stop ends this server's loop but not the router's run,
+which an `Idempotency-Key` keeps alive until ai-router has a cancel
+([ai-router#27](https://github.com/cubicecho/ai-router/issues/27)); and the silence watchdog
+does not see the router's keep-alive comments
+([agent-core#239](https://github.com/cubicecho/agent-core/issues/239)), so a router profile
+wants a generous `requestTimeoutSeconds`.
+
 **A profile leaves and arrives as an agent spec, and the columns are still the only copy.**
 `agentSpec` writes one as a `cubicecho.agent/1` document and `importAgentSpec` reads one back,
 with `agentSpecPreview` answering what the write would do, from the same three arguments and
@@ -494,7 +523,7 @@ fields are the operator's and not in `TOOLS`. The free-text blank with suggestio
 `web/components/completion-field.tsx`, shared by both pickers.
 
 `server/runner/prompt-resources.ts` reads them as a step starts, inside `execute`'s `try` and
-before the hooks, so a failure is the step's `error` and `beforeTurn` is told the prompt as sent.
+before the hooks, so a failure is the step's `error` and `beforeExchange` is told the prompt as sent.
 Four decisions, each with a test in `tests/prompt-resources.test.ts`: a read goes through
 `readResource` with the profile's `servers`, and a slug outside them is refused in the words of
 a slug that is not there, as `call()` refuses a tool; a failed read fails the step before the
@@ -527,19 +556,19 @@ is the run id, each executed step is a turn (the task's own prompt is turn 0, an
 `sessionDelete` for a run deleted by hand, with its task, or by retention. `beforeCompact`
 fires when a step's transcript is folded, which happens only on a compaction model.
 
-`afterTurn` and `beforeCompact` are the two events the *loop* fires: `HookSession.loop` hands
+`afterExchange` and `beforeCompact` are the two events the *loop* fires: `HookSession.loop` hands
 `runAgentLoop` the run's hooks with `fire: [HookEvent.BeforeCompact, HookEvent.AfterTurn]`,
-leaving out `sessionStart` and `beforeTurn`, which `before` gathers ahead of the request so the
+leaving out `sessionStart` and `beforeExchange`, which `before` gathers ahead of the request so the
 context is on the question before the loop sees it. `question` is the step's prompt as written,
 so a memory server files what was asked rather than what was recalled for it; `turnBase` is the
 step's index, so `turn.index` is its place in the run; and `offset` is `HookStep.at`, the count of
 messages the steps before it ended with, which `flow.ts` keeps from each step's `messageCount`. A
 run keeps no transcript, so that lays the steps end to end as if it kept one, and a folded
-message reaches a memory server under the uuid its `afterTurn` uses. The loop's `turn.messages`
+message reaches a memory server under the uuid its `afterExchange` uses. The loop's `turn.messages`
 is the step's whole exchange — the question, any text the model wrote beside its tool calls, and
 the answer — each at its real position, tool results skipped but keeping their places.
 
-Memory written before 7.20.0 is keyed differently. Until then `afterTurn` was a `notify` written
+Memory written before 7.20.0 is keyed differently. Until then `afterExchange` was a `notify` written
 here, which told a step's prompt at `index * 2` and its answer at `index * 2 + 1` and nothing in
 between; a step that called a tool now puts its answer further on, and the next step's question
 after that. The positions are a message's place in the run either way, but a memory server
@@ -548,23 +577,23 @@ remembered after it. Accepted rather than worked around: the old scheme dropped 
 said beside its calls, and with the loop's real positions a stride of two would put a tool-using
 step's answer where the next step's question is.
 
-The loop does not wait for `afterTurn`; it hands the promise back as `result.afterTurn`, and
+The loop does not wait for `afterExchange`; it hands the promise back as `result.afterExchange`, and
 `HookSession.after` keeps what failed on the step's row once the row is closed — closing writes
-its notes whole, so an earlier append would be overwritten. An `afterTurn` note is therefore only
+its notes whole, so an earlier append would be overwritten. An `afterExchange` note is therefore only
 said on the stream as it lands, and a `beforeCompact` that fails is kept on `run_steps.hooks`
 with the rest. A decision step whose answer could not be read back had still answered, so its
 turn is told and kept as well. `{{vars.task.id}}` is the key for memory that should outlast one
 run.
 
-The host side is agent-core's: `gather` before a step, the loop's `afterTurn` after it, and
+The host side is agent-core's: `gather` before a step, the loop's `afterExchange` after it, and
 `withContext` putting
 what was gathered on the step's question with this server's preface, which `hooks.ts` sets once
 with `configureHooks` rather than passing at each call; the runner each of them is handed is
 the pool's `hookRunner`, bound to the run's MCP scope. What stays here is the
 mapping and the persistence — each hook that injected or failed leaves a note on
 `run_steps.hooks`, and a failed `sessionEnd` on `runs.hooks`, since run events are gone a minute
-later. `afterTurn` and `sessionEnd` are not awaited by the run; `sessionEnd` waits for the steps'
-`afterTurn`s so a memory server hears them in order, and `hooksSettled()` is the test seam.
+later. `afterExchange` and `sessionEnd` are not awaited by the run; `sessionEnd` waits for the steps'
+`afterExchange`s so a memory server hears them in order, and `hooksSettled()` is the test seam.
 
 `hiddenTools` keeps a tool out of every run's listing and still callable by the row's hooks, and
 both columns are checked on write in `vetMcpServer` with the pool's `validateHooks`: a
@@ -678,7 +707,7 @@ step answered in prose is read back with `askJson` against a schema whose only f
 of the step's arms, so the second opinion cannot name a case that does not exist.
 
 **A step that fills its window clears its old tool results first.** That is the loop's `prune`
-option, given `COMPACT_AT` and `PRUNE_SHARE` as its gate: past that share of a window the endpoint
+option, given `COMPACTION_DEFAULTS.compactAtShare` and `PRUNE_DEFAULTS.minShare` as its gate: past that share of a window the endpoint
 reported, every result but the latest five is stubbed, behind a boundary that moves only when
 the window fills again so a request between moves is the last one with its tail added. The fold
 — when a compaction model is set — then plans from what is left, and the boundary moves again
@@ -688,7 +717,7 @@ it become a summary at the head, and the tail resumes at an assistant message.
 `tests/compaction.test.ts` runs both end to end, and it is the only test that would notice a fold
 or a prune that silently never happens — which is what the fold's wiring did for its first release. Both rewrite the prefix and cost the prompt cache,
 which is why neither runs a little on every step, and a prune that would win back less than
-`PRUNE_SHARE` of the window is not done at all. It has no column: it makes no request, so there
+`PRUNE_DEFAULTS.minShare` of the window is not done at all. It has no column: it makes no request, so there
 is nothing for an operator to choose to pay for, and with no window known it is inert like the
 fold.
 
@@ -713,6 +742,13 @@ What is kept of them is `runs.metrics`, agent-core's `runMetrics` over the run's
 `server/runner/metrics.ts` collects as the run emits them rather than reading back off the bus —
 the bus caps a run's backlog and drops its oldest, which is exactly the tool calls a summary
 counts.
+
+agent-core calls a flow step an *exchange*: `runAgentLoop` is handed the step's name as
+`exchange` and opens and closes it with `exchange` and `exchange-end` events of its own, so
+`flow.ts` sends no boundary of its own — one would count every step twice in `runMetrics`.
+`RunEvent` on the GraphQL side keeps this server's word: its `kind` says `step` and `step-end`,
+and its `step` field is the event's `exchange`, so the `run_events` tool and the web stream read
+as they always did.
 
 **What a run made is the `resource_link`s its tools answered with, and nothing else.**
 `dispatch` calls the pool with `links: true`, so the model reads the same text as before and the

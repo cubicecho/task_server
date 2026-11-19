@@ -24,8 +24,8 @@ import { mcp } from "./mcp.ts";
  * task's own prompt being turn 0 with `sessionStart` ahead of it. `sessionEnd` fires once the
  * run has finished, `sessionDelete` for a run deleted by hand, by retention or with its task,
  * and `beforeCompact` when a step's transcript is folded — which only a step on a compaction
- * model ever is. The loop fires `beforeCompact` and `afterTurn` rather than this file (see
- * `loop`); `sessionStart` and `beforeTurn` are gathered here, ahead of the step's request, so
+ * model ever is. The loop fires `beforeCompact` and `afterExchange` rather than this file (see
+ * `loop`); `sessionStart` and `beforeExchange` are gathered here, ahead of the step's request, so
  * the context goes on the question before the loop sees it. A skipped or queued run fires nothing, and `{{vars.task.id}}` is the key for memory that should outlast one
  * run.
  */
@@ -104,7 +104,7 @@ export interface HookSessionOptions {
 /**
  * One run's hooks, from its first step to its end.
  *
- * Kept as an object rather than free calls because `end` has to wait for the `afterTurn` calls
+ * Kept as an object rather than free calls because `end` has to wait for the `afterExchange` calls
  * the steps did not: a memory server told the session is over before it was told the last turn
  * would file them out of order.
  */
@@ -137,7 +137,9 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
      */
     before(step: HookStep, signal?: AbortSignal, onEvent?: (event: RunEventInput) => void) {
       const events: HookEvent[] =
-        step.index === 0 ? [HookEvent.SessionStart, HookEvent.BeforeTurn] : [HookEvent.BeforeTurn];
+        step.index === 0
+          ? [HookEvent.SessionStart, HookEvent.BeforeExchange]
+          : [HookEvent.BeforeExchange];
       const context: HookContext = {
         ...contextFor(step),
         prompt: step.prompt,
@@ -151,17 +153,17 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
 
     /**
      * The step's hooks as the loop takes them, for the two events it fires on this host's behalf:
-     * `beforeCompact`, told what is about to be summarised away, and `afterTurn` once the step has
+     * `beforeCompact`, told what is about to be summarised away, and `afterExchange` once the step has
      * its answer.
      *
-     * `fire` leaves out `sessionStart` and `beforeTurn`, which `before` gathers ahead of the
+     * `fire` leaves out `sessionStart` and `beforeExchange`, which `before` gathers ahead of the
      * request so the context is on the question before the loop sees it. `question` is the prompt
      * as written, so a memory server files what the step asked rather than what was recalled for
      * it; `turnBase` makes the step's turn its index in the run, and `offset` puts its messages at
      * `at`, so a folded message and a remembered one carry the same uuid.
      *
      * A `beforeCompact` that fails is told to `keep`, which puts it on the step's row with the
-     * rest. An `afterTurn` is only said on the stream here: it lands after the row is written
+     * rest. An `afterExchange` is only said on the stream here: it lands after the row is written
      * whole, and `after` appends it.
      */
     loop(
@@ -172,19 +174,19 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
       return {
         run,
         context: { ...contextFor(step), prompt: step.prompt, turn: { index: step.index } },
-        fire: [HookEvent.BeforeCompact, HookEvent.AfterTurn],
+        fire: [HookEvent.BeforeCompact, HookEvent.AfterExchange],
         question: step.prompt,
         turnBase: step.index,
         offset: step.at,
         onNote: (note) =>
-          note.event === HookEvent.AfterTurn
+          note.event === HookEvent.AfterExchange
             ? onEvent?.({ kind: RunEventKind.Notice, text: describe(note) })
             : keep(note),
       };
     },
 
     /**
-     * Keeps what a step's `afterTurn` hooks failed at on its row, once they come back, without
+     * Keeps what a step's `afterExchange` hooks failed at on its row, once they come back, without
      * holding up the step after it. Called after the row is closed, since closing it writes its
      * notes whole and would overwrite these.
      *
@@ -201,11 +203,11 @@ export function hookSession({ runId, task, triggerId, servers }: HookSessionOpti
           .set({ hooks: appended(runSteps.hooks, notes) })
           .where(eq(runSteps.id, rowId));
       });
-      pending.push(done.catch((error: unknown) => log(`afterTurn: ${errorMessage(error)}`)));
+      pending.push(done.catch((error: unknown) => log(`afterExchange: ${errorMessage(error)}`)));
     },
 
     /**
-     * The run is over. Waits for the steps' `afterTurn` calls, then fires `sessionEnd` and keeps
+     * The run is over. Waits for the steps' `afterExchange` calls, then fires `sessionEnd` and keeps
      * what failed on the run row. Never rejects: it is called once the run's outcome is already
      * written, and nobody is waiting on it.
      */

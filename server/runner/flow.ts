@@ -18,7 +18,9 @@ import { type RunStep, runSteps, type Settings, type Step, type Task } from "../
 import { type AgentResult, runAgent } from "./agent.ts";
 import { recordArtifacts } from "./artifacts.ts";
 import { describe, type HookSession, type HookStep } from "./hooks.ts";
+import { loadSettings } from "./llm.ts";
 import { readPromptResources } from "./prompt-resources.ts";
+import { isRemoteAgent } from "./remote-agent.ts";
 import { serverLogCollector } from "./server-logs.ts";
 
 /**
@@ -271,7 +273,10 @@ interface Plan {
  * What a whole flow did, summed over its steps. Its artifacts are not here: a uri two steps
  * linked to is one artifact of the run, and the one place that is so is `run_artifacts`.
  */
-export type FlowResult = Omit<AgentResult, "artifacts" | "afterTurn" | "messageCount">;
+export type FlowResult = Omit<
+  AgentResult,
+  "artifacts" | "afterExchange" | "messageCount" | "remote" | "remoteRunId"
+>;
 
 export interface FlowOptions {
   runId: string;
@@ -287,6 +292,20 @@ export interface FlowOptions {
   hooks?: HookSession;
   signal?: AbortSignal;
   onEvent?: (event: RunEventInput) => void;
+}
+
+/**
+ * The settings row's endpoint and model, where they are a plain model a side question can be
+ * asked of — `undefined` where the row has no model, or names an ai-router agent too.
+ */
+async function plainEndpoint(
+  signal?: AbortSignal,
+): Promise<{ config: Settings; model: string } | undefined> {
+  const settings = await loadSettings();
+  if (!settings.model || (await isRemoteAgent(settings, settings.model, signal))) {
+    return undefined;
+  }
+  return { config: settings, model: settings.model };
 }
 
 /**
@@ -323,11 +342,19 @@ export async function runFlow({
   /** Where the next step's question sits among the run's messages. See `HookStep.at`. */
   let at = 0;
 
-  /** Stamps everything a step says with the step it said it in, for whoever is watching. */
+  /**
+   * Stamps everything a step says with the step it said it in, for whoever is watching. The loop
+   * opens each step with its own `exchange` event, named for the step, and the step's kind is put
+   * on it here so a watcher can head a decision as one.
+   */
   const scope =
-    (name: string) =>
+    (plan: Plan) =>
     (event: RunEventInput): void =>
-      onEvent?.({ ...event, step: event.step ?? name });
+      onEvent?.({
+        ...event,
+        exchange: event.exchange || plan.name,
+        ...(event.kind === RunEventKind.Exchange ? { text: plan.kind } : {}),
+      });
 
   /** The model a step runs on: its own, else the task's, else the one in settings. */
   const modelFor = (plan: Plan) => plan.model || task.model || config.model;
@@ -366,10 +393,9 @@ export async function runFlow({
     }
     signal?.throwIfAborted();
 
-    const emit = scope(plan.name);
+    const emit = scope(plan);
     const row = await record(plan, "running");
     const index = executed++;
-    emit({ kind: RunEventKind.Step, name: plan.name, text: plan.kind });
 
     // Kept on the row whether the step works or not: a recall that failed is as much a part of
     // why a step went the way it did as one that worked, and a resource that could not be read
@@ -382,7 +408,7 @@ export async function runFlow({
     // A question nobody answered is the likeliest reason a tool failed, so it is kept on failure
     // too.
     const asked: ElicitationNote[] = [];
-    // The step's `afterTurn`, once the loop has fired it.
+    // The step's `afterExchange`, once the loop has fired it.
     let told: Promise<HookNote[]> | undefined;
     const noted = (): Partial<
       Pick<RunStep, "hooks" | "resources" | "serverLogs" | "elicitations">
@@ -439,6 +465,7 @@ export async function runFlow({
             ? `${systemPrompt}\n\n${decisionInstruction(plan.cases)}`.trim()
             : systemPrompt,
         prompt: turn.prompt,
+        exchange: plan.name,
         context: gathered?.context,
         servers,
         signal,
@@ -456,7 +483,7 @@ export async function runFlow({
         // `emit` puts on the run's stream with the rest.
         session: runId,
       });
-      told = agentResult.afterTurn;
+      told = agentResult.afterExchange;
       at += agentResult.messageCount;
       // Before the decision is read back, which can still fail the step: what the tools made
       // was made either way.
@@ -478,16 +505,25 @@ export async function runFlow({
       const {
         output,
         artifacts: _artifacts,
-        afterTurn: _afterTurn,
+        afterExchange: _afterExchange,
         messageCount: _messageCount,
+        remote,
+        remoteRunId,
         ...tokens
       } = agentResult;
       let branch: string | undefined;
       if (plan.kind === "decision") {
-        branch = await resolveCase(plan, output, emit);
+        branch = await resolveCase(plan, output, emit, remote === true);
         emit({ kind: RunEventKind.Decision, name: plan.name, text: branch });
       }
-      await close(row.id, { status: "ok", output, branch, ...tokens, ...noted() });
+      await close(row.id, {
+        status: "ok",
+        output,
+        branch,
+        ...tokens,
+        ...(remoteRunId ? { remoteRunId } : {}),
+        ...noted(),
+      });
       return branch;
     } catch (error) {
       const stopped = signal?.aborted === true;
@@ -533,39 +569,37 @@ export async function runFlow({
    * say which arm it meant. Only when neither lands does `default` come into it, and a decision
    * with no `default` fails the run rather than quietly running nothing — a branch that silently
    * does nothing is the worst outcome to have to debug.
+   *
+   * A step that ran on an ai-router agent is read back on the settings row's own endpoint, since
+   * the router serves agents and no plain model to ask; where that is a router too, there is
+   * nothing to ask, and the reply goes straight to `default`.
    */
   async function resolveCase(
     plan: Plan,
     output: string,
     emit: (event: RunEventInput) => void,
+    remote: boolean,
   ): Promise<string> {
     const direct = parseCase(output, plan.cases);
     if (direct) {
       return direct;
     }
 
-    // Asked with the arms as a schema, so an endpoint that can hold a reply to one does: the answer
-    // to "which did it mean" cannot itself come back as prose.
-    const extracted = await tryAsk("decision", () =>
-      askJson<{ case?: unknown }>(
-        config,
-        config.toolSelectModel || modelFor(plan),
-        `Which of these did the following answer choose? Reply with exactly one of: ${plan.cases.join(", ")}.`,
-        output,
-        {
-          type: "object",
-          properties: { case: { type: "string", enum: plan.cases } },
-          required: ["case"],
-          additionalProperties: false,
-        },
-        { name: "decision", maxTokens: READ_BACK_MAX_TOKENS, signal },
-      ),
-    );
+    const reader = remote ? await plainEndpoint(signal) : { config, model: modelFor(plan) };
+    const extracted = reader
+      ? await readBack(plan, output, reader.config, reader.config.toolSelectModel || reader.model)
+      : undefined;
     const guessed =
       typeof extracted?.case === "string" ? caseNamed(plan.cases, extracted.case) : undefined;
     if (guessed) {
       emit({ kind: RunEventKind.Notice, text: `decision "${plan.name}" read back as ${guessed}` });
       return guessed;
+    }
+    if (!reader) {
+      emit({
+        kind: RunEventKind.Notice,
+        text: `decision "${plan.name}" was not read back: the settings' endpoint is an agent too`,
+      });
     }
 
     if (caseNamed(plan.cases, DEFAULT_BRANCH)) {
@@ -578,6 +612,29 @@ export async function runFlow({
     throw new Error(
       `Decision "${plan.name}" did not answer with one of: ${plan.cases.join(", ")}. ` +
         `Give it a "${DEFAULT_BRANCH}" arm if it should be allowed to fall through.`,
+    );
+  }
+
+  /**
+   * The one cheap extraction call that says which arm a prose answer meant. Asked with the arms
+   * as a schema, so an endpoint that can hold a reply to one does: the answer to "which did it
+   * mean" cannot itself come back as prose.
+   */
+  function readBack(plan: Plan, output: string, endpoint: Settings, model: string) {
+    return tryAsk("decision", () =>
+      askJson<{ case?: unknown }>(
+        endpoint,
+        model,
+        `Which of these did the following answer choose? Reply with exactly one of: ${plan.cases.join(", ")}.`,
+        output,
+        {
+          type: "object",
+          properties: { case: { type: "string", enum: plan.cases } },
+          required: ["case"],
+          additionalProperties: false,
+        },
+        { name: "decision", maxTokens: READ_BACK_MAX_TOKENS, signal },
+      ),
     );
   }
 

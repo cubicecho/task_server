@@ -12,6 +12,7 @@
  * whether this is the field it wants.
  */
 
+import { type RunEvent, RunEventKind } from "@cubicecho/agent-core";
 import { GraphQLDateTime } from "@vantreeseba/drizzle-graphql";
 import {
   GraphQLBoolean,
@@ -258,6 +259,12 @@ export const StepInputType: GraphQLInputObjectType = new GraphQLInputObjectType(
   }),
 });
 
+/** agent-core's names for a step's boundaries, as this server's API has always spelled them. */
+const STEP_KINDS: Partial<Record<string, string>> = {
+  [RunEventKind.Exchange]: "step",
+  [RunEventKind.ExchangeEnd]: "step-end",
+};
+
 export const RunEventType = new GraphQLObjectType({
   name: "RunEvent",
   description:
@@ -273,10 +280,12 @@ export const RunEventType = new GraphQLObjectType({
     kind: {
       type: new GraphQLNonNull(GraphQLString),
       description:
-        "step | decision | turn | thinking | output | tool-call | tool-result | artifact | " +
-        "server-log | notice | usage | done. An `artifact` is a tool call linking to something " +
+        "step | step-end | decision | turn | thinking | output | tool-call | tool-result | " +
+        "artifact | server-log | notice | usage | done. An `artifact` is a tool call linking to something " +
         "new: `text` is its title or uri, `name` the tool. A `server-log` is what a tool's MCP " +
         "server logged while the call ran: `text` is the message, `level` how serious.",
+      // agent-core calls a step an exchange. This server's flow has steps, and so does its API.
+      resolve: (event: RunEvent) => STEP_KINDS[event.kind] ?? event.kind,
     },
     text: { type: new GraphQLNonNull(GraphQLString) },
     name: {
@@ -288,6 +297,7 @@ export const RunEventType = new GraphQLObjectType({
       description:
         "The flow step this happened inside, so a watcher can group a run the way the task is " +
         "written. Empty for what belongs to the run rather than to any one step.",
+      resolve: (event: RunEvent) => event.exchange ?? "",
     },
     ok: { type: GraphQLBoolean },
     id: {

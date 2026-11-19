@@ -73,7 +73,7 @@ type Agent {
   maxRetries: Int!
 
   """
-  Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty or absent is every enabled server. Tools outside the list cannot be called, not just not offered.
+  Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty or absent is every enabled server, except on an ai-router agent, where it is none. Tools outside the list cannot be called, not just not offered.
   """
   mcpServerIds: JSON
   createdAt: DateTime!
@@ -1313,6 +1313,7 @@ enum RunStepDistinctColumn {
   promptTokens
   completionTokens
   totalTokens
+  remoteRunId
 }
 
 """Columns of RunArtifact that a query can be made distinct on"""
@@ -1583,6 +1584,11 @@ type RunStep {
   totalTokens: Int!
 
   """
+  The ai-router run that answered, where the step ran on one of its agents: the id its `/runs/<id>` reads. Empty for a step on a plain model.
+  """
+  remoteRunId: String!
+
+  """
   Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
   """
   cursor: String
@@ -1688,6 +1694,11 @@ type RunStepMinAggregate {
   promptTokens: Int
   completionTokens: Int
   totalTokens: Int
+
+  """
+  The ai-router run that answered, where the step ran on one of its agents: the id its `/runs/<id>` reads. Empty for a step on a plain model.
+  """
+  remoteRunId: String
 }
 
 type RunStepMaxAggregate {
@@ -1733,6 +1744,11 @@ type RunStepMaxAggregate {
   promptTokens: Int
   completionTokens: Int
   totalTokens: Int
+
+  """
+  The ai-router run that answered, where the step ran on one of its agents: the id its `/runs/<id>` reads. Empty for a step on a plain model.
+  """
+  remoteRunId: String
 }
 
 type RunStepCountNonNullAggregate {
@@ -1757,6 +1773,7 @@ type RunStepCountNonNullAggregate {
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
+  remoteRunId: Int!
 }
 
 type RunStepCountDistinctAggregate {
@@ -1776,6 +1793,7 @@ type RunStepCountDistinctAggregate {
   promptTokens: Int!
   completionTokens: Int!
   totalTokens: Int!
+  remoteRunId: Int!
 }
 
 type RunStepGroupBy {
@@ -1835,6 +1853,11 @@ type RunStepGroupKeys {
   promptTokens: Int
   completionTokens: Int
   totalTokens: Int
+
+  """
+  The ai-router run that answered, where the step ran on one of its agents: the id its `/runs/<id>` reads. Empty for a step on a plain model.
+  """
+  remoteRunId: String
 }
 
 """
@@ -2212,7 +2235,7 @@ type McpServer {
   logLevel: McpServersLogLevelEnum
 
   """
-  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
+  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSON
 
@@ -2884,7 +2907,7 @@ input CreateAgentInput {
   maxRetries: Int
 
   """
-  Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty or absent is every enabled server. Tools outside the list cannot be called, not just not offered.
+  Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty or absent is every enabled server, except on an ai-router agent, where it is none. Tools outside the list cannot be called, not just not offered.
   """
   mcpServerIds: JSON
   createdAt: DateTime
@@ -2963,7 +2986,7 @@ input UpdateAgentInput {
   maxRetries: Int
 
   """
-  Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty or absent is every enabled server. Tools outside the list cannot be called, not just not offered.
+  Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty or absent is every enabled server, except on an ai-router agent, where it is none. Tools outside the list cannot be called, not just not offered.
   """
   mcpServerIds: JSON
   createdAt: DateTime
@@ -3051,7 +3074,7 @@ input AgentFilters {
   maxRetries: IntFilter
 
   """
-  Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty or absent is every enabled server. Tools outside the list cannot be called, not just not offered.
+  Which MCP servers a run on this profile may reach, as a JSON array of their ids. Empty or absent is every enabled server, except on an ai-router agent, where it is none. Tools outside the list cannot be called, not just not offered.
   """
   mcpServerIds: JSONFilter
   createdAt: DateTimeFilter
@@ -4654,6 +4677,11 @@ input RunStepFilters {
   completionTokens: IntFilter
   totalTokens: IntFilter
 
+  """
+  The ai-router run that answered, where the step ran on one of its agents: the id its `/runs/<id>` reads. Empty for a step on a plain model.
+  """
+  remoteRunId: StringFilter
+
   """Matches rows whose run matches these filters"""
   run: RunFilters
   artifacts: RunArtifactListRelationFilter
@@ -4719,6 +4747,7 @@ input RunStepOrderBy {
   promptTokens: InnerOrder
   completionTokens: InnerOrder
   totalTokens: InnerOrder
+  remoteRunId: InnerOrder
 
   """Order by columns of the related run row"""
   run: RunOrderBy
@@ -4790,6 +4819,7 @@ input RunStepCountNonNullHaving {
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
+  remoteRunId: AggregateNumberFilter
 }
 
 input RunStepCountDistinctHaving {
@@ -4809,6 +4839,7 @@ input RunStepCountDistinctHaving {
   promptTokens: AggregateNumberFilter
   completionTokens: AggregateNumberFilter
   totalTokens: AggregateNumberFilter
+  remoteRunId: AggregateNumberFilter
 }
 
 input RunArtifactFilters {
@@ -5032,7 +5063,7 @@ input CreateMcpServerInput {
   logLevel: McpServersLogLevelEnum
 
   """
-  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
+  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSON
 }
@@ -5089,7 +5120,7 @@ input UpdateMcpServerInput {
   logLevel: McpServersLogLevelEnum
 
   """
-  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
+  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSON
 }
@@ -5155,7 +5186,7 @@ input McpServerFilters {
   logLevel: McpServersLogLevelEnumFilter
 
   """
-  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeTurn` (before each step), `afterTurn`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
+  Tool calls made at points in a run, as a JSON array of `{ id, on, tool, args, inject }`. `on` is `sessionStart`, `beforeExchange` (before each step), `afterExchange`, `sessionEnd` or `sessionDelete`. `args` may use `{{prompt}}`, `{{reply}}`, `{{session.id}}` (the run), `{{vars.task.id}}` and the like. `inject` puts the result in front of the step's prompt.
   """
   hooks: JSONFilter
 
@@ -5896,6 +5927,14 @@ type Query {
   ): [String!]!
 
   """
+  Which of `models` the endpoint marks as ai-router agents — models that run a loop of their own, with their own tools and compaction. A step on one reaches only the MCP servers its profile names. Empty for an endpoint that is not an ai-router.
+  """
+  agentModels(
+    """Ask this agent profile's endpoint. Omit for the server's own."""
+    agentId: String
+  ): [String!]!
+
+  """
   One agent profile as an agent spec (`cubicecho.agent/1`), the document another host reads a profile from. A column left to inherit is a field the document does not have. The MCP servers the profile is narrowed to are named by slug under `tools.servers` and defined under `bundle.mcpServers`. It carries no credential: not the profile's API key, and not a bundled server's `env` or `headers`.
   """
   agentSpec(agentId: String!): JSON!
@@ -6144,6 +6183,7 @@ enum RunStepGroupByColumn {
   promptTokens
   completionTokens
   totalTokens
+  remoteRunId
 }
 
 """Columns of RunArtifact that a query can group by"""
@@ -6488,7 +6528,7 @@ type RunEvent {
   at: DateTime!
 
   """
-  step | decision | turn | thinking | output | tool-call | tool-result | artifact | server-log | notice | usage | done. An `artifact` is a tool call linking to something new: `text` is its title or uri, `name` the tool. A `server-log` is what a tool's MCP server logged while the call ran: `text` is the message, `level` how serious.
+  step | step-end | decision | turn | thinking | output | tool-call | tool-result | artifact | server-log | notice | usage | done. An `artifact` is a tool call linking to something new: `text` is its title or uri, `name` the tool. A `server-log` is what a tool's MCP server logged while the call ran: `text` is the message, `level` how serious.
   """
   kind: String!
   text: String!

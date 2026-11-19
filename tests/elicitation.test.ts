@@ -98,7 +98,7 @@ test("a server that asks mid-call is answered decline, and the step keeps what i
   const notices = history(run.id).filter((event) => event.kind === "notice");
   expect(notices).toContainEqual(
     expect.objectContaining({
-      step: "asker",
+      exchange: "asker",
       text:
         "server echo asked: Which folder should I write to? (fields: folder, overwrite) — " +
         "declined: task-server runs unattended",

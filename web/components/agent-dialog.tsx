@@ -1,3 +1,4 @@
+import { useStore } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
 import {
@@ -25,6 +26,7 @@ import { PasswordField } from "@/components/password-field";
 import { Button } from "@/components/ui/button";
 import { RadioGroupField } from "@/components/ui/radio-group-field";
 import { useToast } from "@/components/ui/toast";
+import { useAgentModels } from "@/lib/agent-models";
 import { describeFor } from "@/lib/docs";
 import { request } from "@/lib/gql";
 import { stringList } from "@/lib/json";
@@ -155,6 +157,11 @@ export function AgentDialog({
     defaultValues: toDraft(agent),
     onSubmit: ({ value }) => save.mutateAsync(value),
   });
+  // Asked of the saved profile's endpoint, as the model list is: a new one is not known until it
+  // has been saved once. An agent loads, picks and compacts its tools on the router, so the
+  // settings for a loop the step does not run are left out of the form for one.
+  const agentModels = useAgentModels(agent?.id, Boolean(agent));
+  const isAgent = useStore(form.store, (state) => agentModels.has(state.values.model));
 
   return (
     <DialogLayout
@@ -215,7 +222,11 @@ export function AgentDialog({
             form={form}
             name="model"
             label="Model"
-            description="Opening the list asks this profile's endpoint for its models, so save a new base URL first."
+            description={
+              isAgent
+                ? "An ai-router agent: it runs its own loop, with its own tools and compaction, so the settings for those are left out below."
+                : "Opening the list asks this profile's endpoint for its models, so save a new base URL first."
+            }
             defaultLabel="Default from Settings"
             agentId={agent?.id}
           />
@@ -293,34 +304,38 @@ export function AgentDialog({
             }
           />
 
-          <RadioGroupField
-            form={form}
-            name="toolDiscovery"
-            label="Tool discovery"
-            description={doc("toolDiscovery")}
-            options={[
-              { value: AgentsToolDiscoveryEnum.Inherit, label: "From settings" },
-              {
-                value: AgentsToolDiscoveryEnum.Eager,
-                label: "Eager",
-                description: "Send every definition every time.",
-              },
-              {
-                value: AgentsToolDiscoveryEnum.Ondemand,
-                label: "On demand",
-                description: "Load definitions as the run asks for them.",
-              },
-            ]}
-          />
+          {isAgent ? null : (
+            <>
+              <RadioGroupField
+                form={form}
+                name="toolDiscovery"
+                label="Tool discovery"
+                description={doc("toolDiscovery")}
+                options={[
+                  { value: AgentsToolDiscoveryEnum.Inherit, label: "From settings" },
+                  {
+                    value: AgentsToolDiscoveryEnum.Eager,
+                    label: "Eager",
+                    description: "Send every definition every time.",
+                  },
+                  {
+                    value: AgentsToolDiscoveryEnum.Ondemand,
+                    label: "On demand",
+                    description: "Load definitions as the run asks for them.",
+                  },
+                ]}
+              />
 
-          <ModelSelectField
-            form={form}
-            name="toolSelectModel"
-            label="Tool-picking model"
-            description={doc("toolSelectModel")}
-            defaultLabel="From settings"
-            agentId={agent?.id}
-          />
+              <ModelSelectField
+                form={form}
+                name="toolSelectModel"
+                label="Tool-picking model"
+                description={doc("toolSelectModel")}
+                defaultLabel="From settings"
+                agentId={agent?.id}
+              />
+            </>
+          )}
 
           <RadioGroupField
             form={form}
@@ -367,14 +382,16 @@ export function AgentDialog({
             ]}
           />
 
-          <ModelSelectField
-            form={form}
-            name="compactionModel"
-            label="Compaction model"
-            description={doc("compactionModel")}
-            defaultLabel="From settings"
-            agentId={agent?.id}
-          />
+          {isAgent ? null : (
+            <ModelSelectField
+              form={form}
+              name="compactionModel"
+              label="Compaction model"
+              description={doc("compactionModel")}
+              defaultLabel="From settings"
+              agentId={agent?.id}
+            />
+          )}
 
           {servers.length === 0 ? null : (
             <form.Subscribe selector={(state) => state.values.mcpServerIds.length}>
@@ -386,10 +403,12 @@ export function AgentDialog({
                   label="MCP servers"
                   description={
                     picked === 0
-                      ? "None picked — a task on this profile reaches every enabled server."
+                      ? isAgent
+                        ? "None picked — the agent reaches none of these. Its own servers are on the router; a server picked here is handed to it as one of this server's tools."
+                        : "None picked — a task on this profile reaches every enabled server."
                       : `${picked} of ${servers.length} — a task on this profile reaches no others.`
                   }
-                  placeholder="Every enabled server"
+                  placeholder={isAgent ? "None" : "Every enabled server"}
                   searchLabel="Search servers"
                   popoverLabel="MCP servers"
                   // Enabled first, then the rest under a heading. A server that is off is still

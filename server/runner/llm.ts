@@ -2,6 +2,7 @@ import { listModels as listEndpointModels } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { SETTINGS_ID, type Settings, settings } from "../db/schema.ts";
+import { listedAgents } from "./remote-agent.ts";
 
 /**
  * What this server is configured to talk to, and what the endpoint offers.
@@ -40,4 +41,12 @@ export async function loadSettings(): Promise<Settings> {
 export async function listModels(config?: Settings): Promise<string[]> {
   const models = await listEndpointModels(config ?? (await loadSettings()));
   return models.map((model) => model.id);
+}
+
+/**
+ * The models an endpoint lists as ai-router agents, which run a loop of their own: what the model
+ * picker marks, and what a profile's form hides the loop's own settings for.
+ */
+export async function listAgentModels(config?: Settings): Promise<string[]> {
+  return listedAgents(config ?? (await loadSettings()));
 }

@@ -100,6 +100,23 @@ task runs on one — `agentId` is a column like any other — but cannot read a 
 or point a task at a different one. They carry an endpoint, a key and the tool scope, which is
 the settings row's own argument. See **Permissions**.
 
+### A profile on an ai-router agent
+
+Point a profile at an [ai-router](https://github.com/cubicecho/ai-router) — base URL
+`http://<router>:3000/v1`, a workspace key, and an agent's name as the model — and its tasks run on
+that agent. The model picker marks agents as **ai-router agent**. A step on one is a thin client of
+it:
+
+- The agent keeps its own tools, compaction and tool loading, so the profile's form leaves out
+  tool discovery, the tool-picking model and the compaction model.
+- **MCP servers left empty reach nothing**, not every server, as they would on a plain model. A
+  server picked here is handed to the agent as one of this server's own tools, run here.
+- The system prompt, temperature and max tokens are sent as for any step.
+- The agent's own tool calls are listed on the step, and the step shows the router's run id,
+  which `GET /runs/<id>` on the router reads in full.
+- A decision answered in prose is read back on the settings' own endpoint.
+- **Stop** ends the run here, but the router's run carries on until ai-router can cancel one.
+
 ### Moving a profile between servers
 
 **Export** on a profile's row saves it as `<name>.agent.json`, a `cubicecho.agent/1` document —
@@ -548,18 +565,18 @@ usual use is memory — recall before each step, remember after it:
 
 ```json
 [
-  { "id": "recall", "on": "beforeTurn", "tool": "recall",
+  { "id": "recall", "on": "beforeExchange", "tool": "recall",
     "args": { "query": "{{prompt}}", "scope": "{{vars.task.id}}" }, "inject": true, "maxTokens": 500 },
-  { "id": "remember", "on": "afterTurn", "tool": "remember",
+  { "id": "remember", "on": "afterExchange", "tool": "remember",
     "args": { "scope": "{{vars.task.id}}", "messages": "{{turn.messages}}" } }
 ]
 ```
 
 | Event | When, in a run |
 | --- | --- |
-| `sessionStart` | Before the first step, alongside its `beforeTurn` |
-| `beforeTurn` | Before each step that executes; `inject: true` puts the result ahead of its prompt |
-| `afterTurn` | Once a step has its output (`{{reply}}`, `{{turn.messages}}`: the prompt, any text beside its tool calls, and the answer) |
+| `sessionStart` | Before the first step, alongside its `beforeExchange` |
+| `beforeExchange` | Before each step that executes; `inject: true` puts the result ahead of its prompt |
+| `afterExchange` | Once a step has its output (`{{reply}}`, `{{turn.messages}}`: the prompt, any text beside its tool calls, and the answer) |
 | `beforeCompact` | When a step fills 75% of its window and the oldest of it is summarised (needs a compaction model) |
 | `sessionEnd` | Once the run has finished (`{{status}}`: `ok`, `stopped` or `error`) |
 | `sessionDelete` | When the run is deleted, by hand, with its task, or by retention |

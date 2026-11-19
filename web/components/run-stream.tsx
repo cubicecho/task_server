@@ -86,10 +86,11 @@ function group(blocks: Block[]): Group[] {
       last = { step: block.step, kind: "", blocks: [] };
       groups.push(last);
     }
-    // The `step` event is the heading rather than a line of its own; it names the kind.
+    // The `step` event is the heading rather than a line of its own; it names the kind. Its
+    // `step-end` says nothing the next heading, or the end of the run, does not.
     if (block.kind === "step") {
       last.kind = block.text;
-    } else {
+    } else if (block.kind !== "step-end") {
       last.blocks.push(block);
     }
   }

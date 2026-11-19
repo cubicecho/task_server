@@ -85,7 +85,7 @@ async function seedServers() {
       args: ["--stdio"],
       env: { MEMORY_TOKEN: "env-secret-value" },
       hiddenTools: ["recall"],
-      hooks: [{ id: "recall", on: "beforeTurn", tool: "recall", inject: true }],
+      hooks: [{ id: "recall", on: "beforeExchange", tool: "recall", inject: true }],
     },
     {
       id: "srv-http",
@@ -134,7 +134,7 @@ test("an exported profile carries no key, and no env or headers of the servers i
         command: "no-such-mcp-server",
         args: ["--stdio"],
         hiddenTools: ["recall"],
-        hooks: [{ id: "recall", on: "beforeTurn", tool: "recall", inject: true }],
+        hooks: [{ id: "recall", on: "beforeExchange", tool: "recall", inject: true }],
       },
       { slug: "search", transport: "http", url: "https://search.example/mcp" },
     ],

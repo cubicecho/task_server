@@ -130,7 +130,7 @@ test("a link is captured with its step, its lastModified and its webUrl", async 
   });
   // A watcher is told as it happens, as its own kind rather than inside the tool result.
   expect(history(run.id).filter((event) => event.kind === "artifact")).toMatchObject([
-    { name: "echo__write", text: "Notes A", step: "notes" },
+    { name: "echo__write", text: "Notes A", exchange: "notes" },
   ]);
 });
 
@@ -204,7 +204,12 @@ test("a result with no links makes no row", async () => {
 
 test("a hook call's link is not captured", async () => {
   await echoServer([
-    { id: "file", on: "afterTurn", tool: "write", args: { uri: "doc://memory/{{session.id}}" } },
+    {
+      id: "file",
+      on: "afterExchange",
+      tool: "write",
+      args: { uri: "doc://memory/{{session.id}}" },
+    },
   ]);
   const { id: taskId } = await task("quiet", "say something");
   replies = [completion("something")];
