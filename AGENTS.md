@@ -557,7 +557,7 @@ is the run id, each executed step is a turn (the task's own prompt is turn 0, an
 fires when a step's transcript is folded, which happens only on a compaction model.
 
 `afterExchange` and `beforeCompact` are the two events the *loop* fires: `HookSession.loop` hands
-`runAgentLoop` the run's hooks with `fire: [HookEvent.BeforeCompact, HookEvent.AfterTurn]`,
+`runAgentLoop` the run's hooks with `fire: [HookEvent.BeforeCompact, HookEvent.AfterExchange]`,
 leaving out `sessionStart` and `beforeExchange`, which `before` gathers ahead of the request so the
 context is on the question before the loop sees it. `question` is the step's prompt as written,
 so a memory server files what was asked rather than what was recalled for it; `turnBase` is the
