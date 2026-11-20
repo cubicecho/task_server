@@ -58,7 +58,7 @@ const listing: (request: http.IncomingMessage, response: http.ServerResponse) =>
       JSON.stringify({
         object: "list",
         data: [
-          { id: "personal-finance", object: "model", ai_router: { kind: "agent" } },
+          { id: "personal-finance", object: "model", agent_core: { kind: "agent" } },
           { id: "unmarked", object: "model" },
         ],
       }),
@@ -159,7 +159,7 @@ test("a step on an agent sends the sampling it was configured with, and the syst
   expect(body.max_tokens).toBe(300);
   expect(body.messages[0]).toEqual({ role: "system", content: "you run on a schedule" });
   // The agent's progress is asked for, under the field ai-router reads.
-  expect((body as { ai_router?: unknown }).ai_router).toMatchObject({ progress: true });
+  expect((body as { agent_core?: unknown }).agent_core).toMatchObject({ progress: true });
 });
 
 test("a scope that names a server sends that server's tools as the app's", async () => {

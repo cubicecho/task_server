@@ -125,7 +125,7 @@ test("a beforeExchange hook's result is put in front of each step's prompt, and 
   const run = await runner.runTask(taskId);
   expect(run.status).toBe("ok");
 
-  expect(prompts[0]).toContain('<context source="Echo"');
+  expect(prompts[0]).toContain('<hook_context source="Echo"');
   expect(prompts[0]).toContain("memories of digest step 0");
   // Said in this server's words, not the library's: agent-core's own preface names a user, and
   // nobody is here.

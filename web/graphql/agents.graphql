@@ -47,7 +47,7 @@ query AgentOptions {
   }
 }
 
-# One profile as a `cubicecho.agent/1` document, to save as a file. Asked for when the button
+# One profile as a `cubicecho.agent/2` document, to save as a file. Asked for when the button
 # is pressed rather than with the list: it reads every MCP server row to write the bundle. With
 # it, where that document looks to carry a credential, so the person saving it is told.
 query AgentSpec($agentId: String!) {

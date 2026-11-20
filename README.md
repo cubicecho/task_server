@@ -119,7 +119,7 @@ it:
 
 ### Moving a profile between servers
 
-**Export** on a profile's row saves it as `<name>.agent.json`, a `cubicecho.agent/1` document —
+**Export** on a profile's row saves it as `<name>.agent.json`, a `cubicecho.agent/2` document —
 the format [`@cubicecho/agent-core`](https://github.com/cubicecho/agent-core) defines, so the
 file is one any host on that library reads. It holds what the profile overrides and nothing it
 inherits, the slugs of the MCP servers it is narrowed to, and those servers' configs in a

@@ -143,7 +143,7 @@ test("an exported profile carries no key, and no env or headers of the servers i
 
 test("a column left to inherit is a field the document does not have", async () => {
   await db.insert(tables.agents).values({ id: "bare", name: "Bare" });
-  expect(await exported("bare")).toEqual({ spec: "cubicecho.agent/1", name: "Bare" });
+  expect(await exported("bare")).toEqual({ spec: "cubicecho.agent/2", name: "Bare" });
 
   await db.insert(tables.agents).values({
     id: "full",
@@ -164,13 +164,13 @@ test("a column left to inherit is a field the document does not have", async () 
   });
   // Zero is an answer for every one of these, and has to arrive as zero rather than as nothing.
   expect(await exported("full")).toEqual({
-    spec: "cubicecho.agent/1",
+    spec: "cubicecho.agent/2",
     name: "Full",
     description: "Everything said",
     endpoint: { baseUrl: "http://local:11434/v1", requestTimeoutSeconds: 0 },
     // The column's `tool_loop` leaves in agent-core's spelling, which is the format's.
     model: { model: "big", maxTokens: 0, temperature: 0, reasoningReplay: "tool-loop" },
-    prompt: [{ id: "system", text: "Be brief." }],
+    prompt: [{ role: "system", name: "system", content: "Be brief." }],
     tools: { discovery: "ondemand", maxIterations: 12 },
     retry: { maxRetries: 0 },
     tasks: { toolSelect: { model: "small" } },
@@ -262,7 +262,7 @@ test("the file is named after the profile, whatever the profile is named", () =>
   expect(specFileName("../../etc/passwd")).toBe("etc-passwd.agent.json");
   expect(specFileName("über agent v1.2")).toBe("über-agent-v1.2.agent.json");
   expect(specFileName("///")).toBe("agent.agent.json");
-  expect(specText({ spec: "cubicecho.agent/1" })).toBe('{\n  "spec": "cubicecho.agent/1"\n}\n');
+  expect(specText({ spec: "cubicecho.agent/2" })).toBe('{\n  "spec": "cubicecho.agent/2"\n}\n');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -345,7 +345,7 @@ const columns = (row: Agent) => {
   return rest;
 };
 
-const SPEC = "cubicecho.agent/1";
+const SPEC = "cubicecho.agent/2";
 
 /** A bundle as another host would write one: a command to run, and a url to dial. */
 const BUNDLE = {
@@ -824,10 +824,10 @@ test("a server bundled with a log level is created at the column's default, and 
 test("a document that is not a spec is refused in the parser's words", async () => {
   for (const [document, reason] of [
     ["not an object", "spec: must be an object"],
-    [{ name: "No token" }, 'spec: must be "cubicecho.agent/1"'],
+    [{ name: "No token" }, 'spec: must be "cubicecho.agent/2"'],
     [
-      { spec: "cubicecho.agent/2", name: "Later" },
-      "spec: is version 2, and this build reads version 1",
+      { spec: "cubicecho.agent/3", name: "Later" },
+      "spec: is version 3, and this build reads version 2",
     ],
     [{ spec: SPEC, name: "Shape", prompt: "Be brief." }, "prompt: must be an array"],
     [
@@ -861,10 +861,10 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
       reasoningReplay: "sometimes",
     },
     prompt: [
-      { id: "persona", text: "You are careful." },
-      { id: "rules", text: "Cite." },
-      { id: "file", ref: { type: "file", value: "./prompt.md" } },
+      { role: "system", name: "persona", content: "You are careful." },
+      { role: "developer", name: "system", content: "Cite.", mode: "extend", allowedModes: [] },
     ],
+    promptLayout: "xml",
     tools: { discovery: "proxy" },
     retry: { loadingTimeoutSeconds: 60 },
     tasks: { title: { model: "tiny" }, toolSelect: { model: "small", maxTokens: 10 } },
@@ -884,6 +884,7 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
   expect(shown.dropped.map((line) => line.split(":")[0])).toEqual([
     "id",
     "$schema",
+    "promptLayout",
     "futureKey",
     "extensions.x-sandbox",
     "extensions.com.cubicecho.task-server.toolExecution",
@@ -896,9 +897,10 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
     "tools.discovery",
     "tasks.title",
     "tasks.toolSelect.maxTokens",
-    "prompt[0].id",
-    "prompt[1].id",
-    "prompt[2].ref",
+    "prompt[0].name",
+    "prompt[1].role",
+    "prompt[1].mode",
+    "prompt[1].allowedModes",
     "model.maxTokens",
   ]);
   expect(shown.agent).toMatchObject({
@@ -917,6 +919,33 @@ test("what a profile has no column for is listed, not lost quietly", async () =>
   );
   // A policy the format has no word for is the parser's to refuse, and it leaves the column.
   expect(shown.warnings.some((line) => line.startsWith("model.reasoningReplay"))).toBe(true);
+});
+
+// Every profile exported before agent-core 7 is a version 1 file on somebody's disk, so one is
+// converted rather than refused, and what the conversion lost is said with the rest.
+test("a version 1 document is upgraded on import, and what it lost is a warning", async () => {
+  const document = {
+    spec: "cubicecho.agent/1",
+    name: "Old",
+    prompt: [
+      { id: "system", text: "Be brief." },
+      { id: "file", ref: { type: "file", value: "./prompt.md" } },
+    ],
+  };
+  const shown = await preview(document);
+  expect(shown.refusals).toEqual([]);
+  expect(shown.warnings).toEqual([
+    "prompt[1]: had only a reference, which version 2 does not read, and was dropped",
+  ]);
+  expect(shown.dropped).toEqual([]);
+
+  const { id, errors } = await importSpec(document);
+  expect(errors).toEqual([]);
+  const [row] = (await written()).agents.filter((each) => each.id === id);
+  expect(row).toMatchObject({ name: "Old", systemPrompt: "Be brief." });
+  expect((await exported(row.id)).prompt).toEqual([
+    { role: "system", name: "system", content: "Be brief." },
+  ]);
 });
 
 test("an imported profile has no key, and the preview says what that means", async () => {
@@ -954,14 +983,14 @@ test("pasted text is read as far as JSON, and the rest is left to the server", (
   expect(readSpec("null").problem).toMatch(/null/);
   // Not a spec, and still a document: saying why is the parser's job, in the preview.
   expect(readSpec("[1, 2]")).toEqual({ document: [1, 2] });
-  expect(readSpec('{ "spec": "cubicecho.agent/1" }')).toEqual({
-    document: { spec: "cubicecho.agent/1" },
+  expect(readSpec('{ "spec": "cubicecho.agent/2" }')).toEqual({
+    document: { spec: "cubicecho.agent/2" },
   });
 });
 
 test("the form's ticks start where the server says and go back as slugs", async () => {
   const plan = await preview({
-    spec: "cubicecho.agent/1",
+    spec: "cubicecho.agent/2",
     name: "ticks",
     bundle: {
       mcpServers: [
@@ -990,7 +1019,7 @@ test("import is held until the preview on screen answers what is in the form", (
 
 test("a previewed profile is summarised by the sentinels the list page reads", async () => {
   const plan = await preview({
-    spec: "cubicecho.agent/1",
+    spec: "cubicecho.agent/2",
     name: "summary",
     model: { model: "qwen3" },
     tools: { maxIterations: 4 },

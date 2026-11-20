@@ -61,8 +61,8 @@ export interface AgentOptions {
    */
   exchange?: string;
   /**
-   * What the MCP servers' hooks added for this step — `<context>` blocks from `hooks.ts`. Put in
-   * front of the prompt in the request only: tool preselection reads the prompt as written.
+   * What the MCP servers' hooks added for this step — `<hook_context>` blocks from `hooks.ts`.
+   * Put in front of the prompt in the request only: tool preselection reads the prompt as written.
    */
   context?: string;
   /**
@@ -177,7 +177,7 @@ export async function runAgent({
               ? { tasks: { compaction: { model: config.compactionModel, endpoint: config } } }
               : {}),
           },
-      system: systemPrompt,
+      systemPrompt,
       // The context goes on the step's one question and stays there for the step's whole loop: a
       // run keeps no transcript, so there is no stored message it could leak into. What is said
       // above it is set once in `hooks.ts`, which is the only place a context comes from.

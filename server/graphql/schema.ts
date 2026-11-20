@@ -500,7 +500,7 @@ const baseSchema = new GraphQLSchema({
       agentSpec: {
         type: new GraphQLNonNull(GraphQLJSON),
         description:
-          "One agent profile as an agent spec (`cubicecho.agent/1`), the document another host " +
+          "One agent profile as an agent spec (`cubicecho.agent/2`), the document another host " +
           "reads a profile from. A column left to inherit is a field the document does not " +
           "have. The MCP servers the profile is narrowed to are named by slug under " +
           "`tools.servers` and defined under `bundle.mcpServers`. It carries no credential: " +
@@ -861,7 +861,7 @@ const baseSchema = new GraphQLSchema({
       importAgentSpec: {
         type: new GraphQLNonNull(generatedType("Agent")),
         description:
-          "Saves an agent spec (`cubicecho.agent/1`) as a new agent profile, and answers with " +
+          "Saves an agent spec (`cubicecho.agent/2`) as a new agent profile, and answers with " +
           "it. A field the document leaves out is left to inherit, and one a profile has no " +
           "column for is dropped — `agentSpecPreview` lists which. The profile has no API key " +
           "until `setAgentApiKey` gives it one.\n\n" +
