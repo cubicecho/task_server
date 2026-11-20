@@ -5935,7 +5935,7 @@ type Query {
   ): [String!]!
 
   """
-  One agent profile as an agent spec (`cubicecho.agent/1`), the document another host reads a profile from. A column left to inherit is a field the document does not have. The MCP servers the profile is narrowed to are named by slug under `tools.servers` and defined under `bundle.mcpServers`. It carries no credential: not the profile's API key, and not a bundled server's `env` or `headers`.
+  One agent profile as an agent spec (`cubicecho.agent/2`), the document another host reads a profile from. A column left to inherit is a field the document does not have. The MCP servers the profile is narrowed to are named by slug under `tools.servers` and defined under `bundle.mcpServers`. It carries no credential: not the profile's API key, and not a bundled server's `env` or `headers`.
   """
   agentSpec(agentId: String!): JSON!
 
@@ -6647,7 +6647,7 @@ type Mutation {
   reconnectMcp: [McpServerStatus!]!
 
   """
-  Saves an agent spec (`cubicecho.agent/1`) as a new agent profile, and answers with it. A field the document leaves out is left to inherit, and one a profile has no column for is dropped — `agentSpecPreview` lists which. The profile has no API key until `setAgentApiKey` gives it one.
+  Saves an agent spec (`cubicecho.agent/2`) as a new agent profile, and answers with it. A field the document leaves out is left to inherit, and one a profile has no column for is dropped — `agentSpecPreview` lists which. The profile has no API key until `setAgentApiKey` gives it one.
   
   Refused whole, with nothing written, when the document is not a spec; when `createServers` names a slug that is already an MCP server here; or when none of the servers the agent is narrowed to exist here, since a profile with none listed reaches every server. A slug that is merely missing is dropped from the list.
   """

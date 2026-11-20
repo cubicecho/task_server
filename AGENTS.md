@@ -417,7 +417,7 @@ which is the settings row's own argument. `agentId` on a task stays readable, so
 `/mcp` can see that a task runs on a profile without being able to read or choose one.
 
 **A step on an ai-router agent is a thin client of it.** ai-router serves agents at `/v1`, the
-agent's name as the model, and marks each on `GET /models` with `"ai_router": { "kind": "agent"
+agent's name as the model, and marks each on `GET /models` with `"agent_core": { "kind": "agent"
 }`. `server/runner/remote-agent.ts` reads that mark once per endpoint, key and model — a copy of
 min-agent's until agent-core reads it
 ([agent-core#238](https://github.com/cubicecho/agent-core/issues/238)), when the file goes — and
@@ -446,11 +446,13 @@ does not see the router's keep-alive comments
 wants a generous `requestTimeoutSeconds`.
 
 **A profile leaves and arrives as an agent spec, and the columns are still the only copy.**
-`agentSpec` writes one as a `cubicecho.agent/1` document and `importAgentSpec` reads one back,
+`agentSpec` writes one as a `cubicecho.agent/2` document and `importAgentSpec` reads one back,
 with `agentSpecPreview` answering what the write would do, from the same three arguments and
 without doing it. All three are in `server/graphql/agent-spec.ts`, and the parsing, the
 redaction and the document's shape are agent-core's — `parseSpec`, `exportSpec` — not rewritten
-here. The export is `agentLayer` with a name on it, so a file says what a run on the profile is
+here. A `cubicecho.agent/1` file, which is every export made before agent-core 7, is run through
+`upgradeSpec` first rather than refused, and what the conversion lost is a warning beside the
+parser's. The export is `agentLayer` with a name on it, so a file says what a run on the profile is
 told and nothing a run is not; it carries no key, and `exportSpec` takes `env` and `headers` off
 every bundled server. A secret written into a server's `args` or `url` still travels, since
 cutting it would point the document at a different server; `agentSpecSecrets` answers where

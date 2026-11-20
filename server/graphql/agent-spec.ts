@@ -5,6 +5,7 @@ import {
   parseSpec,
   type SecretHint,
   type SpecServer,
+  upgradeSpec,
 } from "@cubicecho/agent-core";
 import { eq } from "drizzle-orm";
 import { GraphQLError } from "graphql";
@@ -18,7 +19,7 @@ import { NEW_MCP_SERVER, shapeProblems } from "./mcp-server.ts";
 /**
  * An agent profile as a document another host can read, and one read back into a profile.
  *
- * The format is agent-core's `cubicecho.agent/1` and so is everything that is hard about it —
+ * The format is agent-core's `cubicecho.agent/2` and so is everything that is hard about it —
  * what a document may say, what is dropped from one that says more, and what must not leave a
  * host. What is here is the part only this server knows: which column a field lands in, and
  * which of this server's MCP rows a slug means.
@@ -397,13 +398,16 @@ export function planImport(
   options: ImportOptions,
   existing: readonly McpServerRow[],
 ): ImportPlan {
-  const parsed = parseSpec(document, {
+  // A version 1 file is converted rather than refused: it is the format this server exported
+  // until agent-core 7, so every profile saved to disk before then is one.
+  const upgraded = upgradeSpec(document);
+  const parsed = parseSpec(upgraded.document, {
     bundle: true,
     understands: [SPEC_EXTENSION],
   });
   const plan: ImportPlan = {
     refusals: [...parsed.errors],
-    warnings: [...parsed.warnings],
+    warnings: [...upgraded.warnings, ...parsed.warnings],
     dropped: [],
     agent: null,
     servers: null,
@@ -503,20 +507,27 @@ export function planImport(
     }
   }
 
-  // A profile holds one prompt. Parts with a text are joined in the document's order; a part
-  // that is only a reference has nothing to join, since nothing here reads a file or a url.
+  // A profile holds one prompt, a column of plain text. Parts are joined in the document's order,
+  // and what a part says beyond its content — a role, a mode, the modes an app may use — has no
+  // column to land in.
   const texts: string[] = [];
   for (const [index, part] of (spec.prompt ?? []).entries()) {
-    if (part.ref) {
-      drop(`prompt[${index}].ref`, "a reference is not followed here");
-    }
-    if (part.text === "") {
+    if (part.content === "") {
       drop(`prompt[${index}]`, "an empty part deletes the one below it, which a row cannot say");
-    } else if (part.text !== undefined) {
-      texts.push(part.text);
-      if (part.id !== "system") {
-        drop(`prompt[${index}].id`, `"${part.id}" — the one prompt a profile holds is "system"`);
-      }
+      continue;
+    }
+    texts.push(part.content);
+    if (part.name !== "system") {
+      drop(`prompt[${index}].name`, `"${part.name}" — the one prompt a profile holds is "system"`);
+    }
+    if (part.role !== "system") {
+      drop(`prompt[${index}].role`, `"${part.role}" — a profile's prompt is a system part`);
+    }
+    if (part.mode !== undefined) {
+      drop(`prompt[${index}].mode`, "a profile's prompt replaces the server's, so it has no mode");
+    }
+    if (part.allowedModes !== undefined) {
+      drop(`prompt[${index}].allowedModes`, "a profile has no such setting");
     }
   }
   if (texts.length > 1) {

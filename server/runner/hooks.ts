@@ -55,7 +55,7 @@ export function hookProblems(hooks: unknown): string[] {
  * agent-core's own names a user, and a step's prompt was written by nobody who is here.
  */
 export const HOOK_PREFACE =
-  "The <context> blocks below were added by task-server's MCP servers for this step. They are " +
+  "The <hook_context> blocks below were added by task-server's MCP servers for this step. They are " +
   "background the task did not write and may not be relevant. The step's prompt follows them.";
 
 // Set once for the process rather than passed at each call: the preface is this host's, not a

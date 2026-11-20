@@ -120,8 +120,8 @@ test("agent profiles are the settings row again, and just as shut", async () => 
     `{ agentSpecSecrets(agentId: "x") { path } }`,
     // And a document as the row: the write, and the dry run of it, which answers which slugs
     // are servers here. The bundle it may create from is a stdio command this host would spawn.
-    `{ agentSpecPreview(document: { spec: "cubicecho.agent/1", name: "mine" }) { refusals } }`,
-    `mutation { importAgentSpec(document: { spec: "cubicecho.agent/1", name: "mine" }) { id } }`,
+    `{ agentSpecPreview(document: { spec: "cubicecho.agent/2", name: "mine" }) { refusals } }`,
+    `mutation { importAgentSpec(document: { spec: "cubicecho.agent/2", name: "mine" }) { id } }`,
   ]) {
     expect(await refused(source, "agent"), source).toEqual(["FORBIDDEN"]);
   }

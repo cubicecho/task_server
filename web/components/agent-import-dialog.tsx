@@ -200,7 +200,7 @@ export function AgentImportDialog({
             }
             rows={6}
             className="max-h-64 font-mono text-xs"
-            placeholder='{ "spec": "cubicecho.agent/1", "name": "…" }'
+            placeholder='{ "spec": "cubicecho.agent/2", "name": "…" }'
             validators={{
               onChange: ({ value }: { value: string }) =>
                 value.trim() ? readSpec(value).problem : undefined,

@@ -13,7 +13,7 @@ import {
  * a loop keeps for itself (`load_tools`) are names such a server refuses to take as the app's, and
  * its compaction, pruning and tool loading are the server's to do.
  *
- * ai-router says so on its model listing, `"ai_router": { "kind": "agent" }` on the entry, and
+ * ai-router says so on its model listing, `"agent_core": { "kind": "agent" }` on the entry, and
  * agent-core's `listModels` keeps only an entry's id and window, so the listing is read here.
  * Copied from min-agent's `server/remote-agent.ts` until agent-core reads the mark itself
  * ([agent-core#238](https://github.com/cubicecho/agent-core/issues/238)); delete this file then.
