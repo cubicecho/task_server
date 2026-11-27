@@ -20,6 +20,7 @@ RUN npm run build
 
 # ─── Stage 2: runtime ────────────────────────────────────────────────────────
 FROM node:26-slim
+LABEL org.opencontainers.image.source=https://github.com/cubicecho/task_server
 
 WORKDIR /app
 
