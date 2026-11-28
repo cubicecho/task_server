@@ -185,6 +185,53 @@ export const McpProbeType = new GraphQLObjectType({
   },
 });
 
+export const LanMcpServerType = new GraphQLObjectType({
+  name: "LanMcpServer",
+  description:
+    "An MCP server another host announced on the local network, offered to be added as an " +
+    "`http` server. Only a suggestion: what a host announces is unchecked, so read the URL " +
+    "before adding it.",
+  fields: {
+    key: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "Unique on the network: the announcing host's name, a `/`, the card's name.",
+    },
+    cardName: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The name on its Server Card, e.g. `io.github.cubicecho.mcp-skills.nas/skills`.",
+    },
+    title: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "What its card calls it for a person. Empty where it gave none.",
+    },
+    description: { type: new GraphQLNonNull(GraphQLString) },
+    version: { type: new GraphQLNonNull(GraphQLString) },
+    host: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The name the host announced itself under, e.g. `MCP Skills on nas`.",
+    },
+    url: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "The streamable-HTTP endpoint, for the row's `url`.",
+    },
+    requiredHeaders: {
+      type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))),
+      description:
+        "Headers the server says a client must send, by name only — usually `Authorization`. " +
+        "The values are for the operator to supply in the row's `headers`.",
+    },
+    suggestedSlug: {
+      type: new GraphQLNonNull(GraphQLString),
+      description: "A slug no configured server uses yet, from the card's name.",
+    },
+    addedAs: {
+      type: GraphQLString,
+      description:
+        "The slug of the configured `http` server that already points at `url`. Null when none does.",
+    },
+  },
+});
+
 export const ScheduleEntryType = new GraphQLObjectType({
   name: "ScheduleEntry",
   description: "A cron trigger that is currently armed, and when it next fires.",

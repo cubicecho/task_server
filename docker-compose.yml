@@ -10,6 +10,10 @@ services:
     restart: unless-stopped
     ports:
       - "8787:8787"
+    # To announce this server on the LAN, or find the MCP servers on it, over mDNS (Settings →
+    # Server → Local network), multicast has to reach the host's network, which the default
+    # bridge network drops. Replace `ports` with the line below:
+    # network_mode: host
     volumes:
       # The embedded postgres (PGlite) keeps its data here, so the tasks
       # survive a rebuild. Point DATABASE_URL at a real postgres instead and

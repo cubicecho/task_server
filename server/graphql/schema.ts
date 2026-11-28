@@ -26,6 +26,7 @@ import {
   tasks,
   triggers,
 } from "../db/schema.ts";
+import * as lan from "../discovery/lan.ts";
 import { hookProblems, runsDeleted } from "../runner/hooks.ts";
 import { listAgentModels, listModels, loadSettings } from "../runner/llm.ts";
 import { mcp, probe } from "../runner/mcp.ts";
@@ -49,6 +50,7 @@ import { flattenSteps, foreignIds, type StepInput, writeTaskSteps } from "./step
 import {
   AgentSpecPreviewType,
   AgentSpecSecretType,
+  LanMcpServerType,
   McpConnectionInput,
   McpProbeType,
   McpPromptType,
@@ -219,7 +221,13 @@ const { entities } = buildSchema(db, {
     // Raising `maxConcurrentRuns` is the one edit that can start work on its own — whatever is
     // queued for a slot can have one now. Debounced for the same reason: a drain from inside the
     // transaction would read the limit as it stood before the write that raised it.
-    settings: () => drainSoon(),
+    //
+    // Turning the LAN announcement or the watch on or off takes effect at once, after the commit
+    // for the same reason.
+    settings: () => {
+      drainSoon();
+      lan.syncSoon();
+    },
   },
 });
 
@@ -541,6 +549,14 @@ const baseSchema = new GraphQLSchema({
           await mcp.flush();
           return mcp.state();
         },
+      },
+      lanMcpServers: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(LanMcpServerType))),
+        description:
+          "MCP servers other hosts announce on the local network, to add as `http` servers. " +
+          "Empty unless the settings row's `lanDiscovery` is on. Nothing here is added on its " +
+          "own: a host can announce any name and any URL, so each one is the operator's call.",
+        resolve: () => lan.lanServers.list(),
       },
       mcpPrompts: {
         type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(McpPromptType))),

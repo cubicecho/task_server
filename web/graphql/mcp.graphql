@@ -127,3 +127,20 @@ query McpResourceCompletion(
     context: $context
   )
 }
+
+# What other hosts announce on the local network, to be added from. Empty unless the settings
+# row's `lanDiscovery` is on.
+query LanMcpServers {
+  lanMcpServers {
+    key
+    cardName
+    title
+    description
+    version
+    host
+    url
+    requiredHeaders
+    suggestedSlug
+    addedAs
+  }
+}

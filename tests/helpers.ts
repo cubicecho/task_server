@@ -112,6 +112,8 @@ export const settingsRow = (over: Partial<Settings> = {}): Settings => ({
   requestTimeoutSeconds: 0,
   maxRetries: 0,
   maxConcurrentRuns: 4,
+  lanAdvertise: false,
+  lanDiscovery: false,
   ...over,
 });
 

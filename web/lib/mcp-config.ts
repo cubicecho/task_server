@@ -1,5 +1,9 @@
 import { fromMcpServersJson, validateServerConfig } from "@cubicecho/agent-mcp-pool/servers";
-import type { McpConnectionInput, McpServersQuery } from "@/__generated__/graphql/graphql";
+import type {
+  LanMcpServersQuery,
+  McpConnectionInput,
+  McpServersQuery,
+} from "@/__generated__/graphql/graphql";
 import { McpServersTransportEnum } from "@/__generated__/graphql/graphql";
 import { errorMessage } from "@/lib/errors";
 import { parseJson, stringList } from "@/lib/json";
@@ -46,6 +50,32 @@ export function parseMcpJson(text: string): PastedConfig {
     env: JSON.stringify((stdio && row.env) || {}),
     url: stdio ? "" : row.url,
     headers: JSON.stringify((!stdio && row.headers) || {}),
+  };
+}
+
+/**
+ * Where a new server's form starts when it was found rather than typed: an `http` server at the
+ * found URL, with a header for each one the server asks for, its value left for the operator.
+ */
+export interface McpPreset {
+  slug: string;
+  label: string;
+  url: string;
+  headers: Record<string, string>;
+}
+
+/**
+ * The form's start for a server found on the local network.
+ *
+ * The header values are empty on purpose: a card names the headers a server needs, never their
+ * values, and a token is the one thing only the operator has.
+ */
+export function presetFromLan(found: LanMcpServersQuery["lanMcpServers"][number]): McpPreset {
+  return {
+    slug: found.suggestedSlug,
+    label: found.title || found.host,
+    url: found.url,
+    headers: Object.fromEntries(found.requiredHeaders.map((name) => [name, ""])),
   };
 }
 

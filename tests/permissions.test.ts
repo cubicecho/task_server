@@ -85,6 +85,8 @@ test("how this server is wired is the operator's too", async () => {
     `{ mcpServers { slug } }`,
     `{ mcpServersGroupBy(groupBy: [slug]) { group { slug } } }`,
     `{ mcpStatus { slug } }`,
+    // And what the local network offers to be added to it.
+    `{ lanMcpServers { url } }`,
     // The prompts those servers offer are the same list with a second column: which servers
     // this one dials, and what each of them is for.
     `{ mcpPrompts { name } }`,
@@ -100,6 +102,12 @@ test("how this server is wired is the operator's too", async () => {
   ]) {
     expect(await refused(source, "agent"), source).toEqual(["FORBIDDEN"]);
   }
+});
+
+test("the operator is offered what the local network announces, nothing while the watch is off", async () => {
+  const { data, errors } = await ask(`{ lanMcpServers { url } }`, "operator");
+  expect(errors).toBeUndefined();
+  expect(data).toEqual({ lanMcpServers: [] });
 });
 
 // A profile is the settings row per task: an endpoint, a key of its own, and which MCP servers

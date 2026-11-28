@@ -30,7 +30,7 @@ import { describeFor } from "@/lib/docs";
 import { errorMessage } from "@/lib/errors";
 import { request } from "@/lib/gql";
 import { parseJson, stringList } from "@/lib/json";
-import { fieldProblem, parseMcpJson } from "@/lib/mcp-config";
+import { fieldProblem, type McpPreset, parseMcpJson } from "@/lib/mcp-config";
 import { HOOK_PLACEHOLDER, hooksProblem } from "@/lib/mcp-hooks";
 
 type McpServer = McpServersQuery["mcpServers"][number];
@@ -79,6 +79,15 @@ const toDraft = (server?: McpServer): Draft => ({
   hooks: server?.hooks ? JSON.stringify(server.hooks, null, 2) : "",
 });
 
+const fromPreset = (preset: McpPreset): Draft => ({
+  ...toDraft(),
+  slug: preset.slug,
+  label: preset.label,
+  transport: McpServersTransportEnum.Http,
+  url: preset.url,
+  headers: JSON.stringify(preset.headers),
+});
+
 /** A connection field's validator: the pool's own answer, as the field is typed. */
 const checks = (field: Parameters<typeof fieldProblem>[0]) => ({
   onChange: ({ value }: { value: string }) => fieldProblem(field, value),
@@ -86,11 +95,14 @@ const checks = (field: Parameters<typeof fieldProblem>[0]) => ({
 
 export function McpDialog({
   server,
+  preset,
   tools = [],
   onClose,
   onSaved,
 }: {
   server?: McpServer;
+  /** A new server's starting values; ignored when editing `server`. */
+  preset?: McpPreset;
   /** What the server offers now, for the hidden-tools picker. Empty while it is not connected. */
   tools?: readonly McpTool[];
   onClose: () => void;
@@ -136,7 +148,7 @@ export function McpDialog({
   });
 
   const form = useAppForm({
-    defaultValues: toDraft(server),
+    defaultValues: preset && !server ? fromPreset(preset) : toDraft(server),
     onSubmit: ({ value }) => save.mutateAsync(value),
   });
 

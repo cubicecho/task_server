@@ -529,6 +529,21 @@ export const settings = pgTable("settings", {
    * `runner/run.ts`.
    */
   maxConcurrentRuns: integer().notNull().default(4),
+  /**
+   * Whether this server announces its `/mcp` endpoint on the local network over mDNS, as an
+   * `_mcp._tcp` service. Off by default: there is no authentication here, so an announcement
+   * tells every machine on the LAN where to find an open door. The AI Catalog and the Server Card
+   * are served either way; this only decides whether anyone is told to look. See
+   * `discovery/lan.ts`.
+   */
+  lanAdvertise: boolean().notNull().default(false),
+  /**
+   * Whether this server watches the local network for MCP servers that announce themselves, and
+   * offers them on the MCP servers page to be added. A found server is only ever a suggestion:
+   * anything on the LAN can announce any name, so nothing is added without the operator. Off by
+   * default, like the announcement.
+   */
+  lanDiscovery: boolean().notNull().default(false),
 });
 
 /**

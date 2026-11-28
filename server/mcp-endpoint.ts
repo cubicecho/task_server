@@ -13,6 +13,9 @@ import pkg from "../package.json" with { type: "json" };
 import type { GraphContext } from "./graphql/permissions.ts";
 import { schema } from "./graphql/schema.ts";
 
+/** Where the endpoint is mounted, and so what its Server Card names. */
+export const MCP_PATH = "/mcp";
+
 /**
  * The tools an outside client is handed, and nothing else.
  *
@@ -288,5 +291,5 @@ export const mcpHandler = createHttpHandler({
  * alone, the other two met Express's 404 page instead, which reads as "wrong URL".
  */
 export function mountMcp(app: express.Application) {
-  app.all("/mcp", express.json(), mcpHandler);
+  app.all(MCP_PATH, express.json(), mcpHandler);
 }
