@@ -59,8 +59,23 @@ type Run = RunsQuery["runs"][number];
 const SEARCH_DEBOUNCE_MS = 300;
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
 
-const duration = (from: string, to?: string | null) =>
-  to ? formatDuration((new Date(to).getTime() - new Date(from).getTime()) / 1000) : "running…";
+/** Under this many seconds a run's time keeps its tenths: most runs take a few seconds. */
+const SECONDS_WITH_TENTHS = 60;
+
+/**
+ * How long a run took: `3.4s` and `0.4s` under a minute, then cubeui's `5m`, `3h 12m`.
+ *
+ * cubeui's `formatDuration` floors to whole seconds, which writes a sub-second run as `0s`; the
+ * tenths stay here until it can keep them (follow-up: cubeui `formatDuration` sub-second
+ * precision).
+ */
+const duration = (from: string, to?: string | null) => {
+  if (!to) {
+    return "running…";
+  }
+  const seconds = (new Date(to).getTime() - new Date(from).getTime()) / 1000;
+  return seconds < SECONDS_WITH_TENTHS ? `${seconds.toFixed(1)}s` : formatDuration(seconds);
+};
 
 /**
  * What started the run, in as few words as it takes.
