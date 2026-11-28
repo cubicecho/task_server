@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Play, RefreshCw } from "@/components/ui/icons";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { formatDateTime } from "@/lib/format";
 import { request } from "@/lib/gql";
 import {
   HEALTH,
@@ -30,8 +31,6 @@ type Server = StatusQuery["mcpStatus"][number];
 
 /** A failed run whose `error` is empty still has to say something. */
 const NO_REASON = "It broke without saying why.";
-
-const when = (iso: string) => new Date(iso).toLocaleString();
 
 /**
  * What each heap is called, and what being in it means.
@@ -79,8 +78,8 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
     const firings = collision.attempts === 1 ? "One firing" : `${collision.attempts} firings`;
     return (
       <ItemDescription className="text-negative">
-        {firings} turned away, the last at {when(collision.finishedAt ?? collision.startedAt)}.{" "}
-        {collision.error}
+        {firings} turned away, the last at{" "}
+        {formatDateTime(collision.finishedAt ?? collision.startedAt)}. {collision.error}
       </ItemDescription>
     );
   }
@@ -92,20 +91,20 @@ function Why({ task, health }: { task: StatusTask; health: Health }) {
     );
   }
   if (health === "running" && last) {
-    return <ItemDescription>Started {when(last.startedAt)}.</ItemDescription>;
+    return <ItemDescription>Started {formatDateTime(last.startedAt)}.</ItemDescription>;
   }
   if (health === "waiting" && task.waiting[0]) {
     const queued = task.waiting[0];
     const firings = queued.attempts === 1 ? "A firing" : `${queued.attempts} firings`;
     return (
       <ItemDescription>
-        {firings} waiting since {when(queued.startedAt)}. {queued.error}
+        {firings} waiting since {formatDateTime(queued.startedAt)}. {queued.error}
       </ItemDescription>
     );
   }
   return (
     <ItemDescription>
-      {last ? `Last run ${last.status} at ${when(last.startedAt)}.` : "Not run yet."}
+      {last ? `Last run ${last.status} at ${formatDateTime(last.startedAt)}.` : "Not run yet."}
     </ItemDescription>
   );
 }
@@ -154,7 +153,9 @@ function FailureRow({ failure }: { failure: Failure }) {
           ) : (
             <span>(deleted task)</span>
           )}
-          <span className="font-normal text-foreground/60 text-xs">{when(failure.startedAt)}</span>
+          <span className="font-normal text-foreground/60 text-xs">
+            {formatDateTime(failure.startedAt)}
+          </span>
         </ItemTitle>
         <ItemDescription className="line-clamp-2 text-negative">
           {failure.error || NO_REASON}

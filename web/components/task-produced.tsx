@@ -7,6 +7,8 @@ import { ArtifactList } from "@/components/run-outputs";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import { RotateCcwClock } from "@/components/ui/icons";
+import { LoadMoreButton } from "@/components/ui/load-more-button";
+import { formatDate, formatDateTime, joinStats } from "@/lib/format";
 import { request } from "@/lib/gql";
 
 const PAGE = 20;
@@ -52,36 +54,28 @@ export function TaskProduced({ taskId }: { taskId: string }) {
               label="Produced"
               artifacts={rows.slice(0, limit)}
               meta={(artifact) =>
-                [
+                joinStats(
                   artifact.serverSlug,
-                  artifact.lastModified
-                    ? `modified ${new Date(artifact.lastModified).toLocaleDateString()}`
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
+                  artifact.lastModified && `modified ${formatDate(artifact.lastModified)}`,
+                )
               }
               leadingActionSlot={(artifact, label) => (
                 <Button
                   aria-label={`The run that last linked ${label}`}
                   variant="outline"
                   size="icon"
-                  hint={`Last linked ${new Date(artifact.updatedAt).toLocaleString()}`}
+                  hint={`Last linked ${formatDateTime(artifact.updatedAt)}`}
                   linkSlot={<Link to="/runs" search={{ run: artifact.runId }} />}
                   iconSlot={<RotateCcwClock />}
                 />
               )}
             />
-            {rows.length > limit ? (
-              <div>
-                <Button
-                  variant="outline"
-                  onClick={() => setLimit(limit + PAGE)}
-                  disabled={produced.isFetching}
-                  content="Show more"
-                />
-              </div>
-            ) : null}
+            <LoadMoreButton
+              hasMore={rows.length > limit}
+              onLoadMore={() => setLimit(limit + PAGE)}
+              loading={produced.isFetching}
+              label="Show more"
+            />
           </div>
         )
       }

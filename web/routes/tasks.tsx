@@ -25,10 +25,12 @@ import {
   ItemFooter,
   ItemTitle,
 } from "@/components/ui/item";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
+import { formatDateTime } from "@/lib/format";
 import { request } from "@/lib/gql";
-import { STATUS_VARIANT } from "@/lib/run-status";
+import { RUN_STATUSES } from "@/lib/run-status";
 import { useRunTask, useStopTask } from "@/lib/use-task-run";
 
 export function TasksRoute() {
@@ -143,9 +145,7 @@ export function TasksRoute() {
                           <ItemTitle>
                             <span className="truncate">{task.name}</span>
                             {lastRun ? (
-                              <Badge variant={STATUS_VARIANT[lastRun.status] ?? "secondary"}>
-                                {lastRun.status}
-                              </Badge>
+                              <StatusBadge status={lastRun.status} statuses={RUN_STATUSES} />
                             ) : null}
                           </ItemTitle>
                           <ItemDescription className="line-clamp-2">{task.prompt}</ItemDescription>
@@ -223,15 +223,11 @@ export function TasksRoute() {
                                 key={trigger.id}
                                 variant="outline"
                                 className="font-mono font-normal"
-                                title={
-                                  next ? `next: ${new Date(next).toLocaleString()}` : undefined
-                                }
+                                title={next ? `next: ${formatDateTime(next)}` : undefined}
                               >
                                 {trigger.cron}
                                 {trigger.timezone ? ` (${trigger.timezone})` : ""}
-                                {next
-                                  ? ` · next ${new Date(next).toLocaleString()}`
-                                  : " · not scheduled"}
+                                {next ? ` · next ${formatDateTime(next)}` : " · not scheduled"}
                               </Badge>
                             );
                           })}
