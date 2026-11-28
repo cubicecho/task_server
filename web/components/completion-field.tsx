@@ -1,7 +1,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Combobox } from "@/components/combobox";
 import { FormField } from "@/components/form-field";
+import { useDebouncedValue } from "@/components/ui/debounced-value";
 import type { SelectEntry } from "@/lib/select-options";
 
 /**
@@ -13,16 +14,6 @@ import type { SelectEntry } from "@/lib/select-options";
 
 /** How long typing has to pause before the server is asked what it would suggest. */
 const COMPLETION_DEBOUNCE_MS = 200;
-
-/** `value`, once it has held still for `ms`. */
-function useDebounced<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return settled;
-}
 
 /**
  * A suggestion is never the only answer — a server that completes a name knows the names it has
@@ -52,7 +43,7 @@ export function CompletionField({
 }) {
   const [opened, setOpened] = useState(false);
   const [search, setSearch] = useState("");
-  const typed = useDebounced(search, COMPLETION_DEBOUNCE_MS);
+  const typed = useDebouncedValue(search, COMPLETION_DEBOUNCE_MS);
 
   const suggestions = useQuery({
     queryKey: [...queryKey, typed],

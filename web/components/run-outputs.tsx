@@ -13,6 +13,7 @@ import { CodeBlock } from "@/components/ui/code";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Eye } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast";
+import { formatDateTime } from "@/lib/format";
 import { request } from "@/lib/gql";
 import { type ArtifactLink, artifactActions, artifactLabel, isMarkdown } from "@/lib/run-artifacts";
 
@@ -47,7 +48,7 @@ function ArtifactPreview({ artifact, onClose }: { artifact: ArtifactRow; onClose
   });
   const read = resource.data?.mcpResource;
   const modified = artifact.lastModified
-    ? `Last modified ${new Date(artifact.lastModified).toLocaleString()} when the run linked it. `
+    ? `Last modified ${formatDateTime(artifact.lastModified)} when the run linked it. `
     : "";
 
   return (

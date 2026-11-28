@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { RunEventsDocument, type RunEventsSubscription } from "@/__generated__/graphql/graphql";
+import { Badge } from "@/components/ui/badge";
 import { subscribe } from "@/lib/gql";
 import { cn } from "@/lib/utils";
 import { isFailure, isSerious } from "../../shared/server-logs.ts";
@@ -190,12 +191,7 @@ export function RunStream({ runId }: { runId: string }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 text-xs text-foreground/60">
-        <span
-          className={cn(
-            "size-2 rounded-full",
-            ended ? "bg-foreground/60" : "animate-pulse bg-positive",
-          )}
-        />
+        <Badge variant={ended ? "secondary" : "positive"} pulse={!ended} />
         {ended ? "Run ended" : "Live"}
         {error ? <span className="text-negative">· {error}</span> : null}
       </div>

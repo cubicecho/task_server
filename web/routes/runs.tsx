@@ -17,6 +17,7 @@ import { CollapsibleRow } from "@/components/collapsible-row";
 import { Combobox } from "@/components/combobox";
 import { ConfirmButton } from "@/components/confirm-button";
 import { EmptyState } from "@/components/empty-state";
+import { FilterBar } from "@/components/filter-bar";
 import { List } from "@/components/list";
 import { LoadState } from "@/components/load-state";
 import { PageLayout } from "@/components/page-layout";
@@ -29,9 +30,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CodeBlock } from "@/components/ui/code";
 import { CopyButton } from "@/components/ui/copy-button";
-import { Play, RefreshCw, RotateCcwClock, Square, Trash2, X } from "@/components/ui/icons";
-import { Input } from "@/components/ui/input";
+import { Play, RefreshCw, RotateCcwClock, Square, Trash2 } from "@/components/ui/icons";
+import { LoadMoreButton } from "@/components/ui/load-more-button";
+import { SearchInput } from "@/components/ui/search-input";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
+import { formatDateTime, formatDuration } from "@/lib/format";
 import { request } from "@/lib/gql";
 import {
   ANY,
@@ -42,7 +46,7 @@ import {
   pickWindow,
   WINDOWS,
 } from "@/lib/run-filters";
-import { STATUS_VARIANT } from "@/lib/run-status";
+import { RUN_STATUSES } from "@/lib/run-status";
 import { useRefreshRuns, useRunTask, useStopTask } from "@/lib/use-task-run";
 import { cn } from "@/lib/utils";
 import { describeElicitation, type ElicitationNote } from "../../shared/elicitations.ts";
@@ -50,10 +54,13 @@ import type { ResourceRead } from "../../shared/resource-placeholder.ts";
 import { isFailure, type ServerLogNote } from "../../shared/server-logs.ts";
 
 type Run = RunsQuery["runs"][number];
+
+/** How long typing in the search box has to pause before the runs are asked for again. */
+const SEARCH_DEBOUNCE_MS = 300;
 type RunStep = RunDetailQuery["runs"][number]["steps"][number];
 
 const duration = (from: string, to?: string | null) =>
-  to ? `${((new Date(to).getTime() - new Date(from).getTime()) / 1000).toFixed(1)}s` : "running…";
+  to ? formatDuration((new Date(to).getTime() - new Date(from).getTime()) / 1000) : "running…";
 
 /**
  * What started the run, in as few words as it takes.
@@ -158,7 +165,7 @@ function ResourceReads({ reads }: { reads: unknown }) {
                 read.error ? "text-negative" : "text-foreground/60",
               )}
             >
-              {read.server}:{read.uri} · {new Date(read.readAt).toLocaleString()}
+              {read.server}:{read.uri} · {formatDateTime(read.readAt)}
               {read.error
                 ? " · failed"
                 : ` · ${read.chars} chars${read.truncated ? " · cut to fit" : ""}`}
@@ -257,7 +264,7 @@ function RunSteps({ steps }: { steps: readonly RunStep[] }) {
           style={{ marginLeft: `${step.depth}rem` }}
         >
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={STATUS_VARIANT[step.status] ?? "secondary"}>{step.status}</Badge>
+            <StatusBadge status={step.status} statuses={RUN_STATUSES} />
             <span className="font-medium text-sm">{step.name}</span>
             {step.kind === "decision" ? (
               <span className="font-mono text-foreground/60 text-xs">
@@ -466,91 +473,93 @@ const NO_OUTPUT = "(no output)";
  *
  * Every control goes through one `onChange`, because each of them also has to put the list back
  * on its first page — a `limit` grown by Load more is about the rows that were on screen, and
- * means nothing once the question changes.
+ * means nothing once the question changes. The search box tells `onSearch` its text once typing
+ * pauses: without the wait every keystroke is a query, and the query it is a keystroke of scans
+ * the output column of every run ever kept.
  */
-function FilterBar({
+function RunFilterBar({
   filters,
   onChange,
+  onSearch,
+  onClear,
   tasks,
 }: {
   filters: Filters;
   onChange: (patch: Partial<Filters>) => void;
+  onSearch: (search: string) => void;
+  onClear: () => void;
   tasks: { id: string; name: string }[];
 }) {
-  const dirty = isFiltered(filters);
-
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Input
-        value={filters.search}
-        onChange={(event) => onChange({ search: event.target.value })}
-        aria-label="Search runs"
-        placeholder="Search output, errors and task names…"
-        className="min-w-56 flex-1"
-      />
+    <FilterBar
+      isFiltered={isFiltered(filters)}
+      onClear={onClear}
+      contentSlot={
+        <>
+          <SearchInput
+            value={filters.search}
+            onChangeText={(search) => onChange({ search })}
+            onSettledText={onSearch}
+            debounce={SEARCH_DEBOUNCE_MS}
+            label="Search runs"
+            placeholder="Search output, errors and task names…"
+            wrapperClassName="min-w-56 flex-1"
+          />
 
-      {/* Shown only when a link asked for one run: no control above sets it, so this is where it
-          says so, and how it is taken off. */}
-      {filters.runId ? (
-        <Badge
-          variant="outline"
-          onRemove={() => onChange({ runId: null })}
-          removeLabel="Show every run"
-        >
-          One run
-        </Badge>
-      ) : null}
+          {/* Shown only when a link asked for one run: no control above sets it, so this is where
+              it says so, and how it is taken off. */}
+          {filters.runId ? (
+            <Badge
+              variant="outline"
+              onRemove={() => onChange({ runId: null })}
+              removeLabel="Show every run"
+            >
+              One run
+            </Badge>
+          ) : null}
 
-      {/* A rule under the first row of each of these: "any" is how the filter is turned off, not
-          one of the things it filters to, and without it the two read as peers. */}
-      <Combobox
-        aria-label="Status"
-        className="w-36"
-        value={filters.status}
-        onValueChange={(status) => onChange({ status })}
-        options={[
-          { value: ANY, label: "Any status" },
-          { separator: true },
-          ...Object.values(RunsStatusEnum).map((status) => ({ value: status, label: status })),
-        ]}
-      />
+          {/* A rule under the first row of each of these: "any" is how the filter is turned off,
+              not one of the things it filters to, and without it the two read as peers. */}
+          <Combobox
+            aria-label="Status"
+            className="w-36"
+            value={filters.status}
+            onValueChange={(status) => onChange({ status })}
+            options={[
+              { value: ANY, label: "Any status" },
+              { separator: true },
+              ...Object.values(RunsStatusEnum).map((status) => ({ value: status, label: status })),
+            ]}
+          />
 
-      <Combobox
-        aria-label="Task"
-        className="w-44"
-        value={filters.taskId}
-        onValueChange={(taskId) => onChange({ taskId })}
-        options={[
-          { value: ANY, label: "Any task" },
-          { separator: true },
-          ...tasks.map((task) => ({ value: task.id, label: task.name })),
-        ]}
-      />
+          <Combobox
+            aria-label="Task"
+            className="w-44"
+            value={filters.taskId}
+            onValueChange={(taskId) => onChange({ taskId })}
+            options={[
+              { value: ANY, label: "Any task" },
+              { separator: true },
+              ...tasks.map((task) => ({ value: task.id, label: task.name })),
+            ]}
+          />
 
-      <Combobox
-        aria-label="Time window"
-        className="w-40"
-        value={filters.window}
-        onValueChange={(value) => onChange(pickWindow(value))}
-        options={[
-          // Same rule, and `WINDOWS` already leads with "Any time", so it is sliced rather than
-          // written out twice.
-          { value: WINDOWS[0].value, label: WINDOWS[0].label },
-          { separator: true },
-          ...WINDOWS.slice(1).map((option) => ({ value: option.value, label: option.label })),
-        ]}
-      />
-
-      {dirty ? (
-        <Button
-          aria-label="Clear filters"
-          variant="outline"
-          size="icon"
-          onClick={() => onChange(NO_FILTERS)}
-          iconSlot={<X />}
-        />
-      ) : null}
-    </div>
+          <Combobox
+            aria-label="Time window"
+            className="w-40"
+            value={filters.window}
+            onValueChange={(value) => onChange(pickWindow(value))}
+            options={[
+              // Same rule, and `WINDOWS` already leads with "Any time", so it is sliced rather
+              // than written out twice.
+              { value: WINDOWS[0].value, label: WINDOWS[0].label },
+              { separator: true },
+              ...WINDOWS.slice(1).map((option) => ({ value: option.value, label: option.label })),
+            ]}
+          />
+        </>
+      }
+    />
   );
 }
 
@@ -565,13 +574,8 @@ export function RunsRoute() {
   const [replay, setReplay] = useState<{ run: Run; payload: unknown } | null>(null);
   const [limit, setLimit] = useState(PAGE);
 
-  // The typed-in term, a beat behind what is on screen. Without it every keystroke is a query,
-  // and the query it is a keystroke of scans the output column of every run ever kept.
+  // The typed-in term, a beat behind what is on screen: the search box settles it.
   const [search, setSearch] = useState("");
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(filters.search), 300);
-    return () => clearTimeout(timer);
-  }, [filters.search]);
 
   const where = useMemo(() => buildWhere(filters, search), [filters, search]);
   const filtered = where !== undefined;
@@ -603,6 +607,7 @@ export function RunsRoute() {
   useEffect(() => {
     if (linked) {
       setFilters({ ...NO_FILTERS, runId: linked });
+      setSearch(NO_FILTERS.search);
       setOpen(linked);
       setLimit(PAGE);
     }
@@ -616,6 +621,12 @@ export function RunsRoute() {
     if (linked && patch.runId === null) {
       navigate({ to: "/runs", search: {}, replace: true });
     }
+  };
+
+  /** Puts every filter back, the settled search with them: the box only settles what is typed. */
+  const clearFilters = () => {
+    update(NO_FILTERS);
+    setSearch(NO_FILTERS.search);
   };
 
   const refresh = useRefreshRuns();
@@ -641,7 +652,13 @@ export function RunsRoute() {
         />
       }
       headerContentSlot={
-        <FilterBar filters={filters} onChange={update} tasks={tasks.data?.tasks ?? []} />
+        <RunFilterBar
+          filters={filters}
+          onChange={update}
+          onSearch={setSearch}
+          onClear={clearFilters}
+          tasks={tasks.data?.tasks ?? []}
+        />
       }
       contentSlot={
         <>
@@ -682,16 +699,12 @@ export function RunsRoute() {
                         key={run.id}
                         open={open === run.id}
                         onOpenChange={(next) => setOpen(next ? run.id : null)}
-                        badgesSlot={
-                          <Badge variant={STATUS_VARIANT[run.status] ?? "secondary"}>
-                            {run.status}
-                          </Badge>
-                        }
+                        badgesSlot={<StatusBadge status={run.status} statuses={RUN_STATUSES} />}
                         title={run.task.name}
                         meta={
                           <>
                             <span className="shrink-0 font-normal text-foreground/60 text-xs">
-                              {new Date(run.startedAt).toLocaleString()}
+                              {formatDateTime(run.startedAt)}
                               {skipped || queued
                                 ? ""
                                 : ` · ${duration(run.startedAt, run.finishedAt)}`}
@@ -775,14 +788,12 @@ export function RunsRoute() {
             />
           ) : null}
 
-          {more ? (
-            <Button
-              variant="outline"
-              onClick={() => setLimit(limit + PAGE)}
-              disabled={runs.isFetching}
-              content={`Load ${PAGE} more`}
-            />
-          ) : null}
+          <LoadMoreButton
+            hasMore={more}
+            onLoadMore={() => setLimit(limit + PAGE)}
+            loading={runs.isFetching}
+            label={`Load ${PAGE} more`}
+          />
 
           {replay ? (
             <RunDialog

@@ -58,6 +58,7 @@
         "web/components/confirm-button.tsx",
         "web/components/dialog-layout.tsx",
         "web/components/field-row.tsx",
+        "web/components/filter-bar.tsx",
         "web/components/form-field.tsx",
         "web/components/header-content-footer.tsx",
         "web/components/list-item.tsx",

@@ -32,9 +32,9 @@ import {
 } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
+import { formatAgo, formatDateTime } from "@/lib/format";
 import { request } from "@/lib/gql";
 import { type McpPreset, presetFromLan, toConnection } from "@/lib/mcp-config";
-import { uptime } from "@/lib/uptime";
 
 type McpServer = McpServersQuery["mcpServers"][number];
 
@@ -151,7 +151,9 @@ export function McpRoute() {
                       contentSlot={rows.map((server) => {
                         const status = statusOf(server.id);
                         const tools = status?.tools ?? [];
-                        const age = status?.startedAt ? uptime(status.startedAt) : null;
+                        const age = status?.startedAt
+                          ? formatAgo(status.startedAt, undefined, { style: "narrow" })
+                          : "";
                         const probe = probes[server.id];
                         return (
                           <Item key={server.id} size="sm">
@@ -174,9 +176,9 @@ export function McpRoute() {
                                 {age ? (
                                   <span
                                     className="font-normal text-foreground/60 text-xs"
-                                    title={`connected ${new Date(status?.startedAt ?? "").toLocaleString()}`}
+                                    title={`connected ${formatDateTime(status?.startedAt ?? "")}`}
                                   >
-                                    up {age}
+                                    connected {age}
                                     {status?.pid ? ` · pid ${status.pid}` : ""}
                                   </span>
                                 ) : null}
