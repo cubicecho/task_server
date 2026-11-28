@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   DeleteMcpServerDocument,
+  LanMcpServersDocument,
   McpServersDocument,
   type McpServersQuery,
   ReconnectMcpDocument,
@@ -32,7 +33,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { request } from "@/lib/gql";
-import { toConnection } from "@/lib/mcp-config";
+import { type McpPreset, presetFromLan, toConnection } from "@/lib/mcp-config";
 import { uptime } from "@/lib/uptime";
 
 type McpServer = McpServersQuery["mcpServers"][number];
@@ -42,6 +43,8 @@ export function McpRoute() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<McpServer | null>(null);
   const [creating, setCreating] = useState(false);
+  /** A server found on the network, being added: the new-server form, started from what it said. */
+  const [adding, setAdding] = useState<McpPreset | null>(null);
   /** The last test result per server, keyed by id — a test is about one row, not the page. */
   const [probes, setProbes] = useState<Record<string, McpProbe>>({});
 
@@ -50,6 +53,12 @@ export function McpRoute() {
     queryKey: ["mcp"],
     queryFn: () => request(McpServersDocument),
     refetchInterval: 5000,
+  });
+  // In memory on the server and cheap to ask, and a host can come or go at any time.
+  const lan = useQuery({
+    queryKey: ["mcp", "lan"],
+    queryFn: () => request(LanMcpServersDocument),
+    refetchInterval: 10_000,
   });
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["mcp"] });
@@ -89,6 +98,7 @@ export function McpRoute() {
 
   const statusOf = (id: string) => servers.data?.mcpStatus.find((entry) => entry.id === id);
   const rows = servers.data?.mcpServers ?? [];
+  const found = (lan.data?.lanMcpServers ?? []).filter((server) => server.addedAs === null);
 
   return (
     <SettingsTabsRoot
@@ -237,7 +247,52 @@ export function McpRoute() {
                 />
               ) : null}
 
+              {found.length > 0 ? (
+                <CardLayout
+                  level={2}
+                  title="On your network"
+                  description="MCP servers other hosts announce. Anything on the network can announce itself, so check the address before adding one."
+                  contentSlot={
+                    <List
+                      label="MCP servers on the local network"
+                      contentSlot={found.map((server) => (
+                        <Item key={server.key} size="sm">
+                          <ItemContent>
+                            <ItemTitle>
+                              <span className="truncate">{server.title || server.cardName}</span>
+                              {server.requiredHeaders.length ? (
+                                <Badge variant="outline">
+                                  needs {server.requiredHeaders.join(", ")}
+                                </Badge>
+                              ) : null}
+                              <span className="font-normal text-foreground/60 text-xs">
+                                {server.host}
+                              </span>
+                            </ItemTitle>
+                            <ItemDescription className="truncate font-mono text-xs">
+                              {server.url}
+                            </ItemDescription>
+                          </ItemContent>
+                          <ItemActions>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setAdding(presetFromLan(server))}
+                              iconSlot={<Plus />}
+                              content="Add"
+                            />
+                          </ItemActions>
+                        </Item>
+                      ))}
+                    />
+                  }
+                />
+              ) : null}
+
               {creating ? <McpDialog onClose={() => setCreating(false)} onSaved={refresh} /> : null}
+              {adding ? (
+                <McpDialog preset={adding} onClose={() => setAdding(null)} onSaved={refresh} />
+              ) : null}
               {editing && !creating ? (
                 <McpDialog
                   server={editing}

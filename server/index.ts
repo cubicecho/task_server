@@ -1,9 +1,12 @@
+import { once } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import express from "express";
 import { createYoga } from "graphql-yoga";
 import { mountClientApp } from "./client-app.ts";
 import { ensureSchema } from "./db/migrate.ts";
+import { mountDiscovery } from "./discovery/endpoints.ts";
+import * as lan from "./discovery/lan.ts";
 import type { GraphContext } from "./graphql/permissions.ts";
 import { schema } from "./graphql/schema.ts";
 import { mcpHandler, mountMcp } from "./mcp-endpoint.ts";
@@ -31,6 +34,10 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 const app = express();
+
+// The AI Catalog and `/mcp`'s Server Card, which tell a client what this server is before it
+// connects. Public by design, and first, so nothing below answers their paths instead.
+mountDiscovery(app);
 
 // The web app's door, and the operator's. There is no authentication on this server, so the
 // door is the whole of the identity: `/graphql` is the page the operator has open, `/mcp` is
@@ -70,6 +77,11 @@ const server = app.listen(PORT, () => {
 
 await mcp.sync();
 await cron.sync();
+// After `listen`, so a host that finds the announcement can already read the catalog.
+if (!server.listening) {
+  await once(server, "listening");
+}
+await lan.sync();
 cleanup.start();
 
 // Runs that were waiting for a slot when this process last stopped are still waiting: the queue
@@ -79,6 +91,8 @@ await drainQueue();
 const shutdown = async () => {
   cron.stop();
   cleanup.stop();
+  // Says goodbye, so the LAN drops this host at once rather than when its announcement expires.
+  await lan.close();
   await mcpHandler.close();
   await mcp.shutdown();
   // A run cut off here never reaches the save in its own `finally`.

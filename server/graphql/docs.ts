@@ -278,6 +278,12 @@ export const COLUMN_DOCS: ColumnDocs = {
       "How many runs may be in flight at once, across every task. A trigger that fires with no " +
       "slot free leaves a `queued` run, which starts when one comes back; a person or an agent " +
       "asking for a run is refused on the spot instead. Zero lifts the limit.",
+    lanAdvertise:
+      "Announce this server's MCP endpoint on the local network over mDNS, so other tools can " +
+      "find it. There is no authentication here: anyone who finds it can use it.",
+    lanDiscovery:
+      "Watch the local network for MCP servers that announce themselves, and list them on the " +
+      "MCP servers page to add. Nothing is added on its own.",
   },
 };
 

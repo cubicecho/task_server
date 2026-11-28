@@ -16,6 +16,8 @@ fragment SettingsFields on Setting {
   maxRetries
   maxConcurrentRuns
   runRetentionDays
+  lanAdvertise
+  lanDiscovery
 }
 
 query Settings {

@@ -227,6 +227,9 @@ export const permissions: PermissionsMap = {
     // The same servers, answered from the live pool instead of the table. It carries no
     // credentials, but it is the same list of what this server dials and with which tools.
     mcpStatus: canUser(Actions.read, "McpServer"),
+    // And what the LAN offers to be added to that list: how this server could be wired, which
+    // is the operator's question as much as how it is.
+    lanMcpServers: canUser(Actions.read, "McpServer"),
     // And the prompts those servers offer, which are the same list again with a second column:
     // reading them is reading which servers this one is wired to and what each is for. Both go
     // with `mcpStatus` rather than with the tasks they end up in, because the expansion is an

@@ -584,6 +584,31 @@ function SettingsEditor({ row }: { row: SettingsFieldsFragment }) {
                       />
                     }
                   />
+                  <CardLayout
+                    level={2}
+                    title="Local network"
+                    description="Being found by other tools over mDNS, and finding MCP servers to add."
+                    contentSlot={
+                      <div className="flex flex-col gap-3">
+                        <SwitchField
+                          form={form}
+                          name="lanAdvertise"
+                          label="Announce this server"
+                          description={doc("lanAdvertise")}
+                          orientation="horizontal"
+                          className="rounded-md border p-3"
+                        />
+                        <SwitchField
+                          form={form}
+                          name="lanDiscovery"
+                          label="Look for MCP servers"
+                          description={doc("lanDiscovery")}
+                          orientation="horizontal"
+                          className="rounded-md border p-3"
+                        />
+                      </div>
+                    }
+                  />
                 </TabsContent>
               </form>
 

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { fieldProblem, parseMcpJson } from "../web/lib/mcp-config.ts";
+import { fieldProblem, parseMcpJson, presetFromLan } from "../web/lib/mcp-config.ts";
 
 const stdio = { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"] };
 
@@ -74,4 +74,27 @@ test("a field with nothing wrong with it says nothing", () => {
   ] as const) {
     expect(fieldProblem(field, text)).toBeUndefined();
   }
+});
+
+test("starts a found server's form at its URL, with an empty box for each header it needs", () => {
+  const found = {
+    key: "MCP Skills on nas/io.github.cubicecho.mcp-skills.nas/skills",
+    cardName: "io.github.cubicecho.mcp-skills.nas/skills",
+    title: "",
+    description: "Skills.",
+    version: "1.0.0",
+    host: "MCP Skills on nas",
+    url: "http://192.168.1.20:3000/mcp",
+    requiredHeaders: ["Authorization"],
+    suggestedSlug: "skills",
+    addedAs: null,
+  };
+  expect(presetFromLan(found)).toEqual({
+    slug: "skills",
+    // A card with no title is named after the host that announced it.
+    label: "MCP Skills on nas",
+    url: "http://192.168.1.20:3000/mcp",
+    headers: { Authorization: "" },
+  });
+  expect(presetFromLan({ ...found, title: "Skills" }).label).toBe("Skills");
 });

@@ -26,6 +26,8 @@ const ROW: SettingsFieldsFragment = {
   maxRetries: 2,
   maxConcurrentRuns: 4,
   runRetentionDays: 30,
+  lanAdvertise: false,
+  lanDiscovery: false,
 };
 
 describe("settings form", () => {

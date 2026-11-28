@@ -2493,6 +2493,16 @@ type Setting {
   maxConcurrentRuns: Int!
 
   """
+  Announce this server's MCP endpoint on the local network over mDNS, so other tools can find it. There is no authentication here: anyone who finds it can use it.
+  """
+  lanAdvertise: Boolean!
+
+  """
+  Watch the local network for MCP servers that announce themselves, and list them on the MCP servers page to add. Nothing is added on its own.
+  """
+  lanDiscovery: Boolean!
+
+  """
   Opaque cursor of this row's position in the query's ordering. Pass it as `after` to resume from here. Only set on rows returned by a list query.
   """
   cursor: String
@@ -2722,6 +2732,8 @@ type SettingCountNonNullAggregate {
   requestTimeoutSeconds: Int!
   maxRetries: Int!
   maxConcurrentRuns: Int!
+  lanAdvertise: Int!
+  lanDiscovery: Int!
 }
 
 type SettingCountDistinctAggregate {
@@ -2833,6 +2845,16 @@ type SettingGroupKeys {
   Put what each MCP server says about using it in the system prompt, up to 1000 tokens a server. It is the same text on every step, so it stays in the endpoint's prompt cache.
   """
   serverInstructions: Boolean
+
+  """
+  Announce this server's MCP endpoint on the local network over mDNS, so other tools can find it. There is no authentication here: anyone who finds it can use it.
+  """
+  lanAdvertise: Boolean
+
+  """
+  Watch the local network for MCP servers that announce themselves, and list them on the MCP servers page to add. Nothing is added on its own.
+  """
+  lanDiscovery: Boolean
 }
 
 input CreateAgentInput {
@@ -5386,6 +5408,16 @@ input UpdateSettingInput {
   How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: Int
+
+  """
+  Announce this server's MCP endpoint on the local network over mDNS, so other tools can find it. There is no authentication here: anyone who finds it can use it.
+  """
+  lanAdvertise: Boolean
+
+  """
+  Watch the local network for MCP servers that announce themselves, and list them on the MCP servers page to add. Nothing is added on its own.
+  """
+  lanDiscovery: Boolean
 }
 
 """
@@ -5473,6 +5505,16 @@ input SettingFilters {
   How many runs may be in flight at once, across every task. A trigger that fires with no slot free leaves a `queued` run, which starts when one comes back; a person or an agent asking for a run is refused on the spot instead. Zero lifts the limit.
   """
   maxConcurrentRuns: IntFilter
+
+  """
+  Announce this server's MCP endpoint on the local network over mDNS, so other tools can find it. There is no authentication here: anyone who finds it can use it.
+  """
+  lanAdvertise: BooleanFilter
+
+  """
+  Watch the local network for MCP servers that announce themselves, and list them on the MCP servers page to add. Nothing is added on its own.
+  """
+  lanDiscovery: BooleanFilter
 
   """At least one branch matches; ANDed with any sibling fields"""
   OR: [SettingFilters!]
@@ -5589,6 +5631,8 @@ input SettingOrderBy {
   requestTimeoutSeconds: InnerOrder
   maxRetries: InnerOrder
   maxConcurrentRuns: InnerOrder
+  lanAdvertise: InnerOrder
+  lanDiscovery: InnerOrder
 }
 
 """Filters Setting groups by their aggregated values"""
@@ -5661,6 +5705,8 @@ input SettingCountNonNullHaving {
   requestTimeoutSeconds: AggregateNumberFilter
   maxRetries: AggregateNumberFilter
   maxConcurrentRuns: AggregateNumberFilter
+  lanAdvertise: AggregateNumberFilter
+  lanDiscovery: AggregateNumberFilter
 }
 
 input SettingCountDistinctHaving {
@@ -5966,6 +6012,11 @@ type Query {
   mcpStatus: [McpServerStatus!]!
 
   """
+  MCP servers other hosts announce on the local network, to add as `http` servers. Empty unless the settings row's `lanDiscovery` is on. Nothing here is added on its own: a host can announce any name and any URL, so each one is the operator's call.
+  """
+  lanMcpServers: [LanMcpServer!]!
+
+  """
   The prompts the connected MCP servers offer, for a picker — a prompt is the server author's own phrasing of a job that server is good at. Expand one with `mcpPrompt` and the text becomes a task's or a step's prompt, editable before it is saved. Empty when no connected server offers any; a server that cannot be listed is left out rather than failing the query. Each server's list is read to its last page.
   """
   mcpPrompts: [McpPrompt!]!
@@ -6257,6 +6308,8 @@ enum SettingDistinctColumn {
   requestTimeoutSeconds
   maxRetries
   maxConcurrentRuns
+  lanAdvertise
+  lanDiscovery
 }
 
 """Columns of Setting that a query can group by"""
@@ -6278,6 +6331,8 @@ enum SettingGroupByColumn {
   requestTimeoutSeconds
   maxRetries
   maxConcurrentRuns
+  lanAdvertise
+  lanDiscovery
 }
 
 """
@@ -6435,6 +6490,45 @@ type McpTool {
   In the row's `hiddenTools`: never offered to a run's model, still callable by its hooks. Always false on a probe, which tests a connection before there is a row to hide from.
   """
   hidden: Boolean!
+}
+
+"""
+An MCP server another host announced on the local network, offered to be added as an `http` server. Only a suggestion: what a host announces is unchecked, so read the URL before adding it.
+"""
+type LanMcpServer {
+  """
+  Unique on the network: the announcing host's name, a `/`, the card's name.
+  """
+  key: String!
+
+  """
+  The name on its Server Card, e.g. `io.github.cubicecho.mcp-skills.nas/skills`.
+  """
+  cardName: String!
+
+  """What its card calls it for a person. Empty where it gave none."""
+  title: String!
+  description: String!
+  version: String!
+
+  """The name the host announced itself under, e.g. `MCP Skills on nas`."""
+  host: String!
+
+  """The streamable-HTTP endpoint, for the row's `url`."""
+  url: String!
+
+  """
+  Headers the server says a client must send, by name only — usually `Authorization`. The values are for the operator to supply in the row's `headers`.
+  """
+  requiredHeaders: [String!]!
+
+  """A slug no configured server uses yet, from the card's name."""
+  suggestedSlug: String!
+
+  """
+  The slug of the configured `http` server that already points at `url`. Null when none does.
+  """
+  addedAs: String
 }
 
 """

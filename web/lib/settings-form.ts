@@ -60,6 +60,8 @@ export interface SettingsForm {
   compactionModel: string;
   maxConcurrentRuns: number | null;
   runRetentionDays: number | null;
+  lanAdvertise: boolean;
+  lanDiscovery: boolean;
 }
 
 /**
@@ -87,6 +89,8 @@ export const SECTION_OF: Record<keyof SettingsForm, Exclude<SettingsSection, "co
   compactionModel: "limits",
   maxConcurrentRuns: "server",
   runRetentionDays: "server",
+  lanAdvertise: "server",
+  lanDiscovery: "server",
 };
 
 /** A form seeded from the stored row. The key box starts empty, which is what keeps the key. */
@@ -108,6 +112,8 @@ export const toForm = (row: SettingsFieldsFragment): SettingsForm => ({
   compactionModel: row.compactionModel,
   maxConcurrentRuns: row.maxConcurrentRuns,
   runRetentionDays: row.runRetentionDays,
+  lanAdvertise: row.lanAdvertise,
+  lanDiscovery: row.lanDiscovery,
 });
 
 /**
@@ -132,6 +138,8 @@ export const toRow = (form: SettingsForm): UpdateSettingInput => ({
   compactionModel: form.compactionModel,
   maxConcurrentRuns: form.maxConcurrentRuns ?? 0,
   runRetentionDays: form.runRetentionDays ?? 0,
+  lanAdvertise: form.lanAdvertise,
+  lanDiscovery: form.lanDiscovery,
 });
 
 /**
