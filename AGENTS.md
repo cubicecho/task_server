@@ -93,7 +93,7 @@ one, takes over a lock whose holder is gone, and does nothing at all for a `post
 `./data` with a host process is still on its own — that case is what `DATABASE_URL` is for.
 
 **Hand-written GraphQL fields go in `server/graphql/`**, beside the generated entities:
-`models`, `mcpStatus`, `schedule`, `runEvents`, `agentSpec`, `agentSpecSecrets`,
+`models`, `mcpStatus`, `lanMcpServers`, `schedule`, `runEvents`, `agentSpec`, `agentSpecSecrets`,
 `agentSpecPreview` on the query side;
 `runTask`, `stopTask`, `reconnectMcp`, `setApiKey`, `setAgentApiKey`, `importAgentSpec` on the
 mutation side. Give every one of them a `description` — it is what an agent on `/mcp` reads to
@@ -193,6 +193,13 @@ position — what `tools()` hands back — and declares `ToolDefinition` for it 
 arm of `ChatCompletionTool` and structurally assignable to it, so a consumer that proxies MCP
 without ever calling a model no longer installs 24 MB to satisfy a type that is erased anyway.
 Do not "tidy" either of these into a shared dependency.
+
+**The LAN is only ever a suggestion.** `server/discovery/` serves the AI Catalog and `/mcp`'s
+Server Card (always, ahead of every other route), announces the server over mDNS while
+`settings.lanAdvertise` is on, and watches for other servers while `settings.lanDiscovery` is on.
+What the watch finds is listed by `lanMcpServers` and added, if at all, by the operator through
+the ordinary `createMcpServer`: announcements and cards are unauthenticated, so nothing found on
+the network becomes a row on its own. Do not add an auto-link.
 
 **Writes go through `onWrite` hooks** that rebuild the cron schedule and reconcile the MCP
 pool, so a trigger edited in the UI takes effect without a restart. A write that should change

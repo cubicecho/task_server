@@ -846,6 +846,36 @@ What the spike did leave behind is here rather than there. The listing went from
 null branches. Across a hundred logged calls the only filter operator any agent sent was `eq`,
 which is the finding both of those act on.
 
+## Network discovery
+
+Other tools can find `/mcp` without being told its address, and this server can find the MCP
+servers on its network, both through
+[`@cubicecho/mcp-discovery`](https://github.com/cubicecho/mcp-discovery).
+
+**What is served, always.** An AI Catalog at `/.well-known/ai-catalog.json` lists one MCP Server
+Card, at `/mcp/server-card`. The card is named `io.github.cubicecho.task-server.<host>/tasks`,
+after the machine's hostname, so two task servers on one network stay apart, and it names `/mcp`
+at whatever address the client used. Both are public and mounted ahead of everything else; there
+is no authentication here, so the card asks a client for no header.
+
+**Announcing, off by default** (Settings → Server → Local network, or `lanAdvertise` on the
+settings row). The server announces itself over mDNS as an `_mcp._tcp` service named
+`Task Server on <host>`, after it is listening, and says goodbye on shutdown. It is off by default
+because an announcement tells every machine on the LAN where an unauthenticated door is.
+
+**Looking, off by default** (`lanDiscovery`). The server watches the network for other MCP
+servers' announcements, reads each host's catalog and card, and lists what it found under
+**On your network** on the MCP servers page (the `lanMcpServers` query). **Add** opens the usual
+new-server form, started as an `http` server at the found URL with a free slug and an empty value
+for each header the card says it needs, usually `Authorization`. Nothing is ever added on its own:
+mDNS and cards are unauthenticated, anything on the LAN can announce any name and any URL, and a
+server added here hands its tools to every run. Its own announcement is skipped, and a found
+server that a configured `http` server already points at is not offered again.
+
+Both switches take effect at once, without a restart. mDNS needs multicast, which Docker's default
+bridge network drops: in a container, run with `network_mode: host` (see `docker-compose.yml`)
+for either to reach the LAN.
+
 ## Permissions
 
 `TOOLS` above is a listing, not a lock. The seventeen tools are what a visiting agent is *told
